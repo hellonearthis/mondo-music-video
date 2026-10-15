@@ -2,7 +2,7 @@
 
 A community music-video application from MAXIMUM GOOSE LABORATORIES.
 
-Version: **0.1.0** — development preview, not a broadly verified release.
+Version: **0.1.1** — development preview, not a broadly verified release.
 
 The application turns a song into a music video using your own local
 generation setup or supported API providers. Open Actor Protocol (OAP) will be
@@ -24,7 +24,13 @@ review of the relevant upstream terms and access requirements.
 
 ## Install and start
 
-Install Python 3.11 or newer, Git, and FFmpeg (including ffprobe) first.
+Install Python 3.11 or newer, Git, and FFmpeg (including ffprobe) first. Clone
+this repository and run the installer from its folder:
+
+```sh
+git clone https://github.com/hodgemann/mondo-music-video.git
+cd mondo-music-video
+```
 
 Linux, macOS, or Windows/WSL2:
 
@@ -91,6 +97,27 @@ real GPU, paid-provider and Topaz productions still need operator verification.
 The helper shows source/license/destination, asks before each download and checks
 SHA-256 before activation. This preview has no curated model catalog; use a
 reviewed manifest as described in [local model setup](docs/LOCAL_MODELS.md).
+
+## Let an agent operate the studio
+
+An optional **MCP server** exposes the local studio's tools to compatible agent
+clients. The included **skill** teaches an agent the production workflow, OAP
+handling, previews, and spending consent. They do not require another model API
+account or turn this application into a hosted model service.
+
+```sh
+.venv/bin/python -m pip install '.[mcp]'
+.venv/bin/mondo-music-video-mcp
+```
+
+Run the app separately with `mondo-music-video serve`; configure your agent
+client to launch the MCP command over stdio. The MCP process connects to
+`http://127.0.0.1:8091` by default, or a different localhost URL in `MMV_URL`.
+There is also a shell helper: `mondo-music-video-agent status`.
+
+See [agent setup](docs/AGENT_SETUP.md) and the bundled
+[Mondo Music Video skill](skills/mondo-music-video/SKILL.md). The optional MCP
+dependency is not installed for ordinary browser-only use.
 
 See [the roadmap](docs/ROADMAP.md), [project scope](docs/SCOPE.md), and
 [third-party dependencies](docs/THIRD_PARTY.md).

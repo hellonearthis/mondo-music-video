@@ -1,6 +1,6 @@
 # Roadmap
 
-The 0.1.0 development preview implements these workflows. This list also tracks
+The 0.1.1 development preview implements these workflows. This list also tracks
 the verification needed before calling it a broadly supported release.
 
 1. Repository preparation: product scope, permissive application license, clean
@@ -21,4 +21,5 @@ installation on each target OS, broader browser/accessibility review, a reviewed
 model-download catalog and a resolved dependency/license inventory. This preview
 uses simple duration/BPM timing and public prompt templates.
 
-No GitHub remote or public release is configured.
+The first public repository is https://github.com/hodgemann/mondo-music-video.
+Optional MCP tools and the bundled agent skill are documented in AGENT_SETUP.md.

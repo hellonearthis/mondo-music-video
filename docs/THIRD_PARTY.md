@@ -11,6 +11,7 @@ under their respective licenses; this project does not relicense them.
 | Uvicorn | Local HTTP server | See installed dependency license |
 | python-multipart | Media upload parsing | See installed dependency license |
 | Pillow | Reference-image decoding and metadata removal | See installed dependency license |
+| MCP Python SDK (optional) | stdio agent tools | https://github.com/modelcontextprotocol/python-sdk; see upstream distribution notices |
 | FFmpeg / ffprobe | External, user-installed media tools | Licenses depend on the user's build; no binary is bundled |
 | ComfyUI, custom nodes and model files | Optional, user-installed local generation | Separate upstream terms; no copies bundled |
 | Topaz | Optional, user-owned export tool | Separate vendor license; no copy bundled |

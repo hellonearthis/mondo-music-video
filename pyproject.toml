@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mondo-music-video"
-version = "0.1.0"
+version = "0.1.1"
 description = "A focused music-video studio with Open Actor Protocol built in"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,9 +17,12 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["httpx>=0.27,<1"]
+mcp = ["mcp>=2,<3"]
 
 [project.scripts]
 mondo-music-video = "mmv.setup:main"
+mondo-music-video-agent = "mmv.agent:main"
+mondo-music-video-mcp = "mmv.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -27,3 +30,8 @@ include = ["mmv*", "webapp*"]
 
 [tool.setuptools.package-data]
 webapp = ["*.html", "*.js", "*.css"]
+
+[tool.setuptools.data-files]
+"share/mondo-music-video/skills/mondo-music-video" = ["skills/mondo-music-video/SKILL.md", "skills/mondo-music-video/LICENSE"]
+"share/mondo-music-video/skills/mondo-music-video/agents" = ["skills/mondo-music-video/agents/openai.yaml"]
+"share/mondo-music-video/skills/mondo-music-video/references" = ["skills/mondo-music-video/references/requests.md"]

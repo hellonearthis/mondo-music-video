@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mondo Music Video"
+  short_description: "Create music videos with the local Mondo studio"
+  default_prompt: "Use $mondo-music-video to turn my song and visual direction into a music video."
