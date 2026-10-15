@@ -1,0 +1,44 @@
+# Python and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local configuration, credentials and keys
+.env
+.env.*
+!.env.example
+secrets/
+secrets.json
+signing-identity.json
+settings.json
+session.lock
+operation.json
+config.local.*
+*.pem
+*.key
+
+# User data and generated work
+data/
+uploads/
+exports/
+styles/
+actors/
+runs/
+models/
+downloads/
+logs/
+oap_inbox/
+oap_outbox/
+*.oap
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

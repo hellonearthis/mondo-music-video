@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mondo Music Video</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<header><a class="brand" href="/"><span class="brand-mark">M</span><span>MONDO<small>MUSIC VIDEO</small></span></a>
+  <div class="edition">A LITTLE STUDIO. A BIG PICTURE.<span>Community edition <span id="version"></span></span></div>
+  <span class="oap-badge">OAP BUILT IN <span id="oap-version"></span></span></header>
+<div class="shell">
+<aside><div class="nav-label">YOUR STUDIO</div><nav aria-label="Studio sections">
+  <button class="nav active" data-panel="video">Music video <span>01</span></button>
+  <button class="nav" data-panel="actors">Actors &amp; OAP <span>02</span></button>
+  <button class="nav" data-panel="styles">Styles <span>03</span></button>
+  <button class="nav" data-panel="harvest">Style harvest <span>04</span></button>
+  <button class="nav" data-panel="idents">Credits &amp; idents <span>05</span></button>
+  <button class="nav" data-panel="outputs">Finished videos <span>06</span></button>
+  <button class="nav" data-panel="settings">Settings <span>07</span></button>
+</nav><div class="nav-label full-label">THE FULL STUDIO</div><nav aria-label="Full studio previews">
+  <button class="nav teaser" data-feature="Short films">Short films <span>↗</span></button>
+  <button class="nav teaser" data-feature="Micro Drama">Micro Drama <span>↗</span></button>
+  <button class="nav teaser" data-feature="Hodge TV">Hodge TV <span>↗</span></button>
+  <button class="nav teaser" data-feature="The cutting room">Cutting room <span>↗</span></button>
+  <button class="nav teaser" data-feature="The Vault">The Vault <span>↗</span></button>
+</nav><div class="sidebar-note">Made to make something.<br>MAXIMUM GOOSE LABORATORIES</div></aside>
+<main>
+<div id="notice" role="alert" hidden></div>
+<section id="operation" aria-live="polite"><div><span id="status-dot"></span><strong id="status-title">READY WHEN YOU ARE</strong><span id="status-message">One idea. One production at a time.</span></div>
+  <progress id="progress" max="100" value="0" aria-label="Operation progress"></progress><button id="cancel" class="quiet" hidden>Cancel operation</button><button id="show-log" class="quiet" hidden>View log</button>
+  <pre id="operation-log" hidden></pre></section>
+
+<section id="panel-video" class="panel"><div class="eyebrow">01 / THE MAIN EVENT</div><h1>Your song.<br><em>A world of its own.</em></h1><p class="intro">Give your music a picture. Choose a style, bring your cast, and let the track lead.</p>
+<form id="video-form" class="production-form" data-kind="video"><div class="form-grid"><div class="card"><div class="card-title"><span class="step">1</span> Set the direction</div>
+  <label>Your song<input type="file" class="song-input" accept="audio/*" required></label><div class="file-receipt song-receipt">WAV, MP3, FLAC, OGG, M4A, AAC or AIFF · up to 256 MB</div>
+  <label>Production title<input name="title" maxlength="160" placeholder="Something worth turning up"></label>
+  <label>Visual direction<textarea name="direction" rows="5" maxlength="6000" placeholder="A rooftop performance at golden hour. Wind through the city. An electric blue jacket." required></textarea></label>
+  <label>Style<select class="style-select" name="style_id"></select></label>
+  <div class="two-col"><label>Picture shape<select name="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>21:9</option></select></label><label>BPM, if known<input name="bpm" type="number" min="30" max="300" placeholder="Optional"></label></div>
+</div><div class="card"><div class="card-title"><span class="step">2</span> Bring it to life</div>
+  <label>Renderer<select class="backend-select" name="backend"></select></label><label>Render resolution<select class="resolution-select" name="resolution"></select></label>
+  <label>Cast<select class="actor-select" name="actors" multiple size="3" aria-label="Select actors"></select></label><small>Use Ctrl / Command to select several actors. No cast is required unless your renderer needs a reference.</small>
+  <label>Additional reference images<input type="file" class="refs-input" accept="image/*" multiple></label><div class="refs-receipt file-receipt">No additional images</div><button type="button" class="quiet clear-refs">Clear reference images</button>
+  <details><summary>Timing, credits &amp; content</summary><label>Seconds per music passage<input name="segment_seconds" type="number" min="4" max="14" step="0.5" value="8"></label><label>Opening ident<select name="start_ident" class="ident-select"><option value="">None</option></select></label><label>Closing ident<select name="end_ident" class="ident-select"><option value="">None</option></select></label><div class="ratings"></div></details>
+  <div class="action-bar"><button class="primary operation-action" type="submit">Preview production <span>↗</span></button><small>Review the plan and any estimated charges before generation.</small></div>
+</div></div></form></section>
+
+<section id="panel-actors" class="panel" hidden><div class="eyebrow">02 / THE COMPANY YOU KEEP</div><h1>Meet your <em>cast.</em></h1><p class="intro">Visual identities that travel. Create an actor from a reference image, or bring one in with Open Actor Protocol.</p>
+<div id="actor-list" class="actor-grid"></div><div class="form-grid"><form id="actor-form" class="card"><h2>Create an actor</h2><label>Actor ID<input name="actor_id" pattern="[a-z0-9][a-z0-9_-]{0,63}" required placeholder="electric_blue"></label><label>Display name<input name="name" maxlength="160" required></label><label>Visual description<textarea name="description" rows="3" maxlength="6000"></textarea></label><label>Reference image<input type="file" name="reference" accept="image/*" required></label><button class="primary operation-action">Create actor</button></form>
+<div class="card"><h2>Bring an actor with OAP</h2><p>Full packages carry the reference image. Imported voices and other assets remain preserved in the original package and are never executed.</p><label>OAP package<input id="oap-file" type="file" accept=".oap"></label><label class="check"><input id="allow-unsigned" type="checkbox"> Explicitly allow an unsigned package</label><button id="inspect-oap" class="secondary">Inspect package</button><pre id="oap-report" hidden></pre><form id="oap-import-form" hidden><label>Import under actor ID<input name="actor_id" placeholder="Keep package ID"></label><label class="check"><input name="accept_unknown" type="checkbox" required> I reviewed the signer. A valid signature does not establish trust.</label><button class="primary operation-action">Import actor</button></form></div></div></section>
+
+<section id="panel-styles" class="panel" hidden><div class="eyebrow">03 / FIND YOUR LOOK</div><h1>Make it <em>feel something.</em></h1><p class="intro">A visual vocabulary for every song. Start with Daylight Cinema, write your own, or harvest a look from references.</p><div id="style-list" class="style-grid"></div><form id="style-form" class="card narrow"><h2>Write a style</h2><label>Style ID<input name="id" pattern="[a-z0-9][a-z0-9_-]{0,63}" required></label><label>Name<input name="name" maxlength="160" required></label><label>Visual language<textarea name="direction" rows="5" maxlength="8000" required></textarea></label><button class="primary operation-action">Save new style</button></form></section>
+
+<section id="panel-harvest" class="panel" hidden><div class="eyebrow">04 / FOLLOW YOUR EYE</div><h1>Found a look?<br><em>Make it a language.</em></h1><p class="intro">Turn your reference images into a reusable style using your configured vision model.</p><form id="harvest-form" class="production-form card narrow" data-kind="harvest"><label>New style ID<input name="style_id" pattern="[a-z0-9][a-z0-9_-]{0,63}" required></label><label>Style name<input name="title" maxlength="160" required></label><label>Reference images<input type="file" class="refs-input" accept="image/*" multiple required></label><div class="refs-receipt file-receipt">No reference images</div><button type="button" class="quiet clear-refs">Clear reference images</button><p class="muted">Configure your vision service and any expected per-call cost in Settings first.</p><button class="primary operation-action">Preview harvest</button></form></section>
+
+<section id="panel-idents" class="panel" hidden><div class="eyebrow">05 / SIGN YOUR WORK</div><h1>Make an <em>entrance.</em></h1><p class="intro">Generate an animated production ident. Attach it to your next video as opening or closing credits.</p><form id="ident-form" class="production-form card narrow" data-kind="ident"><label>Title to display<input name="title" maxlength="160" required placeholder="Your production name"></label><label>Direction<textarea name="direction" rows="4" maxlength="6000" placeholder="Brushed chrome letters emerge from soft light." required></textarea></label><label>Style<select name="style_id" class="style-select"></select></label><div class="two-col"><label>Renderer<select name="backend" class="backend-select"></select></label><label>Resolution<select name="resolution" class="resolution-select"></select></label></div><div class="two-col"><label>Duration, seconds<input name="ident_seconds" type="number" min="4" max="12" value="5"></label><label>Shape<select name="aspect"><option>16:9</option><option>9:16</option><option>1:1</option></select></label></div><label>Reference images<input type="file" class="refs-input" accept="image/*" multiple></label><div class="refs-receipt file-receipt">No reference images</div><button type="button" class="quiet clear-refs">Clear reference images</button><p class="muted">Generated lettering may need a few attempts to spell a title correctly.</p><button class="primary operation-action">Preview ident</button></form></section>
+
+<section id="panel-outputs" class="panel" hidden><div class="eyebrow">06 / THAT'S A WRAP</div><h1>Ready for <em>the world.</em></h1><p class="intro">Your finished work, ready to play or download. Optional Topaz exports preserve the original.</p><div id="output-list" class="output-grid"></div></section>
+
+<section id="panel-settings" class="panel" hidden><div class="eyebrow">07 / YOUR MACHINE, YOUR STUDIO</div><h1>Set the <em>stage.</em></h1><p class="intro">Connect your own services and installed models. Your keys stay on this machine and are never returned by the settings API.</p><form id="settings-form" class="card"><div id="settings-fields" class="form-grid"></div><button class="primary operation-action">Save settings</button></form><form id="key-form" class="card narrow"><h2>Provider keys</h2><label>Credential<select name="name"><option>WAVESPEED_API_KEY</option><option>MMV_VISION_API_KEY</option></select></label><label>API key<input name="value" type="password" autocomplete="new-password" required></label><p id="key-status" class="muted"></p><button class="secondary operation-action">Save key locally</button></form><p class="muted">Keep the server on localhost. See the included installation and platform guides for setup details.</p></section>
+
+<section id="panel-teaser" class="panel" hidden><div class="eyebrow">A BIGGER STUDIO AWAITS</div><h1 id="teaser-title"></h1><p class="intro" id="teaser-description"></p><div class="card narrow"><h2>Part of the full Mondo studio</h2><p>This feature is not included in Mondo Music Video. This community edition is dedicated to music videos, actors, styles, and idents.</p><button id="back-to-video" class="primary">Back to making music videos</button></div></section>
+<footer>MAXIMUM GOOSE LABORATORIES <span>MAKE SOMETHING THAT MOVES.</span></footer>
+</main></div>
+<dialog id="preview-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close preview">×</button></form><div class="eyebrow">BEFORE THE CAMERA ROLLS</div><h2>Ready to create?</h2><div id="quote-summary"></div><p class="dialog-error" role="alert" hidden></p><label class="check"><input id="consent" type="checkbox"> I accept this plan and any estimated provider charges.</label><button id="start-production" class="primary">Start production</button></dialog>
+<dialog id="upscale-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close upscale">×</button></form><h2>Topaz export</h2><p class="dialog-error" role="alert" hidden></p><form id="upscale-form"><label>Installed model ID<input name="model" value="ahq-12" required></label><label>Scale<select name="scale"><option value="2">2×</option><option value="4">4×</option></select></label><p class="muted">Requires your own compatible Topaz installation, configured in Settings. Topaz may download its model data.</p><button class="primary">Start upscale</button></form></dialog>
+</body></html>
