@@ -21,6 +21,29 @@ Use local models or supported API providers. One production runs at a time,
 with progress, logs and cancellation. You provide your media, models and API
 keys. No actors, model weights or third-party commercial software are bundled.
 
+## Four montage grammars, driven by your music
+
+Mondo uses four distinct visual grammars. The analyzer detects the track's
+beats, downbeats, energy and musical sections; the planner uses that structure
+to select a grammar and place the shots and cuts.
+
+| Musical section energy | Montage grammar | Visual structure |
+| --- | --- | --- |
+| Low | **Standard** | One subject, sustained observation, fewer and longer shots. |
+| Mid | **Thematic multi-scene** | New subjects and settings connected by one thematic anchor. |
+| High | **Chaotic multi-scene** | New subjects, settings and actions in discontinuous collisions. |
+| Peak | **Single-subject fragmentation** | A recurring subject seen through many angles and shot scales. |
+
+These are the default energy-to-grammar assignments. The song's detected
+sections determine which grammars a production uses. Shot density, camera motion
+and shot scale respond to the musical energy; passage boundaries follow detected
+downbeats. Timing is detected from the uploaded audio automatically.
+
+The LLM writer receives the selected grammar, planned shots, camera instructions,
+visual vocabulary and reference bindings. It writes the visual content while
+the planner owns timing. GPU Laya reviews the prompts before rendering, and
+Mondo assembles the rendered passages against the original song.
+
 ## Install
 
 Install **Python 3.11+**, **Git**, and **FFmpeg/ffprobe**, then:
