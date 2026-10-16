@@ -1,0 +1,106 @@
+"""Minimal Comfy API v2 wire fixture, used by the real official SDK."""
+import json
+import socket
+import uuid
+from email.parser import BytesParser
+from email.policy import default
+
+NOW = '2026-10-16T12:00:00Z'
+EXPIRES = '2099-01-01T00:00:00Z'
+
+
+class ComfyV2Mixin:
+    def v2_reply(self, value, status=200, **headers):
+        data = json.dumps(value).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(data)))
+        for key, val in headers.items():
+            self.send_header(key, val)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def v2_job(self, job_id):
+        status = self.server.v2_status.get(job_id, 'running' if self.server.v2_hold else 'succeeded')
+        base = f'http://127.0.0.1:{self.server.server_port}/api/v2'
+        return {'id': job_id, 'status': status, 'created_at': NOW, 'started_at': NOW,
+                'completed_at': NOW if status == 'succeeded' else None, 'expires_at': EXPIRES,
+                'queue_position': None, 'progress': None, 'error': None,
+                'outputs': [{'id': 'output-video', 'node_id': '92', 'name': '../../untrusted.mp4',
+                    'type': 'video', 'content_type': 'video/mp4', 'size_bytes': len(self.video),
+                    'hash': None, 'url': base + '/assets/output-video/content', 'url_expires_at': EXPIRES}]
+                    if status == 'succeeded' else [],
+                'urls': {name: base + '/jobs/' + job_id + suffix for name, suffix in
+                         [('self', ''), ('events', '/events'), ('cancel', '/cancel')]}}
+
+    def v2_post(self, data):
+        if not self.path.startswith('/api/v2/'):
+            return False
+        if self.path == '/api/v2/assets':
+            msg = BytesParser(policy=default).parsebytes(
+                ('Content-Type: ' + self.headers['Content-Type'] + '\r\n\r\n').encode() + data)
+            parts = {part.get_param('name', header='content-disposition'): part.get_payload(decode=True)
+                     for part in msg.iter_parts()}
+            asset_id = str(uuid.uuid4())
+            self.server.v2_assets[asset_id] = parts
+            self.v2_reply({'id': asset_id, 'hash': parts['expected_hash'].decode(),
+                'size_bytes': len(parts['file']), 'content_type': parts['content_type'].decode(),
+                'file_path': parts['file_path'].decode(), 'created_at': NOW, 'created_new': True,
+                'url': f'http://127.0.0.1:{self.server.server_port}/api/v2/assets/{asset_id}/content',
+                'url_expires_at': EXPIRES}, 201)
+        elif self.path == '/api/v2/jobs':
+            body = json.loads(data)
+            self.server.v2_submits.append((dict(self.headers), body))
+            if self.server.v2_reject:
+                self.v2_reply({'error': {'code': 'queue_full', 'message': 'Fixture queue full'}}, 429,
+                              **{'Retry-After': '1'})
+            elif self.server.v2_drop:
+                self.connection.shutdown(socket.SHUT_RDWR)
+                self.connection.close()
+            else:
+                job_id = str(uuid.uuid4())
+                self.server.v2_ids.append(job_id)
+                self.v2_reply(self.v2_job(job_id), 201)
+        elif self.path.endswith('/cancel'):
+            job_id = self.path.split('/')[-2]
+            self.server.v2_status[job_id] = 'canceled'
+            self.server.v2_cancels.append(job_id)
+            self.v2_reply(self.v2_job(job_id))
+        else:
+            self.v2_reply({'error': {'code': 'not_found', 'message': 'Unknown fixture route'}}, 404)
+        return True
+
+    def v2_get(self):
+        if self.path == '/api/v2/health':
+            self.v2_reply({'status': 'healthy'})
+        elif self.path.startswith('/api/v2/jobs/'):
+            self.v2_reply(self.v2_job(self.path.split('/')[-1]))
+        elif self.path == '/api/v2/assets/output-video/content':
+            if self.server.v2_download_fail:
+                self.v2_reply({'error': {'code': 'not_found', 'message': 'Fixture download failure'}}, 503)
+            else:
+                self.send_response(200)
+                self.send_header('Content-Type', 'video/mp4')
+                self.send_header('Content-Length', str(len(self.video)))
+                self.end_headers()
+                self.wfile.write(self.video)
+        else:
+            return False
+        return True
+
+    def do_HEAD(self):
+        self.send_response(404)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+
+def reset_v2(server):
+    server.v2_assets = {}
+    server.v2_submits = []
+    server.v2_status = {}
+    server.v2_ids = []
+    server.v2_cancels = []
+    server.v2_hold = False
+    server.v2_drop = False
+    server.v2_reject = False
+    server.v2_download_fail = False

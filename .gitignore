@@ -43,3 +43,6 @@ oap_outbox/
 .DS_Store
 Thumbs.db
 *.bak
+
+# Local contest planning notes
+/docs/COMFY_CONTEST*.md

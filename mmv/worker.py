@@ -58,7 +58,7 @@ def save_cached_passage_prompt(cache_dir, system, job, prompt, seg_id):
         pass
 
 
-def run(home, directory):
+def run(home, directory, *, resume=False):
     os.environ['MMV_HOME'] = str(home)
     store = Storage(home)
     request = read_json(directory / 'request.json')
@@ -68,7 +68,7 @@ def run(home, directory):
     from .engine.plan import ShotPlan
     from .engine.schema import WriterResponse, build_writer_request, assemble_prompt, validate_prompt, ValidationError, RIGGING_TAIL
     from .engine.writer import call_llm
-    from .engine.backends import get_backend
+    from .render import get_backend
     from .pipeline import ENGINE
     from .render import request_json
     def progress(message, value):
@@ -118,126 +118,131 @@ def run(home, directory):
     # OAP's own category names are enforced independently by check_cast.
     if all(value == 'none' for value in request['content'].values()): restrictions = ['nudity','blood','violence','sexual']
     from . import runtime
-    writer_process = None
-    if settings['writer_mode'] == 'local':
-        progress('Starting music-video writer', 2)
-        writer_process = runtime.start_service(settings['writer_launch'],settings['writer_cwd'],
-                         settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log')
-    prompts = {}
-    validator = None
-    if request['kind'] == 'video':
-        from .engine.validators import LayaSemanticValidator
-        validator = LayaSemanticValidator()
-        progress('Loading Laya prompt reviewer', 3)
-        validator._load_agent()
+    if not resume:
+        writer_process = None
+        if settings['writer_mode'] == 'local':
+            progress('Starting music-video writer', 2)
+            writer_process = runtime.start_service(settings['writer_launch'],settings['writer_cwd'],
+                             settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log')
+        prompts = {}
+        validator = None
+        if request['kind'] == 'video':
+            from .engine.validators import LayaSemanticValidator
+            validator = LayaSemanticValidator()
+            progress('Loading Laya prompt reviewer', 3)
+            validator._load_agent()
 
-    if request['kind'] == 'ident':
-        system = style.compose_ident_prompt()
-        message = style.build_ident_writer_message(request['title'], request['ident_seconds'], request['ident_mode'],
-                   style_card=prepared['style'].get('style_card', prepared['style']['direction']), ident_notes=request['direction'])
-        (directory / 'writer_system.md').write_text(system, encoding='utf-8')
-        cache_dir = store.home / 'cache' / 'prompts'
-        cache_key = hashlib.sha256((system + "\n---\n" + message).encode('utf-8')).hexdigest()
-        cache_file = cache_dir / f"ident_{cache_key}.json"
-        cleared_info = read_json(store.home / 'cache_cleared.json', {})
-        cleared_at = float(cleared_info.get('cleared_at', 0))
-        reuse_prompts = request.get('reuse_prompts', True)
-        if reuse_prompts and cache_file.exists() and (cleared_at <= 0 or cache_file.stat().st_mtime >= cleared_at):
-            try:
-                cached = read_json(cache_file)
-                if cached and "prompt" in cached:
-                    prompts[plan.segments[0].segment_id] = cached["prompt"]
-                    write_json(directory / 'prompts.json', prompts)
-                    progress('Ident prompt resumed from cache', 30)
-            except Exception:
-                pass
-        if plan.segments[0].segment_id not in prompts:
-            progress('Writing ident with the original ident prompt', 10)
-            raw = llm(system, message).strip()
-            if raw.startswith('```'): raw = '\n'.join(raw.splitlines()[1:-1]).strip()
-            if request['title'] not in raw: raise ValueError('Ident writer omitted the exact requested title')
-            prompts[plan.segments[0].segment_id] = raw
-            write_json(directory / 'prompts.json', prompts)
-            try:
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                write_json(cache_file, {"prompt": raw})
-            except Exception:
-                pass
-    else:
-        system = style.compose_writer_prompt(str(style_dir), actor_block=cast_block, restrictions=restrictions,
-                    silent_mouths=effective_silent_mouths, lyrics=request['lyrics'] or None, direction=request['direction'] or None)
-        (directory / 'writer_system.md').write_text(system, encoding='utf-8')
-        jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
-        cache_dir = store.home / 'cache' / 'prompts'
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cleared_info = read_json(store.home / 'cache_cleared.json', {})
-        cleared_at = float(cleared_info.get('cleared_at', 0))
-        reuse_prompts = request.get('reuse_prompts', True)
-        for index, seg in enumerate(plan.segments):
-            tags = backend.ref_tags(seg.ref_image_slots, 0, 1)
-            job = build_writer_request(plan, seg, tags, casting.cast_for(prepared['casting'], seg.segment_id), silent_mouths=effective_silent_mouths)
-            if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
-            write_json(jobs_dir / (seg.segment_id+'.json'), job)
-
-            if reuse_prompts:
-                cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', system, job, seg, tags, cleared_at=cleared_at)
-                if cached:
-                    if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in cached.lower():
-                        soundscape_pos = cached.find("\noverall_soundscape:")
-                        if soundscape_pos > 0:
-                            cached = cached[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + cached[soundscape_pos:]
-                        else:
-                            cached = cached.rstrip() + f" {RIGGING_TAIL}\n"
-                    prompts[seg.segment_id] = cached
-                    write_json(directory / 'prompts.json', prompts)
-                    progress(f'Musical passage {index+1} of {len(plan.segments)} (resumed from cache)', 5 + int(25*(index+1)/len(plan.segments)))
-                    continue
-
-            progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
-            feedback = ''
-            attempts = 3 if settings['writer_mode'] == 'local' else 1
-            for attempt in range(attempts):
-                raw = llm(system + feedback, json.dumps(job, indent=2))
-                (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
+        if request['kind'] == 'ident':
+            system = style.compose_ident_prompt()
+            message = style.build_ident_writer_message(request['title'], request['ident_seconds'], request['ident_mode'],
+                       style_card=prepared['style'].get('style_card', prepared['style']['direction']), ident_notes=request['direction'])
+            (directory / 'writer_system.md').write_text(system, encoding='utf-8')
+            cache_dir = store.home / 'cache' / 'prompts'
+            cache_key = hashlib.sha256((system + "\n---\n" + message).encode('utf-8')).hexdigest()
+            cache_file = cache_dir / f"ident_{cache_key}.json"
+            cleared_info = read_json(store.home / 'cache_cleared.json', {})
+            cleared_at = float(cleared_info.get('cleared_at', 0))
+            reuse_prompts = request.get('reuse_prompts', True)
+            if reuse_prompts and cache_file.exists() and (cleared_at <= 0 or cache_file.stat().st_mtime >= cleared_at):
                 try:
-                    response = WriterResponse.parse(raw, seg.segment_id)
-                    prompt = assemble_prompt(seg, response, tags)
-                    if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in prompt.lower():
-                        soundscape_pos = prompt.find("\noverall_soundscape:")
-                        if soundscape_pos > 0:
-                            prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
-                        else:
-                            prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
-                    problems = validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=effective_silent_mouths)
-                except (ValidationError, TypeError, AttributeError, KeyError) as exc:
-                    problems = [str(exc)]
-                if not problems:
-                    progress(f'Laya reviewing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
-                    state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
-                             'lyrics_flavor':request['lyrics'], 'director_direction':request['direction'],
-                             'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':cast_block}
-                    clip = validator.build_clipboard_request(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
-                    response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
-                    write_json(directory / f'{seg.segment_id}.laya-request-{attempt+1}.json', clip)
-                    write_json(directory / f'{seg.segment_id}.laya-response-{attempt+1}.json', response)
-                if not problems:
-                    prompts[seg.segment_id] = prompt
-                    write_json(directory / 'prompts.json', prompts)
-                    save_cached_passage_prompt(cache_dir, system, job, prompt, seg.segment_id)
-                    break
-                write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
-                feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
-            else:
-                raise ValueError(f'{seg.segment_id}: original prompt validation failed. See the validation report. Nothing rendered.')
-        write_json(directory / 'prompts.json', prompts)
-    if validator is not None:
-        validator._agent = None
-        del validator
-        import gc
-        gc.collect()
-        torch = sys.modules.get("torch")
-        if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
-    runtime.stop_process(writer_process)
+                    cached = read_json(cache_file)
+                    if cached and "prompt" in cached:
+                        prompts[plan.segments[0].segment_id] = cached["prompt"]
+                        write_json(directory / 'prompts.json', prompts)
+                        progress('Ident prompt resumed from cache', 30)
+                except Exception:
+                    pass
+            if plan.segments[0].segment_id not in prompts:
+                progress('Writing ident with the original ident prompt', 10)
+                raw = llm(system, message).strip()
+                if raw.startswith('```'): raw = '\n'.join(raw.splitlines()[1:-1]).strip()
+                if request['title'] not in raw: raise ValueError('Ident writer omitted the exact requested title')
+                prompts[plan.segments[0].segment_id] = raw
+                write_json(directory / 'prompts.json', prompts)
+                try:
+                    cache_dir.mkdir(parents=True, exist_ok=True)
+                    write_json(cache_file, {"prompt": raw})
+                except Exception:
+                    pass
+        else:
+            system = style.compose_writer_prompt(str(style_dir), actor_block=cast_block, restrictions=restrictions,
+                        silent_mouths=effective_silent_mouths, lyrics=request['lyrics'] or None, direction=request['direction'] or None)
+            (directory / 'writer_system.md').write_text(system, encoding='utf-8')
+            jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
+            cache_dir = store.home / 'cache' / 'prompts'
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cleared_info = read_json(store.home / 'cache_cleared.json', {})
+            cleared_at = float(cleared_info.get('cleared_at', 0))
+            reuse_prompts = request.get('reuse_prompts', True)
+            for index, seg in enumerate(plan.segments):
+                tags = backend.ref_tags(seg.ref_image_slots, 0, 1)
+                job = build_writer_request(plan, seg, tags, casting.cast_for(prepared['casting'], seg.segment_id), silent_mouths=effective_silent_mouths)
+                if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
+                write_json(jobs_dir / (seg.segment_id+'.json'), job)
+
+                if reuse_prompts:
+                    cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', system, job, seg, tags, cleared_at=cleared_at)
+                    if cached:
+                        if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in cached.lower():
+                            soundscape_pos = cached.find("\noverall_soundscape:")
+                            if soundscape_pos > 0:
+                                cached = cached[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + cached[soundscape_pos:]
+                            else:
+                                cached = cached.rstrip() + f" {RIGGING_TAIL}\n"
+                        prompts[seg.segment_id] = cached
+                        write_json(directory / 'prompts.json', prompts)
+                        progress(f'Musical passage {index+1} of {len(plan.segments)} (resumed from cache)', 5 + int(25*(index+1)/len(plan.segments)))
+                        continue
+
+                progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
+                feedback = ''
+                attempts = 3 if settings['writer_mode'] == 'local' else 1
+                for attempt in range(attempts):
+                    raw = llm(system + feedback, json.dumps(job, indent=2))
+                    (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
+                    try:
+                        response = WriterResponse.parse(raw, seg.segment_id)
+                        prompt = assemble_prompt(seg, response, tags)
+                        if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in prompt.lower():
+                            soundscape_pos = prompt.find("\noverall_soundscape:")
+                            if soundscape_pos > 0:
+                                prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
+                            else:
+                                prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
+                        problems = validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=effective_silent_mouths)
+                    except (ValidationError, TypeError, AttributeError, KeyError) as exc:
+                        problems = [str(exc)]
+                    if not problems:
+                        progress(f'Laya reviewing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
+                        state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
+                                 'lyrics_flavor':request['lyrics'], 'director_direction':request['direction'],
+                                 'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':cast_block}
+                        clip = validator.build_clipboard_request(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
+                        response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
+                        write_json(directory / f'{seg.segment_id}.laya-request-{attempt+1}.json', clip)
+                        write_json(directory / f'{seg.segment_id}.laya-response-{attempt+1}.json', response)
+                    if not problems:
+                        prompts[seg.segment_id] = prompt
+                        write_json(directory / 'prompts.json', prompts)
+                        save_cached_passage_prompt(cache_dir, system, job, prompt, seg.segment_id)
+                        break
+                    write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
+                    feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
+                else:
+                    raise ValueError(f'{seg.segment_id}: original prompt validation failed. See the validation report. Nothing rendered.')
+            write_json(directory / 'prompts.json', prompts)
+        if validator is not None:
+            validator._agent = None
+            del validator
+            import gc
+            gc.collect()
+            torch = sys.modules.get("torch")
+            if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
+        runtime.stop_process(writer_process)
+    else:
+        prompts = read_json(directory / 'prompts.json', {})
+        if any(not isinstance(prompts.get(seg.segment_id), str) or not prompts[seg.segment_id] for seg in plan.segments):
+            raise ValueError('Resume requires saved validated prompts for every passage')
     progress('All prompts validated; opening renderer', 32)
     if request['backend'] == 'local_h3':
         runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
@@ -257,7 +262,8 @@ def run(home, directory):
     backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
                         song=None, steps=20, timeout_s=3600, comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
-                        map_path=settings['workflow_map_path'], root=ENGINE)
+                        map_path=settings['workflow_map_path'], root=ENGINE,
+                        comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'))
     try:
         song = inside(store.home / 'uploads', request['song']) if request['kind'] == 'video' else directory / 'silence.wav'
         if request['kind'] == 'ident':
@@ -317,10 +323,10 @@ def main():
         from . import runtime
         def terminate(signum, frame): raise SystemExit(130)
         signal.signal(signal.SIGTERM,terminate)
-        try:run(home,directory)
+        try:run(home,directory,resume=len(sys.argv)>4 and sys.argv[4]=='resume')
         except Exception as exc:
             message=str(exc)
-            for key in ('WAVESPEED_API_KEY','MMV_WRITER_API_KEY','MMV_VISION_API_KEY'):
+            for key in ('WAVESPEED_API_KEY','MMV_WRITER_API_KEY','MMV_VISION_API_KEY','MMV_COMFY_API_KEY'):
                 value=Storage(home).key(key)
                 if value:message=message.replace(value,'[redacted]')
             print(type(exc).__name__+': '+message,flush=True)

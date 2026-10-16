@@ -1,4 +1,4 @@
-# Platform support — 1.0.10
+# Platform support — 1.0.11
 
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |
@@ -24,3 +24,8 @@ must be tested individually and are not claimed as supported.
 The app uses filesystem permissions for its credential file. Windows users
 should keep their application data under their private user profile and apply
 appropriate Windows ACLs; POSIX mode bits are not a Windows access-control claim.
+
+The optional Comfy SDK renderer uses Python SDK/proxy packages and a loopback
+ComfyUI installation. Linux transport, synthetic assembly and official-proxy
+checks are covered by automated tests. Real H3 rendering through the proxy and
+Windows/macOS execution remain unverified. See [COMFY_SDK.md](COMFY_SDK.md).

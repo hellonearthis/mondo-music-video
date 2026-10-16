@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 
-from .storage import read_json, write_json
+from .storage import identifier, read_json, write_json
 
 
 class BusyError(ValueError):
@@ -101,10 +101,10 @@ class Jobs:
         with self.lock:
             return dict(self.last)
 
-    def start(self, kind, function):
+    def start(self, kind, function, *, run_id=None):
         with self.lock:
             self.require_idle()
-            record = {"id": uuid.uuid4().hex, "kind": kind, "state": "running",
+            record = {"id": identifier(run_id) if run_id else uuid.uuid4().hex, "kind": kind, "state": "running",
                       "message": "Starting", "progress": 0, "started": time.time()}
             context = JobContext(self, record)
             self.active, self.last = context, record
@@ -120,7 +120,7 @@ class Jobs:
                 except Exception as exc:
                     # Avoid exposing response bodies or credentials from external services.
                     message = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
-                    for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY"):
+                    for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
                         secret = self.store.key(name)
                         if secret:
                             message = message.replace(secret, "[redacted]")

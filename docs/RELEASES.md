@@ -1,5 +1,20 @@
 # Releases
 
+## 1.0.11 — Official Comfy SDK H3 rendering
+
+Adds an opt-in `comfy_sdk_h3` renderer using the official Python SDK and a
+loopback Comfy API v2 proxy. Reuses the original H3 workflow, planning lattice,
+reference ordering, Laya review and frame-exact assembly. Assets transfer through
+the SDK; no shared input/output folders are needed. Submissions are sent once,
+with receipts persisted before dispatch. Known jobs and failed downloads can
+resume through a new preview and consent step without rerunning the writer or
+resubmitting existing generations. Unknown outcomes and failed/canceled/expired
+jobs require operator reconciliation. Adds setup, UI, CLI and MCP integration
+and a reproducible operator procedure in [COMFY_SDK.md](COMFY_SDK.md).
+
+The direct local renderer remains the default. Real GPU verification through
+the proxy remains outstanding.
+
 ## 1.0.10 — Reviewed integration
 
 Integrates the fork’s draft persistence, diagnostics, Windows launcher, prompt

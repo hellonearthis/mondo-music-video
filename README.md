@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.0.10** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.0.11** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 Turn your song into a complete music video. Mondo listens to the track, detects
 beats and downbeats, measures energy, and identifies musical sections. Its
@@ -20,6 +20,15 @@ passage to its planned frames, joins the picture, and restores your original son
 Use local models or supported API providers. One production runs at a time,
 with progress, logs and cancellation. You provide your media, models and API
 keys. No actors, model weights or third-party commercial software are bundled.
+
+## Official Comfy SDK rendering
+
+Install `python -m pip install '.[comfy]'`, start the official local API proxy,
+and choose **H3 / Comfy SDK (local proxy)**. This path runs the existing H3 graph
+through the official Python SDK, uploads references/audio, downloads results and
+supports receipt-based recovery after interrupted renders or failed downloads.
+Your direct local workflow stays the default. See [setup and recovery](docs/COMFY_SDK.md)
+for pinned dependencies and operator verification.
 
 ## Four montage grammars, driven by your music
 

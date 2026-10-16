@@ -72,7 +72,7 @@ DEFAULT_STYLE = {
 DEFAULTS = {
     "backend": "local_h3", "comfy_url": "http://127.0.0.1:8188",
     "workflow_map_path": str(Path(__file__).parent / "engine/config/injection_map.json"),
-    "comfy_input": "", "comfy_output": "",
+    "comfy_input": "", "comfy_output": "", "comfy_sdk_url": "http://127.0.0.1:8189",
     "writer_url": "http://127.0.0.1:8080/v1", "writer_model": "", "writer_mode": "local", "writer_call_estimate": 0.0,
     "writer_launch": "", "writer_cwd": "", "comfy_launch": "", "comfy_cwd": "",
     "laya_model_dir": "", "laya_device": "cuda",
@@ -102,7 +102,7 @@ class Storage:
         return os.environ.get(name) or read_json(self.home / "secrets.json", {}).get(name, "")
 
     def save_key(self, name, value):
-        if name not in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY"):
+        if name not in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
             raise ValueError("Unknown credential")
         secrets = read_json(self.home / "secrets.json", {})
         if value:

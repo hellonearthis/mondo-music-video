@@ -7,3 +7,4 @@ recursive-include tests *.py *.json
 recursive-include mmv/engine/config *.json
 recursive-include mmv/engine/prompts *.md
 recursive-include mmv/engine/workflows *.json
+exclude docs/COMFY_CONTEST*.md

@@ -405,6 +405,7 @@ async function loadOutputs() {
 }
 
 const settingLabels = {
+  comfy_sdk_url: "Local Comfy API proxy URL",
   backend: "Default renderer", comfy_url: "ComfyUI service URL", comfy_input: "ComfyUI input folder (shared local path)", comfy_output: "ComfyUI output folder (shared local path)",
   writer_launch: "Local writer launch command (JSON arguments)", writer_cwd: "Writer working folder", comfy_launch: "ComfyUI launch command (JSON arguments)", comfy_cwd: "ComfyUI working folder",
   laya_model_dir: "Laya model folder", laya_device: "Laya device (cpu, cuda, mps)",
@@ -415,6 +416,7 @@ const settingLabels = {
 };
 
 const settingTooltips = {
+  comfy_sdk_url: "Official Comfy API v2 proxy on this machine, usually http://127.0.0.1:8189",
   backend: "Default video generation engine for music videos and idents",
   comfy_url: "HTTP URL for your running ComfyUI service instance",
   comfy_input: "Shared local filesystem path to ComfyUI's input directory",
@@ -485,6 +487,11 @@ async function preview(form) {
   logSession(`Preview requested for kind='${request.kind}' backend='${request.backend}'`);
   currentQuote = await json("/api/quote", request);
   logSession(`Preview ready: quote_id='${currentQuote.id}' estimate=$${Number(currentQuote.estimate_usd).toFixed(2)}`);
+  showQuote(request, currentQuote);
+}
+
+function showQuote(request, quote) {
+  currentQuote = quote;
   const summary = $("#quote-summary"); summary.replaceChildren();
   summary.append(text("p", request.kind === "harvest" ? "One visual style harvest." : `${currentQuote.clips} clips · ${currentQuote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
                  text("h2", `Estimated provider cost: $${Number(currentQuote.estimate_usd).toFixed(2)}`), text("p", currentQuote.note, "muted"));
@@ -507,6 +514,7 @@ async function poll() {
     $("#status-message").textContent = status.message || "One idea. One production at a time.";
     $("#progress").value = status.progress || 0;
     $("#cancel").hidden = !busy;
+    $("#resume-production").hidden = !status.can_resume;
     $("#show-log").hidden = false;
     $$(".operation-action").forEach(button => button.disabled = busy);
     if (lastState && lastState !== status.state && !busy) { await Promise.all([loadActors(), loadStyles(), loadOutputs()]); }
@@ -594,6 +602,10 @@ async function initialize() {
       if (form.dataset.kind === "harvest") form.querySelector(".refs-input").required = true;
       scheduleSave();
     };
+  });
+  $("#resume-production").onclick = handle(async () => {
+    const quote = await json("/api/resume/quote", {run_id: currentRun});
+    showQuote({kind: quote.kind}, quote);
   });
   $("#start-production").onclick = handle(async () => {
     if (!$("#consent").checked) throw new Error("Accept the preview before starting");

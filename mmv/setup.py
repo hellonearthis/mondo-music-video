@@ -20,10 +20,13 @@ from .storage import Storage, default_home, inside, write_json
 
 def doctor(store):
     settings = store.settings()
+    import importlib.util
     report = {"platform": platform.system(), "architecture": platform.machine(),
               "python": platform.python_version(), "data_directory": str(store.home),
               "ffmpeg": shutil.which("ffmpeg"), "ffprobe": shutil.which("ffprobe"),
               "local_workflow_configured": bool(settings["workflow_map_path"]),
+              "comfy_sdk_installed": importlib.util.find_spec("comfy_sdk") is not None,
+              "comfy_sdk_url": settings["comfy_sdk_url"],
               "comfy_input": settings["comfy_input"], "comfy_output": settings["comfy_output"],
               "writer_configured": bool(settings["writer_model"]), "writer_launch_configured": bool(settings["writer_launch"]),
               "laya_model_directory": settings["laya_model_dir"], "laya_device": settings["laya_device"],
@@ -78,8 +81,8 @@ def configure(store):
         answer = input(f"{label} [{old}]: ").strip()
         return answer or old
 
-    choices = ("local_h3", "wavespeed", "seedance_2", "seedance_2_5")
-    backend = ask("Default renderer (local_h3, wavespeed, seedance_2, seedance_2_5)", settings["backend"])
+    choices = ("local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5")
+    backend = ask("Default renderer (local_h3, comfy_sdk_h3, wavespeed, seedance_2, seedance_2_5)", settings["backend"])
     if backend not in choices:
         raise ValueError("Unknown renderer")
     settings["backend"] = backend
@@ -95,6 +98,14 @@ def configure(store):
         if comfy_python:
             settings["comfy_launch"] = json.dumps([comfy_python, "main.py"])
             settings["comfy_cwd"] = comfy_dir
+    elif backend == "comfy_sdk_h3":
+        from .comfy_sdk import require_sdk, validate_proxy_url
+        require_sdk()
+        settings["comfy_sdk_url"] = validate_proxy_url(ask("Local Comfy API proxy URL", settings["comfy_sdk_url"]))
+        token = getpass.getpass("Proxy bearer token (blank keeps existing token): ").strip()
+        if token:
+            store.save_key("MMV_COMFY_API_KEY", token)
+        configure_standard_graph(store, settings, ask)
     else:
         key = getpass.getpass("WaveSpeed API key (blank keeps an existing key): ").strip()
         if key:

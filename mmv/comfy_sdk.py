@@ -1,0 +1,216 @@
+"""Official Comfy SDK transport for the existing H3 graph, via a local v2 proxy."""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import time
+import uuid
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from .engine.backends.local_h3 import LocalH3Backend
+from .engine.backends.base import BackendError
+from .engine.comfy import WorkflowBuilder, slice_audio
+from .storage import identifier, read_json, write_json
+
+SDK_REVISION = "6d2dd7233dfa0a1abdf199beada55b2282e26b44"
+
+
+def validate_proxy_url(value):
+    url = urlsplit(value)
+    if (url.scheme not in ('http', 'https') or url.hostname not in ('127.0.0.1', 'localhost', '::1')
+            or url.username or url.password or url.query or url.fragment or url.path not in ('', '/')):
+        raise ValueError('Comfy SDK H3 requires a loopback proxy URL, such as http://127.0.0.1:8189')
+    try:
+        url.port
+    except ValueError:
+        raise ValueError('Invalid Comfy proxy port') from None
+    if url.port == 0:
+        raise ValueError('Invalid Comfy proxy port')
+    return value.rstrip('/')
+
+
+def require_sdk():
+    if importlib.util.find_spec('comfy_sdk') is None:
+        raise ValueError('Install the Comfy SDK extra: pip install ".[comfy]"')
+
+
+class SdkSession:
+    """SDK assets/jobs with its documented non-retrying low-level submit.
+
+    Comfy.submit retries 429s independently of RetryPolicy. ComfyLow.post_jobs
+    sends exactly once. Both are shipped by the same pinned official SDK.
+    """
+    def __init__(self, url, key=''):
+        require_sdk()
+        import httpx
+        from comfy_low.transport import ComfyLow
+        from comfy_sdk.assets import AssetFactory
+        from comfy_sdk.jobs import JobFactory
+        url = validate_proxy_url(url)
+        expected = httpx.URL(url)
+        def local_request(request):
+            target = request.url
+            if (target.scheme, target.host, target.port) != (expected.scheme, expected.host, expected.port):
+                raise ValueError('Comfy proxy returned a link outside the configured local endpoint')
+        self.http = httpx.Client(timeout=30, trust_env=False, follow_redirects=False,
+                                 event_hooks={'request': [local_request]})
+        self.low = ComfyLow(url, key or None, client=self.http,
+                            client_info='mondo-music-video')
+        self.assets = AssetFactory(self.low)
+        self.jobs = JobFactory(self.low)
+
+    def submit(self, graph, key):
+        from comfy_sdk.jobs import Job
+        return Job(self.low, self.low.post_jobs(graph, idempotency_key=key))
+
+    def close(self):
+        self.low.close()
+        self.http.close()
+
+
+def check_proxy(url, key=''):
+    session = SdkSession(url, key)
+    try:
+        response = session.low.raw_request('GET', '/health', timeout=3)
+        response.raise_for_status()
+        if response.json().get('status') != 'healthy':
+            raise ValueError('Unexpected proxy health response')
+    except Exception:
+        raise ValueError('Cannot reach the Comfy API v2 proxy. Start comfy-api-proxy and check its URL in Settings.') from None
+    finally:
+        session.close()
+
+
+def cancel_requests(directory, url, key=''):
+    """Cancel only jobs whose IDs were durably recorded by this run."""
+    session = SdkSession(url, key)
+    try:
+        for path in (Path(directory) / 'renders').glob('*/comfy-request.json'):
+            record = read_json(path, {})
+            if record.get('job_id') and record.get('state') not in ('succeeded', 'failed', 'canceled', 'expired'):
+                try:
+                    job = session.jobs.get(record['job_id']).cancel()
+                    record['state'] = job.status
+                    record['cancellation_requested'] = True
+                    write_json(path, record)
+                except Exception:
+                    # Retain the request ID for explicit operator reconciliation.
+                    record['cancellation_unconfirmed'] = True
+                    write_json(path, record)
+    finally:
+        session.close()
+
+
+class ComfySdkH3Backend(LocalH3Backend):
+    name = 'comfy_sdk_h3'
+
+    def capabilities(self):
+        card = super().capabilities()
+        return {**card, 'backend': self.name, 'display_name': 'H3 / official Comfy SDK (local proxy)'}
+
+    def open_render(self, **run):
+        self.directory = Path(run['out_dir'])
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.builder = WorkflowBuilder.load(run.get('map_path'), run.get('root'))
+        self.url = validate_proxy_url(run['comfy_sdk_url'])
+        self.timeout = run.get('timeout_s') or 3600
+        self.session = SdkSession(self.url, run.get('comfy_sdk_key', ''))
+
+    def render_segment(self, **job):
+        seg_id = identifier(job['segment_id'])
+        directory = self.directory / seg_id
+        directory.mkdir(parents=True, exist_ok=True)
+        receipt_path = directory / 'comfy-request.json'
+        # Binding the receipt to exact inputs prevents accidental reuse for a new job.
+        digest = hashlib.sha256(json.dumps({k:v for k,v in job.items() if k not in ('images', 'song')},
+                                         sort_keys=True).encode())
+        for _, path in job.get('images') or []:
+            digest.update(Path(path).read_bytes())
+        digest.update(Path(job['song']).read_bytes())
+        digest.update(json.dumps(self.builder.base, sort_keys=True).encode())
+        digest.update(json.dumps(self.builder.map, sort_keys=True).encode())
+        fingerprint = digest.hexdigest()
+        record = read_json(receipt_path, {})
+        if record:
+            if record.get('fingerprint') != fingerprint or record.get('endpoint') != self.url:
+                raise BackendError('Saved Comfy request has different inputs. Refusing a new submission.')
+            if not record.get('job_id'):
+                raise BackendError('Comfy submission outcome is unknown. Inspect comfy-request.json and the proxy; do not resubmit.')
+            remote = self.session.jobs.get(record['job_id'])
+        else:
+            audio = directory / 'passage.wav'
+            slice_audio(job['song'], audio, job['audio_start_s'], job['audio_end_s'] - job['audio_start_s'])
+            files = {}
+            images = []
+            for index, (_, path) in enumerate(job.get('images') or []):
+                name = f'image-{index}.png'
+                files[name] = Path(path)
+                images.append(name)
+            files['passage.wav'] = audio
+            graph, _ = self.builder.build(prompt=job['prompt'], duration_input=job['duration_input'],
+                seed=job['seed'], width=job['width'], height=job['height'], steps=20,
+                image_files=images, audio_files=['passage.wav'],
+                video_prefix=f"mondo/{job['slug']}/{seg_id}", audio_prefix=f"mondo/{job['slug']}/{seg_id}_diegetic")
+            # Only replace the explicit loader widgets generated by the injection map.
+            for spec_name in ('image_refs', 'audio_refs'):
+                spec = self.builder.map[spec_name]
+                for node in graph.values():
+                    if node.get('class_type') == spec['loader_class']:
+                        value = node.get('inputs', {}).get(spec['loader_field'])
+                        if isinstance(value, str) and value in files:
+                            asset = self.session.assets.from_file(files[value])
+                            node['inputs'][spec['loader_field']] = asset.as_reference()
+            write_json(directory / 'workflow.json', graph)
+            record = {'backend': self.name, 'endpoint': self.url, 'sdk_revision': SDK_REVISION,
+                      'fingerprint': fingerprint, 'idempotency_key': str(uuid.uuid4()),
+                      'state': 'submitting', 'submitted_at': time.time()}
+            # Persist BEFORE dispatch: even a killed process cannot silently submit twice.
+            write_json(receipt_path, record)
+            try:
+                remote = self.session.submit(graph, record['idempotency_key'])
+            except Exception:
+                record['state'] = 'unknown'
+                write_json(receipt_path, record)
+                raise BackendError('Comfy submission did not return a usable receipt. It may be running. '
+                                   'Inspect comfy-request.json and the proxy before generating again.') from None
+            record.update(job_id=remote.id, state=remote.status)
+            write_json(receipt_path, record)
+        deadline = time.monotonic() + self.timeout
+        while remote.status not in ('succeeded', 'failed', 'canceled', 'expired'):
+            if time.monotonic() >= deadline:
+                raise BackendError('Comfy job timed out; its saved request can be resumed without resubmitting.')
+            time.sleep(.5)
+            remote.refresh()
+            record['state'] = remote.status
+            write_json(receipt_path, record)
+        record['state'] = remote.status
+        write_json(receipt_path, record)
+        if remote.status != 'succeeded':
+            raise BackendError(f'Comfy job {remote.id} ended {remote.status}; no replacement generation submitted.')
+        result = {'video': '', 'audio': '', 'request_id': remote.id, 'backend': self.name}
+        for kind, suffix in (('video', '.mp4'), ('audio', '.wav')):
+            candidates = [o for o in remote.outputs if o.content_type.startswith(kind + '/')]
+            if not candidates:
+                if kind == 'video':
+                    raise BackendError('Comfy job returned no video output')
+                continue
+            # Prefer the mapped primary video/audio saver; ignore provider filenames.
+            target_name = 'savevideo_prefix' if kind == 'video' else 'audio_prefix'
+            target = self.builder.map['targets'].get(target_name, {}).get('node')
+            output = next((o for o in candidates if o.node_id == target), candidates[0])
+            destination = directory / (kind + suffix)
+            partial = directory / (kind + suffix + '.partial')
+            # Re-download instead of trusting files left by an interrupted transfer.
+            output.to_file(partial)
+            if not partial.stat().st_size:
+                raise BackendError('Comfy returned an empty media asset')
+            partial.replace(destination)
+            result[kind] = str(destination)
+        write_json(directory / 'result.json', result)
+        return result
+
+    def close_render(self):
+        if getattr(self, 'session', None):
+            self.session.close()

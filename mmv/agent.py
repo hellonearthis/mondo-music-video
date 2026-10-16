@@ -78,6 +78,9 @@ class AgentClient:
             raise ValueError("Review the preview and obtain user authorization before starting")
         return self._json("POST", "/api/start", {"quote_id": quote_id, "consent": True})
 
+    def preview_resume(self, run_id):
+        return self._json("POST", "/api/resume/quote", {"run_id": run_id})
+
     def cancel(self):
         return self._json("POST", "/api/cancel")
 
@@ -171,6 +174,8 @@ def main(argv=None):
     upload.add_argument("path")
     preview = sub.add_parser("preview")
     preview.add_argument("request_file", help="JSON production request file")
+    resume = sub.add_parser("preview-resume")
+    resume.add_argument("run_id")
     start = sub.add_parser("start")
     start.add_argument("quote_id")
     start.add_argument("--consent", action="store_true")
@@ -186,6 +191,8 @@ def main(argv=None):
             result = client.upload(args.kind, args.path)
         elif args.command == "preview":
             result = client.preview(json.loads(Path(args.request_file).read_text(encoding="utf-8")))
+        elif args.command == "preview-resume":
+            result = client.preview_resume(args.run_id)
         elif args.command == "start":
             result = client.start(args.quote_id, args.consent)
         elif args.command == "log":

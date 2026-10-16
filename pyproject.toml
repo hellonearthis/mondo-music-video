@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mondo-music-video"
-version = "1.0.10"
+version = "1.0.11"
 description = "A focused music-video studio with Open Actor Protocol built in"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+comfy = [
+  "comfy-sdk @ git+https://github.com/Comfy-Org/comfy-python-sdk@6d2dd7233dfa0a1abdf199beada55b2282e26b44",
+  "comfy-api-proxy @ git+https://github.com/Comfy-Org/comfy-api-proxy@1569dc17ec0dd293d4b9a0723e142204dacedb85",
+]
 test = ["httpx>=0.27,<1"]
 mcp = ["mcp>=2,<3"]
 

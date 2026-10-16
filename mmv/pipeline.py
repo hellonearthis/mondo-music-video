@@ -47,7 +47,7 @@ def roster_for(store, request, refs):
 
 
 def prepare(store, request):
-    from .engine.backends import get_backend
+    from .render import get_backend
     from .engine.plan import plan
     from .engine.analyze import ScoreMap, Section
     from .engine.casting import assign
@@ -86,7 +86,7 @@ def prepare(store, request):
             raise ValueError('Configure your Laya model folder in Settings before music-video production')
     backend = get_backend(request['backend'])
     refs, descriptions = references(store, request)
-    if request['backend'] != 'local_h3' and not store.key():
+    if request['backend'] not in ('local_h3', 'comfy_sdk_h3') and not store.key():
         raise ValueError('Configure your WaveSpeed API key in Settings')
     if request['backend'] == 'local_h3':
         for key in ('comfy_input', 'comfy_output'):
@@ -97,6 +97,13 @@ def prepare(store, request):
         url = urlparse(settings['comfy_url'])
         if url.scheme != 'http' or url.path not in ('', '/'):
             raise ValueError('The original local H3 adapter needs a direct HTTP ComfyUI host and port')
+    if request['backend'] == 'comfy_sdk_h3':
+        from .comfy_sdk import require_sdk, validate_proxy_url, check_proxy
+        require_sdk()
+        validate_proxy_url(settings['comfy_sdk_url'])
+        from .engine.comfy import WorkflowBuilder
+        WorkflowBuilder.load(settings['workflow_map_path'], ENGINE)
+        check_proxy(settings['comfy_sdk_url'], store.key('MMV_COMFY_API_KEY'))
     style = store.style(request['style_id'])
     if kind == 'video':
         if not request.get('song'):
@@ -131,7 +138,7 @@ def prepare(store, request):
         score = ScoreMap('ident', round(seconds * 24), 22050, 0, 4, sections=[Section(0, round(seconds * 24), 0, .2, 'low')])
     aspect_w, aspect_h = map(int, request['aspect'].split(':'))
     width, height = backend.plan_resolution(aspect_w, aspect_h, megapixels=request['megapixels'],
-                                            resolution=request['resolution'] if request['backend'] != 'local_h3' else None)
+                                            resolution=request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None)
     vocab = read_json(ENGINE / 'config/vocab.json')
     roster = roster_for(store, request, refs)
     p = plan(score, width=width, height=height, vocab=vocab, seed=request['seed'], slug='music-video',
@@ -148,7 +155,7 @@ def prepare(store, request):
             raise ValueError('The planned cast exceeds this renderer’s reference limit')
     casting = assign(p, roster, policy=request['casting_policy'], seed=request['seed'],
                      ref_policy=request['ref_policy'], ensemble_mode=request['ensemble_mode'], on_screen=request['on_screen']) if roster else None
-    render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] != 'local_h3' else None,
+    render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None,
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0
     return {'settings': settings, 'segments': [asdict(s) for s in p.segments], 'plan': asdict(p), 'score': asdict(score),
@@ -167,7 +174,7 @@ def fingerprint(store, request, prepared):
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))
     for key in ('start_ident', 'end_ident'):
         if request.get(key): files.append(inside(store.home / 'runs', request[key]))
-    if request['backend'] == 'local_h3' and request['kind'] != 'harvest':
+    if request['backend'] in ('local_h3', 'comfy_sdk_h3') and request['kind'] != 'harvest':
         from .engine.comfy import WorkflowBuilder
         builder = WorkflowBuilder.load(prepared['settings']['workflow_map_path'], ENGINE)
         digest.update(json.dumps(builder.base, sort_keys=True).encode())
@@ -179,7 +186,7 @@ def fingerprint(store, request, prepared):
     return digest.hexdigest()
 
 
-def produce(store, request, prepared, context):
+def produce(store, request, prepared, context, *, resume=False):
     directory = context.log_path.parent
     write_json(directory / 'request.json', request)
     write_json(directory / 'consent.json', prepared['consent'])
@@ -188,9 +195,15 @@ def produce(store, request, prepared, context):
     context.update('Starting original Mondo production pipeline', 1)
     from .jobs import Cancelled
     try:
-        context.command([sys.executable, '-u', '-m', 'mmv.worker', 'produce', str(store.home), str(directory)],
+        context.command([sys.executable, '-u', '-m', 'mmv.worker', 'produce', str(store.home), str(directory), *(['resume'] if resume else [])],
                         progress_path=directory / 'progress.json')
     except Cancelled:
+        if request['backend'] == 'comfy_sdk_h3':
+            from .comfy_sdk import cancel_requests
+            try:
+                cancel_requests(directory, prepared['settings']['comfy_sdk_url'], store.key('MMV_COMFY_API_KEY'))
+            except Exception:
+                context.update('Proxy cancellation could not be confirmed; inspect saved Comfy request IDs.')
         if request['backend'] == 'local_h3':
             receipt = read_json(directory / 'local-request.json', {})
             prompt_id = receipt.get('prompt_id')

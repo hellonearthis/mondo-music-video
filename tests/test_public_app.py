@@ -1,5 +1,6 @@
 """Public boundary and complete mocked-renderer productions with real media assembly."""
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -30,7 +31,10 @@ def picture():
     return data.getvalue()
 
 
-class MockService(BaseHTTPRequestHandler):
+from mock_comfy_v2 import ComfyV2Mixin, reset_v2
+
+
+class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
     requests = []
     video = b""
     hold = False
@@ -49,6 +53,8 @@ class MockService(BaseHTTPRequestHandler):
 
     def do_POST(self):
         data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if self.v2_post(data):
+            return
         if self.path == "/media/upload/binary":
             self.reply({"data": {"download_url": "https://example.invalid/reference"}})
             return
@@ -84,6 +90,8 @@ class MockService(BaseHTTPRequestHandler):
             self.reply({"data": {"id": "hosted-test"}})
 
     def do_GET(self):
+        if self.v2_get():
+            return
         if self.path.startswith("/view") or self.path == "/video.mp4":
             self.send_response(200)
             self.send_header("Content-Type", "video/mp4")
@@ -154,6 +162,7 @@ class PublicAppTests(unittest.TestCase):
             self.worker_patch = patch("mmv.jobs.JobContext.command",test_command)
             self.worker_patch.start()
         self.client.put("/api/settings", json=settings).raise_for_status()
+        reset_v2(self.server)
         MockService.requests = []
         MockService.hold = False
         MockService.invalid_writer = False
@@ -188,13 +197,178 @@ class PublicAppTests(unittest.TestCase):
         start = self.client.post("/api/start", json={"quote_id": quote.json()["id"], "consent": consent})
         return quote, start
 
+    def configure_sdk(self):
+        settings = self.store.settings()
+        settings.update(comfy_sdk_url=self.url, comfy_input='', comfy_output='')
+        self.client.put('/api/settings', json=settings).raise_for_status()
+        self.store.save_key('MMV_COMFY_API_KEY', 'fake-proxy-token')
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_production_transfers_media_and_assembles(self):
+        self.configure_sdk()
+        actors.create_actor(self.store, 'blue', 'Blue', 'Blue jacket', picture())
+        quote, started = self.start({'backend': 'comfy_sdk_h3', 'song': self.song_upload(), 'actors': ['blue']})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete')
+        self.assertEqual(quote.json()['estimate_usd'], 0)
+        self.assertEqual(len(self.server.v2_submits), 1)
+        headers, body = self.server.v2_submits[0]
+        self.assertEqual(headers['Authorization'], 'Bearer fake-proxy-token')
+        self.assertTrue(headers['Idempotency-Key'])
+        graph = body['workflow']
+        self.assertEqual(graph['124']['inputs']['steps'], 20)
+        ref_node = graph['136']['inputs']
+        image_loader = graph[ref_node['ref_images.ref_image_0'][0]]
+        audio_loader = graph[ref_node['ref_audios.ref_audio_0'][0]]
+        for loader, widget in [(image_loader, 'image'), (audio_loader, 'audio')]:
+            asset_ref = loader['inputs'][widget]
+            self.assertEqual(asset_ref['__type'], 'core/ASSET')
+            self.assertIn(asset_ref['info']['id'], self.server.v2_assets)
+        self.assertEqual(len(self.server.v2_assets), 2)
+        run = self.home / 'runs' / status['id']
+        self.assertTrue((run / 'music-video.mp4').is_file())
+        self.assertAlmostEqual(media.duration(run / 'music-video.mp4'), 1.1, delta=.08)
+        self.assertFalse((run / 'untrusted.mp4').exists())
+        receipt = read_json(next((run / 'renders').glob('*/comfy-request.json')))
+        self.assertEqual(receipt['job_id'], self.server.v2_ids[0])
+        self.assertNotIn('fake-proxy-token', json.dumps(receipt))
+        self.assertNotIn('fake-proxy-token', self.client.get('/api/settings').text)
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_download_failure_resumes_without_generation_or_writer(self):
+        self.configure_sdk()
+        self.server.v2_download_fail = True
+        _, started = self.start({'backend': 'comfy_sdk_h3', 'song': self.song_upload()})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'failed')
+        before = len(MockService.requests)
+        self.server.v2_download_fail = False
+        original = self.store.settings()
+        changed = {**original, 'writer_model': 'changed-model'}
+        self.client.put('/api/settings', json=changed).raise_for_status()
+        stale = self.client.post('/api/resume/quote', json={'run_id': status['id']})
+        self.assertEqual(stale.status_code, 400)
+        self.client.put('/api/settings', json=original).raise_for_status()
+        quote = self.client.post('/api/resume/quote', json={'run_id': status['id']})
+        quote.raise_for_status()
+        self.assertEqual(self.client.post('/api/start', json={'quote_id': quote.json()['id'], 'consent': False}).status_code, 400)
+        resumed = self.client.post('/api/start', json={'quote_id': quote.json()['id'], 'consent': True})
+        resumed.raise_for_status()
+        self.assertEqual(resumed.json()['id'], status['id'])
+        self.assertEqual(self.wait()['state'], 'complete')
+        self.assertEqual(len(self.server.v2_submits), 1)
+        self.assertEqual(len(MockService.requests), before)
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_ambiguous_submission_is_never_retried(self):
+        self.configure_sdk()
+        self.server.v2_drop = True
+        _, started = self.start({'backend': 'comfy_sdk_h3', 'song': self.song_upload()})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'failed')
+        self.assertEqual(len(self.server.v2_submits), 1)
+        receipt = read_json(next((self.home / 'runs' / status['id'] / 'renders').glob('*/comfy-request.json')))
+        self.assertEqual(receipt['state'], 'unknown')
+        quote = self.client.post('/api/resume/quote', json={'run_id': status['id']})
+        self.assertEqual(quote.status_code, 400)
+        self.assertIn('unknown', quote.json()['detail'])
+        self.assertEqual(len(self.server.v2_submits), 1)
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_queue_full_does_not_trigger_hidden_sdk_retry(self):
+        self.configure_sdk()
+        self.server.v2_reject = True
+        _, started = self.start({'backend': 'comfy_sdk_h3', 'song': self.song_upload()})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'failed')
+        self.assertEqual(len(self.server.v2_submits), 1)
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_cancels_only_recorded_job(self):
+        self.configure_sdk()
+        self.server.v2_hold = True
+        _, started = self.start({'backend': 'comfy_sdk_h3', 'song': self.song_upload()})
+        started.raise_for_status()
+        deadline = time.monotonic() + 30
+        receipt = self.home / 'runs' / started.json()['id'] / 'renders/seg000/comfy-request.json'
+        while time.monotonic() < deadline:
+            if read_json(receipt, {}).get('job_id'):
+                break
+            time.sleep(.05)
+        self.assertTrue(read_json(receipt, {}).get('job_id'))
+        self.client.post('/api/cancel').raise_for_status()
+        self.assertEqual(self.wait()['state'], 'cancelled')
+        self.assertEqual(self.server.v2_cancels, self.server.v2_ids)
+        self.assertEqual(len(self.server.v2_submits), 1)
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_oap_rejection_happens_before_upload_or_submit(self):
+        self.configure_sdk()
+        actors.create_actor(self.store, 'blue', 'Blue', '', picture())
+        content = {key: 'none' for key in oap.CONTENT_ENUMS}
+        content['nudity'] = 'explicit'
+        response = self.client.post('/api/quote', json={'backend': 'comfy_sdk_h3',
+            'song': self.song_upload(), 'actors': ['blue'], 'content': content})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('exceeds rider', response.json()['detail'])
+        self.assertEqual(self.server.v2_assets, {})
+        self.assertEqual(self.server.v2_submits, [])
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_known_job_timeout_recovers_without_resubmission(self):
+        from mmv.engine.backends.base import BackendError
+        self.configure_sdk()
+        self.server.v2_hold = True
+        song = self.home / 'song.wav'
+        song.write_bytes(self.song)
+        backend = render.get_backend('comfy_sdk_h3')
+        from mmv.pipeline import ENGINE
+        backend.open_render(out_dir=self.home / 'recovery', comfy_sdk_url=self.url,
+                            map_path=ENGINE / 'config/injection_map.json', root=ENGINE, timeout_s=.01)
+        job = dict(segment_id='seg000', index=0, slug='timeout-test', prompt='A sunlit coast.',
+                   gen_frames=39, duration_input=1.625, width=128, height=72, seed=0,
+                   images=[], song=str(song), audio_start_s=0, audio_end_s=1.1)
+        try:
+            with self.assertRaisesRegex(BackendError, 'timed out'):
+                backend.render_segment(**job)
+            self.server.v2_hold = False
+            result = backend.render_segment(**job)
+            self.assertTrue(Path(result['video']).is_file())
+            self.assertEqual(len(self.server.v2_submits), 1)
+            # Even a changed seed cannot repurpose a saved receipt for a new submission.
+            with self.assertRaisesRegex(BackendError, 'different inputs'):
+                backend.render_segment(**{**job, 'seed': 1})
+            self.assertEqual(len(self.server.v2_submits), 1)
+        finally:
+            backend.close_render()
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_sdk_rejects_followup_links_to_another_origin(self):
+        from mmv.comfy_sdk import SdkSession
+        session = SdkSession(self.url, 'fake-proxy-token')
+        try:
+            with self.assertRaisesRegex(ValueError, 'outside the configured local endpoint'):
+                session.low.raw_request('GET', 'https://example.invalid/api/v2/jobs/fake')
+        finally:
+            session.close()
+
+    def test_sdk_settings_refuse_nonlocal_or_credential_urls(self):
+        for url in ['https://cloud.comfy.org', 'http://127.0.0.1:8189?token=secret',
+                    'http://secret@localhost:8189', 'http://localhost:8189/path']:
+            settings = self.store.settings()
+            settings['comfy_sdk_url'] = url
+            self.assertEqual(self.client.put('/api/settings', json=settings).status_code, 422)
+
     def test_version_matches_package_and_readme(self):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.0.10")
+        self.assertEqual(api_version()["version"], "1.0.11")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.0.10", (root / "README.md").read_text())
+        self.assertIn("1.0.11", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_project_persistence_api(self):

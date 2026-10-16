@@ -35,7 +35,7 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
 Use actual returned upload/actor/style/output IDs. Actors and additional image
 references share a maximum of nine images. WaveSpeed H3 requires at least one
 image. Read catalog for each backend's resolution menu. Supported renderers are
-`local_h3`, `wavespeed`, `seedance_2` and `seedance_2_5`. Hosted providers send the
+`local_h3`, `comfy_sdk_h3`, `wavespeed`, `seedance_2` and `seedance_2_5`. Hosted providers send the
 selected images and song passages to the configured provider.
 
 Content defaults to `none` in all four OAP categories. If the user requests
@@ -105,3 +105,15 @@ Use its actual `id` with `start_production(quote_id=..., consent=true)` after
 authorization, or `mondo-music-video-agent start QUOTE_ID --consent`. Poll status;
 read logs with the returned run ID if needed. Output records include `file` and
 `play_url`. Download to a user-selected new path; do not overwrite existing files.
+
+## Comfy SDK recovery
+
+`comfy_sdk_h3` runs the existing H3 workflow using the official Python SDK and
+a local Comfy API v2 proxy. Configure `comfy_sdk_url` and, if required,
+`MMV_COMFY_API_KEY` in the app. It uses `megapixels`, like `local_h3`.
+
+For an interrupted render or failed download, call `preview_resume(run_id)`
+(or `mondo-music-video-agent preview-resume RUN_ID`), review the returned quote,
+and obtain consent before passing its ID to `start_production`. Recovery reuses
+validated prompts and known generation IDs. It never resubmits an ambiguous,
+failed, canceled or expired job. Do not delete receipts to force a retry.

@@ -31,6 +31,11 @@ def create_server(base_url=None):
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
     @server.tool()
+    def preview_resume(run_id: str) -> dict[str, Any]:
+        """Preview recovery of a Comfy SDK run; obtain consent and use start_production with its quote ID."""
+        return invoke(client.preview_resume, run_id)
+
+    @server.tool()
     def upload_media(kind: Literal["song", "reference", "oap"], path: str) -> dict[str, Any]:
         """Upload a user-selected file from this machine into the local app; returns its upload ID."""
         return invoke(client.upload, kind, path)

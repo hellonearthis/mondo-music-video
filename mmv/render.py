@@ -19,6 +19,7 @@ from .storage import inside, write_json
 # Provider documentation checked 2026-10-15; estimates are displayed, not guarantees.
 CATALOG = {
     "local_h3": {"name": "Local H3 / ComfyUI", "rates": {}, "resolutions": ["768p"]},
+    "comfy_sdk_h3": {"name": "H3 / Comfy SDK (local proxy)", "rates": {}, "resolutions": ["768p"]},
     "wavespeed": {"name": "WaveSpeed H3", "path": "minimax/h3/reference-to-video",
                   "rates": {"768p": .10, "2k": .14}, "resolutions": ["768p", "2k"]},
     "seedance_2": {"name": "Seedance 2.0 / WaveSpeed", "path": "bytedance/seedance-2.0/text-to-video",
@@ -56,3 +57,13 @@ def request_json(url, body=None, *, key="", timeout=30, raw=None, content_type=N
                          "check its dashboard before trying again") from None
     except json.JSONDecodeError:
         raise ValueError("Service did not return JSON") from None
+
+
+def get_backend(name=None):
+    if name == "comfy_sdk_h3":
+        from .comfy_sdk import ComfySdkH3Backend
+        backend = ComfySdkH3Backend()
+        backend.validate_capabilities()
+        return backend
+    from .engine.backends import get_backend as original
+    return original(name)

@@ -23,7 +23,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.10"
+MGL_APP_VERSION = "1.0.11"
 WEB = Path(__file__).parent
 
 
@@ -49,7 +49,7 @@ class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
     song: str = Field(default="", max_length=128)
-    backend: Literal["local_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
+    backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     resolution: Literal["480p", "720p", "768p", "1080p", "2k", "4k"] = "768p"
     aspect: Literal["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] = "16:9"
     direction: str = Field(default="", max_length=6000)
@@ -87,9 +87,14 @@ class StartRequest(StrictModel):
     consent: bool = False
 
 
+class ResumeRequest(StrictModel):
+    run_id: str
+
+
 class Settings(StrictModel):
-    backend: Literal["local_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
+    backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
+    comfy_sdk_url: str = "http://127.0.0.1:8189"
     comfy_input: str = ""
     comfy_output: str = ""
     workflow_map_path: str = DEFAULTS["workflow_map_path"]
@@ -109,6 +114,12 @@ class Settings(StrictModel):
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
     topaz_models: str = ""
+
+    @field_validator("comfy_sdk_url")
+    @classmethod
+    def valid_proxy(cls, value):
+        from mmv.comfy_sdk import validate_proxy_url
+        return validate_proxy_url(value)
 
     @field_validator("writer_launch", "comfy_launch")
     @classmethod
@@ -131,7 +142,7 @@ class Settings(StrictModel):
 
 
 class KeyRequest(StrictModel):
-    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY"]
+    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"]
     value: str = Field(max_length=1000)
 
 
@@ -209,7 +220,11 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.get("/api/status")
     def status():
-        return jobs.status()
+        result = jobs.status()
+        previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
+        result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
+                                and previous.get('backend') == 'comfy_sdk_h3')
+        return result
 
     @app.post("/api/cancel")
     def cancel():
@@ -260,7 +275,7 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/settings")
     def get_settings():
         return {"settings": store.settings(), "keys": {name: bool(store.key(name)) for name in
-                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY")}}
+                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
 
     @app.put("/api/settings")
     def settings(value: Settings):
@@ -392,6 +407,38 @@ def create_app(home=None, *, test_hosts=False):
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
 
+    @app.post("/api/resume/quote")
+    def resume_quote(value: ResumeRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            run_id = identifier(value.run_id)
+            directory = store.home / 'runs' / run_id
+            request = read_json(directory / 'request.json', {})
+            consent = read_json(directory / 'consent.json', {})
+            if request.get('backend') != 'comfy_sdk_h3' or not consent.get('accepted'):
+                raise ValueError('Choose a previously authorized Comfy SDK production')
+            if (directory / 'output.json').exists():
+                raise ValueError('This production is already complete')
+            # Recheck OAP, files, workflow and settings before offering recovery.
+            prepared = production.prepare(store, request)
+            if production.fingerprint(store, request, prepared) != consent.get('fingerprint'):
+                raise ValueError('Original inputs or settings changed; restore them before resuming')
+            prompts = read_json(directory / 'prompts.json', {})
+            if any(not prompts.get(f"seg{seg['index']:03d}") for seg in prepared['segments']):
+                raise ValueError('Only productions with every prompt validated can resume')
+            for path in (directory / 'renders').glob('*/comfy-request.json'):
+                receipt = read_json(path, {})
+                if not receipt.get('job_id'):
+                    raise ValueError('Submission outcome unknown. Reconcile the saved receipt with the proxy before resuming')
+                if receipt.get('state') in ('failed', 'canceled', 'expired'):
+                    raise ValueError('A Comfy job ended without a usable result; resume will not regenerate it')
+            result = quote(ProductionRequest(**request))
+            quotes[result['id']]['resume_run'] = run_id
+            result.update(kind=request['kind'], estimate_usd=0, writer_estimate_usd=0, paid=False,
+                          note='Resume this local Comfy SDK production using saved validated prompts and request IDs. '
+                               'Completed jobs are downloaded again; remaining passages may be submitted. No writer calls.')
+            return result
+
     @app.post("/api/start")
     def start(value: StartRequest):
         with jobs.lock:
@@ -417,11 +464,13 @@ def create_app(home=None, *, test_hosts=False):
                 log_studio(store, f"Start failed: {msg}", level="ERROR")
                 raise ValueError(msg)
             prepared["consent"] = {"accepted": True, "accepted_at": time.time(),
-                                   "estimate_usd": prepared["estimate"], "quote_id": value.quote_id,
+                                   "estimate_usd": 0 if quoted.get("resume_run") else prepared["estimate"], "quote_id": value.quote_id,
                                    "fingerprint": quoted["fingerprint"]}
             quotes.pop(value.quote_id)
             log_studio(store, f"Starting production for kind='{request.get('kind', 'video')}'")
-            return jobs.start(request["kind"], lambda context: production.produce(store, request, prepared, context))
+            return jobs.start(request["kind"], lambda context: production.produce(
+                store, request, prepared, context, resume=bool(quoted.get("resume_run"))),
+                run_id=quoted.get("resume_run"))
 
     @app.get("/api/outputs")
     def outputs():

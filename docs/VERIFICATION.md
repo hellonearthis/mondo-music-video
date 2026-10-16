@@ -1,9 +1,9 @@
-# Verification — 1.0.10
+# Verification — 1.0.11
 
 Run from a checkout:
 
 ```sh
-python -m pip install '.[mcp,test]'
+python -m pip install '.[comfy,mcp,test]'
 python -m unittest discover -s tests -v
 node --check webapp/app.js
 bash -n install.sh
@@ -21,6 +21,28 @@ of the app's own local job; single-operation enforcement; agent CLI and real MCP
 transports; credentials; local HTTP boundaries; downloader integrity; and Topaz
 command construction with preservation of the source video.
 
+## 1.0.11 Comfy SDK verification
+
+All **56 tests passed** on the Linux development environment, including the
+cached Chromium browser flow and real SDK-to-proxy transport test. JavaScript
+syntax, shell syntax, Python compilation and `git diff --check` passed. A
+1.0.11 wheel built successfully; its contents include the adapter and pinned
+SDK/proxy extra, with no handoff draft or credentials. A freshly imported
+version handler and the live temporary test app both reported 1.0.11. Existing
+long-running user services were not restarted as part of these checks.
+
+The new path is tested with the pinned official Python SDK against a mock v2
+service and with the actual pinned official proxy against a synthetic native
+ComfyUI server. Coverage includes asset transfer and loader substitution, a
+frame-exact assembled music video, receipt recovery without writer or generation
+resubmission, lost submission responses, no hidden 429 retry, per-job
+cancellation, OAP rejection before uploads, settings invalidation and token
+redaction. A browser test covers renderer selection, preview/consent, recovery
+and playback when cached Chromium and Playwright are installed.
+
+No real GPU or paid production has been run for this path. The operator check
+and reproduction instructions are in [COMFY_SDK.md](COMFY_SDK.md). Real GPU execution remains unverified.
+
 ## Original-engine parity
 
 On the development machine, the original and extracted analyzers processed the
@@ -34,7 +56,7 @@ planner correction handles hosted adapters that raise on oversized durations:
 the existing phrase-shrinking loop now shrinks those phrases along the same
 musical edges. Golden parity is checked on inputs within the original contract.
 
-## 1.0.10 integration checks
+## Historical 1.0.10 integration checks
 
 All 45 automated tests passed. The integration suite covers
 matching-instruction prompt recovery and public
