@@ -1,6 +1,7 @@
 """Mondo Music Video: a focused public server, independent of the private studio."""
 from __future__ import annotations
 
+import json
 import math
 import secrets
 import time
@@ -22,8 +23,18 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.0"
+MGL_APP_VERSION = "1.0.10"
 WEB = Path(__file__).parent
+
+
+def log_studio(store, message: str, level: str = "INFO"):
+    try:
+        log_file = store.home / "studio.log"
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with log_file.open("a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] [{level}] {message}\n")
+    except Exception:
+        pass
 
 
 def api_version():
@@ -61,6 +72,7 @@ class ProductionRequest(StrictModel):
     ident_seconds: float = Field(default=5, ge=4, le=12)
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
+    reuse_prompts: bool = True
 
     @field_validator("content")
     @classmethod
@@ -135,6 +147,14 @@ class UpscaleRequest(StrictModel):
     scale: Literal[2, 4] = 2
 
 
+class ProjectState(StrictModel):
+    panel: Literal["video", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
+    forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
+    files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
+    details_open: bool = False
+    log_open: bool = False
+
+
 def create_app(home=None, *, test_hosts=False):
     store = Storage(home)
     jobs = Jobs(store)
@@ -159,13 +179,19 @@ def create_app(home=None, *, test_hosts=False):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Cache-Control"] = "no-store"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' blob:; " \
-            "media-src 'self' blob:; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' blob: data:; " \
+            "media-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
         return response
 
     @app.exception_handler(ValueError)
     async def value_error(request, exc):
+        log_studio(store, f"{request.method} {request.url.path} error: {exc}", level="ERROR")
         return JSONResponse({"detail": str(exc)}, status_code=409 if isinstance(exc, BusyError) else 400)
+
+    @app.exception_handler(Exception)
+    async def general_error(request, exc):
+        log_studio(store, f"{request.method} {request.url.path} unexpected error: {exc}", level="ERROR")
+        return JSONResponse({"detail": str(exc)}, status_code=500)
 
     @app.get("/")
     def index():
@@ -193,6 +219,43 @@ def create_app(home=None, *, test_hosts=False):
     def catalog():
         return {"backends": CATALOG, "ratings": oap.CONTENT_ENUMS, "price_checked": "2026-10-15",
                 "oap_version": oap.OAP_VERSION}
+
+    @app.get("/api/project")
+    def get_project():
+        project = read_json(store.home / "project.json", {})
+        uploads = store.home / "uploads"
+        for state in project.get("files", {}).values():
+            if not isinstance(state, dict):
+                continue
+            song = state.get("song")
+            if isinstance(song, str) and song:
+                try:
+                    if not inside(uploads, song).is_file():
+                        state.pop("song", None)
+                        state.pop("songName", None)
+                except ValueError:
+                    state.pop("song", None)
+                    state.pop("songName", None)
+            refs = state.get("references")
+            names = state.get("referenceNames")
+            if isinstance(refs, list):
+                valid_refs, valid_names = [], []
+                for idx, ref in enumerate(refs):
+                    try:
+                        if isinstance(ref, str) and ref and inside(uploads, ref).is_file():
+                            valid_refs.append(ref)
+                            if isinstance(names, list) and idx < len(names):
+                                valid_names.append(names[idx])
+                    except ValueError:
+                        pass
+                state["references"] = valid_refs
+                state["referenceNames"] = valid_names
+        return project
+
+    @app.put("/api/project")
+    def put_project(value: ProjectState):
+        write_json(store.home / "project.json", value.model_dump())
+        return {"ok": True}
 
     @app.get("/api/settings")
     def get_settings():
@@ -307,7 +370,13 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             request = value.model_dump()
-            prepared = production.prepare(store, request)
+            kind = request.get("kind", "video")
+            log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
+            try:
+                prepared = production.prepare(store, request)
+            except Exception as exc:
+                log_studio(store, f"Preview failed ({kind}): {exc}", level="ERROR")
+                raise
             for expired in [key for key, item in quotes.items() if item["expires"] < time.time()]:
                 quotes.pop(expired)
             if len(quotes) > 100:
@@ -329,17 +398,29 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             quoted = quotes.get(value.quote_id)
             if not quoted or quoted["expires"] < time.time():
-                raise ValueError("Preview expired. Request a new preview")
+                msg = "Preview expired. Request a new preview"
+                log_studio(store, f"Start failed: {msg}", level="ERROR")
+                raise ValueError(msg)
             if not value.consent:
-                raise ValueError("Review and accept the preview before starting")
+                msg = "Review and accept the preview before starting"
+                log_studio(store, f"Start failed: {msg}", level="ERROR")
+                raise ValueError(msg)
             request = quoted["request"]
-            prepared = production.prepare(store, request)
+            kind = request.get("kind", "video")
+            try:
+                prepared = production.prepare(store, request)
+            except Exception as exc:
+                log_studio(store, f"Start preparation failed ({kind}): {exc}", level="ERROR")
+                raise
             if production.fingerprint(store, request, prepared) != quoted["fingerprint"]:
-                raise ValueError("Inputs or settings changed. Request a new preview")
+                msg = "Inputs or settings changed. Request a new preview"
+                log_studio(store, f"Start failed: {msg}", level="ERROR")
+                raise ValueError(msg)
             prepared["consent"] = {"accepted": True, "accepted_at": time.time(),
                                    "estimate_usd": prepared["estimate"], "quote_id": value.quote_id,
                                    "fingerprint": quoted["fingerprint"]}
             quotes.pop(value.quote_id)
+            log_studio(store, f"Starting production for kind='{request.get('kind', 'video')}'")
             return jobs.start(request["kind"], lambda context: production.produce(store, request, prepared, context))
 
     @app.get("/api/outputs")
@@ -358,15 +439,85 @@ def create_app(home=None, *, test_hosts=False):
             raise ValueError("Output not found")
         return FileResponse(inside(directory, filename), media_type="video/mp4", filename=filename if download else None)
 
+    @app.post("/api/log/clear")
+    def clear_log():
+        write_json(store.home / "log_cleared.json", {"cleared_at": time.time()})
+        studio_log = store.home / "studio.log"
+        if studio_log.exists():
+            try:
+                studio_log.write_text("", encoding="utf-8")
+            except Exception:
+                pass
+        return {"status": "cleared"}
+
+    @app.post("/api/cache/clear")
+    def clear_cache():
+        write_json(store.home / "cache_cleared.json", {"cleared_at": time.time()})
+        cache_dir = store.home / "cache" / "prompts"
+        count = 0
+        if cache_dir.exists():
+            for f in cache_dir.glob("*.json"):
+                try:
+                    f.unlink()
+                    count += 1
+                except Exception:
+                    pass
+        log_studio(store, f"Prompt cache cleared ({count} cached prompts removed)")
+        return {"status": "cleared", "count": count}
+
     @app.get("/api/log/{run_id}")
     def operation_log(run_id: str):
-        path = store.home / "runs" / identifier(run_id) / "operation.log"
-        if not path.exists():
-            return {"log": ""}
-        with path.open("rb") as stream:
-            stream.seek(max(0, path.stat().st_size - 32000))
-            text = stream.read().decode(errors="replace")
-        return {"log": text}
+        cleared_info = read_json(store.home / "log_cleared.json", {})
+        cleared_at = float(cleared_info.get("cleared_at", 0))
+
+        sections = []
+        if run_id == "latest" or not run_id:
+            runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
+                    if p.stat().st_mtime >= cleared_at]
+            directory = runs[0] if runs else None
+        else:
+            directory = store.home / "runs" / identifier(run_id)
+            if not directory.exists() or directory.stat().st_mtime < cleared_at:
+                runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
+                        if p.stat().st_mtime >= cleared_at]
+                directory = runs[0] if runs else None
+
+        if directory and directory.is_dir() and directory.stat().st_mtime >= cleared_at:
+            path = directory / "operation.log"
+            if path.exists():
+                with path.open("rb") as stream:
+                    stream.seek(max(0, path.stat().st_size - 64000))
+                    sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + stream.read().decode(errors="replace"))
+            # Include any validation failure reports
+            validations = sorted(directory.glob("*.validation-*.json"))
+            for v in validations:
+                try:
+                    data = json.loads(v.read_text(encoding="utf-8"))
+                    sections.append(f"\n--- Validation Details ({v.name}) ---\n" + json.dumps(data, indent=2))
+                except Exception:
+                    pass
+            # Include writer service output if present
+            writer_log = directory / "writer-service.log"
+            if writer_log.exists() and writer_log.stat().st_size > 0:
+                with writer_log.open("rb") as stream:
+                    stream.seek(max(0, writer_log.stat().st_size - 16000))
+                    sections.append("\n--- Writer Service Output ---\n" + stream.read().decode(errors="replace"))
+            # Include final operation status
+            op_info = read_json(directory / "operation.json", {})
+            if op_info.get("state") == "failed" and op_info.get("message"):
+                sections.append(f"\nStatus: FAILED - {op_info['message']}")
+            elif op_info.get("state"):
+                sections.append(f"\nStatus: {op_info['state'].upper()}")
+
+        # Include recent studio event log
+        studio_log = store.home / "studio.log"
+        if studio_log.exists() and studio_log.stat().st_size > 0:
+            with studio_log.open("rb") as stream:
+                stream.seek(max(0, studio_log.stat().st_size - 16000))
+                sections.append("\n=== Studio Server Event Log ===\n" + stream.read().decode(errors="replace"))
+
+        content = "\n\n".join(filter(None, sections)).strip()
+        return {"log": content or "No operation or server log recorded yet."}
 
     @app.post("/api/upscale")
     def upscale(value: UpscaleRequest):

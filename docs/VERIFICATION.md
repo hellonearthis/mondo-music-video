@@ -1,4 +1,4 @@
-# Verification — 1.0.0
+# Verification — 1.0.10
 
 Run from a checkout:
 
@@ -34,7 +34,16 @@ planner correction handles hosted adapters that raise on oversized durations:
 the existing phrase-shrinking loop now shrinks those phrases along the same
 musical edges. Golden parity is checked on inputs within the original contract.
 
-## Verified release checks
+## 1.0.10 integration checks
+
+All 45 automated tests passed. The integration suite covers
+matching-instruction prompt recovery and public
+actor descriptions reaching the writer. The original bundled H3 workflow is
+retained byte for byte. JavaScript and shell syntax checks passed.
+Windows launch, real GPU generation and browser interaction have not been
+reverified for this integration.
+
+## Historical 1.0.0 release checks
 
 All 37 automated checks passed. Headless Chromium passed the complete upload,
 analysis preview, production and playback-metadata flow at desktop and mobile

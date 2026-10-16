@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.0.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.0.10** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 Turn your song into a complete music video. Mondo listens to the track, detects
 beats and downbeats, measures energy, and identifies musical sections. Its
@@ -64,7 +64,8 @@ Windows PowerShell:
 
 ```powershell
 .\install.ps1
-& .\.venv\Scripts\mondo-music-video.exe serve
+.\start.ps1            # Starts Mondo and connects to local llama-server
+.\start.ps1 -SelectModel # Select or switch your llama.cpp GGUF model interactively
 ```
 
 Open **http://127.0.0.1:8091**. Setup saves paths and model/service choices for

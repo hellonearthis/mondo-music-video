@@ -192,16 +192,165 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.0.0")
+        self.assertEqual(api_version()["version"], "1.0.10")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.0.0", (root / "README.md").read_text())
+        self.assertIn("1.0.10", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
+    def test_project_persistence_api(self):
+        project = {
+            "panel": "video",
+            "forms": {"video-form": {"title": "My Track", "backend": "local_h3"}},
+            "files": {"video-form": {"song": "test.wav", "references": []}},
+            "details_open": True,
+            "log_open": False
+        }
+        res = self.client.put("/api/project", json=project)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["ok"])
+        got = self.client.get("/api/project").json()
+        self.assertEqual(got["panel"], "video")
+        self.assertEqual(got["forms"]["video-form"]["title"], "My Track")
+        self.assertTrue(got["details_open"])
 
+    def test_clear_log_endpoint(self):
+        studio_log = self.home / "studio.log"
+        studio_log.write_text("historical error line\n", encoding="utf-8")
+        self.assertIn("historical error", self.client.get("/api/log/latest").json()["log"])
+        res = self.client.post("/api/log/clear")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"status": "cleared"})
+        self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
+        self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
 
+    def test_clear_cache_endpoint(self):
+        cache_dir = self.home / "cache" / "prompts"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "test_prompt.json").write_text('{"prompt": "test"}', encoding="utf-8")
+        self.assertTrue((cache_dir / "test_prompt.json").is_file())
+        res = self.client.post("/api/cache/clear")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "cleared")
+        self.assertEqual(res.json()["count"], 1)
+        self.assertFalse((cache_dir / "test_prompt.json").exists())
+        self.assertTrue((self.home / "cache_cleared.json").is_file())
 
+    def test_empty_song_returns_friendly_error(self):
+        res = self.client.post("/api/quote", json={"kind": "video", "song": "", "direction": "test"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Upload a song first", res.json()["detail"])
+        studio_log = (self.home / "studio.log").read_text(encoding="utf-8")
+        self.assertIn("Preview failed (video): Upload a song first", studio_log)
 
+    def test_passage_recovery_requires_matching_system(self):
+        from types import SimpleNamespace
+        from mmv.worker import find_cached_passage_prompt
+        cache = self.home / "cache" / "prompts"
+        cache.mkdir(parents=True, exist_ok=True)
+        runs = self.home / "runs"
+        previous = runs / "previous"
+        (previous / "writer_jobs").mkdir(parents=True)
+        job = {"segment_id": "seg000", "shots": []}
+        write_json(previous / "writer_jobs/seg000.json", job)
+        write_json(previous / "prompts.json", {"seg000": "validated old prompt"})
+        (previous / "writer_system.md").write_text("old direction", encoding="utf-8")
+        seg = SimpleNamespace(segment_id="seg000")
+        self.assertIsNone(find_cached_passage_prompt(cache, runs, "new direction", job, seg, None))
+        self.assertEqual(find_cached_passage_prompt(cache, runs, "old direction", job, seg, None),
+                         "validated old prompt")
+        # Matching saved prompts remain reusable after the fallback populated the cache.
+        self.assertEqual(find_cached_passage_prompt(cache, None, "old direction", job, seg, None),
+                         "validated old prompt")
 
+    def test_production_supplies_public_actor_metadata(self):
+        actors.create_actor(self.store, "blue", "Blue", "Distinctive blue jacket", picture())
+        _, started = self.start({"song": self.song_upload(), "actors": ["blue"]})
+        started.raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        system = (self.home / "runs" / started.json()["id"] / "writer_system.md").read_text(encoding="utf-8")
+        self.assertIn("CAST MEMBER: Blue", system)
+        self.assertIn("Distinctive blue jacket", system)
+
+    def test_prompt_caching_and_resumption(self):
+        song = self.song_upload()
+        quote, started = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast"})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status["state"], "complete")
+        run_1 = self.home / "runs" / started.json()["id"]
+        prompts_1 = read_json(run_1 / "prompts.json")
+        self.assertTrue(bool(prompts_1))
+
+        # Second production reuses cached prompts
+        quote2, started2 = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast", "reuse_prompts": True})
+        started2.raise_for_status()
+        status2 = self.wait()
+        self.assertEqual(status2["state"], "complete")
+        run_2 = self.home / "runs" / started2.json()["id"]
+        prompts_2 = read_json(run_2 / "prompts.json")
+        self.assertEqual(prompts_1, prompts_2)
+        log_text = (run_2 / "operation.log").read_text(encoding="utf-8")
+        self.assertIn("resumed from cache", log_text)
+
+    def test_instrumental_and_lip_sync_validation(self):
+        from mmv.engine.schema import validate_prompt, RIGGING_TAIL
+        from mmv.engine.plan import Segment, Shot
+        from mmv.engine.comfy import compute_ref_tags
+
+        seg = Segment(
+            index=0,
+            song_start_frame=0,
+            musical_frames=120,
+            gen_frames=120,
+            trim_frames=0,
+            duration_input=5.0,
+            montage_type="standard",
+            section_index=0,
+            section_label="mid",
+            energy=0.5,
+            thematic_anchor=None,
+            ref_image_slots=0,
+            footage_anchor="",
+            practical_effects="",
+            rigging="",
+            audio_slice_start_s=0.0,
+            audio_slice_end_s=5.0,
+            shots=[Shot(n=1, start_frame=0, frames=120, cut_time=None, camera="static", shot_scale="medium", energy=0.5)],
+        )
+        tags = compute_ref_tags(0, 0, 1)
+
+        from mmv.engine.schema import WriterResponse, assemble_prompt
+        resp = WriterResponse(
+            segment_id="seg000",
+            style_opening="Cinematic daylight photography with expressive movement.",
+            subject_definitions=[],
+            summary="A performer in sunlight.",
+            retention_analysis=[],
+            shot_bodies=["The performer moves gracefully through a bright courtyard under sunlight. <Audio 1>"],
+            overall_soundscape="Gentle instrumental music.",
+            non_diegetic_music="N/A",
+        )
+        prompt_without_rigging = assemble_prompt(seg, resp, tags)
+
+        # When silent_mouths is False (e.g. instrumental / no lyrics), missing rigging tail is permitted
+        problems_instrumental = validate_prompt(prompt_without_rigging, seg, tags, strict_words=False, silent_mouths=False)
+        self.assertEqual(problems_instrumental, [])
+
+        # When silent_mouths is True, prompt without rigging tail triggers validation error
+        problems_vocal = validate_prompt(prompt_without_rigging, seg, tags, strict_words=False, silent_mouths=True)
+        self.assertIn("Subject Rigging block is missing (lip-sync suppression)", problems_vocal)
+
+        # Auto-injection before overall_soundscape fixes the validation failure
+        soundscape_pos = prompt_without_rigging.find("\noverall_soundscape:")
+        remediated = prompt_without_rigging[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt_without_rigging[soundscape_pos:]
+        problems_fixed = validate_prompt(remediated, seg, tags, strict_words=False, silent_mouths=True)
+        self.assertEqual(problems_fixed, [])
+
+        # End-to-end production run without lyrics completes cleanly
+        quote, started = self.start({"song": self.song_upload(), "direction": "Warm light", "title": "Instrumental", "lyrics": ""})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status["state"], "complete")
     def test_original_pipeline_real_assembly(self):
         quote, started = self.start({"song":self.song_upload(), "direction":"A sunlit coast", "title":"Coast"})
         started.raise_for_status()

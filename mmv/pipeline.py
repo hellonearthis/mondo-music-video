@@ -21,9 +21,14 @@ ENGINE = Path(__file__).parent / 'engine'
 def references(store, request):
     refs, descriptions = actors.check_cast(store, request.get('actors', []), request['content'])
     for name in request.get('references', []):
-        path = inside(store.home / 'uploads', name)
+        if not name:
+            continue
+        try:
+            path = inside(store.home / 'uploads', name)
+        except ValueError:
+            raise ValueError(f"Reference image '{name}' is not in the uploads directory")
         if path.suffix != '.png' or not path.is_file():
-            raise ValueError('Reference image not found')
+            raise ValueError(f"Reference image '{name}' not found")
         refs.append(path)
     if len(refs) > 9:
         raise ValueError('Choose at most nine total actor/reference images')
@@ -55,8 +60,16 @@ def prepare(store, request):
             raise ValueError('Configure your vision model in Settings')
         if not request.get('references'):
             raise ValueError('Choose images to harvest')
-        refs = [inside(store.home / 'uploads', x) for x in request['references']]
-        if any(p.suffix != '.png' or not p.is_file() for p in refs):
+        refs = []
+        for x in request['references']:
+            if not x:
+                continue
+            try:
+                p = inside(store.home / 'uploads', x)
+            except ValueError:
+                raise ValueError(f"Harvest reference image '{x}' is not in the uploads directory")
+            refs.append(p)
+        if not refs or any(p.suffix != '.png' or not p.is_file() for p in refs):
             raise ValueError('Harvest reference image missing')
         identifier(request['style_id'])
         if (store.home / 'styles' / (request['style_id'] + '.json')).exists():
@@ -86,7 +99,12 @@ def prepare(store, request):
             raise ValueError('The original local H3 adapter needs a direct HTTP ComfyUI host and port')
     style = store.style(request['style_id'])
     if kind == 'video':
-        song = inside(store.home / 'uploads', request['song'])
+        if not request.get('song'):
+            raise ValueError('Upload a song first')
+        try:
+            song = inside(store.home / 'uploads', request['song'])
+        except ValueError:
+            raise ValueError('Upload a song first')
         if not song.is_file():
             raise ValueError('Upload a song first')
         # Cache only original analysis, keyed by the audio bytes and meter.
@@ -101,7 +119,10 @@ def prepare(store, request):
         score = ScoreMap.from_json(score_path)
         for key in ('start_ident', 'end_ident'):
             if request.get(key):
-                p = inside(store.home / 'runs', request[key])
+                try:
+                    p = inside(store.home / 'runs', request[key])
+                except ValueError:
+                    raise ValueError(f"Ident path '{request[key]}' is invalid")
                 record = read_json(p.parent / 'output.json', {})
                 if not p.is_file() or record.get('kind') != 'ident' or record.get('file') != p.name:
                     raise ValueError('Choose a completed ident')

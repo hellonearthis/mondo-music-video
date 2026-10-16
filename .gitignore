@@ -42,3 +42,4 @@ oap_outbox/
 .vscode/
 .DS_Store
 Thumbs.db
+*.bak

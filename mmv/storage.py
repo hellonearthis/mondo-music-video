@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -31,7 +32,14 @@ def write_json(path: Path, value, *, private=False):
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(name, path)
+        for attempt in range(10):
+            try:
+                os.replace(name, path)
+                break
+            except PermissionError:
+                if attempt == 9 or os.name != "nt":
+                    raise
+                time.sleep(0.02)
     finally:
         if os.path.exists(name):
             os.unlink(name)
@@ -77,14 +85,14 @@ DEFAULTS = {
 class Storage:
     def __init__(self, home=None):
         self.home = Path(home or default_home()).resolve()
-        for name in ("actors", "styles", "uploads", "runs", "exports", "models"):
+        for name in ("actors", "styles", "uploads", "runs", "exports", "models", "cache"):
             (self.home / name).mkdir(parents=True, exist_ok=True)
         if not (self.home / "styles/daylight.json").exists():
             write_json(self.home / "styles/daylight.json", DEFAULT_STYLE)
 
     def settings(self):
         settings = {**DEFAULTS, **{k:v for k,v in read_json(self.home / "settings.json", {}).items() if k in DEFAULTS}}
-        if not settings["workflow_map_path"]:
+        if not settings["workflow_map_path"] or not Path(settings["workflow_map_path"]).is_file():
             settings["workflow_map_path"] = DEFAULTS["workflow_map_path"]
         if not settings["laya_model_dir"]:
             settings["laya_model_dir"] = str(self.home / "models/laya")

@@ -1,0 +1,294 @@
+<#
+.SYNOPSIS
+    Mondo Music Video Launcher & llama.cpp Model Selector
+.DESCRIPTION
+    Launches Mondo Music Video and connects to or starts your local llama-server
+    with interactive model selection from C:\llamaCPP\models.
+.EXAMPLE
+    .\start.ps1
+    .\start.ps1 -SelectModel
+    .\start.ps1 -Gui
+    .\start.ps1 -Model "Qwen3-VL-8B"
+#>
+param(
+    [switch]$SelectModel,
+    [switch]$Gui,
+    [string]$Model = "",
+    [int]$Port = 8091,
+    [int]$LlamaPort = 8081,
+    [string]$LlamaDir = "C:\llamaCPP",
+    [switch]$NoLlama,
+    [switch]$NoBrowser,
+    [switch]$Help
+)
+
+$ErrorActionPreference = "Stop"
+
+if ($Help) {
+    Write-Host ""
+    Write-Host "Mondo Music Video Launcher" -ForegroundColor Cyan
+    Write-Host "--------------------------" -ForegroundColor DarkCyan
+    Write-Host "Usage: .\start.ps1 [options]"
+    Write-Host ""
+    Write-Host "Options:"
+    Write-Host "  -SelectModel       Interactively choose a GGUF model from llama.cpp"
+    Write-Host "  -Gui               Open the llama.cpp graphical launcher (launcher.ps1)"
+    Write-Host "  -Model <name>      Select model matching name or substring"
+    Write-Host "  -Port <int>        Mondo Studio web port (default: 8091)"
+    Write-Host "  -LlamaPort <int>   llama-server port (default: 8081)"
+    Write-Host "  -LlamaDir <path>   llama.cpp installation directory (default: C:\llamaCPP)"
+    Write-Host "  -NoLlama           Skip llama.cpp management (assume already running)"
+    Write-Host "  -NoBrowser         Do not automatically open the browser"
+    Write-Host ""
+    exit 0
+}
+
+$MmvProjectDir = $PSScriptRoot
+if (-not $MmvProjectDir) { $MmvProjectDir = (Get-Location).Path }
+$MmvPython = Join-Path $MmvProjectDir ".venv\Scripts\python.exe"
+
+if (-not (Test-Path $MmvPython)) {
+    Write-Host "[!] Virtual environment not found. Running install.ps1..." -ForegroundColor Yellow
+    & (Join-Path $MmvProjectDir "install.ps1")
+    if (-not (Test-Path $MmvPython)) {
+        throw "Could not find Python in .venv. Run install.ps1 first."
+    }
+}
+
+$modelsDir = Join-Path $LlamaDir "models"
+$serverExe = Join-Path $LlamaDir "llama-server.exe"
+$launcherPs1 = Join-Path $LlamaDir "launcher.ps1"
+$launcherConfig = Join-Path $LlamaDir "launcher_config.json"
+
+function Test-HttpOk([string]$url, [int]$timeoutSec = 2) {
+    try {
+        $req = [System.Net.WebRequest]::Create($url)
+        $req.Timeout = $timeoutSec * 1000
+        $req.Method = "GET"
+        $resp = $req.GetResponse()
+        $resp.Close()
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Get-DiscoveredModels {
+    $found = @()
+    if (-not (Test-Path $modelsDir)) { return $found }
+    $files = Get-ChildItem -Path $modelsDir -Recurse -Filter "*.gguf" -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch "mmproj" }
+
+    foreach ($file in $files) {
+        $relPath = $file.FullName.Substring($LlamaDir.Length).TrimStart("\/")
+        $dir = $file.DirectoryName
+        $proj = Get-ChildItem -Path $dir -Filter "*mmproj*.gguf" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        $projRel = if ($proj) { $proj.FullName.Substring($LlamaDir.Length).TrimStart("\/") } else { "" }
+        $sizeGb = [Math]::Round($file.Length / 1GB, 2)
+        $parentFolder = $file.Directory.Parent.Name
+        if ($file.Directory.FullName -eq $modelsDir) {
+            $folderTag = "(Root)"
+        } elseif ($parentFolder -and $parentFolder -ne "models") {
+            $folderTag = "$parentFolder/" + $file.Directory.Name
+        } else {
+            $folderTag = $file.Directory.Name
+        }
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        $alias = $name.ToLower() -replace "-gguf$", "" -replace "-q[0-9].*$", "" -replace "-bf16.*$", "" -replace "-f16.*$", ""
+
+        $found += [PSCustomObject]@{
+            Name          = $name
+            FileName      = $file.Name
+            RelativePath  = $relPath
+            FullPath      = $file.FullName
+            SizeGB        = $sizeGb
+            HasVision     = ($projRel -ne "")
+            MmprojRelPath = $projRel
+            FolderTag     = $folderTag
+            DefaultAlias  = $alias
+        }
+    }
+    return $found
+}
+
+# If GUI requested
+if ($Gui -and (Test-Path $launcherPs1)) {
+    Write-Host "[*] Launching llama.cpp GUI launcher ($launcherPs1)..." -ForegroundColor Cyan
+    Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$launcherPs1`""
+}
+
+# Model selection logic
+$selectedModel = $null
+$models = Get-DiscoveredModels
+
+if ($Model) {
+    $match = $models | Where-Object { $_.Name -like "*$Model*" -or $_.RelativePath -like "*$Model*" } | Select-Object -First 1
+    if ($match) {
+        $selectedModel = $match
+        Write-Host "[+] Selected model by query: $($selectedModel.Name)" -ForegroundColor Green
+    } else {
+        Write-Warning "Model matching '$Model' not found in $modelsDir. Falling back to selector."
+    }
+}
+
+if (-not $selectedModel -and ($SelectModel -or $models.Count -gt 0)) {
+    # Check if last model from launcher_config.json is available
+    $defaultIndex = 1
+    $lastModelPath = ""
+    if (Test-Path $launcherConfig) {
+        try {
+            $cfg = Get-Content $launcherConfig -Raw | ConvertFrom-Json
+            $lastModelPath = $cfg.LastModel
+        } catch {}
+    }
+
+    if ($lastModelPath) {
+        for ($i = 0; $i -lt $models.Count; $i++) {
+            if ($models[$i].RelativePath -eq $lastModelPath) {
+                $defaultIndex = $i + 1
+                break
+            }
+        }
+    }
+
+    if ($SelectModel) {
+        Write-Host ""
+        Write-Host "======================================================================" -ForegroundColor Cyan
+        Write-Host "  Mondo Music Video - llama.cpp Model Selector" -ForegroundColor Cyan
+        Write-Host "======================================================================" -ForegroundColor Cyan
+        Write-Host ""
+
+        for ($i = 0; $i -lt $models.Count; $i++) {
+            $m = $models[$i]
+            $vis = if ($m.HasVision) { "[Vision]" } else { "        " }
+            $isDef = if (($i + 1) -eq $defaultIndex) { "*" } else { " " }
+            $num = ("{0}[{1,2}]" -f $isDef, ($i + 1))
+            Write-Host " $num " -NoNewline -ForegroundColor Yellow
+            Write-Host "$($vis) " -NoNewline -ForegroundColor Green
+            Write-Host ("{0,-40}" -f $m.Name) -NoNewline -ForegroundColor White
+            Write-Host (" {0,5} GB" -f $m.SizeGB) -NoNewline -ForegroundColor Gray
+            Write-Host "  ($($m.FolderTag))" -ForegroundColor DarkGray
+        }
+
+        Write-Host ""
+        $choice = Read-Host "Select model number [1-$($models.Count), default $defaultIndex]"
+        $idx = $defaultIndex
+        if ([int]::TryParse($choice, [ref]$idx) -and $idx -ge 1 -and $idx -le $models.Count) {
+            $selectedModel = $models[$idx - 1]
+        } else {
+            $selectedModel = $models[$defaultIndex - 1]
+        }
+    } else {
+        $selectedModel = $models[$defaultIndex - 1]
+    }
+}
+
+# Update Mondo Studio settings with selected model
+if ($selectedModel) {
+    Write-Host "[+] Configuring Mondo Music Video for model: $($selectedModel.Name)" -ForegroundColor Cyan
+    $launchArgs = @(
+        "$serverExe",
+        "-m", "$($selectedModel.RelativePath)",
+        "-ngl", "99",
+        "-c", "8192",
+        "--flash-attn", "on",
+        "--host", "127.0.0.1",
+        "--port", "$LlamaPort",
+        "--alias", "$($selectedModel.DefaultAlias)",
+        "--sleep-idle-seconds", "10"
+    )
+    if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
+        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
+    }
+    $launchJson = ($launchArgs | ConvertTo-Json -Compress)
+
+    $visionLines = if ($selectedModel.HasVision) {
+        "s['vision_url'] = 'http://127.0.0.1:$LlamaPort'`ns['vision_model'] = '$($selectedModel.DefaultAlias)'`ns['vision_call_estimate'] = 0.0"
+    } else { "" }
+
+    # Sync to Mondo's storage settings using python helper
+    $pyCode = @"
+from mmv.storage import Storage, read_json, write_json
+store = Storage()
+s = store.settings()
+s['writer_url'] = 'http://127.0.0.1:$LlamaPort'
+s['writer_model'] = '$($selectedModel.DefaultAlias)'
+s['writer_mode'] = 'local'
+s['writer_launch'] = r'''$launchJson'''
+s['writer_cwd'] = r'''$LlamaDir'''
+$visionLines
+write_json(store.home / 'settings.json', s)
+"@
+    & $MmvPython -c $pyCode
+}
+
+# Check/Launch llama-server
+if (-not $NoLlama -and (Test-Path $serverExe)) {
+    $llamaUrl = "http://127.0.0.1:$LlamaPort/models"
+    $isLlamaRunning = Test-HttpOk $llamaUrl
+
+    if (-not $isLlamaRunning -and $selectedModel) {
+        Write-Host "[*] Starting llama-server on port $LlamaPort with $($selectedModel.Name)..." -ForegroundColor Yellow
+        $serverArgs = @(
+            "-m", (Join-Path $LlamaDir $selectedModel.RelativePath),
+            "-ngl", "99",
+            "-c", "8192",
+            "--flash-attn", "on",
+            "--host", "127.0.0.1",
+            "--port", "$LlamaPort",
+            "--alias", "$($selectedModel.DefaultAlias)",
+            "--sleep-idle-seconds", "10"
+        )
+        if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
+            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
+        }
+
+        Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $LlamaDir -WindowStyle Minimized
+
+        Write-Host "[-] Waiting for llama-server to be ready..." -NoNewline
+        for ($w = 0; $w -lt 25; $w++) {
+            Start-Sleep -Seconds 1
+            Write-Host "." -NoNewline
+            if (Test-HttpOk $llamaUrl) {
+                $isLlamaRunning = $true
+                break
+            }
+        }
+        Write-Host ""
+        if ($isLlamaRunning) {
+            Write-Host "[+] llama-server is ready on http://127.0.0.1:$LlamaPort" -ForegroundColor Green
+        } else {
+            Write-Warning "llama-server is still loading. Mondo will automatically start or wait for it during generation."
+        }
+    } elseif ($isLlamaRunning) {
+        Write-Host "[+] llama-server is already running on http://127.0.0.1:$LlamaPort" -ForegroundColor Green
+    }
+}
+
+# Check if Mondo Music Video Studio is already running
+if (Test-HttpOk "http://127.0.0.1:$Port/api/version" 1) {
+    Write-Host ""
+    Write-Host "[+] Mondo Music Video Studio is already running on http://127.0.0.1:$Port" -ForegroundColor Green
+    if (-not $NoBrowser) {
+        Write-Host "[*] Opening browser..." -ForegroundColor Cyan
+        Start-Process "http://127.0.0.1:$Port/"
+    }
+    return
+}
+
+# Launch Mondo Music Video Studio Server
+Write-Host ""
+Write-Host "======================================================================" -ForegroundColor Green
+Write-Host "  Starting Mondo Music Video Studio on http://127.0.0.1:$Port" -ForegroundColor Green
+Write-Host "======================================================================" -ForegroundColor Green
+Write-Host ""
+
+if (-not $NoBrowser) {
+    Start-Job -ScriptBlock {
+        param($p)
+        Start-Sleep -Seconds 2
+        Start-Process "http://127.0.0.1:$p/"
+    } -ArgumentList $Port | Out-Null
+}
+
+& $MmvPython -m mmv.setup serve --port $Port
