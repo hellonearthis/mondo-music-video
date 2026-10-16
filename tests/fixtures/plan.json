@@ -1,0 +1,498 @@
+{
+  "song": "generated-click-track.wav",
+  "slug": "untitled",
+  "seed": 17,
+  "fps": 24,
+  "width": 1024,
+  "height": 576,
+  "tempo_bpm": 117.454,
+  "total_frames": 960,
+  "segments": [
+    {
+      "index": 0,
+      "song_start_frame": 0,
+      "musical_frames": 61,
+      "gen_frames": 73,
+      "trim_frames": 61,
+      "duration_input": 3.0416666666666665,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Lyrical observational photography",
+      "practical_effects": "In-camera reflections and colored light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 0.0,
+      "audio_slice_end_s": 3.0416666666666665,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 61,
+          "cut_time": null,
+          "camera": "The camera pushes in with small amplitude at slow speed",
+          "shot_scale": "high-angle wide shot",
+          "energy": 0.003,
+          "vocab": {
+            "lighting": "soft overcast light",
+            "setting": "open-air courtyard",
+            "subject_type": "fully clothed performer",
+            "mechanism": "wind moving fabric",
+            "tonal_register": "anticipation",
+            "costume": "textured everyday clothing"
+          }
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "song_start_frame": 61,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Handheld live-performance photography",
+      "practical_effects": "Wind, moving fabric, and shifting light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 2.5416666666666665,
+      "audio_slice_end_s": 7.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 96,
+          "cut_time": null,
+          "camera": "The camera tilts down with small amplitude at slow speed",
+          "shot_scale": "two shot",
+          "energy": 0.003,
+          "vocab": {
+            "lighting": "warm side light",
+            "setting": "colorful soundstage",
+            "subject_type": "dancer in everyday clothing",
+            "mechanism": "moving shadows",
+            "tonal_register": "exhilaration",
+            "costume": "tailored streetwear"
+          }
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "song_start_frame": 157,
+      "musical_frames": 95,
+      "gen_frames": 107,
+      "trim_frames": 95,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Cinematic music-video photography",
+      "practical_effects": "In-camera reflections and colored light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 6.541666666666667,
+      "audio_slice_end_s": 11.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 95,
+          "cut_time": null,
+          "camera": "The camera tilts down with small amplitude at slow speed",
+          "shot_scale": "medium-wide shot",
+          "energy": 0.0,
+          "vocab": {
+            "lighting": "late afternoon backlight",
+            "setting": "rain-washed city street",
+            "subject_type": "musician in a tailored jacket",
+            "mechanism": "lights pulsing across surfaces",
+            "tonal_register": "quiet reflection",
+            "costume": "flowing fully covering stagewear"
+          }
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "song_start_frame": 252,
+      "musical_frames": 97,
+      "gen_frames": 107,
+      "trim_frames": 97,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Lyrical observational photography",
+      "practical_effects": "Wind, moving fabric, and shifting light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 10.5,
+      "audio_slice_end_s": 14.958333333333334,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 48,
+          "cut_time": null,
+          "camera": "The camera pushes in with small amplitude at slow speed",
+          "shot_scale": "over the shoulder",
+          "energy": 0.334,
+          "vocab": {
+            "lighting": "colored practical lights",
+            "setting": "sunlit rooftop",
+            "subject_type": "fully clothed ensemble",
+            "mechanism": "paper turning in the breeze",
+            "tonal_register": "wonder",
+            "costume": "textured everyday clothing"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 48,
+          "frames": 49,
+          "cut_time": "00:02.000",
+          "camera": "The camera pans left with small amplitude at slow speed",
+          "shot_scale": "profile",
+          "energy": 0.333,
+          "vocab": {
+            "lighting": "colored practical lights",
+            "setting": "sunlit rooftop",
+            "subject_type": "fully clothed ensemble",
+            "mechanism": "paper turning in the breeze",
+            "tonal_register": "wonder",
+            "costume": "textured everyday clothing"
+          }
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "song_start_frame": 349,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Cinematic music-video photography",
+      "practical_effects": "Wind, moving fabric, and shifting light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 14.541666666666666,
+      "audio_slice_end_s": 19.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 96,
+          "cut_time": null,
+          "camera": "The camera trucks right with small amplitude at slow speed",
+          "shot_scale": "overhead",
+          "energy": 0.335,
+          "vocab": {
+            "lighting": "soft overcast light",
+            "setting": "empty rehearsal room",
+            "subject_type": "musician in a tailored jacket",
+            "mechanism": "reflections rippling across glass",
+            "tonal_register": "wonder",
+            "costume": "tailored streetwear"
+          }
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "song_start_frame": 445,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Handheld live-performance photography",
+      "practical_effects": "In-camera reflections and colored light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 18.541666666666668,
+      "audio_slice_end_s": 23.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 96,
+          "cut_time": null,
+          "camera": "The camera pushes in with small amplitude at slow speed",
+          "shot_scale": "over-the-shoulder shot",
+          "energy": 0.098,
+          "vocab": {
+            "lighting": "warm side light",
+            "setting": "quiet train platform",
+            "subject_type": "fully clothed performer",
+            "mechanism": "lights pulsing across surfaces",
+            "tonal_register": "quiet reflection",
+            "costume": "flowing fully covering stagewear"
+          }
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "song_start_frame": 541,
+      "musical_frames": 95,
+      "gen_frames": 107,
+      "trim_frames": 95,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Handheld live-performance photography",
+      "practical_effects": "Wind, moving fabric, and shifting light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 22.541666666666668,
+      "audio_slice_end_s": 27.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 95,
+          "cut_time": null,
+          "camera": "The camera pans right with large amplitude",
+          "shot_scale": "extreme wide shot",
+          "energy": 0.668,
+          "vocab": {
+            "lighting": "late afternoon backlight",
+            "setting": "desert road",
+            "subject_type": "fully clothed ensemble",
+            "mechanism": "wind moving fabric",
+            "tonal_register": "exhilaration",
+            "costume": "textured everyday clothing"
+          }
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "song_start_frame": 636,
+      "musical_frames": 97,
+      "gen_frames": 107,
+      "trim_frames": 97,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Lyrical observational photography",
+      "practical_effects": "In-camera reflections and colored light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 26.5,
+      "audio_slice_end_s": 30.958333333333332,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 85,
+          "cut_time": null,
+          "camera": "The camera arcs around the subject with medium amplitude",
+          "shot_scale": "central framing",
+          "energy": 0.665,
+          "vocab": {
+            "lighting": "late afternoon backlight",
+            "setting": "windswept shoreline",
+            "subject_type": "dancer in everyday clothing",
+            "mechanism": "reflections rippling across glass",
+            "tonal_register": "anticipation",
+            "costume": "tailored streetwear"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 85,
+          "frames": 12,
+          "cut_time": "00:03.542",
+          "camera": "The camera whips right with large amplitude at fast speed",
+          "shot_scale": "close-up",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "soft overcast light",
+            "setting": "windswept shoreline",
+            "subject_type": "dancer in everyday clothing",
+            "mechanism": "reflections rippling across glass",
+            "tonal_register": "anticipation",
+            "costume": "tailored streetwear"
+          }
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "song_start_frame": 733,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Cinematic music-video photography",
+      "practical_effects": "Wind, moving fabric, and shifting light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 30.541666666666668,
+      "audio_slice_end_s": 35.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 59,
+          "cut_time": null,
+          "camera": "The camera whips right with large amplitude at fast speed",
+          "shot_scale": "extreme close-up",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "warm side light",
+            "setting": "quiet train platform",
+            "subject_type": "fully clothed performer",
+            "mechanism": "paper turning in the breeze",
+            "tonal_register": "wonder",
+            "costume": "flowing fully covering stagewear"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 59,
+          "frames": 37,
+          "cut_time": "00:02.458",
+          "camera": "The camera pushes in with large amplitude at fast speed",
+          "shot_scale": "extreme close-up",
+          "energy": 0.997,
+          "vocab": {
+            "lighting": "colored practical lights",
+            "setting": "quiet train platform",
+            "subject_type": "fully clothed performer",
+            "mechanism": "paper turning in the breeze",
+            "tonal_register": "wonder",
+            "costume": "flowing fully covering stagewear"
+          }
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "song_start_frame": 829,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Handheld live-performance photography",
+      "practical_effects": "In-camera reflections and colored light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 34.541666666666664,
+      "audio_slice_end_s": 39.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 72,
+          "cut_time": null,
+          "camera": "The camera pulls out with medium amplitude",
+          "shot_scale": "macro shot",
+          "energy": 0.666,
+          "vocab": {
+            "lighting": "soft overcast light",
+            "setting": "sunlit rooftop",
+            "subject_type": "fully clothed ensemble",
+            "mechanism": "moving shadows",
+            "tonal_register": "quiet reflection",
+            "costume": "textured everyday clothing"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 72,
+          "frames": 24,
+          "cut_time": "00:03.000",
+          "camera": "The camera pans left with large amplitude at fast speed",
+          "shot_scale": "extreme close-up",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "colored practical lights",
+            "setting": "sunlit rooftop",
+            "subject_type": "fully clothed ensemble",
+            "mechanism": "moving shadows",
+            "tonal_register": "quiet reflection",
+            "costume": "textured everyday clothing"
+          }
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "song_start_frame": 925,
+      "musical_frames": 35,
+      "gen_frames": 39,
+      "trim_frames": 35,
+      "duration_input": 1.625,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Lyrical observational photography",
+      "practical_effects": "Wind, moving fabric, and shifting light",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 38.541666666666664,
+      "audio_slice_end_s": 40.166666666666664,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 35,
+          "cut_time": null,
+          "camera": "The camera whips right with large amplitude at fast speed",
+          "shot_scale": "macro shot",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "warm side light",
+            "setting": "open-air courtyard",
+            "subject_type": "dancer in everyday clothing",
+            "mechanism": "reflections rippling across glass",
+            "tonal_register": "anticipation",
+            "costume": "flowing fully covering stagewear"
+          }
+        }
+      ]
+    }
+  ]
+}

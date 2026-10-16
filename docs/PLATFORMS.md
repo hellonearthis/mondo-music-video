@@ -1,14 +1,14 @@
-# Platform support — 0.1.1
+# Platform support — 1.0.0
 
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |
-| Linux | `install.sh` | Fresh Python 3.12 environment installed from public dependencies; 32 checks including MCP and real FFmpeg assembly passed; AI services mocked |
+| Linux | `install.sh` | Fresh Python 3.12 environment installed from public dependencies; 37 automated checks, Chromium, GPU Laya and a real local H3 music-video production; see VERIFICATION.md |
 | Windows / WSL2 | `install.sh` inside WSL | Launcher included; full clean-machine and GPU verification pending |
 | Native Windows | `install.ps1` | Launcher included; execution and GPU verification pending |
 | macOS | `install.sh` | Launcher included; execution pending; use hosted renderers unless a compatible local runtime is independently established |
 
 Python 3.11+, Git and FFmpeg/ffprobe are prerequisites. Dependency installation
-requires internet access. This preview intentionally does not run OS package
+requires internet access. The installer does not run OS package
 managers, request administrator rights, or install GPU drivers automatically.
 
 Run `mondo-music-video doctor` to inspect OS, Python, paths, FFmpeg, optional

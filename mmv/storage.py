@@ -63,7 +63,11 @@ DEFAULT_STYLE = {
 
 DEFAULTS = {
     "backend": "local_h3", "comfy_url": "http://127.0.0.1:8188",
-    "workflow_path": "", "workflow_map_path": "", "comfy_input": "",
+    "workflow_map_path": str(Path(__file__).parent / "engine/config/injection_map.json"),
+    "comfy_input": "", "comfy_output": "",
+    "writer_url": "http://127.0.0.1:8080/v1", "writer_model": "", "writer_mode": "local", "writer_call_estimate": 0.0,
+    "writer_launch": "", "writer_cwd": "", "comfy_launch": "", "comfy_cwd": "",
+    "laya_model_dir": "", "laya_device": "cuda",
     "vision_url": "http://127.0.0.1:8080/v1", "vision_model": "",
     "vision_key_env": "MMV_VISION_API_KEY", "vision_call_estimate": 0.0,
     "topaz_executable": "", "topaz_models": "",
@@ -79,13 +83,18 @@ class Storage:
             write_json(self.home / "styles/daylight.json", DEFAULT_STYLE)
 
     def settings(self):
-        return {**DEFAULTS, **read_json(self.home / "settings.json", {})}
+        settings = {**DEFAULTS, **{k:v for k,v in read_json(self.home / "settings.json", {}).items() if k in DEFAULTS}}
+        if not settings["workflow_map_path"]:
+            settings["workflow_map_path"] = DEFAULTS["workflow_map_path"]
+        if not settings["laya_model_dir"]:
+            settings["laya_model_dir"] = str(self.home / "models/laya")
+        return settings
 
     def key(self, name="WAVESPEED_API_KEY"):
         return os.environ.get(name) or read_json(self.home / "secrets.json", {}).get(name, "")
 
     def save_key(self, name, value):
-        if name not in ("WAVESPEED_API_KEY", "MMV_VISION_API_KEY"):
+        if name not in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY"):
             raise ValueError("Unknown credential")
         secrets = read_json(self.home / "secrets.json", {})
         if value:

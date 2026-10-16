@@ -3,11 +3,11 @@
 Mondo Music Video is a focused community application, independently developed
 and versioned. It is not the complete Mondo studio with hidden controls.
 
-## Included in the planned first release
+## Included
 
 Music-video generation uses song analysis, visual direction, styles, optional
 actor references, prompt writing, rendering, and automatic assembly into a final
-video. Internal assembly is essential; individual clip redo/recast and manual
+video. Laya reviews the writer’s prompts before rendering. Internal assembly is essential; individual clip redo/recast and manual
 reassembly controls are outside this edition's scope.
 
 Actors have visual identity records and reference images. OAP is a required part
@@ -16,7 +16,7 @@ applicable actor-boundary checks. There is no mandatory account, reporting,
 public actor sharing, or bundled cast. Voice synthesis and audition systems are
 outside this edition's scope.
 
-Styles include a newly authored general-purpose default. Style harvesting uses
+Styles include a general-purpose default. Style harvesting uses
 the user's reference images and configured vision service. Credits/idents can
 be generated and attached to music videos.
 

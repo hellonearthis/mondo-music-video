@@ -17,8 +17,16 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
   "aspect": "16:9",
   "actors": [],
   "references": [],
-  "segment_seconds": 8,
-  "bpm": null,
+  "megapixels": 0.6,
+  "beats_per_bar": 4,
+  "bars_per_phrase": 8,
+  "seed": 0,
+  "conceptual_theme": "",
+  "lyrics": "",
+  "ref_policy": "all",
+  "casting_policy": "random",
+  "ensemble_mode": "off",
+  "on_screen": 1,
   "start_ident": "",
   "end_ident": ""
 }
@@ -26,7 +34,7 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
 
 Use actual returned upload/actor/style/output IDs. Actors and additional image
 references share a maximum of nine images. WaveSpeed H3 requires at least one
-image. Read catalog for each backend's resolution menu. This preview supports
+image. Read catalog for each backend's resolution menu. Supported renderers are
 `local_h3`, `wavespeed`, `seedance_2` and `seedance_2_5`. Hosted providers send the
 selected images and song passages to the configured provider.
 
@@ -45,9 +53,15 @@ different ratings, pass all categories with valid catalog values:
 ```
 
 Actor riders must permit the selected ratings. Do not relax them to force a run.
-An optional BPM is 30–300; passages are 4–14 seconds. Automatic final assembly
-is internal. The public prompt builder and duration/BPM planner are intentionally
-simple; do not promise automatic beat detection or the full studio writer.
+The original analyzer detects beats, downbeats, energy and musical sections.
+The original planner places passages and shots on that structure. Inspect the
+analysis and segments returned by the production preview. The LLM writer creates
+the visual prompts; Laya reviews them before rendering. Local rendering uses
+`megapixels`; hosted rendering uses the provider's named `resolution`.
+
+Music-video generation requires the configured writer and Laya model. Do not
+bypass a failed Laya review or promise a completed production before rendering
+and automatic frame-exact assembly have succeeded.
 
 ## Ident
 

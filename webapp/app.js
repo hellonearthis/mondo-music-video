@@ -76,8 +76,11 @@ async function loadOutputs() {
 }
 
 const settingLabels = {
-  backend: "Default renderer", comfy_url: "ComfyUI service URL", comfy_input: "ComfyUI input folder (shared local path)",
-  workflow_path: "H3 API workflow JSON path", workflow_map_path: "Workflow binding map JSON path",
+  backend: "Default renderer", comfy_url: "ComfyUI service URL", comfy_input: "ComfyUI input folder (shared local path)", comfy_output: "ComfyUI output folder (shared local path)",
+  writer_launch: "Local writer launch command (JSON arguments)", writer_cwd: "Writer working folder", comfy_launch: "ComfyUI launch command (JSON arguments)", comfy_cwd: "ComfyUI working folder",
+  laya_model_dir: "Laya model folder", laya_device: "Laya device (cpu, cuda, mps)",
+  writer_url: "Writer service URL (OpenAI-compatible /v1)", writer_model: "Music-video writer model", writer_mode: "Writer service: local or API", writer_call_estimate: "API writer estimate per call, USD",
+  workflow_map_path: "Workflow binding map JSON path",
   vision_url: "Vision service URL (OpenAI-compatible /v1)", vision_model: "Vision model name", vision_key_env: "Vision credential name",
   vision_call_estimate: "Vision estimate per call, USD (0 for local)", topaz_executable: "Installed Topaz FFmpeg executable path", topaz_models: "Installed Topaz models folder"
 };
@@ -86,8 +89,9 @@ async function loadSettings() {
   $("#settings-fields").replaceChildren(...Object.entries(data.settings).map(([name, value]) => {
     const label = text("label", settingLabels[name] || name);
     let input;
-    if (name === "backend") { input = document.createElement("select"); input.append(...Object.entries(catalog.backends).map(([key, card]) => option(key, card.name))); }
-    else { input = document.createElement("input"); input.type = name === "vision_call_estimate" ? "number" : "text"; if (input.type === "number") { input.min = "0"; input.max = "100"; input.step = "0.001"; } }
+    if (name === "writer_mode") { input = document.createElement("select"); input.append(option("local", "Local"), option("api", "API")); }
+    else if (name === "backend") { input = document.createElement("select"); input.append(...Object.entries(catalog.backends).map(([key, card]) => option(key, card.name))); }
+    else { input = document.createElement("input"); input.type = name.endsWith("call_estimate") ? "number" : "text"; if (input.type === "number") { input.min = "0"; input.max = "100"; input.step = "0.001"; } }
     input.name = name; input.value = value; if (name === "vision_key_env") input.readOnly = true; label.append(input); return label;
   }));
   $("#key-status").textContent = Object.entries(data.keys).map(([name, set]) => `${name}: ${set ? "configured" : "not set"}`).join(" · ");
@@ -102,8 +106,8 @@ async function preview(form) {
     if (!files.song) throw new Error("Upload your song first");
     request.song = files.song;
     request.actors = [...form.querySelector(".actor-select").selectedOptions].map(item => item.value);
-    request.segment_seconds = Number(request.segment_seconds);
-    request.bpm = request.bpm ? Number(request.bpm) : null;
+    for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) request[name] = Number(request[name]);
+    request.silent_mouths = request.silent_mouths === "true";
     request.content = {};
     for (const category of Object.keys(catalog.ratings)) { request.content[category] = request["rating_" + category]; delete request["rating_" + category]; }
   }
@@ -112,6 +116,13 @@ async function preview(form) {
   const summary = $("#quote-summary"); summary.replaceChildren();
   summary.append(text("p", request.kind === "harvest" ? "One visual style harvest." : `${currentQuote.clips} clips · ${currentQuote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
                  text("h2", `Estimated provider cost: $${Number(currentQuote.estimate_usd).toFixed(2)}`), text("p", currentQuote.note, "muted"));
+  if (currentQuote.analysis && request.kind === "video") {
+    const a = currentQuote.analysis;
+    summary.append(text("p", `Detected tempo: ${a.tempo_bpm.toFixed(1)} BPM · ${a.beats} beats · ${a.downbeats} downbeats · ${a.sections} sections · ${a.shots} shots · ${a.width} × ${a.height}`));
+    for (const passage of currentQuote.segments) {
+      summary.append(text("p", `${(passage.song_start_frame / 24).toFixed(2)}s · ${passage.section_label} · ${passage.montage_type.replaceAll("_", " ")} · ${passage.shots.length} shots`));
+    }
+  }
   $("#consent").checked = false; $("#preview-dialog").showModal();
 }
 
@@ -190,7 +201,7 @@ async function initialize() {
     const body = new FormData(event.target); body.set("filename", currentOap); body.set("allow_unsigned", String($("#allow-unsigned").checked)); body.set("accept_unknown", String(event.target.elements.accept_unknown.checked));
     await api("/api/oap/import", {method: "POST", body}); event.target.hidden = true; $("#oap-report").hidden = true; await loadActors();
   });
-  $("#settings-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.vision_call_estimate = Number(body.vision_call_estimate); await json("/api/settings", body, "PUT"); notice("Settings saved."); });
+  $("#settings-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.vision_call_estimate = Number(body.vision_call_estimate); body.writer_call_estimate = Number(body.writer_call_estimate); await json("/api/settings", body, "PUT"); notice("Settings saved."); });
   $("#key-form").onsubmit = handle(async event => { await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT"); event.target.elements.value.value = ""; await loadSettings(); notice("Key saved locally. The settings API does not return it."); });
   $("#upscale-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.scale = Number(body.scale); await json("/api/upscale", {...body, source: upscaleSource}); $("#upscale-dialog").close(); });
   poll();

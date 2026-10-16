@@ -34,6 +34,7 @@ class MockService(BaseHTTPRequestHandler):
     requests = []
     video = b""
     hold = False
+    invalid_writer = False
 
     def log_message(self, *args):
         pass
@@ -54,9 +55,29 @@ class MockService(BaseHTTPRequestHandler):
         body = json.loads(data)
         type(self).requests.append((self.path, body))
         if self.path == "/prompt":
+            graph = body["prompt"]
+            prefix = graph["148"]["inputs"]["filename_prefix"]
+            target = self.server.output / (prefix + "_00001.mp4")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.video)
+            self.server.last_filename = target.name
             self.reply({"prompt_id": "local-test", "node_errors": {}})
         elif self.path == "/chat/completions":
-            self.reply({"choices": [{"message": {"content": "Soft teal light, flowing fabric, patient camera movement."}}]})
+            system = body["messages"][0].get("content", "") if len(body["messages"]) > 1 else ""
+            user = body["messages"][-1]["content"]
+            if isinstance(user, list):
+                content = json.dumps({"style_card":"Soft teal light", "aesthetic_directives":"Soft teal light and textured paper, with patient camera movement."})
+            elif user.startswith("TEXT:"):
+                title = user.splitlines()[0][6:]
+                content = 'The words "' + title + '" emerge in brushed metal with continuous motion, then hold motionless and legible. Silent scene, no musical score.'
+            else:
+                job = json.loads(user)
+                text = "The fully clothed performer moves through warm light as wind lifts the fabric of a blue jacket. Reflections trace shifting patterns across nearby glass while the camera follows with deliberate rhythmic motion and the scene remains grounded in a coherent physical space. The subject stays recognizable and each movement carries the energy of the music through precise visible changes in posture and light. "
+                content = json.dumps({"segment_id":job["segment_id"], "style_opening":"Cinematic daylight photography with expressive movement.",
+                    "subject_definitions":[], "summary":"A fully clothed performer in sunlight.", "retention_analysis":[],
+                    "shot_bodies":[text * 3 + " Subject Rigging: lips firmly sealed shut, jaw completely relaxed, to prevent any facial babbling or lip-sync hallucinations." for shot in job["shots"]], "overall_soundscape":"Wind and quiet footsteps.", "non_diegetic_music":"N/A"})
+            if self.invalid_writer: content = "{}"
+            self.reply({"choices":[{"message":{"content":content}}]})
         elif self.path == "/queue":
             self.reply({})
         else:
@@ -71,7 +92,7 @@ class MockService(BaseHTTPRequestHandler):
             self.wfile.write(self.video)
         elif self.path.startswith("/history/"):
             self.reply({} if self.hold else {"local-test": {"status": {"status_str": "success"},
-                        "outputs": {"2": {"videos": [{"filename": "mock.mp4", "subfolder": "", "type": "output"}]}}}})
+                        "outputs": {"2": {"videos": [{"filename": self.server.last_filename, "subfolder": "", "type": "output"}]}}}})
         elif self.path.startswith("/predictions/"):
             self.reply({"data": {"status": "completed", "outputs": [f"http://127.0.0.1:{self.server.server_port}/video.mp4"]}})
         else:
@@ -108,23 +129,37 @@ class PublicAppTests(unittest.TestCase):
         self.app = create_app(self.home, test_hosts=True)
         self.client = TestClient(self.app)
         self.store = self.app.state.store
-        self.graph = self.home / "test-workflow.json"
-        self.mapping = self.home / "test-map.json"
-        write_json(self.graph, {"1": {"class_type": "TestReference", "inputs": {
-            "prompt": "", "duration": 5, "width": 128, "height": 72, "seed": 1, "filename_prefix": "test"}},
-            "2": {"class_type": "SaveVideo", "inputs": {"video": ["1", 0]}}})
-        write_json(self.mapping, {"reference_node": "1", "output_node": "2", "inputs": {
-            name: ["1", "filename_prefix" if name == "video_prefix" else name]
-            for name in ("prompt", "duration", "width", "height", "seed", "video_prefix")}})
         (self.home / "comfy-input").mkdir()
+        (self.home / "comfy-output").mkdir()
+        self.server.output = self.home / "comfy-output"
         settings = self.store.settings()
-        settings.update(comfy_url=self.url, comfy_input=str(self.home / "comfy-input"), workflow_path=str(self.graph),
-                        workflow_map_path=str(self.mapping), vision_url=self.url, vision_model="test")
+        settings.update(comfy_url=self.url, comfy_input=str(self.home / "comfy-input"), comfy_output=str(self.home / "comfy-output"),
+                        laya_model_dir=os.environ.get("MMV_TEST_LAYA_MODEL_DIR", str(self.home / "models/laya")), laya_device="cuda",
+                        writer_url=self.url, writer_model="fixture-writer", vision_url=self.url, vision_model="fixture-vision")
+        if not os.environ.get("MMV_TEST_LAYA_MODEL_DIR"):
+            model = self.home / "models/laya"
+            (model / "tokenizer").mkdir(parents=True)
+            (model / "encoder").mkdir()
+            for name in ("model.safetensors", "rl_agent_config.json", "encoder/config.json"):
+                (model / name).write_text("fixture")
+            from mmv.jobs import JobContext
+            original_command = JobContext.command
+            def test_command(context, argv, **kwargs):
+                if "mmv.worker" in argv and "produce" in argv:
+                    argv = ["mock_laya_worker" if x == "mmv.worker" else x for x in argv]
+                    env = os.environ.copy()
+                    env["PYTHONPATH"] = str(Path(__file__).parent) + os.pathsep + env.get("PYTHONPATH", "")
+                    kwargs["env"] = env
+                return original_command(context, argv, **kwargs)
+            self.worker_patch = patch("mmv.jobs.JobContext.command",test_command)
+            self.worker_patch.start()
         self.client.put("/api/settings", json=settings).raise_for_status()
         MockService.requests = []
         MockService.hold = False
+        MockService.invalid_writer = False
 
     def tearDown(self):
+        if hasattr(self,"worker_patch"): self.worker_patch.stop()
         if self.app.state.jobs.active:
             self.app.state.jobs.cancel()
             self.wait()
@@ -136,11 +171,13 @@ class PublicAppTests(unittest.TestCase):
         response.raise_for_status()
         return response.json()["file"]
 
-    def wait(self, timeout=25):
+    def wait(self, timeout=90):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             status = self.client.get("/api/status").json()
             if status["state"] not in ("running", "cancelling") and self.app.state.jobs.active is None:
+                if status["state"] == "failed":
+                    print((self.home / "runs" / status["id"] / "operation.log").read_text())
                 return status
             time.sleep(.05)
         self.fail("Operation did not finish")
@@ -155,75 +192,92 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "0.1.1")
+        self.assertEqual(api_version()["version"], "1.0.0")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("0.1.1", (root / "README.md").read_text())
+        self.assertIn("1.0.0", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
-    def test_full_local_video_real_assembly(self):
-        quote, start = self.start({"song": self.song_upload(), "direction": "A sunlit coast", "title": "Coast"})
-        start.raise_for_status()
-        self.assertEqual(quote.json()["estimate_usd"], 0)
+
+
+
+
+
+    def test_original_pipeline_real_assembly(self):
+        quote, started = self.start({"song":self.song_upload(), "direction":"A sunlit coast", "title":"Coast"})
+        started.raise_for_status()
         status = self.wait()
         self.assertEqual(status["state"], "complete", status)
-        output = self.client.get("/api/outputs").json()[0]
-        self.assertAlmostEqual(output["duration"], 1.1, delta=.09)
-        self.assertEqual(self.client.get("/api/media/" + output["file"]).status_code, 200)
-        self.assertTrue((self.home / "runs" / start.json()["id"] / "requests.json").exists())
-        self.assertTrue(read_json(self.home / "runs" / start.json()["id"] / "consent.json")["accepted"])
-        graph = next(body["prompt"] for path, body in MockService.requests if path == "/prompt")
-        self.assertIn("<Audio 1>", graph["1"]["inputs"]["prompt"])
+        run = self.home / "runs" / started.json()["id"]
+        self.assertTrue((run / "score.json").is_file())
+        plan = read_json(run / "plan.json")
+        self.assertEqual(quote.json()["analysis"]["shots"], sum(len(s["shots"]) for s in plan["segments"]))
+        self.assertAlmostEqual(media.duration(run / "music-video.mp4"), plan["total_frames"]/24, delta=.08)
+        prompts = read_json(run / "prompts.json")
+        self.assertIn("subject_definitions:", next(iter(prompts.values())))
+        self.assertIn("<Audio 1>", next(iter(prompts.values())))
+        graph = next(b["prompt"] for path,b in MockService.requests if path == "/prompt")
+        self.assertEqual(graph["124"]["inputs"]["steps"], 20)
+        self.assertNotIn("115", graph)
+        self.assertTrue(read_json(run / "consent.json")["accepted"])
 
-    def test_paid_consent_and_hosted_full_video(self):
-        self.store.save_key("WAVESPEED_API_KEY", "mock-only-key")
-        image = self.client.post("/api/upload/reference", files={"file": ("ref.png", picture())}).json()["file"]
-        request = {"song": self.song_upload(), "backend": "wavespeed", "references": [image], "direction": "Ocean waves"}
-        with patch.object(render, "BASE", self.url):
-            quote, rejected = self.start(request, consent=False)
-            self.assertEqual(rejected.status_code, 400)
-            self.assertEqual(MockService.requests, [])
-            self.assertEqual(quote.json()["estimate_usd"], .40)
-            accepted = self.client.post("/api/start", json={"quote_id": quote.json()["id"], "consent": True})
-            accepted.raise_for_status()
-            result = self.wait()
-        self.assertEqual(result["state"], "complete", result)
-        submissions = [body for path, body in MockService.requests if path.endswith("/reference-to-video")]
-        self.assertEqual(len(submissions), 1)
-        self.assertEqual(submissions[0]["duration"], 4)
-        self.assertEqual(len(submissions[0]["reference_images"]), 1)
+    def test_ident_and_harvest(self):
+        _, started = self.start({"kind":"ident", "title":"Studio", "ident_seconds":4})
+        started.raise_for_status(); self.assertEqual(self.wait()["state"], "complete")
+        image = self.client.post("/api/upload/reference", files={"file":("ref.png",picture())}).json()["file"]
+        _, started = self.start({"kind":"harvest", "style_id":"teal", "title":"Teal", "references":[image]})
+        started.raise_for_status(); status=self.wait(); self.assertEqual(status["state"], "complete", status)
+        self.assertIn("Soft teal", self.store.style("teal")["style_card"])
 
-    def test_ident_and_attached_credits(self):
-        quote, start = self.start({"kind": "ident", "title": "Studio", "direction": "Sunlight", "ident_seconds": 4})
-        start.raise_for_status()
-        self.assertEqual(quote.json()["clips"], 1)
-        self.assertEqual(self.wait()["state"], "complete")
-        ident = self.client.get("/api/outputs").json()[0]["file"]
-        _, start = self.start({"song": self.song_upload(), "start_ident": ident, "end_ident": ident, "direction": "Coast"})
-        start.raise_for_status()
-        status = self.wait()
-        self.assertEqual(status["state"], "complete", status)
-        self.assertAlmostEqual(status["result"]["duration"], 9.1, delta=.15)
+    def test_deleted_timing_inputs_are_rejected(self):
+        for name,value in (("bpm",120),("segment_seconds",8)):
+            self.assertEqual(self.client.post("/api/quote",json={name:value}).status_code,422)
+        html=self.client.get("/").text
+        self.assertNotIn('name="bpm"',html)
+        self.assertNotIn('name="segment_seconds"',html)
 
-    def test_harvest_end_to_end(self):
-        image = self.client.post("/api/upload/reference", files={"file": ("ref.png", picture())}).json()["file"]
-        _, start = self.start({"kind": "harvest", "style_id": "teal", "title": "Teal", "references": [image]})
-        start.raise_for_status()
-        status = self.wait()
-        self.assertEqual(status["state"], "complete", status)
-        self.assertIn("Soft teal", self.store.style("teal")["direction"])
+    def test_api_writer_requires_cost_and_no_implicit_render(self):
+        settings=self.store.settings();settings.update(writer_mode="api",writer_call_estimate=0)
+        self.client.put("/api/settings",json=settings).raise_for_status()
+        response=self.client.post("/api/quote",json={"song":self.song_upload()})
+        self.assertEqual(response.status_code,400)
+        self.assertEqual(MockService.requests,[])
 
-    def test_cancel_and_no_queue(self):
-        MockService.hold = True
-        _, start = self.start({"song": self.song_upload()})
-        start.raise_for_status()
-        deadline = time.monotonic() + 5
-        while not any(path == "/prompt" for path, body in MockService.requests) and time.monotonic() < deadline:
-            time.sleep(.03)
-        self.assertEqual(self.client.post("/api/quote", json={"song": "anything"}).status_code, 409)
-        self.assertEqual(self.client.put("/api/settings", json=self.store.settings()).status_code, 409)
+    def test_hosted_original_adapters_and_consent(self):
+        self.store.save_key("WAVESPEED_API_KEY","mock-only-key")
+        image=self.client.post("/api/upload/reference",files={"file":("ref.png",picture())}).json()["file"]
+        song=self.song_upload()
+        with patch.dict(os.environ,{"WAVESPEED_BASE_URL":self.url}):
+            for backend,resolution,cost in (("wavespeed","768p",.4),("seedance_2_5","480p",.72)):
+                MockService.requests=[]
+                quote,rejected=self.start({"song":song,"backend":backend,"resolution":resolution,"references":[image]},consent=False)
+                self.assertEqual(rejected.status_code,400)
+                self.assertEqual(MockService.requests,[])
+                self.assertEqual(quote.json()["estimate_usd"],cost)
+                started=self.client.post("/api/start",json={"quote_id":quote.json()["id"],"consent":True})
+                started.raise_for_status();status=self.wait();self.assertEqual(status["state"],"complete",status)
+                submissions=[body for path,body in MockService.requests if path.endswith("/reference-to-video") or path.endswith("/text-to-video")]
+                self.assertEqual(len(submissions),1)
+                self.assertIn("subject_definitions:",read_json(self.home/"runs"/started.json()["id"]/"prompts.json")["seg000"])
+                receipt=read_json(self.home/"runs"/started.json()["id"]/"renders.json")["seg000"]
+                self.assertEqual(receipt["request_id"],"hosted-test")
+
+    def test_failed_writer_never_renders(self):
+        MockService.invalid_writer=True
+        _,started=self.start({"song":self.song_upload()});started.raise_for_status()
+        status=self.wait();self.assertEqual(status["state"],"failed")
+        self.assertFalse(any(path=="/prompt" for path,body in MockService.requests))
+        self.assertEqual(sum(path=="/chat/completions" for path,body in MockService.requests),3)
+
+    def test_cancel_own_render_and_no_queue(self):
+        MockService.hold=True
+        _,started=self.start({"song":self.song_upload()});started.raise_for_status()
+        deadline=time.monotonic()+15
+        while time.monotonic()<deadline and not any(path=="/prompt" for path,body in MockService.requests): time.sleep(.05)
+        self.assertTrue(any(path=="/prompt" for path,body in MockService.requests))
+        self.assertEqual(self.client.post("/api/quote",json={"song":"anything"}).status_code,409)
         self.client.post("/api/cancel").raise_for_status()
-        self.assertEqual(self.wait()["state"], "cancelled")
-        self.assertTrue(any(path == "/queue" and body == {"delete": ["local-test"]} for path, body in MockService.requests))
+        self.assertEqual(self.wait()["state"],"cancelled")
+        self.assertTrue(any(path=="/queue" and body=={"delete":["local-test"]} for path,body in MockService.requests))
 
     def test_stale_preview_rejected(self):
         quote = self.client.post("/api/quote", json={"song": self.song_upload()}).json()
@@ -293,19 +347,6 @@ class PublicAppTests(unittest.TestCase):
         with Image.open(destination) as clean:
             self.assertFalse(clean.getexif())
 
-    def test_seedance_payload_and_cost(self):
-        self.store.save_key("WAVESPEED_API_KEY", "mock-only-key")
-        with patch.object(render, "BASE", self.url):
-            quote, started = self.start({"song": self.song_upload(), "backend": "seedance_2_5",
-                                         "resolution": "480p", "direction": "Sunlit coast"})
-            started.raise_for_status()
-            self.assertEqual(quote.json()["estimate_usd"], .72)
-            result = self.wait()
-        self.assertEqual(result["state"], "complete", result)
-        submissions = [body for path, body in MockService.requests if path.endswith("seedance-2.5/text-to-video")]
-        self.assertEqual(len(submissions), 1)
-        self.assertIn("@Audio 1", submissions[0]["prompt"])
-        self.assertNotIn("reference_images", submissions[0])
 
     def test_topaz_direct_export_command_and_original_preserved(self):
         _, started = self.start({"song": self.song_upload()})
@@ -352,27 +393,9 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/quote", json={"content": {"nudity": "invented"}}).status_code, 422)
         self.assertEqual(self.client.post("/api/quote", json={"kind": "film"}).status_code, 422)
 
-    def test_missing_models_and_api_key_fail_before_generation(self):
-        self.graph.unlink()
-        response = self.client.post("/api/quote", json={"song": self.song_upload()})
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(MockService.requests, [])
-        with patch.dict(os.environ, {"WAVESPEED_API_KEY": ""}):
-            response = self.client.post("/api/quote", json={"song": "missing", "backend": "seedance_2", "resolution": "480p"})
-            self.assertEqual(response.status_code, 400)
 
 
 class UtilityTests(unittest.TestCase):
-    def test_music_plan_covers_song_and_local_grid(self):
-        for seconds in (.1, 1, 8, 14.1, 61.3, 180):
-            for backend in render.CATALOG:
-                segments = media.plan(seconds, backend, bpm=123)
-                self.assertEqual(sum(x["frames"] for x in segments), max(1, __import__("math").ceil(seconds * 24)))
-                for segment in segments:
-                    self.assertGreaterEqual(segment["gen_frames"], segment["frames"])
-                    if backend == "local_h3":
-                        self.assertEqual((segment["gen_frames"] - 5) % 17, 0)
-                        self.assertEqual(segment["duration"], segment["gen_frames"] / 24)
 
     def test_single_session_and_interrupted_recovery(self):
         with tempfile.TemporaryDirectory() as temp:

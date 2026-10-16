@@ -1,0 +1,207 @@
+[
+  {
+    "source": "mondo/mondo/analyze.py",
+    "public": "mmv/engine/analyze.py",
+    "sha256": "0b39d2b1fa2934e9d6d5fcfcf9ae0fd6c49c445a61b2f0512d814643b75717a8",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/grid.py",
+    "public": "mmv/engine/grid.py",
+    "sha256": "6dcee9e9908169570ffa3d23f22a1cd6f5e886cdaf253483b5dcb7d8d961a302",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/plan.py",
+    "public": "mmv/engine/plan.py",
+    "sha256": "0d1e05e3f7a28160df6b13db051893f74733be33577b4d14ec49230e0d8f591c",
+    "adaptation": "hosted snap-limit exceptions treated as a request to shrink the existing downbeat phrase; original musical analysis/planning logic retained"
+  },
+  {
+    "source": "mondo/mondo/schema.py",
+    "public": "mmv/engine/schema.py",
+    "sha256": "2e3a31c62bbf32578eed863f26b03eee54b0592b66ee2fa85ac721fa1f579433",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/casting.py",
+    "public": "mmv/engine/casting.py",
+    "sha256": "248475a279a133cb0bccb852a99741d217790604cb49bf6ae8be1349d24513a6",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/comfy.py",
+    "public": "mmv/engine/comfy.py",
+    "sha256": "1bfa06ffab5b50af303f84e901db33a801034da388a0afed47dd529085b55181",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/atomic_io.py",
+    "public": "mmv/engine/atomic_io.py",
+    "sha256": "8438071d7ed7f44111ab89a78e76f5d5bc80da3a14ab9eb100a7ac3092eb55b1",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/backends/__init__.py",
+    "public": "mmv/engine/backends/__init__.py",
+    "sha256": "da72d9df1e0c3bb356948b51075a7613601b2cf9ee0ce37266d825eda1d2ce9f",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/backends/base.py",
+    "public": "mmv/engine/backends/base.py",
+    "sha256": "ca1bd3bc83c848addccd3bd7bae316427f1ee8e7fa2028edbbcaefcdf5845c5b",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/backends/local_h3.py",
+    "public": "mmv/engine/backends/local_h3.py",
+    "sha256": "d9a04b9eabc0fa15b63013d4b52cd731d69e34b02328003e46bf4c92fb2e7dd9",
+    "adaptation": "NSFW workflow switching and its helpers removed; original standard H3 rendering retained"
+  },
+  {
+    "source": "mondo/mondo/backends/wavespeed.py",
+    "public": "mmv/engine/backends/wavespeed.py",
+    "sha256": "e1ab4ad651edddd5ec03eb0cec7d793c846febd7fbfeaa6165dcfa50aa34ed08",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/backends/seedance.py",
+    "public": "mmv/engine/backends/seedance.py",
+    "sha256": "e08394d273beaadaac8a33be4b2caf787479042987fe5b2d879cb8968d10a06a",
+    "adaptation": "rate-card path adjusted for package namespace; renderer behavior unchanged"
+  },
+  {
+    "source": "mondo/config/seedance_rate_card.json",
+    "public": "mmv/engine/config/seedance_rate_card.json",
+    "sha256": "e19d16a9d849fc70297205cafd4b75218aa5bce513b853ffe8e80c759a6266e9",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/config/injection_map.json",
+    "public": "mmv/engine/config/injection_map.json",
+    "sha256": "d0ebfb3b43d66011b5a0ab39a6b7c4d09abf92268f883bced7c10d31d5a12f88",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/workflows/h3_ref2video_audionodeadded.json",
+    "public": "mmv/engine/workflows/h3_ref2video_audionodeadded.json",
+    "sha256": "c8dbea5c1a2c06185fbc978e9d1374ae76ca1d20ccef2e8670efe3014f069ce9",
+    "adaptation": "personal input filenames and output prefixes replaced; graph topology and models unchanged"
+  },
+  {
+    "source": "mondo/prompts/writer_base.md",
+    "public": "mmv/engine/prompts/writer_base.md",
+    "sha256": "6e9014a80ad8f34382646ff85ea23a9e36fd883e1b7aa413c2b132740c18932b",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/prompts/ident_base.md",
+    "public": "mmv/engine/prompts/ident_base.md",
+    "sha256": "48af7f534bf41de6fc97b9de7a99b28d3080ef1e578772f07a5c03bbcdd4c8f8",
+    "adaptation": "none"
+  },
+  {
+    "source": "style_engine.py",
+    "public": "mmv/engine/style.py",
+    "sha256": "88a47d08c50d13f35ae24b735775983ae5b6d3ecd0d6b0daf56fdb2b2e2aa907",
+    "functions": [
+      "normalize_restrictions",
+      "build_restriction_block",
+      "_replace_subject_rigging_block",
+      "compose_writer_prompt",
+      "inject_conceptual_theme",
+      "build_harvest_payload",
+      "parse_harvest_response",
+      "compose_ident_prompt",
+      "build_ident_style_card_payload",
+      "build_ident_writer_message"
+    ],
+    "adaptation": "whitelisted original functions; configurable data/template paths"
+  },
+  {
+    "source": "actor_engine.py",
+    "public": "mmv/engine/actor.py",
+    "sha256": "ba4bcdb93ffac5f554383eae450b0b3d6c455ff21adce0fa927f66a28096fb82",
+    "functions": [
+      "resolve_sheet",
+      "actor_profile_lines",
+      "_casting_rules",
+      "cast_writer_block"
+    ],
+    "adaptation": "whitelisted original functions; configurable data/template paths"
+  },
+  {
+    "source": "mondo/mondo/assemble.py",
+    "public": "mmv/engine/assemble.py",
+    "sha256": "82fa68ca091e17d80b41c64f3c36625138cd20525dbf7ad96a7aec4900d351c8",
+    "functions": [
+      "_probe_audio",
+      "_run",
+      "assemble_run",
+      "assemble_run_with_ident",
+      "concat_audio",
+      "concat_diegetic",
+      "concat_video",
+      "extract_audio",
+      "extract_audio_span",
+      "mux",
+      "normalize_clip",
+      "probe_frames",
+      "trim_to_frames"
+    ],
+    "adaptation": "music assembly functions only; dialogue mixing and text-overlay branches removed"
+  },
+  {
+    "source": "batch_writer_api.py",
+    "public": "mmv/engine/writer.py",
+    "sha256": "31d58105528987c7499ae68d4da2786424babc8cf3372737135d26e4c65a4f53",
+    "functions": [
+      "call_llm"
+    ],
+    "adaptation": "public endpoint/model/key settings replace private profile registry; error bodies suppressed; original chat payload retained"
+  },
+  {
+    "source": "mondo/mondo/validators/base.py",
+    "public": "mmv/engine/validators/base.py",
+    "sha256": "187d125f476ea9360c58d189cb69f1464b043e4bebe2b66ed3ddfe79865e471c",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/validators/laya_semantic.py",
+    "public": "mmv/engine/validators/laya_semantic.py",
+    "sha256": "57e60cd4477b93d5066d81ded0f41f9b03627d3c74fffbabee8d5885574e781e",
+    "adaptation": "public model/device settings; music-only clipboard removes script-breakdown question; original inference, decisions and corrective feedback retained"
+  },
+  {
+    "source": "mondo/mondo/validators/laya/rl_common.py",
+    "public": "mmv/engine/validators/laya/rl_common.py",
+    "sha256": "8d83611d480c971d640a7b7d3aa2f2219c5e8455e9cc2329fd073681bd8be23e",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/validators/laya/rl_agent_api.py",
+    "public": "mmv/engine/validators/laya/rl_agent_api.py",
+    "sha256": "be3b46819c9999c3ef88e0f2ecf6d3ab1cdfed1d9a8b466fc89811e34d44031b",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo/mondo/validators/laya/VENDOR.md",
+    "public": "mmv/engine/validators/laya/VENDOR.md",
+    "sha256": "6a9074f1533a3450fbb05ea3b760d826337b7bf8d483189e22608465287e83bb",
+    "adaptation": "none"
+  },
+  {
+    "source": "mondo_master.py",
+    "public": "mmv/runtime.py",
+    "sha256": "c4af0007f3266ef9f601ee85e0d9875553efd79749711bfebf13f68f24965790",
+    "functions": [
+      "cleanup",
+      "http_ok",
+      "start_process",
+      "stop_process",
+      "wait_http"
+    ],
+    "adaptation": "original HTTP/start/stop/cleanup helpers; Windows process handling and ownership-only configurable service launch; no studio preemption"
+  }
+]

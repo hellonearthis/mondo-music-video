@@ -1,86 +1,72 @@
-# Local services and model setup
+# Local models and services
 
-The app contains no AI weights, actor library, bundled ComfyUI, or private studio
-workflows. Install and configure your chosen services independently, then point
-Mondo Music Video at them. API-only operation needs no GPU or local model files.
+Mondo Music Video does not distribute model weights. Select existing files or
+use the download helper after reviewing the model publisher's terms.
 
-## Local H3
+## Writer
 
-Use an installed ComfyUI with a compatible H3 reference-to-video workflow and
-its model files/custom nodes. Export the workflow in **API format**, not the UI
-layout format. Configure the following in Settings:
+Configure an OpenAI-compatible `/v1` service URL and model name. A local
+llama-server can be launched by Mondo using the JSON argument list saved by
+setup. The writer receives the composed Mondo music-video system prompt and a
+structured job for each planned passage. It writes visual content; the planner
+owns timing, shot counts and reference slots.
 
-- ComfyUI URL, normally `http://127.0.0.1:8188`.
-- ComfyUI input directory, writable from this machine. Audio and actor references
-  are copied there with production-specific filenames. A remote service requires
-  an explicitly shared input directory; arbitrary remote ComfyUI is not supported.
-- Your exported API workflow JSON path.
-- A binding map JSON path describing that workflow's node inputs and output.
+A local production can make up to two corrective writer passes after the first
+response. Laya's notes feed that loop. API writers make one call per passage;
+a rejection stops production before rendering and is recorded for inspection.
+There is no automatic paid retry or provider substitution.
 
-Example binding map (replace every node ID/input name to match your own graph):
+## Laya
 
-```json
-{
-  "inputs": {
-    "prompt": ["10", "value"],
-    "duration": ["11", "value"],
-    "width": ["12", "width"],
-    "height": ["12", "height"],
-    "seed": ["13", "noise_seed"],
-    "video_prefix": ["14", "filename_prefix"]
-  },
-  "reference_node": "12",
-  "output_node": "14"
-}
+The original Laya semantic reviewer checks visual density, cinematic
+completeness, style and content restrictions. CUDA is the default device.
+CPU and MPS can be selected explicitly for other hardware. A missing or failed
+Laya model stops music-video production; it is never silently bypassed.
+
+The configured folder must contain:
+
+```text
+laya/
+  model.safetensors
+  rl_agent_config.json
+  tokenizer/tokenizer.json
+  tokenizer/tokenizer_config.json
+  encoder/config.json
 ```
 
-The reference node must accept H3 sockets `ref_images.ref_image_0`, etc., and
-`ref_audios.ref_audio_0`. New LoadImage/LoadAudio nodes are attached per clip.
-The output node must report a downloadable video in ComfyUI history. Configure
-sampler settings in your workflow; the app does not expose sampling internals.
+Download the pinned English checkpoint with `mondo-music-video download-laya`.
+Its manifest pins the upstream revision and SHA-256 for each file. Existing
+files are preserved. Set the model directory in Settings when using another
+location. Torch, Transformers and Safetensors are application dependencies.
 
-Music passages are rendered at 24 fps, rounded up to H3's 17n+5 frame lattice,
-then trimmed to the planned span. Local output uses a modest 720p-class canvas
-(other picture shapes have corresponding dimensions), regardless of the hosted
-resolution menu. This preview does not install custom nodes or choose hardware
-settings for you. Confirm model/runtime requirements with their maintainers.
+## Standard H3 / ComfyUI
 
-Cancellation removes this application's pending ComfyUI task. It deliberately
-does not issue a global interrupt that might stop another client's task. An
-already running local task can continue; inspect ComfyUI before starting again.
+Install ComfyUI, the MiniMax H3 nodes, ComfyMathExpression and VideoHelperSuite,
+and compatible H3 weights separately. The included graph is
+`mmv/engine/workflows/h3_ref2video_audionodeadded.json`; its original injection map
+is `mmv/engine/config/injection_map.json`. It uses the H3 video/audio VAEs, an H3
+reference-to-video diffusion model and its compatible text encoder.
 
-## Style harvesting
+Setup copies this standard graph into your private data directory and asks for
+your installed model filenames. It writes an injection map pointing to that
+copy. The application preserves the original graph injection, audio slicing,
+17n+5 frame lattice, reference tags and 20-step sampler. It does not include an
+NSFW workflow or LoRA selector.
 
-Set a vision-capable OpenAI-compatible `/v1` endpoint and its served model name.
-The app sends cleaned reference images to `/chat/completions` and stores the
-returned style description. No service is silently launched. Use an estimate
-of zero only for a free/local service; enter an expected per-call charge for a
-paid one. Harvesting uses at most 700 completion tokens but the configured cost
-is an estimate, not a provider spending cap.
+Configure ComfyUI's input and output directories as paths accessible to this
+app. The adapter uses ComfyUI's direct HTTP host and port. ComfyUI's filesystem
+and this app must share those directories. A ComfyUI launch command is optional
+when you manage the service yourself. Automatic launches stop only processes
+started for this production; they do not terminate other applications.
 
-## Opt-in model downloads
+For a local llama-server and H3 sharing a GPU, let Mondo launch both services.
+It writes and reviews all prompts, stops its writer, and then starts ComfyUI.
 
-Create a reviewed JSON manifest with entries like:
+## Download other models
 
-```json
-{
-  "models": [{
-    "name": "Your selected model",
-    "url": "https://model-publisher.example/pinned-revision/model.gguf",
-    "license_url": "https://model-publisher.example/license",
-    "sha256": "REPLACE_WITH_THE_PUBLISHERS_64_CHARACTER_LOWERCASE_SHA256",
-    "destination": "writer/model.gguf",
-    "size_bytes": 123456789
-  }]
-}
-```
-
-This is a format example, not a working model source. Use the publisher's real
-URL, revision, checksum, size and terms. The installer does not infer permission
-from a download URL. Gated/authenticated sources are not supported by this
-preview's helper: download those through the publisher's normal process.
-
-Verified files go under the configured data directory's `models/` tree. Configure
-your AI service to load them there, or move them into that service's expected
-location. The helper does not edit an unrelated service's configuration. Existing
-destinations and partial downloads are preserved rather than overwritten.
+`mondo-music-video download-models manifest.json` accepts a manifest with a
+nonempty `models` array. Each entry needs `name`, `url`, `license_url`, `sha256`,
+and `destination`; `size_bytes` is optional. URLs must be HTTPS and destinations
+are relative to your private data directory's `models/` folder. The helper
+asks before each download and checks integrity before activation. It does not
+bypass gated access, grant licenses, overwrite files, or infer compatibility.

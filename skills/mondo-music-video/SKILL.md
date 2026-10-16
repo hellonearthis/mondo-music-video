@@ -26,6 +26,11 @@ switch providers or install/download model weights.
 
 ## Produce
 
+Music videos use automatic beat/downbeat and section analysis, the original
+Mondo shot planner, LLM-written visual prompts, and Laya review before rendering.
+Use the detected musical timing returned by the preview. Confirm writer, Laya
+and renderer configuration before starting; model failures stop production.
+
 1. Use the user's selected song/reference files. Upload them into the local app;
    production requests use the resulting upload IDs, not source filesystem paths.
    Use existing actor/style IDs where requested. Read

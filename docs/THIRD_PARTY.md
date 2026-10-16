@@ -27,6 +27,9 @@ Prices are estimates based on those dated pages and can change. The app does not
 retry paid submissions automatically. Remote request IDs are saved with each
 production. Always check the provider dashboard after an interrupted submission.
 
-Before a broadly distributed release, inventory the resolved dependency wheels
-and preserve all required notices. The development preview uses bounded direct
-dependencies rather than a claim of a fully audited cross-platform lockfile.
+Laya inference modules are vendored from the Apache-2.0 upstream revision recorded
+in `mmv/engine/validators/laya/VENDOR.md`. Model weights are not distributed.
+NumPy, SciPy and Librosa provide audio analysis; Torch, Transformers and
+Safetensors support Laya inference. Their distributions retain upstream notices.
+The source extraction manifest records the authorized music-video source files
+and the portability changes made to them.

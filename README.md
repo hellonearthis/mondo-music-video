@@ -1,132 +1,120 @@
 # Mondo Music Video
 
-A community music-video application from MAXIMUM GOOSE LABORATORIES.
+**Version 1.0.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
-Version: **0.1.1** — development preview, not a broadly verified release.
+Turn your song into a complete music video. Mondo listens to the track, detects
+beats and downbeats, measures energy, and identifies musical sections. Its
+seeded planner turns that musical structure into montage passages and timed
+shots. An LLM writer develops the visuals from your direction, style and cast;
+Laya reviews the prompts before the video renderer runs. Mondo then trims every
+passage to its planned frames, joins the picture, and restores your original song.
 
-The application turns a song into a music video using your own local
-generation setup or supported API providers. Open Actor Protocol (OAP) will be
-built into actor import/export and reference-image workflows.
+## What you can make
 
-Included features:
+- Music videos with beat-driven cuts and energy-aware montage grammar.
+- Consistent reference-image actors with Open Actor Protocol built in.
+- Your own visual styles, including styles harvested from reference images.
+- Animated production idents and opening or closing credits.
+- Finished videos to play, download, or upscale with your installed Topaz tools.
 
-- Music-video creation, one operation at a time, with progress and cancellation.
-- Actors and reference images, with built-in OAP support.
-- Styles and style harvesting from reference images.
-- Animated credits and idents.
-- Finished-video playback and download.
-- Optional Topaz upscale export with a compatible user-owned installation.
-- Guided system configuration and optional downloads of supported models.
+Use local models or supported API providers. One production runs at a time,
+with progress, logs and cancellation. You provide your media, models and API
+keys. No actors, model weights or third-party commercial software are bundled.
 
-No actors, AI model weights, songs, API keys, or Topaz software are bundled.
-You supply your own media and provider accounts. Model downloads will require
-review of the relevant upstream terms and access requirements.
+## Install
 
-## Install and start
-
-Install Python 3.11 or newer, Git, and FFmpeg (including ffprobe) first. Clone
-this repository and run the installer from its folder:
+Install **Python 3.11+**, **Git**, and **FFmpeg/ffprobe**, then:
 
 ```sh
 git clone https://github.com/hodgemann/mondo-music-video.git
 cd mondo-music-video
 ```
 
-Linux, macOS, or Windows/WSL2:
+Linux, macOS, or Windows through WSL:
 
 ```sh
 bash install.sh
 .venv/bin/mondo-music-video serve
 ```
 
-Native Windows, from PowerShell:
+Windows PowerShell:
 
 ```powershell
 .\install.ps1
 & .\.venv\Scripts\mondo-music-video.exe serve
 ```
 
-Open **http://127.0.0.1:8091**. The launcher serves only on localhost and prevents
-two launched instances from sharing the same data directory. Keep this a local
-application; it is not a multi-user hosted service. Do not launch it with several
-workers or use a reverse proxy to expose it publicly.
+Open **http://127.0.0.1:8091**. Setup saves paths and model/service choices for
+your machine. The app runs on localhost and uses a single worker.
 
-Setup creates an isolated environment and asks for renderer settings. It does
-not install ComfyUI, launch AI services, or download models automatically.
-`--non-interactive` installs dependencies and prints checks instead of running the
-setup questions. Existing user data and models are not overwritten.
+## Configure your models
 
-The settings screen also accepts your own keys. They are stored in a local
-secrets file with owner-only permissions where supported; they are not encrypted
-at rest. Environment variables `WAVESPEED_API_KEY` and `MMV_VISION_API_KEY` override
-saved keys. Model/service requests go directly to the provider you configure.
+The music-video writer accepts an OpenAI-compatible chat service, either local
+or API-based. Local H3 uses ComfyUI and the included standard H3 workflow and
+injection map. Setup can configure launch commands so the local writer stops
+before the renderer starts, freeing GPU memory. Existing externally managed
+services stay under your control.
 
-Default data locations are the user's XDG data directory on Linux, Application
-Support on macOS, and LocalAppData on Windows. Set `MMV_HOME` or run
-`mondo-music-video --data-dir /your/path configure` / `serve` to choose another
-location. Back up that data directory to preserve actors, signing identity,
-styles and productions. Do not publish it.
-
-## Your first production
-
-1. Configure a renderer in Settings. Hosted H3 requires a reference image;
-   Seedance supports generation without one. Local H3 requires your installed
-   ComfyUI, models, exported API workflow and binding map.
-2. Upload a song, describe the visuals, select a style and optionally add actors
-   or reference images. An optional BPM aligns passages to bars.
-3. Preview the production and estimated provider charges, then explicitly accept
-   and start. Progress and cancellation remain available.
-4. Play/download the finished video. Generate an ident in Credits & Idents to
-   use it as opening/closing credits on a later production.
-
-The public prompt builder uses your direction, style, cast descriptions and a
-small rotating shot vocabulary. It does not contain the full studio's narrative
-writer, casting system or advanced music planner. Song timing uses duration and
-optional user-supplied BPM, rather than automatic beat detection.
-
-See [local model setup](docs/LOCAL_MODELS.md), [platform support](docs/PLATFORMS.md)
-and [verification](docs/VERIFICATION.md). Cross-platform launchers are included;
-real GPU, paid-provider and Topaz productions still need operator verification.
-
-## Model download helper
+Laya reviews music-video prompts locally and uses CUDA by default. Select your
+Laya model folder in Settings, or download the pinned model files yourself with:
 
 ```sh
-.venv/bin/mondo-music-video download-models /path/to/reviewed-manifest.json
+.venv/bin/mondo-music-video download-laya
 ```
 
-The helper shows source/license/destination, asks before each download and checks
-SHA-256 before activation. This preview has no curated model catalog; use a
-reviewed manifest as described in [local model setup](docs/LOCAL_MODELS.md).
+The helper displays the source, terms and destination and verifies checksums.
+You can also select existing model files. See [model setup](docs/LOCAL_MODELS.md)
+for the required files, renderer setup, and download manifests.
 
-## Let an agent operate the studio
+Hosted rendering supports WaveSpeed H3, Seedance 2.0 and Seedance 2.5. Supply your
+own provider key. Charges are shown before you accept a production. An API
+writer has a separately configured estimate; paid submissions are not retried
+automatically. Uploaded references and song passages go to your chosen provider.
 
-An optional **MCP server** exposes the local studio's tools to compatible agent
-clients. The included **skill** teaches an agent the production workflow, OAP
-handling, previews, and spending consent. They do not require another model API
-account or turn this application into a hosted model service.
+## Make a video
+
+1. Upload your song and choose a style and visual direction.
+2. Optionally choose actors or reference images, a conceptual theme, or lyrics
+   to inform the visuals. Musical timing comes from the track analysis.
+3. Review the detected musical structure, planned shots and estimated charges.
+4. Start production. Mondo writes and reviews the prompts, renders the passages,
+   and assembles the finished music video automatically.
+5. Play or download your video. Create an ident in Credits & Idents to attach
+   to another production, or use the optional Topaz export on a finished video.
+
+The Actors tab imports and exports OAP packages, verifies their signatures and
+checks actor riders. No account, reporting or public actor sharing is required.
+
+## Agent operation
+
+The included skill and optional MCP server let an agent operate the same app,
+including its OAP, review and production workflow:
 
 ```sh
 .venv/bin/python -m pip install '.[mcp]'
 .venv/bin/mondo-music-video-mcp
 ```
 
-Run the app separately with `mondo-music-video serve`; configure your agent
-client to launch the MCP command over stdio. The MCP process connects to
-`http://127.0.0.1:8091` by default, or a different localhost URL in `MMV_URL`.
-There is also a shell helper: `mondo-music-video-agent status`.
+Run the app separately. See [agent setup](docs/AGENT_SETUP.md) and the bundled
+[skill](skills/mondo-music-video/SKILL.md). A CLI client is also included:
+`mondo-music-video-agent --help`.
 
-See [agent setup](docs/AGENT_SETUP.md) and the bundled
-[Mondo Music Video skill](skills/mondo-music-video/SKILL.md). The optional MCP
-dependency is not installed for ordinary browser-only use.
+## Your data
 
-See [the roadmap](docs/ROADMAP.md), [project scope](docs/SCOPE.md), and
-[third-party dependencies](docs/THIRD_PARTY.md).
+Data lives in your user data directory: XDG data on Linux, Application Support
+on macOS, or LocalAppData on Windows. `MMV_HOME` or `--data-dir` selects another
+location. Back it up to preserve actors, styles, signing identity and productions.
+Keys stay in a local secrets file; environment variables `WAVESPEED_API_KEY`,
+`MMV_WRITER_API_KEY`, and `MMV_VISION_API_KEY` override saved values. Keep that
+directory private.
+
+See [platform support](docs/PLATFORMS.md), [verification](docs/VERIFICATION.md),
+[scope](docs/SCOPE.md), and [third-party notices](docs/THIRD_PARTY.md).
 
 ## License
 
-Application code and documentation authored for this repository are licensed
-under [Apache License 2.0](LICENSE). Third-party dependencies retain their own
-licenses. [Open Actor Protocol](https://github.com/hodgemann/oap) is a separate
-MIT-licensed project.
+Mondo Music Video is licensed under [Apache License 2.0](LICENSE). Third-party
+components retain their own licenses. [Open Actor Protocol](https://github.com/hodgemann/oap)
+is MIT-licensed. Laya inference code is attributed in [its vendor notice](mmv/engine/validators/laya/VENDOR.md).
 
 Copyright 2026 MAXIMUM GOOSE LABORATORIES.

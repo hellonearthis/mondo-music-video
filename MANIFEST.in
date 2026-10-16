@@ -1,3 +1,9 @@
 include install.sh install.ps1 AGENTS.md
 recursive-include docs *.md
 recursive-include skills *.md *.yaml
+
+recursive-include docs *.json
+recursive-include tests *.py *.json
+recursive-include mmv/engine/config *.json
+recursive-include mmv/engine/prompts *.md
+recursive-include mmv/engine/workflows *.json

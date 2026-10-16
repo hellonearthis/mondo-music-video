@@ -43,7 +43,7 @@ class JobContext:
         if self.cancelled.wait(seconds):
             self.check()
 
-    def command(self, argv, *, env=None):
+    def command(self, argv, *, env=None, progress_path=None):
         self.check()
         kwargs = {"start_new_session": True} if os.name != "nt" else {
             "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -51,7 +51,13 @@ class JobContext:
             process = subprocess.Popen([str(x) for x in argv], stdout=log,
                                        stderr=log, env=env, **kwargs)
             try:
+                last_progress = None
                 while process.poll() is None:
+                    if progress_path and progress_path.exists():
+                        current_progress = read_json(progress_path)
+                        if current_progress != last_progress:
+                            self.update(**current_progress)
+                            last_progress = current_progress
                     if self.cancelled.wait(0.2):
                         if os.name == "nt":
                             subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
@@ -59,7 +65,7 @@ class JobContext:
                         else:
                             os.killpg(process.pid, signal.SIGTERM)
                         try:
-                            process.wait(timeout=5)
+                            process.wait(timeout=30)
                         except subprocess.TimeoutExpired:
                             process.kill()
                             process.wait()
@@ -113,7 +119,7 @@ class Jobs:
                 except Exception as exc:
                     # Avoid exposing response bodies or credentials from external services.
                     message = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
-                    for name in ("WAVESPEED_API_KEY", "MMV_VISION_API_KEY"):
+                    for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY"):
                         secret = self.store.key(name)
                         if secret:
                             message = message.replace(secret, "[redacted]")

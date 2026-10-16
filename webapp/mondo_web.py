@@ -22,7 +22,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "0.1.1"
+MGL_APP_VERSION = "1.0.0"
 WEB = Path(__file__).parent
 
 
@@ -46,8 +46,18 @@ class ProductionRequest(StrictModel):
     actors: list[str] = Field(default_factory=list, max_length=9)
     references: list[str] = Field(default_factory=list, max_length=9)
     content: dict[str, str] = Field(default_factory=lambda: {key: "none" for key in oap.CONTENT_ENUMS})
-    segment_seconds: float = Field(default=8, ge=4, le=14)
-    bpm: float | None = Field(default=None, ge=30, le=300)
+    beats_per_bar: int = Field(default=4, ge=2, le=12)
+    bars_per_phrase: int = Field(default=8, ge=1, le=32)
+    seed: int = Field(default=0, ge=0, le=2147483647)
+    megapixels: float = Field(default=.6, ge=.15, le=4)
+    conceptual_theme: str = Field(default="", max_length=2000)
+    lyrics: str = Field(default="", max_length=16000)
+    silent_mouths: bool = True
+    ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
+    casting_policy: Literal["random", "rotate", "section"] = "random"
+    ensemble_mode: Literal["off", "always", "mixed"] = "off"
+    on_screen: int = Field(default=1, ge=1, le=9)
+    ident_mode: Literal["standard", "harvest", "scenographic"] = "standard"
     ident_seconds: float = Field(default=5, ge=4, le=12)
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
@@ -69,8 +79,18 @@ class Settings(StrictModel):
     backend: Literal["local_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
     comfy_input: str = ""
-    workflow_path: str = ""
-    workflow_map_path: str = ""
+    comfy_output: str = ""
+    workflow_map_path: str = DEFAULTS["workflow_map_path"]
+    writer_url: str = "http://127.0.0.1:8080/v1"
+    writer_model: str = ""
+    writer_mode: Literal["local", "api"] = "local"
+    writer_call_estimate: float = Field(default=0, ge=0, le=100)
+    writer_launch: str = ""
+    writer_cwd: str = ""
+    comfy_launch: str = ""
+    comfy_cwd: str = ""
+    laya_model_dir: str = ""
+    laya_device: Literal["cpu", "cuda", "mps"] = "cuda"
     vision_url: str = "http://127.0.0.1:8080/v1"
     vision_model: str = ""
     vision_key_env: Literal["MMV_VISION_API_KEY"] = "MMV_VISION_API_KEY"
@@ -78,7 +98,18 @@ class Settings(StrictModel):
     topaz_executable: str = ""
     topaz_models: str = ""
 
-    @field_validator("comfy_url", "vision_url")
+    @field_validator("writer_launch", "comfy_launch")
+    @classmethod
+    def valid_launch(cls, value):
+        if value:
+            import json
+            try: command = json.loads(value)
+            except (ValueError,TypeError): raise ValueError("Use a JSON array of command arguments")
+            if not isinstance(command,list) or not command or any(not isinstance(x,str) or not x for x in command):
+                raise ValueError("Use a nonempty JSON array of command arguments")
+        return value
+
+    @field_validator("comfy_url", "vision_url", "writer_url")
     @classmethod
     def valid_url(cls, value):
         url = urlparse(value)
@@ -88,7 +119,7 @@ class Settings(StrictModel):
 
 
 class KeyRequest(StrictModel):
-    name: Literal["WAVESPEED_API_KEY", "MMV_VISION_API_KEY"]
+    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY"]
     value: str = Field(max_length=1000)
 
 
@@ -166,7 +197,7 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/settings")
     def get_settings():
         return {"settings": store.settings(), "keys": {name: bool(store.key(name)) for name in
-                ("WAVESPEED_API_KEY", "MMV_VISION_API_KEY")}}
+                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY")}}
 
     @app.put("/api/settings")
     def settings(value: Settings):
@@ -285,7 +316,9 @@ def create_app(home=None, *, test_hosts=False):
             quotes[quote_id] = {"request": request, "fingerprint": production.fingerprint(store, request, prepared),
                                 "expires": time.time() + 600}
             return {"id": quote_id, "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
-                    "seconds": prepared["seconds"], "paid": request["backend"] != "local_h3" if request["kind"] != "harvest"
+                    "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
+                    "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
+                    "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}

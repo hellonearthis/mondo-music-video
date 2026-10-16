@@ -1,5 +1,14 @@
 # Releases
 
+## 1.0.0 — Mondo Music Video
+
+Complete song-to-video workflow with automatic beat/downbeat, energy and section
+analysis, seeded musical montage planning, the Mondo LLM writer, GPU Laya prompt
+review, standard local H3 and hosted renderer adapters, frame-exact assembly,
+OAP actors, styles/harvest, credits/idents and optional Topaz export. Includes
+portable setup, verified opt-in Laya downloads, agent CLI, MCP server and skill.
+
+
 ## 0.1.1 — agent operation and first public GitHub release
 
 Optional local stdio MCP server, a bundled Mondo Music Video agent skill, and a

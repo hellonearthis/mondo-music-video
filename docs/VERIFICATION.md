@@ -1,6 +1,6 @@
-# Verification — 0.1.1
+# Verification — 1.0.0
 
-Run from a checkout after installing the test extra:
+Run from a checkout:
 
 ```sh
 python -m pip install '.[mcp,test]'
@@ -9,36 +9,56 @@ node --check webapp/app.js
 bash -n install.sh
 ```
 
-Node is needed only for the JavaScript syntax check, not to run the application.
-The tests use isolated temporary application data and a local mock HTTP service.
-They create small synthetic media fixtures and use real FFmpeg/ffprobe to
-exercise complete music-video and attached-ident assembly. No AI weights, API
-credits or user productions are used.
+The automated suite uses temporary data, synthetic media and local mock AI
+services. It runs the actual analyzer, planner, writer contract, Laya adapter,
+renderer adapters and FFmpeg assembly. Learned Laya decisions are mocked in
+that suite; no model download or paid generation is triggered by running tests.
 
-Coverage includes upstream OAP signing/verification/round trip, tampering and
-unsafe archive rejection, actor riders, hosted consent and request recording,
-preview invalidation, cancellation, concurrent-operation rejection, credential
-visibility, local-only request boundaries, interrupted-state recovery and
-consent/integrity checks for the model downloader.
+Coverage includes source hashes and original golden plans; backend phrase/frame
+limits; reference-slot contracts; OAP signatures, riders and package integrity;
+hosted consent and request receipts; failed-writer render prevention; cancellation
+of the app's own local job; single-operation enforcement; agent CLI and real MCP
+transports; credentials; local HTTP boundaries; downloader integrity; and Topaz
+command construction with preservation of the source video.
 
-The version handler is freshly imported and compared against pyproject.toml,
-README and API output. There is no requirement to start a server on the private
-studio's port or import any private studio code.
+## Original-engine parity
 
-All 32 integration/unit checks passed in a fresh Linux Python 3.12 virtual
-environment with dependencies installed from their public sources. This includes
-the pinned upstream OAP dependency. This is not an all-platform install claim.
+On the development machine, the original and extracted analyzers processed the
+same generated 40-second click track and returned exactly equal scores: 80 beats
+and 20 downbeats. Twelve planner/casting/writer-job comparisons matched exactly
+across four renderer backends and three seeds. The repository includes portable
+score/plan golden fixtures, not private media or actors.
 
-Agent checks exercise streamed media upload, actor/OAP round trips, CLI JSON
-output, preserved existing download files, preview/consent, local URL restrictions
-and proxy bypass. MCP checks use the real stdio transport for tool discovery and
-app calls, plus an in-memory MCP connection for a complete mock-rendered music
-video. Installing only `.[test]` skips the two optional MCP protocol tests.
+The source extraction manifest records source hashes and adaptations. One
+planner correction handles hosted adapters that raise on oversized durations:
+the existing phrase-shrinking loop now shrinks those phrases along the same
+musical edges. Golden parity is checked on inputs within the original contract.
 
-The installed wheel was also checked in headless Chromium at desktop (1440px)
-and mobile (390px) widths: navigation, initialized backend/resolution menus and
-live version output worked, and the mobile page had no horizontal overflow.
+## Verified release checks
 
-Real GPU inference, paid provider generation, Topaz execution, PowerShell setup
-and clean-machine installation on all target platforms remain operator checks.
-Do not treat mocked service tests as proof that these external systems work.
+All 37 automated checks passed. Headless Chromium passed the complete upload,
+analysis preview, production and playback-metadata flow at desktop and mobile
+widths, including absence of manual timing controls and no mobile overflow.
+
+A separate real local GPU production used the supplied 11.52-second song at
+0.3 MP: 736 × 416, 19 detected beats, 5 downbeats, 2 sections and 9 planned shots.
+The local LLM wrote the prompts, GPU Laya reviewed them (including a corrective
+writer pass), and the standard H3 workflow rendered both passages. The original
+assembler produced 276 frames at 24 fps, an 11.5-second H.264/AAC video. Full
+FFmpeg decoding passed. No API generation credits were used. The test media,
+model files and private run records are not distributed with the source.
+
+The installed release environment was checked independently with Torch 2.14.1,
+Transformers 5.20.0 and GPU Laya: the saved production prompt passed review on
+CUDA in 492 ms after model loading. The live app version was verified as 1.0.0.
+
+## External systems
+
+GPU Laya inference and the real local song-to-video workflow are checked
+separately from the automated mocks. Paid-provider service availability, model
+quality and spelling in generated idents depend on the selected models/services.
+Hosted adapter tests do not spend API credits. Topaz tests verify invocation;
+they do not establish compatibility with every Topaz installation.
+
+See PLATFORMS.md for the OS coverage. No test on one machine establishes that
+all GPU drivers, custom-node versions, model files or operating systems work.

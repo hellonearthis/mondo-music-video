@@ -23,8 +23,12 @@ def doctor(store):
     report = {"platform": platform.system(), "architecture": platform.machine(),
               "python": platform.python_version(), "data_directory": str(store.home),
               "ffmpeg": shutil.which("ffmpeg"), "ffprobe": shutil.which("ffprobe"),
-              "local_workflow_configured": bool(settings["workflow_path"] and settings["workflow_map_path"]),
-              "comfy_input": settings["comfy_input"], "api_key_configured": bool(store.key()),
+              "local_workflow_configured": bool(settings["workflow_map_path"]),
+              "comfy_input": settings["comfy_input"], "comfy_output": settings["comfy_output"],
+              "writer_configured": bool(settings["writer_model"]), "writer_launch_configured": bool(settings["writer_launch"]),
+              "laya_model_directory": settings["laya_model_dir"], "laya_device": settings["laya_device"],
+              "laya_files_present": all((Path(settings["laya_model_dir"]) / name).exists() for name in
+                 ("model.safetensors", "rl_agent_config.json", "tokenizer/tokenizer.json", "encoder/config.json")), "api_key_configured": bool(store.key()),
               "topaz_configured": bool(settings["topaz_executable"])}
     gpu = shutil.which("nvidia-smi")
     if gpu:
@@ -36,6 +40,33 @@ def doctor(store):
             report["nvidia_gpu"] = "Detection unavailable"
     report["support"] = "OS detection only; consult docs/PLATFORMS.md for verified capabilities"
     return report
+
+
+def configure_standard_graph(store, settings, ask):
+    engine = Path(__file__).parent / "engine"
+    directory = store.home / "config"
+    directory.mkdir(exist_ok=True)
+    graph_path = directory / "h3-standard.json"
+    graph = json.loads(graph_path.read_text() if graph_path.exists() else (engine / "workflows/h3_ref2video_audionodeadded.json").read_text())
+    comfy_dir = Path(settings["comfy_input"]).expanduser().parent
+    for node_id, folder, field, label in (
+        ("119", "vae", "vae_name", "H3 video VAE filename"),
+        ("120", "vae", "vae_name", "H3 audio VAE filename"),
+        ("127", "diffusion_models", "unet_name", "H3 reference-to-video model filename"),
+        ("128", "text_encoders", "clip_name", "H3 text encoder filename"),
+    ):
+        current = graph[node_id]["inputs"][field]
+        model_dir = comfy_dir / "models" / folder
+        if not (model_dir / current).is_file():
+            found = sorted(str(x.relative_to(model_dir)) for x in model_dir.rglob("*.safetensors")) if model_dir.is_dir() else []
+            if found: print(label + " — installed: " + ", ".join(found[:15]))
+        graph[node_id]["inputs"][field] = ask(label, current)
+    write_json(graph_path, graph)
+    mapping = json.loads((engine / "config/injection_map.json").read_text())
+    mapping["workflow"] = str(graph_path)
+    map_path = directory / "h3-injection-map.json"
+    write_json(map_path, mapping)
+    settings["workflow_map_path"] = str(map_path)
 
 
 def configure(store):
@@ -57,17 +88,44 @@ def configure(store):
         candidates = [Path.home() / "ComfyUI/input", Path.home() / "Documents/ComfyUI/input"]
         detected = next((str(x) for x in candidates if x.is_dir()), "")
         settings["comfy_input"] = ask("ComfyUI input folder", settings["comfy_input"] or detected)
-        settings["workflow_path"] = ask("Exported H3 API workflow JSON", settings["workflow_path"])
-        settings["workflow_map_path"] = ask("Workflow binding map JSON (see docs/LOCAL_MODELS.md)", settings["workflow_map_path"])
+        settings["comfy_output"] = ask("ComfyUI output folder", settings["comfy_output"] or str(Path(settings["comfy_input"]).parent / "output"))
+        configure_standard_graph(store, settings, ask)
+        comfy_dir = str(Path(settings["comfy_input"]).expanduser().parent)
+        comfy_python = ask("Python executable for your existing ComfyUI installation (blank: manage service yourself)")
+        if comfy_python:
+            settings["comfy_launch"] = json.dumps([comfy_python, "main.py"])
+            settings["comfy_cwd"] = comfy_dir
     else:
         key = getpass.getpass("WaveSpeed API key (blank keeps an existing key): ").strip()
         if key:
             store.save_key("WAVESPEED_API_KEY", key)
+    settings["laya_model_dir"] = ask("Laya model folder (model.safetensors, config, tokenizer, encoder)", settings["laya_model_dir"])
+    import torch
+    detected_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    settings["laya_device"] = ask("Laya device (cuda, mps, cpu)", detected_device)
+    settings["writer_url"] = ask("Music-video writer service URL (/v1)", settings["writer_url"])
+    settings["writer_model"] = ask("Music-video writer model name", settings["writer_model"])
+    settings["writer_mode"] = ask("Writer service type (local or api)", settings["writer_mode"])
+    if settings["writer_mode"] == "local":
+        executable = ask("llama-server executable (blank: manage service yourself)")
+        if executable:
+            model_path = ask("Writer GGUF path")
+            url = urllib.parse.urlparse(settings["writer_url"])
+            port = url.port or 8080
+            settings["writer_launch"] = json.dumps([executable, "-m", model_path, "--alias", settings["writer_model"],
+                "-ngl", "all", "-np", "1", "-fa", "on", "--cache-type-k", "q4_0", "--cache-type-v", "q4_0",
+                "--jinja", "--no-context-shift", "--port", str(port), "-c", "65536", "--reasoning", "off", "--temp", "0.7"])
+    if settings["writer_mode"] == "api":
+        settings["writer_call_estimate"] = float(ask("Estimated writer cost per call, USD", str(settings["writer_call_estimate"])))
+        key = getpass.getpass("Writer API key (blank keeps existing): ").strip()
+        if key: store.save_key("MMV_WRITER_API_KEY", key)
     settings["vision_url"] = ask("Optional OpenAI-compatible vision service URL", settings["vision_url"])
     settings["vision_model"] = ask("Vision model name (blank until configured)", settings["vision_model"])
     # Use the same validation as the web configuration; nothing launches services here.
     from webapp.mondo_web import Settings
     write_json(store.home / "settings.json", Settings(**settings).model_dump())
+    if not doctor(store)["laya_files_present"] and ask("Download the pinned Laya files after reviewing their terms? (yes/no)", "no").lower() == "yes":
+        download_models(store, Path(__file__).parent / "engine/config/laya-download.json")
     print(json.dumps(doctor(store), indent=2))
     print("Start with: mondo-music-video serve")
 
@@ -150,6 +208,7 @@ def main(argv=None):
     sub.add_parser("doctor")
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=8091)
+    sub.add_parser("download-laya")
     models = sub.add_parser("download-models")
     models.add_argument("manifest")
     args = parser.parse_args(argv)
@@ -161,6 +220,8 @@ def main(argv=None):
             with SessionLock(store.home):
                 if args.command == "configure":
                     configure(store)
+                elif args.command == "download-laya":
+                    download_models(store, Path(__file__).parent / "engine/config/laya-download.json")
                 elif args.command == "download-models":
                     download_models(store, args.manifest)
                 elif args.command == "serve":

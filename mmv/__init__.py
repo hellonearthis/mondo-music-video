@@ -1,1 +1,1 @@
-"""Mondo Music Video's independent public implementation."""
+"""Mondo Music Video: music-driven planning and production."""

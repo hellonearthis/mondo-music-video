@@ -1,7 +1,8 @@
 # Mondo Music Video repository rules
 
-- Keep this independent public application free of private studio source,
-  prompts, documentation, credentials, actors, models and production artifacts.
+- Release only the authorized music-video engine sources and prompts recorded
+  in docs/SOURCE_EXTRACTION.json. Keep unrelated private studio code, credentials,
+  actors, models and production artifacts out of this repository.
 - Never import from a sibling studio checkout or link its Git object store.
 - Every delivered batch of program changes needs a new application version.
   The version source is `MGL_APP_VERSION` in `webapp/mondo_web.py`; update

@@ -1,0 +1,232 @@
+"""Cancellable process boundary for the extracted music-video pipeline."""
+from __future__ import annotations
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+from .storage import Storage, inside, read_json, write_json
+
+
+def run(home, directory):
+    os.environ['MMV_HOME'] = str(home)
+    store = Storage(home)
+    request = read_json(directory / 'request.json')
+    prepared = read_json(directory / 'prepared.json')
+    settings = prepared['settings']
+    from .engine import style, actor, casting, assemble
+    from .engine.plan import ShotPlan
+    from .engine.schema import WriterResponse, build_writer_request, assemble_prompt, validate_prompt, ValidationError
+    from .engine.writer import call_llm
+    from .engine.backends import get_backend
+    from .pipeline import ENGINE
+    from .render import request_json
+    def progress(message, value):
+        print(message, flush=True)
+        write_json(directory / 'progress.json', {'message': message, 'progress': value})
+    def llm(system, user):
+        ok, text, error = call_llm(None, system, user, .7, 4096, 900,
+                                   profile=(settings, store.key('MMV_WRITER_API_KEY')))
+        if not ok: raise ValueError(error or 'Writer returned no output')
+        if not isinstance(text, str) or not text.strip(): raise ValueError('Writer returned no text')
+        return text
+    if request['kind'] == 'harvest':
+        progress('Harvesting visual style with the original style contract', 10)
+        response = request_json(settings['vision_url'].rstrip('/') + '/chat/completions',
+             {'model': settings['vision_model'], 'messages': [{'role':'user', 'content': style.build_harvest_payload([Path(p) for p in prepared['references']])}],
+              'max_tokens':4096, 'temperature':.4}, key=store.key('MMV_VISION_API_KEY'), timeout=900)
+        card, aesthetic = style.parse_harvest_response(response['choices'][0]['message']['content'])
+        if not card.strip() or not aesthetic.strip(): raise ValueError('Harvest did not return a style card and aesthetic directives')
+        record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic, 'style_card':card}
+        write_json(store.home / 'styles' / (request['style_id'] + '.json'), record)
+        write_json(directory / 'result.json', {'style':record['id']})
+        return
+    plan_path = directory / 'plan.json'
+    write_json(plan_path, prepared['plan'])
+    write_json(directory / 'score.json', prepared['score'])
+    write_json(directory / 'casting.json', prepared['casting'])
+    plan = ShotPlan.from_json(plan_path)
+    plan.slug = 'mmv-' + directory.name
+    plan.to_json(plan_path)
+    backend = get_backend(request['backend'])
+    style_dir = directory / 'style';style_dir.mkdir(exist_ok=True)
+    (style_dir / 'aesthetic.md').write_text(prepared['style']['direction'], encoding='utf-8')
+    (style_dir / 'style_card.md').write_text(prepared['style'].get('style_card', prepared['style']['direction']), encoding='utf-8')
+    # Public records are adapted to the original visual-contract reader in this process only.
+    roster = (prepared['casting'] or {}).get('roster', [])
+    actor_records = {}
+    for member in roster:
+        record = store.actor(member['actor_id']) or {}
+        actor_records[member['actor_id']] = {**record, 'display_name':member['display_name'],
+            'reference_sheets':[member['sheet']], 'visual_contract':record.get('visual_contract') or {'default_sheet':member['sheet'],
+            'sheets':{member['sheet']:{'canonical_summary':record.get('description','')}}}}
+    actor.load_actor_meta = lambda actor_id: actor_records[actor_id]
+    cast_block = actor.cast_writer_block([a['actor_id'] for a in roster], silent_mouths=request['silent_mouths'])
+    restrictions = [name for name in ('nudity','blood','violence','sexual') if request['content'].get({'blood':'blood_gore','sexual':'sexual_content'}.get(name,name), 'none') == 'none']
+    # OAP's own category names are enforced independently by check_cast.
+    if all(value == 'none' for value in request['content'].values()): restrictions = ['nudity','blood','violence','sexual']
+    from . import runtime
+    writer_process = None
+    if settings['writer_mode'] == 'local':
+        progress('Starting music-video writer', 2)
+        writer_process = runtime.start_service(settings['writer_launch'],settings['writer_cwd'],
+                         settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log')
+    prompts = {}
+    validator = None
+    if request['kind'] == 'video':
+        from .engine.validators import LayaSemanticValidator
+        validator = LayaSemanticValidator()
+        progress('Loading Laya prompt reviewer', 3)
+        validator._load_agent()
+
+    if request['kind'] == 'ident':
+        progress('Writing ident with the original ident prompt', 10)
+        system = style.compose_ident_prompt()
+        message = style.build_ident_writer_message(request['title'], request['ident_seconds'], request['ident_mode'],
+                   style_card=prepared['style'].get('style_card', prepared['style']['direction']), ident_notes=request['direction'])
+        (directory / 'writer_system.md').write_text(system, encoding='utf-8')
+        raw = llm(system, message).strip()
+        if raw.startswith('```'): raw = '\n'.join(raw.splitlines()[1:-1]).strip()
+        if request['title'] not in raw: raise ValueError('Ident writer omitted the exact requested title')
+        prompts[plan.segments[0].segment_id] = raw
+    else:
+        system = style.compose_writer_prompt(str(style_dir), actor_block=cast_block, restrictions=restrictions,
+                    silent_mouths=request['silent_mouths'], lyrics=request['lyrics'] or None, direction=request['direction'] or None)
+        (directory / 'writer_system.md').write_text(system, encoding='utf-8')
+        jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
+        for index, seg in enumerate(plan.segments):
+            progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
+            tags = backend.ref_tags(seg.ref_image_slots, 0, 1)
+            job = build_writer_request(plan, seg, tags, casting.cast_for(prepared['casting'], seg.segment_id), silent_mouths=request['silent_mouths'])
+            if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
+            write_json(jobs_dir / (seg.segment_id+'.json'), job)
+            feedback = ''
+            attempts = 3 if settings['writer_mode'] == 'local' else 1
+            for attempt in range(attempts):
+                raw = llm(system + feedback, json.dumps(job, indent=2))
+                (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
+                try:
+                    response = WriterResponse.parse(raw, seg.segment_id)
+                    prompt = assemble_prompt(seg, response, tags)
+                    problems = validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=request['silent_mouths'])
+                except (ValidationError, TypeError, AttributeError, KeyError) as exc:
+                    problems = [str(exc)]
+                if not problems:
+                    progress(f'Laya reviewing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
+                    state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
+                             'lyrics_flavor':request['lyrics'], 'director_direction':request['direction'],
+                             'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':cast_block}
+                    clip = validator.build_clipboard_request(prompt,seg,tags,silent_mouths=request['silent_mouths'],state=state)
+                    response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=request['silent_mouths'],state=state)
+                    write_json(directory / f'{seg.segment_id}.laya-request-{attempt+1}.json', clip)
+                    write_json(directory / f'{seg.segment_id}.laya-response-{attempt+1}.json', response)
+                if not problems:
+                    prompts[seg.segment_id] = prompt
+                    break
+                write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
+                feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
+            else:
+                raise ValueError(f'{seg.segment_id}: original prompt validation failed. See the validation report. Nothing rendered.')
+    write_json(directory / 'prompts.json', prompts)
+    if validator is not None:
+        validator._agent = None
+        del validator
+        import gc
+        gc.collect()
+        torch = sys.modules.get("torch")
+        if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
+    runtime.stop_process(writer_process)
+    progress('All prompts validated; opening renderer', 32)
+    if request['backend'] == 'local_h3':
+        runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
+                              settings['comfy_url'].rstrip('/')+'/system_stats',directory/'comfy-service.log')
+    rendered = {}
+    sheets = casting.sheet_paths(prepared['casting']) if prepared['casting'] else {}
+    url = urlparse(settings['comfy_url'])
+    if request['backend'] == 'local_h3':
+        from .engine.comfy import ComfyClient
+        original_queue = ComfyClient.queue
+        def record_queue(client, graph):
+            write_json(directory / 'render-graph.json', graph)
+            prompt_id = original_queue(client, graph)
+            write_json(directory / 'local-request.json', {'prompt_id':prompt_id})
+            return prompt_id
+        ComfyClient.queue = record_queue
+    backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
+                        song=None, steps=20, timeout_s=3600, comfy_host=url.hostname, comfy_port=url.port or 8188,
+                        comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
+                        map_path=settings['workflow_map_path'], root=ENGINE)
+    try:
+        song = inside(store.home / 'uploads', request['song']) if request['kind'] == 'video' else directory / 'silence.wav'
+        if request['kind'] == 'ident':
+            subprocess.run(['ffmpeg','-nostdin','-y','-v','error','-f','lavfi','-i','anullsrc=r=44100:cl=stereo','-t',str(plan.segments[0].gen_frames/24),str(song)],check=True)
+        for index, seg in enumerate(plan.segments):
+            progress(f'Rendering musical passage {index+1} of {len(plan.segments)}', 35+int(45*index/len(plan.segments)))
+            images = [(member['actor_id'],sheets[member['actor_id']]) for member in casting.cast_for(prepared['casting'],seg.segment_id)]
+            if len(images) != seg.ref_image_slots: raise ValueError('Original cast/reference-slot contract disagrees; refusing render')
+            rendered[seg.segment_id] = backend.render_segment(segment_id=seg.segment_id,index=seg.index,slug=plan.slug,
+                prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
+                width=plan.width,height=plan.height,seed=request['seed']+seg.index,images=images,song=str(song),
+                audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
+            write_json(directory / 'renders.json', rendered)
+            video = rendered[seg.segment_id].get('video')
+            if not video or not Path(video).is_file() or assemble.probe_frames(video) < seg.trim_frames:
+                raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')
+    finally:
+        backend.close_render()
+    progress('Assembling frame-exact music video', 85)
+    if request['kind'] == 'ident':
+        output = directory / 'ident.mp4'
+        assemble.trim_to_frames(rendered[plan.segments[0].segment_id]['video'], output, plan.total_frames)
+    else:
+        opening, closing = request.get('start_ident'), request.get('end_ident')
+        if opening and closing:
+            # Original primitives, one encode per raw clip, stream-copy join and song mux.
+            work=directory/'assembly/work';work.mkdir(parents=True,exist_ok=True)
+            clips=[assemble.trim_to_frames(rendered[s.segment_id]['video'],work/(s.segment_id+'.mp4'),s.trim_frames) for s in plan.segments]
+            first=inside(store.home/'runs',opening);last=inside(store.home/'runs',closing)
+            clips=[assemble.normalize_clip(first,work/'opening.mp4')]+clips+[assemble.normalize_clip(last,work/'closing.mp4')]
+            picture=assemble.concat_video(clips,work/'picture.mp4',work)
+            audio=[assemble.extract_audio(first,work/'opening.wav'),assemble.extract_audio(song,work/'song.wav'),assemble.extract_audio(last,work/'closing.wav')]
+            track=assemble.concat_audio(audio,work/'song-with-idents.wav',work)
+            output=assemble.mux(picture,track,directory/'music-video.mp4')
+        else:
+            if opening or closing:
+                result=assemble.assemble_run_with_ident(plan,rendered,song,inside(store.home/'runs',opening or closing),
+                      'start' if opening else 'end',directory/'assembly')
+            else:
+                result=assemble.assemble_run(plan,rendered,song,directory/'assembly')
+            output=directory/'music-video.mp4';shutil.copy2(result['video'],output)
+    from .media import duration
+    write_json(directory/'output.json',{'file':output.name,'duration':duration(output),'kind':request['kind'],
+                                       'title':request['title'] or 'Music video'})
+    progress('Complete',100)
+
+
+def main():
+    if sys.argv[1] == 'analyze':
+        from .engine.analyze import analyze
+        path=Path(sys.argv[3]); temp=path.with_suffix('.tmp')
+        analyze(sys.argv[2],beats_per_bar=int(sys.argv[4])).to_json(temp)
+        temp.replace(path)
+    elif sys.argv[1] == 'produce':
+        home,directory=Path(sys.argv[2]),Path(sys.argv[3])
+        import signal
+        from . import runtime
+        def terminate(signum, frame): raise SystemExit(130)
+        signal.signal(signal.SIGTERM,terminate)
+        try:run(home,directory)
+        except Exception as exc:
+            message=str(exc)
+            for key in ('WAVESPEED_API_KEY','MMV_WRITER_API_KEY','MMV_VISION_API_KEY'):
+                value=Storage(home).key(key)
+                if value:message=message.replace(value,'[redacted]')
+            print(type(exc).__name__+': '+message,flush=True)
+            raise SystemExit(1)
+        finally:
+            runtime.cleanup()
+    else: raise SystemExit('Unknown worker phase')
+
+if __name__=='__main__':main()
