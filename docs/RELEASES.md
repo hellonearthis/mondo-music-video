@@ -1,5 +1,11 @@
 # Releases
 
+## 1.0.16 — Resizable cast list
+
+The music-video cast list can be resized vertically using its lower-right
+handle, making larger rosters easier to browse. Its width follows the form,
+and existing selections and multiple-selection controls remain intact.
+
 ## Optional starter cast — asset addition
 
 Four owner-authorized actors are available in `examples/starter-cast` as signed

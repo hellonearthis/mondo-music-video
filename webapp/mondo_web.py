@@ -24,7 +24,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.15"
+MGL_APP_VERSION = "1.0.16"
 WEB = Path(__file__).parent
 
 

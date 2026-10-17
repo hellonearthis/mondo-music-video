@@ -1,4 +1,13 @@
-# Verification — 1.0.15
+# Verification — 1.0.16
+
+## 1.0.16 resizable cast selector
+
+Both existing Chromium flows and the version consistency test passed (3 tests,
+10.58 seconds). A separate browser check with the 85-actor local roster dragged
+the list from 160px to 333px, retained the selected actor, and confirmed no page
+overflow at a 360px viewport. Fresh handler import and live `/api/version` both
+reported 1.0.16. JavaScript syntax and diff whitespace checks passed. No paid or
+GPU work ran; all local actor files remain ignored.
 
 ## Optional starter cast publication
 
