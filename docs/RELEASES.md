@@ -1,5 +1,27 @@
 # Releases
 
+## 1.2.1 — Starter installation and local library deletion
+
+The Linux/WSL/macOS and PowerShell installers install the six public styles and
+include a verified, signer-approved import of the four public starter actors.
+The same step is available as `install-starter-assets`, including from wheels.
+Noninteractive actor import requires explicit starter-signer acceptance; pending
+actors are reported. Existing assets are preserved and the complete bundle is
+checked before import. Only the authorized public assets are packaged.
+
+Actor and style cards now offer confirmed local deletion. Active production
+blocks deletion and stale previews are invalidated. Completed videos and exports
+remain. Deletions survive restarts and setup reruns, including Daylight; starter
+restoration is an explicit `--restore` action. Agent setup and public asset guides
+now describe the integrated installation and library controls.
+
+MCP now exposes 22 tools, including actor/style deletion, API profile creation,
+selection/removal, bounded settings updates, public starter installation and
+read-only API model discovery. Explicit confirmations protect destructive tools;
+credentials can be imported from a designated process environment variable and
+never appear in results. Active-profile removal restores manual configuration.
+Existing stdio clients need reconnecting to load the new tool list.
+
 ## 1.2.0 — Agent installation and multiple API profiles
 
 A repository installation handoff guides agents through hardware inspection,

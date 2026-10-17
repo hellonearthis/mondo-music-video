@@ -98,7 +98,8 @@ class Storage:
         self.home = Path(home or default_home()).resolve()
         for name in ("actors", "styles", "uploads", "runs", "exports", "models", "cache"):
             (self.home / name).mkdir(parents=True, exist_ok=True)
-        if not (self.home / "styles/daylight.json").exists():
+        removed_styles = read_json(self.home / "removed-assets.json", {}).get("styles", [])
+        if not (self.home / "styles/daylight.json").exists() and "daylight" not in removed_styles:
             write_json(self.home / "styles/daylight.json", DEFAULT_STYLE)
 
     def settings(self):

@@ -98,3 +98,18 @@ def activate(store, name):
     settings = Settings(**resolve(store, settings)).model_dump()
     save_settings(store, settings)
     return {"name": name, "role": item["role"], "active": True}
+
+
+def remove_profile(store, name):
+    profiles = records(store)
+    item = profiles.get(name)
+    if not item:
+        raise ValueError("Unknown API profile")
+    settings = store.settings()
+    active = settings.get(item["role"] + "_api_profile") == name
+    if active:
+        settings[item["role"] + "_api_profile"] = ""
+        save_settings(store, settings)
+    del profiles[name]
+    write_json(store.home / "api-profiles.json", profiles, private=True)
+    return {"deleted": name, "role": item["role"], "manual_restored": active}

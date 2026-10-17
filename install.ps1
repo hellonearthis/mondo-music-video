@@ -1,4 +1,4 @@
-param([switch]$NonInteractive)
+param([switch]$NonInteractive, [switch]$AcceptStarterSigner, [switch]$SkipStarterAssets)
 $ErrorActionPreference = "Stop"
 $MmvProjectDir = $PSScriptRoot
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Install Git first for Open Actor Protocol." }
@@ -15,6 +15,13 @@ if ($LASTEXITCODE -ne 0) { throw "Could not create the virtual environment." }
 $MmvPython = "$MmvProjectDir/.venv/Scripts/python.exe"
 & $MmvPython -m pip install $MmvProjectDir
 if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
+$MmvStarterArgs = @("-m", "mmv.setup", "install-starter-assets")
+if ($NonInteractive) { $MmvStarterArgs += "--non-interactive" }
+if ($AcceptStarterSigner) { $MmvStarterArgs += "--accept-starter-signer" }
+if (-not $SkipStarterAssets) {
+    & $MmvPython @MmvStarterArgs
+    if ($LASTEXITCODE -ne 0) { throw "Starter asset installation failed." }
+}
 if ($NonInteractive) { & $MmvPython -m mmv.setup doctor } else { & $MmvPython -m mmv.setup configure }
 if ($LASTEXITCODE -ne 0) { throw "Setup did not complete." }
 Write-Host "Launch: & '$MmvProjectDir/.venv/Scripts/mondo-music-video.exe' serve"

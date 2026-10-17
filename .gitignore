@@ -16,6 +16,7 @@ dist/
 secrets/
 secrets.json
 api-profiles.json
+removed-assets.json
 signing-identity.json
 settings.json
 session.lock

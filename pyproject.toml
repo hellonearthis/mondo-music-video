@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mondo-music-video"
-version = "1.2.0"
+version = "1.2.1"
 description = "A focused music-video studio with Open Actor Protocol built in"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -46,3 +46,7 @@ webapp = ["*.html", "*.js", "*.css"]
 "share/mondo-music-video/skills/mondo-music-video" = ["skills/mondo-music-video/SKILL.md", "skills/mondo-music-video/LICENSE"]
 "share/mondo-music-video/skills/mondo-music-video/agents" = ["skills/mondo-music-video/agents/openai.yaml"]
 "share/mondo-music-video/skills/mondo-music-video/references" = ["skills/mondo-music-video/references/requests.md"]
+
+"share/mondo-music-video/examples/starter-cast" = ["examples/starter-cast/manifest.json", "examples/starter-cast/README.md", "examples/starter-cast/animal_pig.oap", "examples/starter-cast/robobabe1.oap", "examples/starter-cast/henchman_1.oap", "examples/starter-cast/human_female_casual_01.oap"]
+
+"share/mondo-music-video/examples/style-presets" = ["examples/style-presets/manifest.json", "examples/style-presets/README.md", "examples/style-presets/sun_bleach.json", "examples/style-presets/nature_doc.json", "examples/style-presets/industrial_decay.json", "examples/style-presets/noir_bw.json", "examples/style-presets/gel_wash_psych.json", "examples/style-presets/crt_1990s.json"]

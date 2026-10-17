@@ -16,6 +16,10 @@ Offer multiple named API profiles and independent writer, vision and video
 selections. Preserve existing accounts when adding another. Profile credentials
 are private: never stage or package `api-profiles.json`. Do not automatically
 switch accounts/providers after a paid failure.
+Agent-assisted setup includes the four authorized starter actors and six public
+style presets by default unless declined. Follow the install guide's checksum,
+OAP verification and explicit signer-acceptance steps; skip existing IDs and
+verify the assets appear in the app. Never import other local/private assets.
 
 ## Development and release
 
@@ -48,6 +52,9 @@ switch accounts/providers after a paid failure.
   disabled, startup only checks/notifies and links to the installation's own
   tracked repository. Preserve local work, private data and active operations.
 - Do not publish or push without user authorization.
+- When adding user-facing capabilities, audit the agent client, MCP tools,
+  included skill and agent documentation for coverage. Keep version/tool discovery
+  and mock transport tests current; preserve confirmation and paid-consent guards.
 
 ## Collaborative fork review
 

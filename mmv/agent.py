@@ -12,6 +12,12 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+AGENT_SETTINGS = {
+    "auto_updates", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
+    "vision_url", "vision_model", "vision_call_estimate", "laya_model_dir", "laya_device", "h3_models",
+    "writer_api_profile", "vision_api_profile", "video_api_profile", "comfy_url", "comfy_sdk_url",
+}
+
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
@@ -60,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "styles", "outputs", "settings"):
+        if kind not in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -128,6 +134,44 @@ class AgentClient:
     def create_style(self, style_id, name, direction):
         return self._json("POST", "/api/styles", {"id": style_id, "name": name, "direction": direction})
 
+    def delete_actor(self, actor_id, confirm=False):
+        if confirm is not True:
+            raise ValueError("Deleting an actor requires explicit user authorization; set confirm only after that authorization")
+        return self._json("DELETE", "/api/actors/" + urllib.parse.quote(actor_id, safe=""))
+
+    def delete_style(self, style_id, confirm=False):
+        if confirm is not True:
+            raise ValueError("Deleting a style requires explicit user authorization; set confirm only after that authorization")
+        return self._json("DELETE", "/api/styles/" + urllib.parse.quote(style_id, safe=""))
+
+    def select_api_profile(self, name):
+        return self._json("POST", "/api/api-profiles/" + urllib.parse.quote(name, safe="") + "/activate")
+
+    def add_api_profile(self, name, role, settings, key_env=""):
+        payload = {"name": name, "role": role, "settings": settings}
+        if key_env:
+            key = os.environ.get(key_env, "")
+            if not key:
+                raise ValueError("The named API key environment variable is empty or missing")
+            if len(key) > 1000 or any(ord(c) < 33 or ord(c) > 126 for c in key):
+                raise ValueError("Invalid API key format")
+            payload["key"] = key
+        return self._json("POST", "/api/api-profiles", payload)
+
+    def remove_api_profile(self, name, confirm=False):
+        if confirm is not True:
+            raise ValueError("Removing an API profile and stored key requires explicit user authorization")
+        return self._json("DELETE", "/api/api-profiles/" + urllib.parse.quote(name, safe=""))
+
+    def update_settings(self, changes):
+        if not isinstance(changes, dict) or set(changes) - AGENT_SETTINGS:
+            raise ValueError("Use supported service/model/profile/update preferences; executable commands and credentials require setup or the GUI")
+        return self._json("PATCH", "/api/settings", changes)
+
+    def install_starter_assets(self, accept_starter_signer=False, restore_removed=False):
+        return self._json("POST", "/api/starter-assets", {
+            "accept_starter_signer": accept_starter_signer, "restore_removed": restore_removed})
+
     def inspect_oap(self, filename, allow_unsigned=False):
         return self._json("GET", "/api/oap/inspect/" + urllib.parse.quote(filename, safe="") +
                           "?allow_unsigned=" + str(bool(allow_unsigned)).lower())
@@ -167,7 +211,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap"))
@@ -181,6 +225,12 @@ def main(argv=None):
     start.add_argument("--consent", action="store_true")
     log = sub.add_parser("log")
     log.add_argument("run_id")
+    for name in ("delete-actor", "delete-style"):
+        delete = sub.add_parser(name)
+        delete.add_argument("id")
+        delete.add_argument("--confirm", action="store_true")
+    profile = sub.add_parser("select-api-profile")
+    profile.add_argument("name")
     download = sub.add_parser("download")
     download.add_argument("output_file")
     download.add_argument("destination")
@@ -201,6 +251,12 @@ def main(argv=None):
             result = client.download(args.output_file, args.destination)
         elif args.command == "cancel":
             result = client.cancel()
+        elif args.command == "delete-actor":
+            result = client.delete_actor(args.id, args.confirm)
+        elif args.command == "delete-style":
+            result = client.delete_style(args.id, args.confirm)
+        elif args.command == "select-api-profile":
+            result = client.select_api_profile(args.name)
         else:
             result = client.inspect(args.command)
         print(json.dumps(result, indent=2, allow_nan=False))

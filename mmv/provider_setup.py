@@ -28,6 +28,7 @@ def inspect_writer(url, *, key_env=None):
     except ValueError:
         raise ValueError("Invalid API port") from None
     headers = {"Accept": "application/json"}
+    key = ""
     if key_env:
         key = os.environ.get(key_env, "")
         if not key:
@@ -56,6 +57,8 @@ def inspect_writer(url, *, key_env=None):
                   if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]})
     if not ids:
         raise ValueError("The service did not advertise any model IDs")
+    if key and any(key in model_id for model_id in ids):
+        raise ValueError("The model listing contained credential material and was not returned")
     return {"base_url": url.rstrip("/"), "model_ids": ids,
             "generation_submitted": False, "inference_verified": False,
             "next_step": "Choose a chat-capable model using the provider documentation; configure "

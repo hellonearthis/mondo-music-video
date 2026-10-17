@@ -107,6 +107,13 @@ increase, model/provider change or new paid service needs a revised proposal.
 The original “install this” is not permission for silent multi-gigabyte downloads
 or paid generation. While waiting, continue only independent preparation.
 
+Include the four bundled starter actors and six bundled styles in the setup
+plan by default, unless the user declines. They are already in the checkout and
+need no separate model download. Explain the starter-cast signer and OAP riders
+as part of setup; obtain explicit signer acceptance before importing signed
+actors, unless the user has already authorized that signer. Do not silently
+set an unknown-signer acceptance flag. Keep existing actors/styles on collisions.
+
 ## 4. Install, download and configure
 
 After the applicable download approval, use the provided installer without its
@@ -157,6 +164,50 @@ shell history, shared reports or committed settings. Ask the user to enter
 secrets through the Settings UI when practical. Do not create accounts or spend
 money as part of an installation request.
 
+### Install and verify the bundled starters
+
+Both platform installers now run `install-starter-assets` as part of setup.
+The command verifies the full allowlisted bundle and imports only the four
+signed public actors and six public styles. Existing IDs/files are preserved.
+Deliberately deleted assets stay deleted on subsequent installs, unless the user
+explicitly asks to restore them. No assets are imported merely by starting the app.
+
+Interactive installation shows the starter-cast public key and asks for signer
+acceptance. For agent-assisted/noninteractive setup, obtain that acceptance as
+part of the setup plan, then run:
+
+```sh
+bash install.sh --non-interactive --accept-starter-signer
+```
+
+```powershell
+.\install.ps1 -NonInteractive -AcceptStarterSigner
+```
+
+Without the acceptance flag, noninteractive setup installs styles and reports
+actors as `pending_signer`. Do not claim a full starter cast is installed while
+acceptance is pending. To complete it after approval, or when the application
+was installed directly with pip, stop the app and run:
+
+```sh
+.venv/bin/mondo-music-video install-starter-assets --non-interactive --accept-starter-signer
+```
+
+Use the same `MMV_HOME` or `--data-dir` as the intended app. The command reports
+`installed`, `preserved`, `removed`, and `pending_signer` entries. To deliberately
+restore starter assets removed through the GUI, add `--restore`; never add that
+flag as routine setup/update behavior. Source checkouts and installed wheels
+both include exactly the public starter assets.
+If the user explicitly declines all starter assets, use the installer's
+`--skip-starter-assets` option (PowerShell: `-SkipStarterAssets`).
+
+The actor IDs are `animal_pig`, `robobabe1`, `henchman_1`, and
+`human_female_casual_01`. The style IDs are `sun_bleach`, `nature_doc`,
+`industrial_decay`, `noir_bw`, `gel_wash_psych`, and `crt_1990s`. See the
+[starter cast](../examples/starter-cast/README.md) and
+[style preset](../examples/style-presets/README.md) descriptions and manifests.
+Never copy from another checkout or use a private roster as an install source.
+
 ## 5. Launch and give an honest readiness report
 
 Start with `.venv/bin/mondo-music-video serve` (Windows:
@@ -165,6 +216,18 @@ Start with `.venv/bin/mondo-music-video serve` (Windows:
 health and advertised model IDs. Confirm configured paths and required files.
 Check that the active ComfyUI graph's nodes and selected model names are available.
 An open web page or a green doctor report alone does not establish inference.
+
+### Verify starters and local collection controls
+
+Inspect `actors` and `styles` through the app and refresh the browser. Confirm
+that the four actor IDs and six preset IDs are available in the cast/style
+selectors, except for entries explicitly declined or previously deleted.
+Report installed, preserved, removed and pending assets separately. No generation
+is needed for this check. Explain that **Delete actor** and **Delete style** on
+library cards remove unwanted local assets after confirmation. Deletion keeps
+completed videos and exports and is blocked during production. Actors can be
+exported through OAP before deletion. The app remembers deletions across restarts
+and installer reruns, including deletion of the built-in Daylight style.
 
 Report the URL, chosen models/services, private data location, how to start/stop
 the app, and any blockers. Distinguish **installed**, **configured**, and

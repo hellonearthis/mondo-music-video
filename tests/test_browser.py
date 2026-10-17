@@ -10,6 +10,44 @@ from test_agent import LiveAppFixture
                      and list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome')),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_delete_local_actor_and_style_with_confirmation(self):
+        from mmv import actors
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        actors.create_actor(self.fixture.store, 'disposable', 'Disposable Actor', 'Overview', picture())
+        self.fixture.client.post('/api/styles', json={'id': 'disposable', 'name': 'Disposable Style', 'direction': 'Daylight'}).raise_for_status()
+        with sync_playwright() as p:
+            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('.nav[data-panel=actors]').click()
+                card = page.locator('#actor-list article').filter(has_text='Disposable Actor')
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                card.get_by_role('button', name='Delete actor', exact=True).click()
+                expect(card).to_have_count(1)
+                page.once('dialog', lambda dialog: dialog.accept())
+                card.get_by_role('button', name='Delete actor', exact=True).click()
+                expect(card).to_have_count(0)
+                expect(page.locator('.actor-select option[value=disposable]')).to_have_count(0)
+                page.locator('.nav[data-panel=styles]').click()
+                card = page.locator('#style-list article').filter(has_text='Disposable Style')
+                page.once('dialog', lambda dialog: dialog.accept())
+                card.get_by_role('button', name='Delete style', exact=True).click()
+                expect(card).to_have_count(0)
+                expect(page.locator('.style-select option[value=disposable]')).to_have_count(0)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                self.assertFalse(self.fixture.store.actor('disposable'))
+                self.assertFalse((self.home / 'styles/disposable.json').exists())
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_saved_api_profiles_switch_independently_without_network_generation(self):
         from mmv.api_profiles import save_profile
         from playwright.sync_api import sync_playwright, expect
@@ -163,7 +201,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.2.0')
+                expect(page.locator('#version')).to_have_text('1.2.1')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -256,7 +294,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.2.0')
+                expect(page.locator('#version')).to_have_text('1.2.1')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

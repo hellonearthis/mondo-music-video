@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.2.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.2.1** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -10,12 +10,19 @@ Give a coding agent with terminal access this one instruction:
 
 Your agent follows the repository's [installation guide](docs/INSTALL_WITH_AGENT.md):
 it checks your hardware, recommends suitable models, configures your services,
-and starts the app. **It asks before large downloads.** Already have API accounts?
+and starts the app with the **four starter actors and six included styles**.
+Existing actors/styles are preserved, and actor imports include OAP signer
+review. **It asks before large downloads.** Already have API accounts?
 It can configure multiple [API profiles](docs/API_PROVIDER_SETUP.md) and select
 writing, vision and video services independently. A new video provider may need
 an adapter; the guide explains how an agent can build and verify one.
 
 Prefer to install it yourself? Jump to [manual installation](#install).
+
+The platform installers include starter assets too. Remove unwanted items with
+**Delete actor** or **Delete style** on their library cards. Deletions are
+confirmed and remembered across restarts and setup reruns; existing videos and
+exports are kept.
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
@@ -187,6 +194,10 @@ The Actors tab imports and exports OAP packages, verifies their signatures and
 checks actor riders. No account, reporting or public actor sharing is required.
 
 ## Agent operation
+
+The v1.2.1 MCP server has 22 tools, including API profile add/select/remove,
+model/service preferences, starter installation and confirmed actor/style
+deletion. Reconnect the MCP client after upgrading to refresh its tool list.
 
 The included skill and optional MCP server let an agent operate the same app,
 including its OAP, review and production workflow:

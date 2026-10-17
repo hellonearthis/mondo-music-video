@@ -105,6 +105,10 @@ class ApiProfileTests(unittest.TestCase):
             with patch.object(app.state.jobs, 'require_idle', side_effect=BusyError('busy')):
                 self.assertEqual(client.post('/api/api-profiles', json={'name': 'blocked', 'role': 'writer'}).status_code, 409)
                 self.assertEqual(client.put('/api/settings', json={**original, 'writer_api_profile': 'writer-a'}).status_code, 409)
+                self.assertEqual(client.delete('/api/api-profiles/copy-a').status_code, 409)
+                self.assertEqual(client.post('/api/api-profiles/copy-a/activate').status_code, 409)
+                self.assertEqual(client.patch('/api/settings', json={'auto_updates': True}).status_code, 409)
+                self.assertEqual(client.post('/api/starter-assets', json={'accept_starter_signer': True}).status_code, 409)
 
     def test_agent_cli_can_save_list_and_activate_without_echoing_key(self):
         config = self.store.home / 'input.json'

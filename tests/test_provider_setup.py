@@ -48,6 +48,14 @@ class ProviderSetupTests(unittest.TestCase):
                 inspect_writer("https://example.test/v1", key_env="MISSING")
             factory.assert_not_called()
 
+    def test_provider_cannot_echo_the_discovery_key_into_tool_results(self):
+        with patch.dict(os.environ, {'TEST_PROVIDER_KEY': 'private-value'}), patch(
+                'mmv.provider_setup.urllib.request.build_opener') as factory:
+            factory.return_value.open.return_value = self.response({'data': [{'id': 'echo-private-value'}]})
+            with self.assertRaises(ValueError) as error:
+                inspect_writer('https://example.test/v1', key_env='TEST_PROVIDER_KEY')
+            self.assertNotIn('private-value', str(error.exception))
+
     def test_invalid_responses_and_errors_do_not_echo_body(self):
         for raw in (b"secret-invalid-json", b'{"data": []}', b'{"models": []}',
                     b"x" * (2 * 1024 * 1024 + 1)):

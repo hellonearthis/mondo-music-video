@@ -12,6 +12,23 @@ packages. Each contains one reference sheet and its visual description and rider
 
 ## Import
 
+Agent-assisted installation includes these four actors by default unless you
+decline, with package/signature verification and explicit signer acceptance.
+Existing actor IDs are preserved. See the
+[agent installation guide](../../docs/INSTALL_WITH_AGENT.md). For manual import:
+
+The platform installers also include this step. Interactive setup asks once for
+acceptance of the verified starter signer. Noninteractive setup imports actors
+with `--accept-starter-signer` (PowerShell: `-AcceptStarterSigner`); without it,
+actors are reported as pending signer approval. The standalone command is
+`mondo-music-video install-starter-assets --accept-starter-signer` with the app
+stopped. Starter assets are also included in installed wheels.
+
+To remove an unwanted actor, click **Delete actor** on its Actors & OAP card
+and confirm. Export first if you want a backup. Completed videos and previous
+exports are retained. Deletions survive restarts and installer reruns; add
+`--restore` to the standalone starter command only when you want them restored.
+
 1. Open **Actors & OAP** and choose one of these `.oap` files under **Bring an actor
    with OAP**. For a GitHub download, open the file and use **Download raw file**.
 2. Click **Inspect package**, review the reference identity, content rider and
@@ -26,8 +43,8 @@ verify integrity and authorship, not endorsement. Check `manifest.json` here for
 package and reference-image SHA-256 hashes.
 
 Imports never overwrite an existing actor. If an ID already exists, keep your
-local actor or choose a different local ID. Packages are optional and do not
-replace or automatically import into a user's roster.
+local actor or choose a different local ID. You can decline the starter cast;
+the app launcher alone does not import actors into your roster.
 
 These four actor assets are distributed under the repository's Apache-2.0
 license; their OAP riders remain available for production checks. No voice,

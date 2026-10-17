@@ -5,6 +5,7 @@ import json
 import math
 import os
 import secrets
+import shutil
 import time
 import uuid
 import asyncio
@@ -25,7 +26,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.2.0"
+MGL_APP_VERSION = "1.2.1"
 WEB = Path(__file__).parent
 
 
@@ -267,6 +268,13 @@ class Settings(StrictModel):
 class ApiProfileRequest(StrictModel):
     name: str
     role: Literal["writer", "vision", "video"]
+    settings: dict | None = None
+    key: str | None = Field(default=None, max_length=1000)
+
+
+class StarterRequest(StrictModel):
+    accept_starter_signer: bool = False
+    restore_removed: bool = False
 
 
 class KeyRequest(StrictModel):
@@ -488,8 +496,40 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             current = store.settings()
-            return save_profile(store, value.name, value.role,
-                {k: current[k] for k in FIELDS[value.role]}, store.key(KEYS[value.role]))
+            config = value.settings if value.settings is not None else {k: current[k] for k in FIELDS[value.role]}
+            credential = value.key if value.key is not None else (store.key(KEYS[value.role]) if value.settings is None else "")
+            return save_profile(store, value.name, value.role, config, credential)
+
+    @app.post("/api/api-profiles/{name}/activate")
+    def activate_api_profile(name: str):
+        from mmv.api_profiles import activate
+        with jobs.lock:
+            jobs.require_idle()
+            return activate(store, identifier(name))
+
+    @app.delete("/api/api-profiles/{name}")
+    def delete_api_profile(name: str):
+        from mmv.api_profiles import remove_profile
+        with jobs.lock:
+            jobs.require_idle()
+            result = remove_profile(store, identifier(name))
+            quotes.clear()
+            return result
+
+    @app.patch("/api/settings")
+    def patch_settings(changes: dict):
+        with jobs.lock:
+            jobs.require_idle()
+            return settings(Settings(**{**store.settings(), **changes}))
+
+    @app.post("/api/starter-assets")
+    def install_starter_assets(value: StarterRequest):
+        from mmv.starter_assets import install
+        with jobs.lock:
+            jobs.require_idle()
+            result = install(store, accept_signer=value.accept_starter_signer, restore=value.restore_removed)
+            quotes.clear()
+            return result
 
     @app.get("/api/fs/browse")
     def browse_fs(path: str = "", mode: Literal["folder", "file"] = "folder", ext: str = ""):
@@ -618,6 +658,22 @@ def create_app(home=None, *, test_hosts=False):
             raise ValueError("Actor not found")
         return FileResponse(inside(store.home / "actors" / actor_id, record["reference"]), media_type="image/png")
 
+    @app.delete("/api/actors/{actor_id}")
+    def delete_actor(actor_id: str):
+        from mmv.starter_assets import mark_removed
+        with jobs.lock:
+            jobs.require_idle()
+            actor_id = identifier(actor_id)
+            if (store.home / "actors" / actor_id).is_symlink():
+                raise ValueError("Cannot delete a linked actor directory")
+            target = inside(store.home / "actors", actor_id)
+            if not target.is_dir() or not (target / "actor.json").is_file():
+                raise ValueError("Actor not found")
+            mark_removed(store, "actors", actor_id)
+            shutil.rmtree(target)
+            quotes.clear()
+        return {"deleted": actor_id}
+
     @app.post("/api/actors/{actor_id}/export")
     def export_actor(actor_id: str):
         with jobs.lock:
@@ -656,6 +712,22 @@ def create_app(home=None, *, test_hosts=False):
                 raise ValueError("Style already exists; use a different ID")
             write_json(path, value.model_dump())
         return value.model_dump()
+
+    @app.delete("/api/styles/{style_id}")
+    def delete_style(style_id: str):
+        from mmv.starter_assets import mark_removed
+        with jobs.lock:
+            jobs.require_idle()
+            style_id = identifier(style_id)
+            if (store.home / "styles" / (style_id + ".json")).is_symlink():
+                raise ValueError("Cannot delete a linked style file")
+            target = inside(store.home / "styles", style_id + ".json")
+            if not target.is_file():
+                raise ValueError("Style not found")
+            mark_removed(store, "styles", style_id)
+            target.unlink()
+            quotes.clear()
+        return {"deleted": style_id}
 
     @app.post("/api/quote")
     def quote(value: ProductionRequest):

@@ -1,4 +1,44 @@
-# Verification — 1.2.0
+# Verification — 1.2.1
+
+## 1.2.1 starter installation and local library deletion
+
+The full suite passed **113 tests and 53 subtests in 36.22 seconds**, including
+six Chromium flows. Additional targeted starter tests passed **6 tests in
+10.42 seconds**, including a stubbed Python/pip shell-installer check for starter
+invocation, noninteractive signer acceptance, flag order and explicit opt-out.
+No dependencies were downloaded by that test. Native PowerShell execution
+remains an operator check; the script uses the same starter command/flags.
+
+Temporary-data tests verify all four signed OAP imports, preserved original
+packages, complete styles, existing/custom-ID preservation, corrupted-bundle
+refusal before import, pending signer acceptance, deletion blocked during active
+operations, deletion persistence across Storage recreation/installer reruns,
+explicit starter restoration, retained exports, and refusal to follow asset
+symlinks during deletion. Chromium verifies canceled/confirmed deletion, removal
+from cast/style selectors, reload persistence and absence of browser errors.
+Shell/JavaScript syntax and diff checks passed. No paid, GPU or Topaz work ran.
+
+MCP stdio discovery verifies 22 tools and app version 1.2.1. New tool tests cover
+API add/select/remove, confirmation refusal, no secret values in results, manual
+configuration restoration, bounded settings patches and update inspection,
+provider-model discovery with mocked HTTP, public starter signer review/import,
+actor/style deletion and explicit restoration. Profile activation/deletion,
+settings patches and starter imports refuse active operations. A final targeted
+provider run passed **7 tests and 10 subtests in 1.04 seconds**, including rejection
+of a provider that echoes its discovery credential in a model ID.
+
+Source and wheel packages include only the four authorized public actor packages
+and six complete style presets; bundle hashes and private-file exclusions were
+checked. An isolated installed-wheel import from outside the checkout installed
+all ten starters in temporary data, preserving signed OAP packages. Native
+PowerShell remains unverified. Existing MCP clients require a reconnect.
+
+Final operator checks freshly imported the 1.2.1 version handler, restarted the
+idle preview and confirmed live `/api/version` 1.2.1. A fresh stdio connection
+launched the installed wheel in isolated Python mode from outside the checkout:
+MCP initialization reported **1.2.1**, discovery returned **22 tools**, and its
+read-only version tool reached the live **1.2.1** app. This check changed no
+operator profiles, actors, styles or production data.
 
 ## 1.2.0 agent installation and multiple API profiles
 

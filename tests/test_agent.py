@@ -102,7 +102,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.2.0")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.2.1")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -110,7 +110,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.2.0")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.2.1")
 
     def test_create_style_and_upload_reference(self):
         style = self.agent.create_style("cool", "Cool", "Cool blue light")
@@ -119,6 +119,16 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
 
 class ClientBoundaryTests(unittest.TestCase):
+    def test_destructive_actions_and_executable_settings_require_boundaries(self):
+        client = AgentClient()
+        with patch.object(client, '_json') as request:
+            for operation in (lambda: client.delete_actor('example'), lambda: client.delete_style('example'),
+                              lambda: client.remove_api_profile('example'),
+                              lambda: client.update_settings({'writer_launch': '["arbitrary"]'})):
+                with self.assertRaises(ValueError):
+                    operation()
+            request.assert_not_called()
+
     def test_remote_or_ambiguous_targets_are_rejected(self):
         for url in ("https://example.com", "http://127.0.0.1.example.com", "http://127.0.0.1/private",
                     "http://user:password@localhost", "file:///tmp/app", "http://localhost:99999",
@@ -148,19 +158,80 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 14)
+                self.assertEqual(len(names), 22)
                 self.assertIn("preview_resume", names)
                 self.assertIn("preview_production", names)
+                self.assertTrue({'delete_actor', 'delete_style', 'add_api_profile', 'remove_api_profile',
+                    'select_api_profile', 'update_studio_settings', 'install_starter_assets', 'inspect_api_models'} <= names)
                 self.assertNotIn("run_shell", names)
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.2.0")
+                self.assertEqual(result.structured_content["data"]["version"], "1.2.1")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)
                 result = await client.call_tool("inspect_studio", {"kind": "settings"})
                 self.assertNotIn("secrets.json", json.dumps(result.model_dump()))
+        asyncio.run(check())
+
+    def test_mcp_api_profiles_settings_library_and_starters(self):
+        async def check():
+            import io
+            from mcp import Client
+            from mmv.mcp_server import create_server
+            async with Client(create_server(self.url)) as client:
+                with patch.dict(os.environ, {'MCP_TEST_KEY': 'mock-provider-secret'}):
+                    result = await client.call_tool('add_api_profile', {'name': 'mcp-provider', 'role': 'writer',
+                        'settings': {'writer_url': 'https://provider.example/v1', 'writer_model': 'mock-chat',
+                                     'writer_mode': 'api', 'writer_call_estimate': .1}, 'key_env': 'MCP_TEST_KEY'})
+                self.assertFalse(result.is_error, result)
+                self.assertNotIn('mock-provider-secret', json.dumps(result.model_dump()))
+                self.assertTrue(result.structured_content['key_configured'])
+                result = await client.call_tool('select_api_profile', {'name': 'mcp-provider'})
+                self.assertFalse(result.is_error, result)
+                self.assertEqual(self.fixture.store.settings()['writer_model'], 'mock-chat')
+                result = await client.call_tool('remove_api_profile', {'name': 'mcp-provider'})
+                self.assertTrue(result.is_error)
+                self.assertEqual(self.fixture.store.key('MMV_WRITER_API_KEY'), 'mock-provider-secret')
+                result = await client.call_tool('remove_api_profile', {'name': 'mcp-provider', 'confirm': True})
+                self.assertFalse(result.is_error, result)
+                self.assertTrue(result.structured_content['manual_restored'])
+                self.assertEqual(self.fixture.store.settings()['writer_model'], 'fixture-writer')
+                result = await client.call_tool('update_studio_settings', {'changes': {'auto_updates': True, 'laya_device': 'cpu'}})
+                self.assertFalse(result.is_error, result)
+                self.assertTrue(self.fixture.store.settings()['auto_updates'])
+                result = await client.call_tool('update_studio_settings', {'changes': {'writer_launch': '["forbidden"]'}})
+                self.assertTrue(result.is_error)
+                result = await client.call_tool('inspect_studio', {'kind': 'update'})
+                self.assertFalse(result.is_error, result)
+                with patch('mmv.provider_setup.urllib.request.build_opener') as opener:
+                    opener.return_value.open.return_value = io.BytesIO(b'{"data":[{"id":"mock-chat"}]}')
+                    result = await client.call_tool('inspect_api_models', {'url': 'https://provider.example/v1'})
+                self.assertFalse(result.is_error, result)
+                self.assertFalse(result.structured_content['generation_submitted'])
+                result = await client.call_tool('create_style', {'style_id': 'remove-me', 'name': 'Temporary', 'direction': 'Daylight'})
+                self.assertFalse(result.is_error, result)
+                result = await client.call_tool('delete_style', {'style_id': 'remove-me'})
+                self.assertTrue(result.is_error)
+                result = await client.call_tool('delete_style', {'style_id': 'remove-me', 'confirm': True})
+                self.assertFalse(result.is_error, result)
+                result = await client.call_tool('install_starter_assets', {})
+                self.assertFalse(result.is_error, result)
+                self.assertEqual(len(result.structured_content['pending_signer']), 4)
+                result = await client.call_tool('install_starter_assets', {'accept_starter_signer': True})
+                self.assertFalse(result.is_error, result)
+                self.assertEqual(len(result.structured_content['installed']), 4)
+                result = await client.call_tool('delete_actor', {'actor_id': 'animal_pig'})
+                self.assertTrue(result.is_error)
+                result = await client.call_tool('delete_actor', {'actor_id': 'animal_pig', 'confirm': True})
+                self.assertFalse(result.is_error, result)
+                self.assertFalse(self.fixture.store.actor('animal_pig'))
+                result = await client.call_tool('install_starter_assets', {'accept_starter_signer': True})
+                self.assertIn('actors/animal_pig', result.structured_content['removed'])
+                result = await client.call_tool('install_starter_assets', {'accept_starter_signer': True, 'restore_removed': True})
+                self.assertFalse(result.is_error, result)
+                self.assertTrue(self.fixture.store.actor('animal_pig'))
         asyncio.run(check())
 
     def test_mcp_preview_start_flow(self):

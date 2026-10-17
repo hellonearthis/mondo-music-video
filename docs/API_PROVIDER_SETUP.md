@@ -22,6 +22,14 @@ role's endpoint/model/cost; use Manual configuration to edit individual fields
 for a new account. Saving a key updates the selected profile only. Saving a
 profile captures the already saved configuration, not unsaved form edits.
 
+With MCP, agents can use `add_api_profile`, `select_api_profile`, and
+`remove_api_profile`. New configurations do not inherit another provider's key.
+Use the Settings form or an explicitly designated `key_env` already available
+to the MCP server for credentials. Removal requires `confirm=true` after user
+authorization and restores manual configuration if that profile was active.
+`inspect_api_models` and `update_studio_settings` cover discovery and supported
+service/model preferences. See [the MCP tool guide](AGENT_SETUP.md).
+
 An agent can also save and activate profiles through the CLI while the app is
 stopped. For example, write a private JSON config file containing:
 

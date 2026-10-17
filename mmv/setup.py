@@ -75,7 +75,7 @@ def configure_standard_graph(store, settings, ask):
 
 def configure(store):
     settings = store.settings()
-    print("Mondo Music Video setup — no models or actors are bundled.")
+    print("Mondo Music Video setup — model weights are not bundled; the installer handles starter actors/styles.")
     print("Data directory:", store.home)
 
     def ask(label, old=""):
@@ -218,6 +218,10 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("configure")
     sub.add_parser("doctor")
+    starter = sub.add_parser("install-starter-assets", help="Install the four public actors and six styles")
+    starter.add_argument("--accept-starter-signer", action="store_true", help="Explicitly accept the bundled actor signer")
+    starter.add_argument("--non-interactive", action="store_true")
+    starter.add_argument("--restore", action="store_true", help="Explicitly restore previously deleted starter assets")
     api = sub.add_parser("inspect-api", help="List an API's advertised models without generating")
     api.add_argument("url", help="OpenAI-compatible base URL, usually ending in /v1")
     api.add_argument("--key-env", help="Environment variable containing the key; never pass a literal key")
@@ -255,6 +259,14 @@ def main(argv=None):
                     startup_locks.enter_context(repository_session(store))
                 if args.command == "configure":
                     configure(store)
+                elif args.command == "install-starter-assets":
+                    from .starter_assets import SIGNER, install
+                    accepted = args.accept_starter_signer
+                    if not accepted and not args.non_interactive:
+                        print("Includes Hambo, Robotic Woman, Henchman #1 and Human Female Casual #1.")
+                        print("Signed OAP packages retain their content riders. Starter public key:", SIGNER)
+                        accepted = input("Accept this bundled starter-cast signer and import missing actors? Type yes: ").strip().lower() == "yes"
+                    print(json.dumps(install(store, accept_signer=accepted, restore=args.restore), indent=2))
                 elif args.command == "download-laya":
                     download_models(store, Path(__file__).parent / "engine/config/laya-download.json")
                 elif args.command == "download-models":

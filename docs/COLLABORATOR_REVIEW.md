@@ -1,5 +1,13 @@
 # Collaborator review record
 
+## October 17, 2026 — starter assets in agent installation
+
+Fetched the isolated collaborator checkout; origin/main is still
+`764ca66843843217d51c8708cb1e1fa952d9f364`, with no new commits. This
+1.2.1 follow-up integrates public starter imports into both installers and adds
+local actor/style deletion controls. No actor asset contents or workflow defaults
+change; the separate collaborator hardware dock remains pending its focused review.
+
 ## October 17, 2026 — agent installation and provider setup
 
 Fetched the isolated collaborator checkout again: origin/main remains

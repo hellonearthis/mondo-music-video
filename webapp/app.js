@@ -363,11 +363,26 @@ async function loadStyles() {
   $$(".style-select").forEach(select => {
     const old = select.value;
     select.replaceChildren(...styles.map(style => option(style.id, style.name, `${style.name} (${style.id})`)));
+    if (!styles.length) {
+      const empty = option("", "No styles yet — add one in Styles");
+      empty.disabled = true;
+      select.replaceChildren(empty);
+    }
     if (styles.some(x => x.id === old)) select.value = old;
   });
   $("#style-list").replaceChildren(...styles.map(style => {
     const card = text("article", "", "card", `Style card: ${style.name}`);
     card.append(text("h2", style.name), text("p", style.direction));
+    const remove = text("button", "Delete style", "quiet operation-action", `Delete ${style.name} from this machine`);
+    remove.type = "button";
+    remove.onclick = handle(async () => {
+      if (!window.confirm(`Delete style “${style.name}” from this machine? Completed videos are kept.`)) return;
+      await api(`/api/styles/${encodeURIComponent(style.id)}`, {method: "DELETE"});
+      await loadStyles();
+      scheduleSave();
+      notice("Style deleted from your local collection.");
+    });
+    card.append(remove);
     return card;
   }));
 }
@@ -414,6 +429,16 @@ async function loadActors() {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     });
     card.append(image, text("h2", actor.name), text("p", actorOverview(actor)), text("p", actor.oap ? "OAP imported · original package preserved" : "OAP ready · signed on export"), button);
+    const remove = text("button", "Delete actor", "quiet operation-action", `Delete ${actor.name} from this machine`);
+    remove.type = "button";
+    remove.onclick = handle(async () => {
+      if (!window.confirm(`Delete actor “${actor.name}”, their reference image and imported package from this machine? Export first if you want a backup. Completed videos and earlier exports are kept.`)) return;
+      await api(`/api/actors/${encodeURIComponent(actor.id)}`, {method: "DELETE"});
+      await loadActors();
+      scheduleSave();
+      notice("Actor deleted from your local cast.");
+    });
+    card.append(remove);
     return card;
   }));
   if (!actors.length) $("#actor-list").append(text("div", "Your cast starts here. Create an actor or import a full OAP package below.", "empty", "No actors currently in your studio library"));

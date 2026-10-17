@@ -19,6 +19,20 @@ review. The presets are distributed under the repository's Apache-2.0 license.
 
 ## Install
 
+Agent-assisted installation includes these six presets by default unless you
+decline, preserving existing styles. See the
+[agent installation guide](../../docs/INSTALL_WITH_AGENT.md). For manual setup:
+
+Both platform installers now install the presets as part of setup, preserving
+existing IDs/files. The standalone `mondo-music-video install-starter-assets`
+command also installs them with the app stopped; actor imports have a separate
+signer-acceptance step. These presets are included in installed wheels.
+
+Use **Delete style** on a style's card to remove it locally after confirmation.
+Deleted presets stay removed on restart and installer reruns. Deliberate
+restoration uses the standalone command's `--restore` option. Completed videos
+are retained, and deletion is blocked while a production is active.
+
 Stop MMV before copying files. Copy the six named preset JSON files into the
 `styles` folder inside **your MMV application data directory**. Copy neither
 `manifest.json` nor this README into that folder. Keep existing files if their
