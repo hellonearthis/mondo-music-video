@@ -1,5 +1,15 @@
 # Verification — 1.1.0
 
+## Optional public style presets
+
+All six published preset hashes and API schemas were verified. Installing the
+six JSON files into temporary application storage exposed all six alongside
+Daylight Cinema through `/api/styles`. Public copies contain SFW costume/sound
+adaptations and explicit content boundaries; private local originals were not
+modified. The source distribution includes exactly these six presets, with no
+local actor/style data, credentials or private contest/video planning files.
+No paid or GPU operations ran. The app version remains 1.1.0.
+
 ## 1.1.0 browser title
 
 Verified that the HTML title is `🪿 Mondo Music Video`. The version consistency

@@ -5,7 +5,9 @@
 The browser tab now starts with the goose emoji: **🪿 Mondo Music Video**.
 This minor release follows the SDK rendering integration, expanded vocabulary,
 model controls, dark mode and resizable casting improvements delivered across
-1.0.x. The six newly imported styles are still local pending owner review.
+1.0.x. Six owner-reviewed styles are now available as optional presets in
+`examples/style-presets`, with installation instructions and integrity hashes.
+This asset-only addition leaves the application at 1.1.0.
 
 ## 1.0.16 — Resizable cast list
 
