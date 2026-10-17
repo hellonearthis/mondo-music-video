@@ -276,5 +276,37 @@
         "policy": "retain existing public mouth-rigging contract"
       }
     }
+  },
+  {
+    "source": "actors/animal_pig/actor.json and selected reference sheet",
+    "public": "examples/starter-cast/animal_pig.oap",
+    "published_sha256": "21e4622134291385b32c71296ad33e045e59faac3d9fef0d143c9a2c557646dd",
+    "reference_sha256": "f0624fc1a466369875819bffb203910fbfd865099e4ebbe7c2f8692df7e45414",
+    "authorization": "Owner explicitly authorized this actor for public distribution on 2026-10-17; authorization excludes every other roster actor.",
+    "adaptation": "Signed OAP package with cleaned reference image and visual description/rider only; dedicated temporary signing identity; no voice assets, private keys, original studio metadata or runtime studio dependencies."
+  },
+  {
+    "source": "actors/robobabe1/actor.json and selected reference sheet",
+    "public": "examples/starter-cast/robobabe1.oap",
+    "published_sha256": "05537a13fe4c33ab3acaf3949a350556c1b29925eef93091c767df9fa79deede",
+    "reference_sha256": "ce9123dc7740387400bfdd6bd2610d240f65b69d3b1ef9871ee223086472d5cd",
+    "authorization": "Owner explicitly authorized this actor for public distribution on 2026-10-17; authorization excludes every other roster actor.",
+    "adaptation": "Signed OAP package with cleaned reference image and visual description/rider only; dedicated temporary signing identity; no voice assets, private keys, original studio metadata or runtime studio dependencies."
+  },
+  {
+    "source": "actors/henchman_1/actor.json and selected reference sheet",
+    "public": "examples/starter-cast/henchman_1.oap",
+    "published_sha256": "9d9fa272d5661cca59124e6959e1326f1c4f0530ee15797a1ea81a6a08e23084",
+    "reference_sha256": "0e9ff50341a4b1cfc773e5989b7320599b764faf9fde8846b33d809fd1f2d8f1",
+    "authorization": "Owner explicitly authorized this actor for public distribution on 2026-10-17; authorization excludes every other roster actor.",
+    "adaptation": "Signed OAP package with cleaned reference image and visual description/rider only; dedicated temporary signing identity; no voice assets, private keys, original studio metadata or runtime studio dependencies."
+  },
+  {
+    "source": "actors/human_female_casual_01/actor.json and selected reference sheet",
+    "public": "examples/starter-cast/human_female_casual_01.oap",
+    "published_sha256": "1b0fb66251f12cc95896442a58947e057b804b22062a90094d0e9c7f1257b199",
+    "reference_sha256": "dc407b6a8fcb24da025538fc03147d1d6aa51acfb65e0c616f6f0f32126818c3",
+    "authorization": "Owner explicitly authorized this actor for public distribution on 2026-10-17; authorization excludes every other roster actor.",
+    "adaptation": "Signed OAP package with cleaned reference image and visual description/rider only; dedicated temporary signing identity; no voice assets, private keys, original studio metadata or runtime studio dependencies."
   }
 ]

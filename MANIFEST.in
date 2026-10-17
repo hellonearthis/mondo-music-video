@@ -8,3 +8,9 @@ recursive-include mmv/engine/config *.json
 recursive-include mmv/engine/prompts *.md
 recursive-include mmv/engine/workflows *.json
 exclude docs/COMFY_CONTEST*.md
+
+include examples/starter-cast/README.md examples/starter-cast/manifest.json
+include examples/starter-cast/animal_pig.oap
+include examples/starter-cast/robobabe1.oap
+include examples/starter-cast/henchman_1.oap
+include examples/starter-cast/human_female_casual_01.oap

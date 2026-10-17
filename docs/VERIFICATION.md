@@ -1,5 +1,17 @@
 # Verification — 1.0.15
 
+## Optional starter cast publication
+
+Verified exactly four signed OAP archives against their allowlist and SHA-256
+manifest. Each contains only `manifest.json` and `identity/reference.png`;
+reference hashes match the selected local images. All four imported into a
+temporary empty roster, retained their visual descriptions, and passed casting
+checks. No paid or GPU operations ran. All 255 local actor files remained
+ignored and untracked. A built source distribution contained exactly the four
+approved packages and no local data, private keys, studio metadata backups,
+credentials or contest notes. This asset/documentation addition leaves the
+application at 1.0.15.
+
 ## 1.0.15 default dark theme
 
 Verified default dark rendering, switching to light, preference persistence across

@@ -1,5 +1,13 @@
 # Releases
 
+## Optional starter cast — asset addition
+
+Four owner-authorized actors are available in `examples/starter-cast` as signed
+OAP packages: `animal_pig`, `robobabe1`, `henchman_1` and
+`human_female_casual_01`. Import instructions and SHA-256 hashes accompany them.
+All other roster actors remain private and ignored. Application behavior and
+version remain 1.0.15; this adds optional assets and documentation only.
+
 ## 1.0.15 — Dark mode by default
 
 The studio opens in dark mode, including forms, dialogs, file browsing and OAP
