@@ -1,5 +1,18 @@
 # Releases
 
+## 1.0.15 — Dark mode by default
+
+The studio opens in dark mode, including forms, dialogs, file browsing and OAP
+reports. A header toggle switches to light mode; the browser remembers the choice
+and applies it before the page paints. Theme switching works even when browser
+storage is unavailable.
+
+## 1.0.14 — Actor card overviews
+
+Actor cards show only the Identity section when a description includes structured
+visual details. Full actor descriptions remain available for generation and OAP
+export. Plain descriptions continue to display normally.
+
 ## 1.0.13 — Expanded SFW vocabulary and contributor thanks
 
 Imports the owner-authorized vocabulary data into the public music-video pool,

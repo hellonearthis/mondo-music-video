@@ -1,4 +1,23 @@
-# Verification — 1.0.13
+# Verification — 1.0.15
+
+## 1.0.15 default dark theme
+
+Verified default dark rendering, switching to light, preference persistence across
+reloads in both directions, and a visible toggle without page overflow at 360px.
+Desktop and mobile previews were visually inspected. The initial full run passed
+67 tests and 28 subtests; one browser flow encountered a reload/restore timing
+race in the test. Moving the theme reload checks to the end resolved it: both
+browser flows passed on the focused rerun (9.33 seconds). JavaScript syntax and
+diff checks passed. Fresh version import and live `/api/version` reported 1.0.15.
+
+## 1.0.14 actor card overviews
+
+All 68 tests and 28 subtests passed in 25.87 seconds, including existing Chromium
+flows. JavaScript syntax and diff whitespace checks passed. The display helper
+was checked against all 85 local actors: each returned its Identity overview,
+without Hair or later sections; plain descriptions remained intact. Full stored
+descriptions were unchanged. A fresh version-handler import and the restarted
+live preview `/api/version` both reported 1.0.14.
 
 Run from a checkout:
 

@@ -1,6 +1,21 @@
 "use strict";
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+const themeToggle = $("#theme-toggle");
+function updateThemeToggle() {
+  const dark = document.documentElement.dataset.theme !== "light";
+  themeToggle.setAttribute("aria-pressed", String(dark));
+  themeToggle.textContent = dark ? "Dark mode" : "Light mode";
+  themeToggle.title = dark ? "Switch to light mode" : "Switch to dark mode";
+}
+themeToggle.onclick = () => {
+  const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem("mmv-theme", theme); } catch {}
+  updateThemeToggle();
+};
+updateThemeToggle();
+
 let catalog, currentQuote, currentOap, lastState, currentRun, upscaleSource;
 const formFiles = new WeakMap();
 const sessionLogs = [];
@@ -341,6 +356,12 @@ async function loadStyles() {
   }));
 }
 
+function actorOverview(actor) {
+  const description = actor.description || "";
+  const identity = description.match(/(?:^|\n)Identity:\s*([\s\S]*?)(?=\n(?:Hair|Makeup|Wardrobe|Footwear|Accessories|Expression Range|Detail Notes|Canonical Summary|Height):|$)/i);
+  return identity ? identity[1].trim() : description;
+}
+
 async function loadActors() {
   const actors = await (await api("/api/actors")).json();
   $$(".actor-select").forEach(select => {
@@ -376,7 +397,7 @@ async function loadActors() {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     });
-    card.append(image, text("h2", actor.name), text("p", actor.description), text("p", actor.oap ? "OAP imported · original package preserved" : "OAP ready · signed on export"), button);
+    card.append(image, text("h2", actor.name), text("p", actorOverview(actor)), text("p", actor.oap ? "OAP imported · original package preserved" : "OAP ready · signed on export"), button);
     return card;
   }));
   if (!actors.length) $("#actor-list").append(text("div", "Your cast starts here. Create an actor or import a full OAP package below.", "empty", "No actors currently in your studio library"));
