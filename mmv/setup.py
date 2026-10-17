@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import getpass
 import hashlib
 import json
@@ -219,6 +220,7 @@ def main(argv=None):
     sub.add_parser("doctor")
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=8091)
+    serve.add_argument("--no-auto-update", action="store_true", help="Check for updates without installing this launch")
     sub.add_parser("download-laya")
     models = sub.add_parser("download-models")
     models.add_argument("manifest")
@@ -228,7 +230,11 @@ def main(argv=None):
         if args.command == "doctor":
             print(json.dumps(doctor(store), indent=2))
         else:
-            with SessionLock(store.home):
+            with ExitStack() as startup_locks:
+                startup_locks.enter_context(SessionLock(store.home))
+                if args.command == "serve":
+                    from .updates import repository_session
+                    startup_locks.enter_context(repository_session(store))
                 if args.command == "configure":
                     configure(store)
                 elif args.command == "download-laya":
@@ -236,6 +242,16 @@ def main(argv=None):
                 elif args.command == "download-models":
                     download_models(store, args.manifest)
                 elif args.command == "serve":
+                    from .updates import startup_update
+                    print("Checking the installation's tracked repository for updates...", flush=True)
+                    update = startup_update(store, automatic=False if args.no_auto_update else None)
+                    print(update['message'], flush=True)
+                    if update.get('fatal'):
+                        raise ValueError(update['message'])
+                    if update.get('restart'):
+                        environment = {**os.environ, 'MMV_UPDATE_RESTART_COMMIT': update['installed_commit']}
+                        arguments = list(argv) if argv is not None else sys.argv[1:]
+                        os.execve(sys.executable, [sys.executable, '-m', 'mmv.setup', *arguments], environment)
                     import uvicorn
                     from webapp.mondo_web import create_app
                     uvicorn.run(create_app(store.home), host="127.0.0.1", port=args.port, workers=1,

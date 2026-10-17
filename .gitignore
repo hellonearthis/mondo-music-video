@@ -19,6 +19,8 @@ signing-identity.json
 settings.json
 session.lock
 operation.json
+update-status.json
+update-install.log
 config.local.*
 *.pem
 *.key

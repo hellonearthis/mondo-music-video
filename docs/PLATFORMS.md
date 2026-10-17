@@ -41,3 +41,8 @@ The Windows launcher adds opt-in context/batch/image-token presets and UTF-8
 JSON settings transfer; native PowerShell execution remains unverified. Laya
 CPU fallback is selectable rather than silently changing an explicit CUDA/MPS
 choice. See [local writer tuning](LOCAL_WRITER_TUNING.md).
+
+Startup updater logic in 1.1.3 is covered on Linux with disposable Git remotes,
+mock installation, Chromium and offline real pip/mock-wheel checks. Native
+Windows locking, package replacement and restart still need operator verification.
+Automatic installation is off by default on every platform.

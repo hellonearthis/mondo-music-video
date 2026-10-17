@@ -1,5 +1,21 @@
 # Releases
 
+## 1.1.3 — Optional startup updates
+
+Launch-time checks follow the installation's own tracked remote and branch.
+Automatic installation is **off by default**; the UI reports available versions
+with a repository link. A saved Settings switch enables installation at the next
+launch, with clean fast-forward checks, staged wheel builds, preservation of
+installed Comfy/MCP extras, ignored-file collision protection and re-exec into
+the new code. Failures during installation attempt application-package recovery
+and stop startup for environment repair. Active/interrupted work and local
+changes prevent automatic replacement.
+
+A checkout-wide runtime lease prevents another launcher updating a live app.
+Source-only/wheel-only and native-platform limits are documented in `UPDATES.md`.
+The collaborator fork was checked through `764ca66`; its separate hardware dock
+is recorded for focused follow-up in `COLLABORATOR_REVIEW.md`.
+
 ## 1.1.2 — Additional aspect ratios
 
 Music-video and ident shape selectors add 5:4, 4:5, 2:1, 1:2, 9:21, 3:1 and

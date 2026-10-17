@@ -24,3 +24,6 @@ include examples/style-presets/industrial_decay.json
 include examples/style-presets/noir_bw.json
 include examples/style-presets/gel_wash_psych.json
 include examples/style-presets/crt_1990s.json
+
+# Private updater state can contain local source paths and installation logs.
+global-exclude update-status.json update-install.log

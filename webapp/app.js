@@ -448,6 +448,7 @@ async function loadOutputs() {
 }
 
 const settingLabels = {
+  auto_updates: "Automatic updates",
   comfy_sdk_url: "Local Comfy API proxy URL",
   backend: "Default renderer", comfy_url: "ComfyUI service URL", comfy_input: "ComfyUI input folder (shared local path)", comfy_output: "ComfyUI output folder (shared local path)",
   writer_launch: "Local writer launch command (JSON arguments)", writer_cwd: "Writer working folder", comfy_launch: "ComfyUI launch command (JSON arguments)", comfy_cwd: "ComfyUI working folder",
@@ -463,6 +464,7 @@ const settingLabels = {
 };
 
 const settingTooltips = {
+  auto_updates: "At the next launch, install tracked repository updates automatically. Turn off to check and notify only.",
   comfy_sdk_url: "Official Comfy API v2 proxy on this machine, usually http://127.0.0.1:8189",
   backend: "Default video generation engine for music videos and idents",
   comfy_url: "HTTP URL for your running ComfyUI service instance",
@@ -684,7 +686,11 @@ async function loadSettings() {
     const tip = settingTooltips[name] || settingLabels[name] || name;
     const label = text("label", settingLabels[name] || name, "", tip);
     let input;
-    if (name === "writer_mode") {
+    if (name === "auto_updates") {
+      input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = Boolean(value);
+    } else if (name === "writer_mode") {
       input = document.createElement("select");
       input.append(option("local", "Local", "Local writer engine"), option("api", "API", "Hosted cloud API provider"));
     } else if (name === "backend") {
@@ -898,10 +904,29 @@ window.addEventListener("pageshow", event => {
   if (event.persisted) setupEventStream();
 });
 
+async function loadUpdateStatus() {
+  try {
+    const status = await (await api("/api/update")).json();
+    const banner = $("#update-banner");
+    if (!status.available && !["updated", "failed", "unavailable"].includes(status.state)) return;
+    $("#update-message").textContent = status.message + (status.available && status.available_version && status.available_version !== "unknown" ? ` Available version: ${status.available_version}.` : "");
+    const link = $("#update-repository");
+    if (status.repository_url) {
+      const url = new URL(status.repository_url);
+      if (["https:", "http:"].includes(url.protocol)) {
+        link.href = url.href;
+        link.hidden = false;
+      }
+    }
+    banner.hidden = false;
+  } catch { /* Update availability must not block the studio UI. */ }
+}
+
 async function initialize() {
   initTooltips();
   setupOapGuide();
   setupLlamaGuide();
+  loadUpdateStatus();
   catalog = await (await api("/api/catalog")).json();
   const version = await (await api("/api/version")).json();
   $("#version").textContent = version.version; $("#oap-version").textContent = catalog.oap_version;
@@ -1224,6 +1249,7 @@ async function initialize() {
       if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
       delete raw["h3_" + key];
     }
+    raw.auto_updates = event.target.elements.auto_updates.checked;
     raw.vision_call_estimate = Number(raw.vision_call_estimate);
     raw.writer_call_estimate = Number(raw.writer_call_estimate);
     if (Object.keys(h3_models).length) raw.h3_models = h3_models;

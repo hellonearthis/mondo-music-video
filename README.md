@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.1.2** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.1.3** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
@@ -26,6 +26,14 @@ with progress, logs and cancellation. You provide your media, models and API
 keys. Four optional [starter actors](examples/starter-cast/README.md) are included
 as importable OAP packages. Model weights and third-party commercial software
 are not bundled.
+
+## Updates
+
+The launcher checks its tracked Git repository at startup. **Automatic
+installation is off by default**: an available update shows a notice and a link
+to that repository. Enable **Automatic updates** in Settings to install on the
+next launch, before production starts. Local changes and diverged branches are
+preserved, and user data stays private. See [update behavior and recovery](docs/UPDATES.md).
 
 ## Official Comfy SDK rendering
 

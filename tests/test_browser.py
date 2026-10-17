@@ -118,7 +118,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.1.2')
+                expect(page.locator('#version')).to_have_text('1.1.3')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -165,6 +165,39 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 done.set()
                 browser.close()
 
+    def test_update_notice_link_and_opt_in_setting(self):
+        from mmv.storage import write_json
+        from playwright.sync_api import sync_playwright, expect
+        write_json(self.home / 'update-status.json', {
+            'state': 'available', 'available': True, 'automatic': False,
+            'message': 'An update is available. Automatic installation is turned off.',
+            'available_version': '9.0.0', 'repository_url': 'https://github.com/example/mmv'})
+        with sync_playwright() as p:
+            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.goto(self.url)
+                expect(page.locator('#update-banner')).to_be_visible()
+                expect(page.locator('#update-message')).to_contain_text('9.0.0')
+                expect(page.locator('#update-repository')).to_have_attribute('href', 'https://github.com/example/mmv')
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('.nav[data-panel=settings]').click()
+                choice = page.locator('input[name=auto_updates]')
+                expect(choice).not_to_be_checked()
+                choice.check()
+                page.locator('#settings-form > button').click()
+                expect(page.locator('#notice')).to_have_text('Settings saved.')
+                expect(choice).to_be_checked()
+                self.assertTrue(self.fixture.store.settings()['auto_updates'])
+                choice.uncheck()
+                page.locator('#settings-form > button').click()
+                expect(page.locator('#notice')).to_have_text('Settings saved.')
+                expect(choice).not_to_be_checked()
+                self.assertFalse(self.fixture.store.settings()['auto_updates'])
+            finally:
+                browser.close()
+
     def test_sdk_selection_preview_recovery_and_playback(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.configure_sdk()
@@ -178,7 +211,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.1.2')
+                expect(page.locator('#version')).to_have_text('1.1.3')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

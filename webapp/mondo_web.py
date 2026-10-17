@@ -25,7 +25,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.1.2"
+MGL_APP_VERSION = "1.1.3"
 WEB = Path(__file__).parent
 
 
@@ -196,6 +196,7 @@ class ResumeRequest(StrictModel):
 
 
 class Settings(StrictModel):
+    auto_updates: bool = False
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
     comfy_sdk_url: str = "http://127.0.0.1:8189"
@@ -331,6 +332,12 @@ def create_app(home=None, *, test_hosts=False):
         return FileResponse(WEB / "style.css", media_type="text/css")
 
     app.get("/api/version")(api_version)
+
+    @app.get("/api/update")
+    def update_status():
+        from mmv.updates import public_status
+        return public_status(store)
+
 
     def get_full_status(snapshot=None):
         result = dict(snapshot) if snapshot is not None else jobs.status()

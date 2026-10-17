@@ -1,4 +1,32 @@
-# Verification — 1.1.2
+# Verification — 1.1.3
+
+## 1.1.3 optional startup updater
+
+The complete suite passed **93 tests and 38 subtests in 28.48 seconds**, including
+four Chromium flows. Updates default off in storage and API settings. Browser
+checks verified the update/version notice, repository link, and toggling/saving
+the preference in both directions. Disposable local Git tests covered normal and
+non-default tracked branches, notify-only checks, clean fast-forward updates,
+re-exec arguments, checkout leases, unchanged private assets, ignored collisions,
+local changes/divergence, interrupted operations, offline preparation and package
+installation/recovery failures. Pip was mocked for these Git transaction tests.
+
+A separate offline check used actual pip to install, upgrade and restore a tiny
+mock application wheel in a disposable virtualenv; it did not modify the operator
+installation. Actual full-MMV upgrade/dependency recovery and native Windows
+restart remain operator checks. No paid, GPU or Topaz operations ran.
+
+Python compilation, JavaScript/shell syntax and diff checks passed. Both 1.1.3
+wheel and source packages built; the updater and update guide are included, and
+private data, credentials and contest/video planning notes are excluded. Update
+state/log files are explicitly ignored and excluded from source distributions.
+The four previously authorized actor packages remain the only packaged roster.
+
+Fresh handler import and the restarted live `/api/version` reported 1.1.3.
+The live settings endpoint confirmed `auto_updates: false`, and startup completed
+its tracked-repository check without installation. Collaborator revision
+`764ca66` was downloaded/reviewed for task-start context; the separate new dock
+is recorded in `COLLABORATOR_REVIEW.md` for focused follow-up.
 
 ## 1.1.2 expanded aspect selectors
 
