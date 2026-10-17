@@ -1,4 +1,4 @@
-# Verification — 1.0.13
+# Verification — 1.0.14
 
 Run from a checkout:
 
@@ -24,6 +24,12 @@ hosted consent and request receipts; failed-writer render prevention; cancellati
 of the app's own local job; single-operation enforcement; agent CLI and real MCP
 transports; credentials; local HTTP boundaries; downloader integrity; and Topaz
 command construction with preservation of the source video.
+
+## 1.0.14 song preview player & studio direction guide
+
+- Verified `.song-preview-wrap` and `.song-preview` `<audio>` player element in `webapp/index.html` and `webapp/style.css`.
+- Verified `GET /api/uploads/song/{filename}` audio streaming with path-traversal protection.
+- Verified version `1.0.14` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
 
 ## 1.0.13 expanded vocabulary
 

@@ -369,10 +369,21 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.0.13")
+        self.assertEqual(api_version()["version"], "1.0.14")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.0.13", (root / "README.md").read_text())
+        self.assertIn("1.0.14", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
+
+    def test_uploaded_song_preview_endpoint(self):
+        up = self.client.post("/api/upload/song", files={"file": ("track.wav", self.song, "audio/wav")})
+        self.assertEqual(up.status_code, 200)
+        uploaded_name = up.json()["file"]
+        res = self.client.get(f"/api/uploads/song/{uploaded_name}")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("audio/wav", res.headers["content-type"])
+        self.assertEqual(res.content, self.song)
+        missing = self.client.get("/api/uploads/song/nonexistent.wav")
+        self.assertEqual(missing.status_code, 400)
 
     def test_project_persistence_api(self):
         project = {

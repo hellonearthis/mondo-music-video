@@ -300,6 +300,7 @@ async function restoreProject() {
       if (receipt) receipt.textContent = "Uploaded: " + state.songName;
       const songInput = form.querySelector(".song-input");
       if (songInput) songInput.required = false;
+      updateSongPreview(form, "/api/uploads/song/" + encodeURIComponent(state.song));
     }
     if (Array.isArray(fileState.references) && fileState.references.length) {
       state.references = fileState.references;
@@ -311,6 +312,21 @@ async function restoreProject() {
     }
     formFiles.set(form, state);
   });
+}
+
+function updateSongPreview(form, src) {
+  const wrap = form.querySelector(".song-preview-wrap");
+  const audio = form.querySelector(".song-preview");
+  if (!wrap || !audio) return;
+  if (src) {
+    audio.src = src;
+    wrap.hidden = false;
+  } else {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    wrap.hidden = true;
+  }
 }
 
 async function upload(file, kind) {
@@ -829,7 +845,14 @@ async function initialize() {
     const song = form.querySelector(".song-input");
     if (song) song.onchange = handle(async () => {
       const selected = song.files[0]; if (!selected) return;
-      const state = formFiles.get(form); state.song = undefined; state.songName = undefined; state.pending++;
+      const state = formFiles.get(form);
+      if (state.songObjectUrl) {
+        URL.revokeObjectURL(state.songObjectUrl);
+        state.songObjectUrl = undefined;
+      }
+      state.songObjectUrl = URL.createObjectURL(selected);
+      updateSongPreview(form, state.songObjectUrl);
+      state.song = undefined; state.songName = undefined; state.pending++;
       song.disabled = true; form.querySelector(".song-receipt").textContent = "Uploading " + selected.name + "…";
       try {
         state.song = await upload(selected, "song");
@@ -838,7 +861,15 @@ async function initialize() {
         song.required = false;
         scheduleSave();
       }
-      catch (error) { form.querySelector(".song-receipt").textContent = "Upload failed; select the song again."; throw error; }
+      catch (error) {
+        if (state.songObjectUrl) {
+          URL.revokeObjectURL(state.songObjectUrl);
+          state.songObjectUrl = undefined;
+        }
+        updateSongPreview(form, "");
+        form.querySelector(".song-receipt").textContent = "Upload failed; select the song again.";
+        throw error;
+      }
       finally { state.pending--; song.disabled = false; }
     });
     form.querySelector(".refs-input").onchange = handle(async event => {

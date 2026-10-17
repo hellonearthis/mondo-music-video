@@ -1,5 +1,10 @@
 # Releases
 
+## 1.0.14 — Inline song audio preview player & studio direction guide
+
+- **Inline song audio player**: Added `.song-preview-wrap` containing `<audio class="song-preview" controls>` right below `.song-input` and `.song-receipt`, enabling instant listening and scrubbing on selection via `URL.createObjectURL` and persistent server-backed playback via `GET /api/uploads/song/{filename}` across project reloads.
+- **Studio direction prompting guide**: Added `docs/STUDIO_DIRECTION_PROMPTING.md` mapping the 8 production departments, job contract structure, practical mechanisms sampling, and directorial UI controls.
+
 ## 1.0.13 — Expanded SFW vocabulary and contributor thanks
 
 Imports the owner-authorized vocabulary data into the public music-video pool,

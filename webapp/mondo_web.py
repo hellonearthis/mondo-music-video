@@ -24,7 +24,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.13"
+MGL_APP_VERSION = "1.0.14"
 WEB = Path(__file__).parent
 
 
@@ -493,6 +493,23 @@ def create_app(home=None, *, test_hosts=False):
                     target.unlink(missing_ok=True)
                     raise
         return {"file": name, "name": file.filename}
+
+    @app.get("/api/uploads/song/{filename}")
+    def get_uploaded_song(filename: str):
+        path = inside(store.home / "uploads", filename)
+        suffix = path.suffix.lower()
+        if not path.is_file() or suffix not in (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".aiff"):
+            raise ValueError("Uploaded song not found")
+        media_types = {
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".flac": "audio/flac",
+            ".ogg": "audio/ogg",
+            ".m4a": "audio/mp4",
+            ".aac": "audio/aac",
+            ".aiff": "audio/aiff",
+        }
+        return FileResponse(path, media_type=media_types.get(suffix, "application/octet-stream"))
 
     @app.get("/api/actors")
     def list_actors():
