@@ -1,6 +1,21 @@
 # Mondo Music Video
 
-**Version 1.1.3** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.2.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+
+## Easy install — let your AI agent do it
+
+Give a coding agent with terminal access this one instruction:
+
+> Install this: https://github.com/hodgemann/mondo-music-video
+
+Your agent follows the repository's [installation guide](docs/INSTALL_WITH_AGENT.md):
+it checks your hardware, recommends suitable models, configures your services,
+and starts the app. **It asks before large downloads.** Already have API accounts?
+It can configure multiple [API profiles](docs/API_PROVIDER_SETUP.md) and select
+writing, vision and video services independently. A new video provider may need
+an adapter; the guide explains how an agent can build and verify one.
+
+Prefer to install it yourself? Jump to [manual installation](#install).
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
@@ -105,6 +120,8 @@ for existing seeds; musical timing and actor assignments stay unchanged.
 See [vocabulary details](docs/VOCABULARY.md).
 
 ## Install
+
+Manual installation:
 
 Install **Python 3.11+**, **Git**, and **FFmpeg/ffprobe**, then:
 

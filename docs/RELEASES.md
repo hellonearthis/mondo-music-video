@@ -1,5 +1,23 @@
 # Releases
 
+## 1.2.0 — Agent installation and multiple API profiles
+
+A repository installation handoff guides agents through hardware inspection,
+model choices, explicit large-download approval, configuration and readiness.
+Setup asks about existing API providers and documents how to configure compatible
+writer/vision APIs or implement a reviewed video adapter. The new `inspect-api`
+command performs a bounded, read-only model listing without generating, changing
+settings, or following redirects. It does not establish inference compatibility.
+Named private API profiles retain multiple accounts/models, with independent
+writer, vision and supported hosted-video selectors in Settings and agent CLI
+commands. Each selection uses its own credential; returning to manual settings
+restores the previous configuration. No account/provider is used as an automatic
+paid fallback. Keys from inactive profiles are also redacted from operation logs.
+Existing providers, model/workflow defaults and paid-consent rules are preserved.
+The collaborator fork remains at reviewed revision `764ca66`.
+
+Thanks to Abandoned Muse for her inspiration and patience.
+
 ## 1.1.3 — Optional startup updates
 
 Launch-time checks follow the installation's own tracked remote and branch.

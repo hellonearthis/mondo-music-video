@@ -10,6 +10,51 @@ from test_agent import LiveAppFixture
                      and list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome')),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_saved_api_profiles_switch_independently_without_network_generation(self):
+        from mmv.api_profiles import save_profile
+        from playwright.sync_api import sync_playwright, expect
+        store = self.fixture.store
+        original = store.settings()
+        for name in ('account-a', 'account-b'):
+            save_profile(store, name, 'writer', {'writer_url': f'https://{name}.example/v1',
+                'writer_model': name, 'writer_mode': 'api', 'writer_call_estimate': .1}, f'private-{name}')
+        save_profile(store, 'vision-account', 'vision', {'vision_url': 'https://vision.example/v1',
+            'vision_model': 'vision-model'}, 'private-vision')
+        with sync_playwright() as p:
+            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('.nav[data-panel=settings]').click()
+                writer = page.locator('select[name=writer_api_profile]')
+                expect(writer).to_have_value('')
+                writer.select_option('account-a')
+                page.locator('select[name=vision_api_profile]').select_option('vision-account')
+                page.get_by_role('button', name='Save settings', exact=True).click()
+                expect(page.locator('input[name=writer_model]')).to_have_value('account-a')
+                expect(page.locator('input[name=vision_model]')).to_have_value('vision-model')
+                page.locator('select[name=writer_api_profile]').select_option('account-b')
+                page.get_by_role('button', name='Save settings', exact=True).click()
+                expect(page.locator('input[name=writer_model]')).to_have_value('account-b')
+                self.assertEqual(store.key('MMV_WRITER_API_KEY'), 'private-account-b')
+                self.assertEqual(store.key('MMV_VISION_API_KEY'), 'private-vision')
+                page.once('dialog', lambda dialog: dialog.accept('saved-copy'))
+                page.get_by_role('button', name='Save configured writer API as a profile').click()
+                expect(page.locator('select[name=writer_api_profile] option[value=saved-copy]')).to_have_count(1)
+                page.locator('select[name=writer_api_profile]').select_option('')
+                page.locator('select[name=vision_api_profile]').select_option('')
+                page.get_by_role('button', name='Save settings', exact=True).click()
+                expect(page.locator('input[name=writer_model]')).to_have_value(original['writer_model'])
+                self.assertEqual(store.settings()['writer_url'], original['writer_url'])
+                self.assertNotIn('private-account', page.locator('body').inner_text())
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_model_picker_and_oap_summary_preserve_operator_choices(self):
         import json
         from mmv import actors
@@ -118,7 +163,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.1.3')
+                expect(page.locator('#version')).to_have_text('1.2.0')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -211,7 +256,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.1.3')
+                expect(page.locator('#version')).to_have_text('1.2.0')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

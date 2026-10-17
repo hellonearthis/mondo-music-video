@@ -340,9 +340,8 @@ def main():
         try:run(home,directory,resume=len(sys.argv)>4 and sys.argv[4]=='resume')
         except Exception as exc:
             message=str(exc)
-            for key in ('WAVESPEED_API_KEY','MMV_WRITER_API_KEY','MMV_VISION_API_KEY','MMV_COMFY_API_KEY'):
-                value=Storage(home).key(key)
-                if value:message=message.replace(value,'[redacted]')
+            for value in Storage(home).secret_values():
+                message=message.replace(value,'[redacted]')
             print(type(exc).__name__+': '+message,flush=True)
             raise SystemExit(1)
         finally:

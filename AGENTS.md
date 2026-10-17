@@ -1,5 +1,24 @@
 # Mondo Music Video repository rules
 
+## Installation requests
+
+When a user says “install this” and supplies this repository, follow
+[docs/INSTALL_WITH_AGENT.md](docs/INSTALL_WITH_AGENT.md). Handle discovery,
+commands, model selection, configuration and startup for them. Inspect hardware
+and reuse existing services/models first. Before large dependency or model
+downloads, present the combined sizes, destinations, terms and recommendation
+and obtain explicit approval. Installation alone does not authorize paid work.
+Do not declare the system ready to generate just because the web UI opens.
+Ask about existing API providers and follow `docs/API_PROVIDER_SETUP.md` for
+compatible service configuration or a requested new adapter. Do not equate a
+successful model listing with verified generation or video compatibility.
+Offer multiple named API profiles and independent writer, vision and video
+selections. Preserve existing accounts when adding another. Profile credentials
+are private: never stage or package `api-profiles.json`. Do not automatically
+switch accounts/providers after a paid failure.
+
+## Development and release
+
 - Release only the authorized music-video engine sources and prompts recorded
   in docs/SOURCE_EXTRACTION.json. Keep unrelated private studio code, credentials,
   actors, models and production artifacts out of this repository.

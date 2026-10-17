@@ -25,7 +25,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.1.3"
+MGL_APP_VERSION = "1.2.0"
 WEB = Path(__file__).parent
 
 
@@ -196,6 +196,9 @@ class ResumeRequest(StrictModel):
 
 
 class Settings(StrictModel):
+    writer_api_profile: str = ""
+    vision_api_profile: str = ""
+    video_api_profile: str = ""
     auto_updates: bool = False
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
@@ -220,6 +223,11 @@ class Settings(StrictModel):
     topaz_executable: str = ""
     topaz_models: str = ""
     h3_models: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("writer_api_profile", "vision_api_profile", "video_api_profile")
+    @classmethod
+    def valid_api_profile(cls, value):
+        return identifier(value) if value else ""
 
     @field_validator("h3_models")
     @classmethod
@@ -254,6 +262,11 @@ class Settings(StrictModel):
         if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
             raise ValueError("Use an HTTP(S) service URL without embedded credentials")
         return value.rstrip("/")
+
+
+class ApiProfileRequest(StrictModel):
+    name: str
+    role: Literal["writer", "vision", "video"]
 
 
 class KeyRequest(StrictModel):
@@ -447,10 +460,12 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.get("/api/settings")
     def get_settings():
+        from mmv.api_profiles import public_profiles
         s = store.settings()
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
+                "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
 
@@ -459,11 +474,22 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             dump = value.model_dump()
+            from mmv.api_profiles import resolve, save_settings
+            dump = Settings(**resolve(store, dump)).model_dump()
             h3_models = dump.pop("h3_models", None)
             if h3_models:
                 _update_h3_models(store, dump, h3_models)
-            write_json(store.home / "settings.json", dump)
+            save_settings(store, dump)
         return {"ok": True}
+
+    @app.post("/api/api-profiles")
+    def save_api_profile(value: ApiProfileRequest):
+        from mmv.api_profiles import FIELDS, KEYS, save_profile
+        with jobs.lock:
+            jobs.require_idle()
+            current = store.settings()
+            return save_profile(store, value.name, value.role,
+                {k: current[k] for k in FIELDS[value.role]}, store.key(KEYS[value.role]))
 
     @app.get("/api/fs/browse")
     def browse_fs(path: str = "", mode: Literal["folder", "file"] = "folder", ext: str = ""):
@@ -823,10 +849,8 @@ def create_app(home=None, *, test_hosts=False):
                 sections.append("\n=== Studio Server Event Log ===\n" + stream.read().decode(errors="replace"))
 
         content = "\n\n".join(filter(None, sections)).strip()
-        for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
-            secret = store.key(name)
-            if secret:
-                content = content.replace(secret, "[redacted]")
+        for secret in store.secret_values():
+            content = content.replace(secret, "[redacted]")
         return {"log": content or "No operation or server log recorded yet."}
 
     @app.post("/api/upscale")

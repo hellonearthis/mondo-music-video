@@ -218,6 +218,17 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("configure")
     sub.add_parser("doctor")
+    api = sub.add_parser("inspect-api", help="List an API's advertised models without generating")
+    api.add_argument("url", help="OpenAI-compatible base URL, usually ending in /v1")
+    api.add_argument("--key-env", help="Environment variable containing the key; never pass a literal key")
+    sub.add_parser("list-api-profiles", help="List saved API configurations without exposing keys")
+    profile = sub.add_parser("save-api-profile", help="Save an additional named API configuration")
+    profile.add_argument("name")
+    profile.add_argument("--role", required=True, choices=("writer", "vision", "video"))
+    profile.add_argument("--config", required=True, type=Path, help="JSON file of settings for this role")
+    profile.add_argument("--key-env", help="Read and store the key from this environment variable")
+    activate = sub.add_parser("use-api-profile", help="Select a saved API configuration for its role")
+    activate.add_argument("name")
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=8091)
     serve.add_argument("--no-auto-update", action="store_true", help="Check for updates without installing this launch")
@@ -225,10 +236,17 @@ def main(argv=None):
     models = sub.add_parser("download-models")
     models.add_argument("manifest")
     args = parser.parse_args(argv)
-    store = Storage(args.data_dir)
     try:
+        if args.command == "inspect-api":
+            from .provider_setup import inspect_writer
+            print(json.dumps(inspect_writer(args.url, key_env=args.key_env), indent=2))
+            return
+        store = Storage(args.data_dir)
         if args.command == "doctor":
             print(json.dumps(doctor(store), indent=2))
+        elif args.command == "list-api-profiles":
+            from .api_profiles import public_profiles
+            print(json.dumps(public_profiles(store), indent=2))
         else:
             with ExitStack() as startup_locks:
                 startup_locks.enter_context(SessionLock(store.home))
@@ -241,6 +259,16 @@ def main(argv=None):
                     download_models(store, Path(__file__).parent / "engine/config/laya-download.json")
                 elif args.command == "download-models":
                     download_models(store, args.manifest)
+                elif args.command == "save-api-profile":
+                    from .api_profiles import save_profile
+                    key = os.environ.get(args.key_env, "") if args.key_env else ""
+                    if args.key_env and not key:
+                        raise ValueError("The named API key environment variable is empty or missing")
+                    print(json.dumps(save_profile(store, args.name, args.role,
+                        json.loads(args.config.read_text(encoding="utf-8")), key), indent=2))
+                elif args.command == "use-api-profile":
+                    from .api_profiles import activate
+                    print(json.dumps(activate(store, args.name), indent=2))
                 elif args.command == "serve":
                     from .updates import startup_update
                     print("Checking the installation's tracked repository for updates...", flush=True)

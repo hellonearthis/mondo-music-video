@@ -448,6 +448,7 @@ async function loadOutputs() {
 }
 
 const settingLabels = {
+  writer_api_profile: "Writer API profile", vision_api_profile: "Vision API profile", video_api_profile: "Video API profile",
   auto_updates: "Automatic updates",
   comfy_sdk_url: "Local Comfy API proxy URL",
   backend: "Default renderer", comfy_url: "ComfyUI service URL", comfy_input: "ComfyUI input folder (shared local path)", comfy_output: "ComfyUI output folder (shared local path)",
@@ -686,7 +687,12 @@ async function loadSettings() {
     const tip = settingTooltips[name] || settingLabels[name] || name;
     const label = text("label", settingLabels[name] || name, "", tip);
     let input;
-    if (name === "auto_updates") {
+    if (name.endsWith("_api_profile")) {
+      const role = name.replace("_api_profile", "");
+      input = document.createElement("select");
+      input.append(option("", "Manual configuration", "Use the individual settings below"));
+      input.append(...(data.api_profiles || []).filter(p => p.role === role).map(p => option(p.name, p.name)));
+    } else if (name === "auto_updates") {
       input = document.createElement("input");
       input.type = "checkbox";
       input.checked = Boolean(value);
@@ -797,6 +803,20 @@ async function loadSettings() {
     fields.push(label);
   }
 
+  for (const role of ["writer", "vision", "video"]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quiet";
+    button.textContent = `Save configured ${role} API as a profile`;
+    button.onclick = handle(async () => {
+      const name = window.prompt(`Profile ID for the saved ${role} settings (lowercase letters, numbers, underscores or hyphens). Save your settings and key first.`);
+      if (!name) return;
+      await json("/api/api-profiles", {name, role}, "POST");
+      await loadSettings();
+      notice("API profile saved privately. Select it and save Settings to activate it.");
+    });
+    fields.push(button);
+  }
   $("#settings-fields").replaceChildren(...fields);
   $("#key-status").textContent = Object.entries(data.keys).map(([name, set]) => `${name}: ${set ? "configured" : "not set"}`).join(" · ");
   return data.settings;

@@ -1,5 +1,12 @@
 # Collaborator review record
 
+## October 17, 2026 — agent installation and provider setup
+
+Fetched the isolated collaborator checkout again: origin/main remains
+`764ca66843843217d51c8708cb1e1fa952d9f364`. No new contributions were found.
+The hardware/status dock review below remains pending its focused integration;
+this setup delivery does not change either collaborator's workflow defaults.
+
 ## October 17, 2026 — startup updater development
 
 Checked and downloaded hellonearthis's fork through `764ca66` into an isolated

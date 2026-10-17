@@ -1,4 +1,31 @@
-# Verification — 1.1.3
+# Verification — 1.2.0
+
+## 1.2.0 agent installation and multiple API profiles
+
+The complete suite passed **104 tests and 52 subtests in 30.04 seconds**,
+including five Chromium flows. Profile checks exercise independent role/account
+selection, credential isolation from generic environment keys, key updates,
+manual configuration restoration, no silent overwrites, owner-only POSIX file
+permissions, invalid/cross-role profiles, active-operation guards and agent CLI
+save/list/activation. Browser verification switches writer accounts while
+retaining a separate vision account, saves a profile through Settings, and
+restores manual configuration. Additional targeted profile checks cover malformed
+configuration and redaction of an inactive account's key from historical logs.
+
+Mock API discovery checks cover GET-only requests, invalid URLs, missing keys,
+bounded/invalid responses, redacted errors and blocked redirects. The discovery
+CLI creates no application data and submits no generation. Local guide links
+and pinned writer metadata were checked. JavaScript/Python syntax and diff
+checks passed. Both source and wheel packages built; their contents include the new modules
+and source installation guides, with only the four authorized actor packages.
+Private profiles, data, secrets and contest notes are excluded. No real provider calls, paid generations, GPU inference
+or Topaz work ran.
+
+Fresh version-handler import and the restarted live `/api/version` report
+**1.2.0**. Native Windows execution and real provider chat/video compatibility
+remain operator checks. New video APIs require an adapter; this release supplies
+the agent implementation guide rather than a universal video API client.
+The collaborator fork remains `764ca66843843217d51c8708cb1e1fa952d9f364`.
 
 ## 1.1.3 optional startup updater
 

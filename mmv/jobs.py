@@ -157,10 +157,8 @@ class Jobs:
                 except Exception as exc:
                     # Avoid exposing response bodies or credentials from external services.
                     message = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
-                    for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
-                        secret = self.store.key(name)
-                        if secret:
-                            message = message.replace(secret, "[redacted]")
+                    for secret in self.store.secret_values():
+                        message = message.replace(secret, "[redacted]")
                     context.update(message, state="failed")
                 finally:
                     with self.lock:

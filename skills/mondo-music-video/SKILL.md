@@ -6,6 +6,15 @@ description: Operate a local Mondo Music Video app to create music videos or ide
 
 # Mondo Music Video
 
+For a fresh installation request, follow
+[../../docs/INSTALL_WITH_AGENT.md](../../docs/INSTALL_WITH_AGENT.md) first.
+That guide covers hardware inspection, model recommendations, download approval,
+configuration and readiness checks. The operation instructions below assume an
+installed application.
+If this skill was installed from a wheel without repository documentation,
+read the guide from the user's checkout or the
+[public repository](https://github.com/hodgemann/mondo-music-video/blob/main/docs/INSTALL_WITH_AGENT.md).
+
 Use the running local app, normally `http://127.0.0.1:8091`. Its single-operation
 guard, OAP checks and preview/consent flow remain authoritative. Do not import a
 private studio checkout or invoke a renderer directly to bypass this workflow.
