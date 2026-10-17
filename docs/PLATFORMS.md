@@ -1,4 +1,4 @@
-# Platform support — 1.0.11
+# Platform support — 1.0.13
 
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |
@@ -29,3 +29,9 @@ The optional Comfy SDK renderer uses Python SDK/proxy packages and a loopback
 ComfyUI installation. Linux transport, synthetic assembly and official-proxy
 checks are covered by automated tests. Real H3 rendering through the proxy and
 Windows/macOS execution remain unverified. See [COMFY_SDK.md](COMFY_SDK.md).
+
+The 1.0.13 model settings/path-picker integration is verified with Linux mock
+services and Chromium. Windows JSON lock retries are tested with simulated
+permission errors; native Windows filesystem browsing and real model switching
+remain operator checks. Parallel tests use four workers by default; use
+`python -m pytest -n 0` for a serial run.

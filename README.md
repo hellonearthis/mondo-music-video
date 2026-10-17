@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.0.11** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.0.13** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 Turn your song into a complete music video. Mondo listens to the track, detects
 beats and downbeats, measures energy, and identifies musical sections. Its
@@ -30,6 +30,15 @@ supports receipt-based recovery after interrupted renders or failed downloads.
 Your direct local workflow stays the default. See [setup and recovery](docs/COMFY_SDK.md)
 for pinned dependencies and operator verification.
 
+## Model selection and setup helpers
+
+Settings lists the models reported by your ComfyUI installation, alongside the
+models already selected in your active workflow. Changing a model creates a
+private workflow copy; your original graph, bindings and precision settings are
+preserved. Nothing is downloaded or selected automatically. File/folder Browse
+buttons help configure local paths, and the OAP guide explains actors, reference
+images, signatures and content riders. See [model settings](docs/MODEL_SETTINGS.md).
+
 ## Four montage grammars, driven by your music
 
 Mondo uses four distinct visual grammars. The analyzer detects the track's
@@ -52,6 +61,20 @@ The LLM writer receives the selected grammar, planned shots, camera instructions
 visual vocabulary and reference bindings. It writes the visual content while
 the planner owns timing. GPU Laya reviews the prompts before rendering, and
 Mondo assembles the rendered passages against the original song.
+
+## Expanded visual vocabulary
+
+The planner now draws from 269 settings, 233 subject types, 256 mechanisms,
+227 lighting choices, 185 tonal registers, 111 practical effects, 70 footage
+anchors and 31 costume choices. These are the SFW selections from the owner's
+full vocabulary, with the existing camera bands, shot scales and mouth-rigging
+contract retained.
+
+The original seeded sampler still rotates each vocabulary table without
+repeating a draw until its pool is exhausted. Shared section/segment choices
+can intentionally recur across shots. A larger pool changes the visual choices
+for existing seeds; musical timing and actor assignments stay unchanged.
+See [vocabulary details](docs/VOCABULARY.md).
 
 ## Install
 
@@ -143,6 +166,12 @@ directory private.
 
 See [platform support](docs/PLATFORMS.md), [verification](docs/VERIFICATION.md),
 [scope](docs/SCOPE.md), and [third-party notices](docs/THIRD_PARTY.md).
+
+## Credits and thanks
+
+Special thanks to [hellonearthis](https://github.com/hellonearthis) for his
+contributions to Windows support, model selection, setup and OAP guidance,
+and faster parallel testing—and for helping make Mondo Music Video better.
 
 ## License
 

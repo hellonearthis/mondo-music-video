@@ -1,0 +1,110 @@
+{
+  "camera_by_energy": {
+    "0.00": [
+      "The camera holds a static shot",
+      "The camera pushes in with small amplitude at slow speed",
+      "The camera tilts down with small amplitude at slow speed"
+    ],
+    "0.25": [
+      "The camera pushes in with small amplitude at slow speed",
+      "The camera trucks right with small amplitude at slow speed",
+      "The camera pans left with small amplitude at slow speed",
+      "The camera holds a static shot"
+    ],
+    "0.50": [
+      "The camera arcs around the subject with medium amplitude",
+      "The camera tracks the subject",
+      "The camera pans right with large amplitude",
+      "The camera pedestals up with small amplitude",
+      "The camera pulls out with medium amplitude"
+    ],
+    "0.75": [
+      "The camera tracks the subject at fast speed",
+      "The camera pans right with large amplitude at fast speed",
+      "The camera pushes in with large amplitude at fast speed",
+      "The camera shakes slightly while arcing around the subject",
+      "The camera rolls clockwise with small amplitude"
+    ],
+    "0.90": [
+      "The camera shakes strongly",
+      "The camera pans left with large amplitude at fast speed",
+      "The camera pushes in with large amplitude at fast speed",
+      "The camera rolls counterclockwise with large amplitude at fast speed",
+      "The camera whips right with large amplitude at fast speed"
+    ]
+  },
+  "shot_scales": [
+    "extreme wide shot",
+    "wide shot",
+    "medium-wide shot",
+    "medium shot",
+    "medium close-up",
+    "close-up",
+    "extreme close-up",
+    "macro shot",
+    "low-angle medium shot",
+    "high-angle wide shot",
+    "over-the-shoulder shot",
+    "ultra wide",
+    "two shot",
+    "over the shoulder",
+    "high angle",
+    "low angle",
+    "overhead",
+    "worms-eye",
+    "profile",
+    "central framing"
+  ],
+  "settings": [
+    "sunlit rooftop",
+    "empty rehearsal room",
+    "windswept shoreline",
+    "rain-washed city street",
+    "open-air courtyard",
+    "colorful soundstage",
+    "quiet train platform",
+    "desert road"
+  ],
+  "subject_types": [
+    "fully clothed performer",
+    "dancer in everyday clothing",
+    "musician in a tailored jacket",
+    "fully clothed ensemble"
+  ],
+  "mechanisms": [
+    "wind moving fabric",
+    "reflections rippling across glass",
+    "moving shadows",
+    "paper turning in the breeze",
+    "lights pulsing across surfaces"
+  ],
+  "costume": [
+    "tailored streetwear",
+    "textured everyday clothing",
+    "flowing fully covering stagewear"
+  ],
+  "tonal_registers": [
+    "exhilaration",
+    "anticipation",
+    "wonder",
+    "quiet reflection"
+  ],
+  "lighting": [
+    "warm side light",
+    "soft overcast light",
+    "colored practical lights",
+    "late afternoon backlight"
+  ],
+  "footage_anchors": [
+    "Cinematic music-video photography",
+    "Handheld live-performance photography",
+    "Lyrical observational photography"
+  ],
+  "practical_effects": [
+    "Wind, moving fabric, and shifting light",
+    "In-camera reflections and colored light"
+  ],
+  "rigging": [
+    "lips firmly sealed shut, jaw completely relaxed"
+  ]
+}

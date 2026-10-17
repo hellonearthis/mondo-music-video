@@ -1,0 +1,498 @@
+{
+  "song": "generated-click-track.wav",
+  "slug": "untitled",
+  "seed": 17,
+  "fps": 24,
+  "width": 1024,
+  "height": 576,
+  "tempo_bpm": 117.454,
+  "total_frames": 960,
+  "segments": [
+    {
+      "index": 0,
+      "song_start_frame": 0,
+      "musical_frames": 61,
+      "gen_frames": 73,
+      "trim_frames": 61,
+      "duration_input": 3.0416666666666665,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "mixed media",
+      "practical_effects": "Practical prosthetic effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 0.0,
+      "audio_slice_end_s": 3.0416666666666665,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 61,
+          "cut_time": null,
+          "camera": "The camera pushes in with small amplitude at slow speed",
+          "shot_scale": "high-angle wide shot",
+          "energy": 0.003,
+          "vocab": {
+            "lighting": "window-pane cross shadow",
+            "setting": "audiometry booth",
+            "subject_type": "company",
+            "mechanism": "embracing",
+            "tonal_register": "extractive",
+            "costume": "veil"
+          }
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "song_start_frame": 61,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Lost film footage",
+      "practical_effects": "Practical oil effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 2.5416666666666665,
+      "audio_slice_end_s": 7.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 96,
+          "cut_time": null,
+          "camera": "The camera tilts down with small amplitude at slow speed",
+          "shot_scale": "two shot",
+          "energy": 0.003,
+          "vocab": {
+            "lighting": "caustics on a ceiling",
+            "setting": "record store",
+            "subject_type": "attendant",
+            "mechanism": "advancing",
+            "tonal_register": "quarantined",
+            "costume": "robe"
+          }
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "song_start_frame": 157,
+      "musical_frames": 95,
+      "gen_frames": 107,
+      "trim_frames": 95,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Second-unit location footage",
+      "practical_effects": "Practical veil effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 6.541666666666667,
+      "audio_slice_end_s": 11.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 95,
+          "cut_time": null,
+          "camera": "The camera tilts down with small amplitude at slow speed",
+          "shot_scale": "medium-wide shot",
+          "energy": 0.0,
+          "vocab": {
+            "lighting": "range hood light",
+            "setting": "glacier snout",
+            "subject_type": "industrial figure",
+            "mechanism": "stretching awake",
+            "tonal_register": "monsoonal",
+            "costume": "denim jacket"
+          }
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "song_start_frame": 252,
+      "musical_frames": 97,
+      "gen_frames": 107,
+      "trim_frames": 97,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Vacation resort promotional footage",
+      "practical_effects": "Practical trapdoor effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 10.5,
+      "audio_slice_end_s": 14.958333333333334,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 48,
+          "cut_time": null,
+          "camera": "The camera pans left with small amplitude at slow speed",
+          "shot_scale": "extreme wide shot",
+          "energy": 0.334,
+          "vocab": {
+            "lighting": "eye light",
+            "setting": "aviary",
+            "subject_type": "stylized figure",
+            "mechanism": "morphing",
+            "tonal_register": "telluric",
+            "costume": "apron"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 48,
+          "frames": 49,
+          "cut_time": "00:02.000",
+          "camera": "The camera holds a static shot",
+          "shot_scale": "ultra wide",
+          "energy": 0.333,
+          "vocab": {
+            "lighting": "lantern light",
+            "setting": "aviary",
+            "subject_type": "stylized figure",
+            "mechanism": "morphing",
+            "tonal_register": "telluric",
+            "costume": "apron"
+          }
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "song_start_frame": 349,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Raw, unedited performance footage",
+      "practical_effects": "Practical body paint effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 14.541666666666666,
+      "audio_slice_end_s": 19.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 96,
+          "cut_time": null,
+          "camera": "The camera pushes in with small amplitude at slow speed",
+          "shot_scale": "worms-eye",
+          "energy": 0.335,
+          "vocab": {
+            "lighting": "hearth glow",
+            "setting": "plaster cast gallery",
+            "subject_type": "signalman",
+            "mechanism": "transformation",
+            "tonal_register": "epistolary",
+            "costume": "tailored suit"
+          }
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "song_start_frame": 445,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Amateur cine-club footage",
+      "practical_effects": "Practical spark effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 18.541666666666668,
+      "audio_slice_end_s": 23.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 96,
+          "cut_time": null,
+          "camera": "The camera holds a static shot",
+          "shot_scale": "central framing",
+          "energy": 0.098,
+          "vocab": {
+            "lighting": "plasma arc",
+            "setting": "bindery",
+            "subject_type": "celebrant",
+            "mechanism": "hurling",
+            "tonal_register": "interstitial",
+            "costume": "concert attire"
+          }
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "song_start_frame": 541,
+      "musical_frames": 95,
+      "gen_frames": 107,
+      "trim_frames": 95,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "City symphony footage",
+      "practical_effects": "Practical frost effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 22.541666666666668,
+      "audio_slice_end_s": 27.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 95,
+          "cut_time": null,
+          "camera": "The camera arcs around the subject with medium amplitude",
+          "shot_scale": "profile",
+          "energy": 0.668,
+          "vocab": {
+            "lighting": "ghost light",
+            "setting": "anechoic chamber",
+            "subject_type": "servant",
+            "mechanism": "rising",
+            "tonal_register": "hopeless",
+            "costume": "reflective garment"
+          }
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "song_start_frame": 636,
+      "musical_frames": 97,
+      "gen_frames": 107,
+      "trim_frames": 97,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Advertising campaign footage",
+      "practical_effects": "Practical dust effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 26.5,
+      "audio_slice_end_s": 30.958333333333332,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 85,
+          "cut_time": null,
+          "camera": "The camera pans right with large amplitude",
+          "shot_scale": "low angle",
+          "energy": 0.665,
+          "vocab": {
+            "lighting": "keyhole light",
+            "setting": "empty street",
+            "subject_type": "hooded figure",
+            "mechanism": "carrying",
+            "tonal_register": "autumnal",
+            "costume": "flowing dress"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 85,
+          "frames": 12,
+          "cut_time": "00:03.542",
+          "camera": "The camera shakes strongly",
+          "shot_scale": "close-up",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "muzzle flash",
+            "setting": "empty street",
+            "subject_type": "hooded figure",
+            "mechanism": "carrying",
+            "tonal_register": "autumnal",
+            "costume": "flowing dress"
+          }
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "song_start_frame": 733,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Poetic essay-film footage",
+      "practical_effects": "Practical marionette effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 30.541666666666668,
+      "audio_slice_end_s": 35.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 59,
+          "cut_time": null,
+          "camera": "The camera rolls counterclockwise with large amplitude at fast speed",
+          "shot_scale": "macro shot",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "light through a tent wall",
+            "setting": "mannequin repair room",
+            "subject_type": "watchman",
+            "mechanism": "pressing",
+            "tonal_register": "melancholic",
+            "costume": "long gloves"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 59,
+          "frames": 37,
+          "cut_time": "00:02.458",
+          "camera": "The camera whips right with large amplitude at fast speed",
+          "shot_scale": "macro shot",
+          "energy": 0.997,
+          "vocab": {
+            "lighting": "oil lamp",
+            "setting": "mannequin repair room",
+            "subject_type": "watchman",
+            "mechanism": "pressing",
+            "tonal_register": "melancholic",
+            "costume": "long gloves"
+          }
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "song_start_frame": 829,
+      "musical_frames": 96,
+      "gen_frames": 107,
+      "trim_frames": 96,
+      "duration_input": 4.458333333333333,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Analog film footage",
+      "practical_effects": "Practical film-loop effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 34.541666666666664,
+      "audio_slice_end_s": 39.0,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 72,
+          "cut_time": null,
+          "camera": "The camera pans right with large amplitude",
+          "shot_scale": "over-the-shoulder shot",
+          "energy": 0.666,
+          "vocab": {
+            "lighting": "turn-signal blink",
+            "setting": "velodrome",
+            "subject_type": "apparition",
+            "mechanism": "twisting",
+            "tonal_register": "static",
+            "costume": "embroidered coat"
+          }
+        },
+        {
+          "n": 2,
+          "start_frame": 72,
+          "frames": 24,
+          "cut_time": "00:03.000",
+          "camera": "The camera shakes strongly",
+          "shot_scale": "close-up",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "open shade",
+            "setting": "velodrome",
+            "subject_type": "apparition",
+            "mechanism": "twisting",
+            "tonal_register": "static",
+            "costume": "embroidered coat"
+          }
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "song_start_frame": 925,
+      "musical_frames": 35,
+      "gen_frames": 39,
+      "trim_frames": 35,
+      "duration_input": 1.625,
+      "montage_type": "standard",
+      "section_index": 0,
+      "section_label": "low",
+      "energy": 0.462,
+      "thematic_anchor": null,
+      "ref_image_slots": 1,
+      "footage_anchor": "Home movie footage",
+      "practical_effects": "Practical fog effects",
+      "rigging": "lips firmly sealed shut, jaw completely relaxed",
+      "audio_slice_start_s": 38.541666666666664,
+      "audio_slice_end_s": 40.166666666666664,
+      "shots": [
+        {
+          "n": 1,
+          "start_frame": 0,
+          "frames": 35,
+          "cut_time": null,
+          "camera": "The camera whips right with large amplitude at fast speed",
+          "shot_scale": "close-up",
+          "energy": 1.0,
+          "vocab": {
+            "lighting": "magnesium flare",
+            "setting": "apothecary drawers",
+            "subject_type": "sitter",
+            "mechanism": "stiffening",
+            "tonal_register": "transient",
+            "costume": "uniform"
+          }
+        }
+      ]
+    }
+  ]
+}

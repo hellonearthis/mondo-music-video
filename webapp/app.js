@@ -345,11 +345,17 @@ async function loadActors() {
   const actors = await (await api("/api/actors")).json();
   $$(".actor-select").forEach(select => {
     const old = [...select.selectedOptions].map(x => x.value);
-    select.replaceChildren(...actors.map(actor => {
-      const node = option(actor.id, actor.name, `Cast actor: ${actor.name} (${actor.id})`);
-      node.selected = old.includes(actor.id);
-      return node;
-    }));
+    if (!actors.length) {
+      const emptyOpt = option("", "No cast members yet — add in 02. Actors & OAP", "No cast members currently in your studio library");
+      emptyOpt.disabled = true;
+      select.replaceChildren(emptyOpt);
+    } else {
+      select.replaceChildren(...actors.map(actor => {
+        const node = option(actor.id, actor.name, `Cast actor: ${actor.name} (${actor.id})`);
+        node.selected = old.includes(actor.id);
+        return node;
+      }));
+    }
   });
   $("#actor-list").replaceChildren(...actors.map(actor => {
     const card = text("article", "", "card", `Cast member: ${actor.name}`);
@@ -412,7 +418,11 @@ const settingLabels = {
   writer_url: "Writer service URL (OpenAI-compatible /v1)", writer_model: "Music-video writer model", writer_mode: "Writer service: local or API", writer_call_estimate: "API writer estimate per call, USD",
   workflow_map_path: "Workflow binding map JSON path",
   vision_url: "Vision service URL (OpenAI-compatible /v1)", vision_model: "Vision model name", vision_key_env: "Vision credential name",
-  vision_call_estimate: "Vision estimate per call, USD (0 for local)", topaz_executable: "Installed Topaz FFmpeg executable path", topaz_models: "Installed Topaz models folder"
+  vision_call_estimate: "Vision estimate per call, USD (0 for local)", topaz_executable: "Installed Topaz FFmpeg executable path", topaz_models: "Installed Topaz models folder",
+  h3_video_vae: "H3 video VAE model",
+  h3_audio_vae: "H3 audio VAE model",
+  h3_diffusion_model: "H3 reference-to-video diffusion model",
+  h3_text_encoder: "H3 text encoder (CLIP) model"
 };
 
 const settingTooltips = {
@@ -437,12 +447,203 @@ const settingTooltips = {
   vision_key_env: "Environment variable name storing your vision API key",
   vision_call_estimate: "Estimated cost in USD per vision style-harvest call",
   topaz_executable: "Path to Topaz Video AI ffmpeg.exe binary for upscaling",
-  topaz_models: "Folder path containing installed Topaz AI model weight files"
+  topaz_models: "Folder path containing installed Topaz AI model weight files",
+  h3_video_vae: "Video VAE safetensors filename for MiniMax H3 (node 119)",
+  h3_audio_vae: "Audio VAE safetensors filename for MiniMax H3 (node 120)",
+  h3_diffusion_model: "Reference-to-video UNET diffusion model for MiniMax H3 (node 127)",
+  h3_text_encoder: "Text encoder CLIP model for MiniMax H3 (node 128)"
 };
+
+const folderSettings = new Set([
+  "comfy_input",
+  "comfy_output",
+  "writer_cwd",
+  "comfy_cwd",
+  "laya_model_dir",
+  "topaz_models"
+]);
+
+const fileSettings = {
+  topaz_executable: ".exe",
+  workflow_map_path: ".json"
+};
+
+let pickerNavigation = 0;
+let currentPickerState = {
+  mode: "folder",
+  ext: "",
+  current: "",
+  onSelect: null,
+  allEntries: []
+};
+
+async function navigatePicker(targetPath) {
+  const navigation = ++pickerNavigation;
+  $("#picker-confirm").disabled = true;
+  const params = new URLSearchParams();
+  if (targetPath) params.set("path", targetPath);
+  params.set("mode", currentPickerState.mode);
+  if (currentPickerState.ext) params.set("ext", currentPickerState.ext);
+
+  const res = await api("/api/fs/browse?" + params.toString());
+  if (!res.ok) return;
+  const data = await res.json();
+  if (navigation !== pickerNavigation || !$("#folder-picker-dialog").open) return;
+  currentPickerState.current = data.current;
+
+  $("#picker-selected-path").value = currentPickerState.mode === "folder" ? data.current : "";
+  $("#picker-confirm").disabled = currentPickerState.mode === "file";
+
+  const roots = $("#picker-roots");
+  roots.replaceChildren();
+  if (data.home) {
+    const homeBtn = document.createElement("button");
+    homeBtn.type = "button";
+    homeBtn.className = "picker-root-btn";
+    homeBtn.textContent = "🏠 Home";
+    homeBtn.onclick = handle(() => navigatePicker(data.home));
+    roots.append(homeBtn);
+  }
+  for (const drive of (data.drives || [])) {
+    const driveBtn = document.createElement("button");
+    driveBtn.type = "button";
+    driveBtn.className = "picker-root-btn";
+    driveBtn.textContent = drive;
+    driveBtn.onclick = handle(() => navigatePicker(drive));
+    roots.append(driveBtn);
+  }
+
+  const breadcrumbs = $("#picker-breadcrumbs");
+  breadcrumbs.replaceChildren();
+  const parts = data.current.split(/[\\/]+/).filter(Boolean);
+  const isWin = /^[a-zA-Z]:/.test(data.current);
+  let accumulated = "";
+
+  if (data.parent) {
+    const upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.className = "picker-crumb";
+    upBtn.textContent = "⬆ Up";
+    upBtn.onclick = handle(() => navigatePicker(data.parent));
+    breadcrumbs.append(upBtn, document.createTextNode(" · "));
+  }
+
+  parts.forEach((part, index) => {
+    if (index === 0 && isWin) {
+      accumulated = part + "\\";
+    } else if (index === 0 && !isWin) {
+      accumulated = "/" + part;
+    } else {
+      accumulated += (accumulated.endsWith("\\") || accumulated.endsWith("/") ? "" : (isWin ? "\\" : "/")) + part;
+    }
+    const currentPath = accumulated;
+    const crumb = document.createElement("button");
+    crumb.type = "button";
+    crumb.className = "picker-crumb";
+    crumb.textContent = part;
+    if (index < parts.length - 1) {
+      crumb.onclick = handle(() => navigatePicker(currentPath));
+      breadcrumbs.append(crumb, document.createTextNode(" > "));
+    } else {
+      breadcrumbs.append(crumb);
+    }
+  });
+
+  currentPickerState.allEntries = [
+    ...(data.folders || []).map(f => ({ ...f, isDir: true })),
+    ...(data.files || []).map(f => ({ ...f, isDir: false }))
+  ];
+  renderPickerEntries();
+}
+
+function renderPickerEntries() {
+  const container = $("#picker-entries");
+  container.replaceChildren();
+  const filter = ($("#picker-filter").value || "").toLowerCase().trim();
+
+  const filtered = currentPickerState.allEntries.filter(entry =>
+    !filter || entry.name.toLowerCase().includes(filter)
+  );
+
+  if (!filtered.length) {
+    const empty = document.createElement("div");
+    empty.className = "picker-entry";
+    empty.style.color = "var(--muted)";
+    empty.textContent = "(No matching folders or files)";
+    container.append(empty);
+    return;
+  }
+
+  for (const entry of filtered) {
+    const row = document.createElement("div");
+    row.className = "picker-entry";
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    if ($("#picker-selected-path").value === entry.path) {
+      row.classList.add("selected");
+    }
+
+    const icon = document.createElement("span");
+    icon.className = "picker-entry-icon";
+    icon.textContent = entry.isDir ? "📁" : "📄";
+
+    const name = document.createElement("span");
+    name.className = "picker-entry-name";
+    name.textContent = entry.name;
+
+    row.append(icon, name);
+
+    row.onclick = () => {
+      $("#picker-selected-path").value = entry.path;
+      $("#picker-confirm").disabled = currentPickerState.mode === "file" && entry.isDir;
+      container.querySelectorAll(".picker-entry").forEach(el => el.classList.remove("selected"));
+      row.classList.add("selected");
+    };
+
+    row.ondblclick = () => {
+      if (entry.isDir) {
+        navigatePicker(entry.path).catch(error => notice(error.message));
+      } else {
+        if (currentPickerState.onSelect) {
+          currentPickerState.onSelect(entry.path);
+        }
+        $("#folder-picker-dialog").close();
+      }
+    };
+
+    row.onkeydown = event => {
+      if (event.key === "Enter") { event.preventDefault(); row.ondblclick(); }
+      if (event.key === " ") { event.preventDefault(); row.click(); }
+    };
+    container.append(row);
+  }
+}
+
+function openPicker(options) {
+  currentPickerState = {
+    mode: options.mode || "folder",
+    ext: options.ext || "",
+    current: "",
+    onSelect: options.onSelect,
+    allEntries: []
+  };
+
+  $("#picker-title").textContent = options.title || (options.mode === "file" ? "Select file" : "Select folder");
+  $("#picker-confirm").textContent = options.mode === "file" ? "Select this file" : "Select this folder";
+  $("#picker-filter").value = "";
+
+  const dialog = $("#folder-picker-dialog");
+  dialog.showModal();
+  navigatePicker(options.initialPath || "").catch(error => notice(error.message));
+}
 
 async function loadSettings() {
   const data = await (await api("/api/settings")).json();
-  $("#settings-fields").replaceChildren(...Object.entries(data.settings).map(([name, value]) => {
+  const currentH3 = data.settings.h3_models || {};
+  const installedH3 = data.h3_models_installed || {};
+  const entries = Object.entries(data.settings).filter(([k]) => k !== "h3_models");
+
+  const fields = entries.map(([name, value]) => {
     const tip = settingTooltips[name] || settingLabels[name] || name;
     const label = text("label", settingLabels[name] || name, "", tip);
     let input;
@@ -462,9 +663,72 @@ async function loadSettings() {
     input.dataset.tooltip = tip;
     input.title = tip;
     if (name === "vision_key_env") input.readOnly = true;
-    label.append(input);
+
+    if (folderSettings.has(name) || name in fileSettings) {
+      const group = document.createElement("div");
+      group.className = "path-input-group";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "browse-btn";
+      btn.textContent = "📁 Browse";
+      btn.dataset.tooltip = `Browse filesystem for ${settingLabels[name] || name}`;
+      btn.title = btn.dataset.tooltip;
+      const isFile = name in fileSettings;
+      btn.onclick = (e) => {
+        e.preventDefault();
+        openPicker({
+          title: isFile ? `Select file: ${settingLabels[name] || name}` : `Select folder: ${settingLabels[name] || name}`,
+          mode: isFile ? "file" : "folder",
+          ext: fileSettings[name] || "",
+          initialPath: input.value,
+          onSelect: (selectedPath) => {
+            input.value = selectedPath;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        });
+      };
+      group.append(input, btn);
+      label.append(group);
+    } else {
+      label.append(input);
+    }
     return label;
-  }));
+  });
+
+  const h3Keys = [
+    ["video_vae", "h3_video_vae"],
+    ["audio_vae", "h3_audio_vae"],
+    ["diffusion_model", "h3_diffusion_model"],
+    ["text_encoder", "h3_text_encoder"]
+  ];
+
+  for (const [key, fieldName] of h3Keys) {
+    const tip = settingTooltips[fieldName];
+    const label = text("label", settingLabels[fieldName] || fieldName, "", tip);
+    const installed = installedH3[key] || [];
+    const currentVal = currentH3[key] || "";
+    const select = document.createElement("select");
+    select.name = "h3_" + key;
+    select.dataset.initialValue = currentVal;
+    select.dataset.tooltip = tip;
+    select.title = tip;
+
+    const optionsList = Array.from(new Set([currentVal, ...installed].filter(Boolean)));
+    if (!currentVal) {
+      select.append(option("", "No supported loader in selected workflow"));
+      select.disabled = true;
+    } else {
+      for (const m of optionsList) {
+        const label = m === currentVal && !installed.includes(m) ? m + " (current; not detected)" : m;
+        select.append(option(m, label, `${settingLabels[fieldName]}: ${m}`));
+      }
+      select.value = currentVal;
+    }
+    label.append(select);
+    fields.push(label);
+  }
+
+  $("#settings-fields").replaceChildren(...fields);
   $("#key-status").textContent = Object.entries(data.keys).map(([name, set]) => `${name}: ${set ? "configured" : "not set"}`).join(" · ");
   return data.settings;
 }
@@ -526,6 +790,7 @@ async function poll() {
 
 async function initialize() {
   initTooltips();
+  setupOapGuide();
   catalog = await (await api("/api/catalog")).json();
   const version = await (await api("/api/version")).json();
   $("#version").textContent = version.version; $("#oap-version").textContent = catalog.oap_version;
@@ -670,19 +935,145 @@ async function initialize() {
   }
   $("#actor-form").onsubmit = handle(async event => { await api("/api/actors", {method: "POST", body: new FormData(event.target)}); event.target.reset(); await loadActors(); scheduleSave(); });
   $("#style-form").onsubmit = handle(async event => { await json("/api/styles", Object.fromEntries(new FormData(event.target))); event.target.reset(); await loadStyles(); scheduleSave(); });
+  function renderOapReportCard(report, allowUnsigned) {
+    const card = $("#oap-report-card");
+    if (!card) return;
+    const manifest = report.manifest || {}, verification = report.verification || {};
+    const identity = manifest.identity || {}, rider = manifest.rider || {};
+    const signed = Boolean(verification.signature_valid);
+    const valid = Boolean(verification.ok);
+    const header = text("div", "", "oap-report-header");
+    header.append(text("div", "Package: " + (identity.display_name || identity.actor_id || "Actor"), "oap-report-title"));
+    const badge = signed && valid
+      ? (verification.agent_known ? "Signature valid · known signer" : "Signature valid · signer not locally trusted")
+      : (valid && allowUnsigned ? "Unsigned package · explicitly allowed" : "Verification warning");
+    header.append(text("span", badge, "oap-badge-pill " + (signed && valid ? "badge-valid" : "badge-unsigned")));
+    const grid = text("div", "", "oap-report-grid");
+    const ratings = rider.content && typeof rider.content === "object"
+      ? Object.entries(rider.content).map(([key, value]) => `${key}: ${value}`).join(", ")
+      : "Not specified in package";
+    for (const [label, value] of [
+      ["Actor ID", identity.actor_id || "Not specified"],
+      ["Display name", identity.display_name || "Not specified"],
+      ["Signing public key", signed ? (manifest.agent?.public_key || "Not supplied") : "Unsigned"],
+      ["Visual identity", manifest.visual?.core_identity || "Not specified"],
+      ["Ratings ceiling", ratings],
+      ["Commercial rider", rider.commercial ? JSON.stringify(rider.commercial, null, 2) : "Not specified in package"]
+    ]) {
+      grid.append(text("div", label + ":", "oap-report-label"), text("div", String(value), "oap-report-value"));
+    }
+    card.replaceChildren(header, grid);
+    card.hidden = false;
+    if ($("#oap-raw-toggle-wrap")) $("#oap-raw-toggle-wrap").hidden = false;
+  }
+
+  function setupOapGuide() {
+    const dialog = $("#oap-helper-dialog");
+    if (!dialog) return;
+
+    $$(".oap-help-btn").forEach(btn => {
+      btn.onclick = () => {
+        dialog.showModal();
+      };
+    });
+
+    $$(".close-oap-dialog").forEach(btn => {
+      btn.onclick = () => {
+        dialog.close();
+      };
+    });
+
+    $$(".nav-to-actors-btn").forEach(btn => {
+      btn.onclick = () => {
+        const actorNav = document.querySelector('.nav[data-panel="actors"]');
+        if (actorNav) actorNav.click();
+        if (dialog.open) dialog.close();
+      };
+    });
+
+    $$(".oap-tab-btn").forEach(tabBtn => {
+      tabBtn.onclick = () => {
+        const tabId = tabBtn.dataset.tab;
+        $$(".oap-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
+        $$(".oap-tab-content").forEach(content => {
+          const matches = content.id === `tab-${tabId}`;
+          content.classList.toggle("active", matches);
+          content.hidden = !matches;
+        });
+      };
+    });
+
+    const toggleRaw = $("#toggle-raw-oap");
+    if (toggleRaw) {
+      toggleRaw.onclick = () => {
+        const pre = $("#oap-report");
+        pre.hidden = !pre.hidden;
+        toggleRaw.textContent = pre.hidden ? "Show raw manifest JSON" : "Hide raw manifest JSON";
+      };
+    }
+  }
+
   $("#inspect-oap").onclick = handle(async () => {
     const file = $("#oap-file").files[0]; if (!file) throw new Error("Choose an OAP package first");
+    $("#oap-import-form").hidden = true;
+    $("#oap-import-form").elements.accept_unknown.checked = false;
+    $("#oap-report-card").hidden = true;
+    $("#oap-raw-toggle-wrap").hidden = true;
+    $("#oap-report").hidden = true;
+    $("#toggle-raw-oap").textContent = "Show raw manifest JSON";
     currentOap = await upload(file, "oap");
-    const report = await (await api(`/api/oap/inspect/${currentOap}?allow_unsigned=${$("#allow-unsigned").checked}`)).json();
-    $("#oap-report").textContent = JSON.stringify(report, null, 2); $("#oap-report").hidden = false; $("#oap-import-form").hidden = false;
+    const allowUnsigned = $("#allow-unsigned").checked;
+    const report = await (await api(`/api/oap/inspect/${currentOap}?allow_unsigned=${allowUnsigned}`)).json();
+    $("#oap-report").textContent = JSON.stringify(report, null, 2);
+    renderOapReportCard(report, allowUnsigned);
+    $("#oap-import-form").hidden = false;
   });
   $("#oap-import-form").onsubmit = handle(async event => {
-    const body = new FormData(event.target); body.set("filename", currentOap); body.set("allow_unsigned", String($("#allow-unsigned").checked)); body.set("accept_unknown", String(event.target.elements.accept_unknown.checked));
-    await api("/api/oap/import", {method: "POST", body}); event.target.hidden = true; $("#oap-report").hidden = true; await loadActors();
+    const body = new FormData(event.target);
+    body.set("filename", currentOap);
+    body.set("allow_unsigned", String($("#allow-unsigned").checked));
+    body.set("accept_unknown", String(event.target.elements.accept_unknown.checked));
+    await api("/api/oap/import", {method: "POST", body});
+    event.target.hidden = true;
+    $("#oap-report").hidden = true;
+    if ($("#oap-report-card")) $("#oap-report-card").hidden = true;
+    if ($("#oap-raw-toggle-wrap")) $("#oap-raw-toggle-wrap").hidden = true;
+    notice("Actor successfully imported into your studio cast library.");
+    await loadActors();
   });
-  $("#settings-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.vision_call_estimate = Number(body.vision_call_estimate); body.writer_call_estimate = Number(body.writer_call_estimate); await json("/api/settings", body, "PUT"); notice("Settings saved."); });
+  $("#settings-form").onsubmit = handle(async event => {
+    const raw = Object.fromEntries(new FormData(event.target));
+    const h3_models = {};
+    for (const key of ["video_vae", "audio_vae", "diffusion_model", "text_encoder"]) {
+      const field = event.target.elements["h3_" + key];
+      const value = raw["h3_" + key];
+      if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
+      delete raw["h3_" + key];
+    }
+    raw.vision_call_estimate = Number(raw.vision_call_estimate);
+    raw.writer_call_estimate = Number(raw.writer_call_estimate);
+    if (Object.keys(h3_models).length) raw.h3_models = h3_models;
+    await json("/api/settings", raw, "PUT");
+    await loadSettings();
+    notice("Settings saved.");
+  });
   $("#key-form").onsubmit = handle(async event => { await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT"); event.target.elements.value.value = ""; await loadSettings(); notice("Key saved locally. The settings API does not return it."); });
   $("#upscale-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.scale = Number(body.scale); await json("/api/upscale", {...body, source: upscaleSource}); $("#upscale-dialog").close(); });
+
+  const pickerFilter = $("#picker-filter");
+  if (pickerFilter) pickerFilter.oninput = () => renderPickerEntries();
+  const pickerCancel = $("#picker-cancel");
+  if (pickerCancel) pickerCancel.onclick = () => $("#folder-picker-dialog").close();
+  const pickerConfirm = $("#picker-confirm");
+  if (pickerConfirm) {
+    pickerConfirm.onclick = () => {
+      const selected = $("#picker-selected-path").value;
+      if (selected && currentPickerState.onSelect) {
+        currentPickerState.onSelect(selected);
+      }
+      $("#folder-picker-dialog").close();
+    };
+  }
 
   await restoreProject();
   poll();

@@ -19,9 +19,71 @@ FIXTURES=Path(__file__).parent/'fixtures'
 class OriginalEngineTests(unittest.TestCase):
     def test_original_golden_plan(self):
         score=ScoreMap.from_json(FIXTURES/'score.json')
-        actual=plan(score,width=1024,height=576,vocab=json.loads((ROOT/'mmv/engine/config/vocab.json').read_text()),
+        actual=plan(score,width=1024,height=576,vocab=json.loads((FIXTURES/'vocab-legacy.json').read_text(encoding='utf-8')),
                     seed=17,cast_size=3,ref_policy='all',bars_per_phrase=2,backend=get_backend('local_h3'))
         self.assertEqual(asdict(actual),json.loads((FIXTURES/'plan.json').read_text()))
+
+    def test_expanded_vocabulary_golden_plan(self):
+        score = ScoreMap.from_json(FIXTURES / 'score.json')
+        vocab = json.loads((ROOT / 'mmv/engine/config/vocab.json').read_text(encoding='utf-8'))
+        actual = plan(score, width=1024, height=576, vocab=vocab, seed=17, cast_size=3,
+                      ref_policy='all', bars_per_phrase=2, backend=get_backend('local_h3'))
+        self.assertEqual(asdict(actual), json.loads((FIXTURES / 'plan-expanded.json').read_text(encoding='utf-8')))
+
+    def test_expanded_vocabulary_preserves_timing_and_casting(self):
+        from mmv.engine.casting import assign
+        legacy = json.loads((FIXTURES / 'vocab-legacy.json').read_text(encoding='utf-8'))
+        expanded = json.loads((ROOT / 'mmv/engine/config/vocab.json').read_text(encoding='utf-8'))
+        roster = [{'actor_id': f'actor_{index}', 'display_name': f'Actor {index}',
+                   'sheet': f'actor_{index}.png', 'sheet_path': f'/temporary/actor_{index}.png'} for index in range(3)]
+        def structure(p):
+            data = asdict(p)
+            for segment in data['segments']:
+                for key in ('thematic_anchor', 'footage_anchor', 'practical_effects'):
+                    segment.pop(key)
+                for shot in segment['shots']:
+                    for key in ('camera', 'shot_scale', 'vocab'):
+                        shot.pop(key)
+            return data
+        for backend in ('local_h3', 'wavespeed', 'seedance_2', 'seedance_2_5'):
+            for seed in (0, 1, 17):
+                with self.subTest(backend=backend, seed=seed):
+                    plans = [plan(ScoreMap.from_json(FIXTURES / 'score.json'), width=1024, height=576,
+                                  vocab=vocab, seed=seed, cast_size=3, ref_policy='all',
+                                  bars_per_phrase=2, backend=get_backend(backend)) for vocab in (legacy, expanded)]
+                    self.assertEqual(structure(plans[0]), structure(plans[1]))
+                    for policy in ('random', 'rotate', 'section'):
+                        casts = [assign(p, roster, policy=policy, seed=seed, ref_policy='all') for p in plans]
+                        self.assertEqual(casts[0], casts[1])
+
+    def test_expanded_rotation_pools_are_sfw_unique_and_traceable(self):
+        from mmv.engine.plan import VocabSampler
+        import re
+        path = ROOT / 'mmv/engine/config/vocab.json'
+        vocab = json.loads(path.read_text(encoding='utf-8'))
+        legacy = json.loads((FIXTURES / 'vocab-legacy.json').read_text(encoding='utf-8'))
+        manifest = json.loads((ROOT / 'docs/SOURCE_EXTRACTION.json').read_text(encoding='utf-8'))
+        record = next(entry for entry in manifest if entry['public'] == 'mmv/engine/config/vocab.json')
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), record['published_sha256'])
+        self.assertEqual(vocab['camera_by_energy'], legacy['camera_by_energy'])
+        self.assertEqual(vocab['shot_scales'], legacy['shot_scales'])
+        self.assertEqual(vocab['rigging'], legacy['rigging'])
+        sampler = VocabSampler(vocab, seed=17)
+        for table, minimum in [('settings', 250), ('subject_types', 200), ('mechanisms', 250),
+                               ('costume', 30), ('tonal_registers', 180), ('lighting', 220),
+                               ('footage_anchors', 65), ('practical_effects', 100)]:
+            with self.subTest(table=table):
+                pool = vocab[table]
+                self.assertGreaterEqual(len(pool), minimum)
+                self.assertEqual(len(pool), len(set(pool)))
+                self.assertEqual(len(pool), record['counts'][table]['published'])
+                for _ in range(2):
+                    draws = [sampler.pick(table) for _ in pool]
+                    self.assertEqual(set(draws), set(pool))
+                    self.assertEqual(len(draws), len(set(draws)))
+                for value in pool:
+                    self.assertIsNone(re.search(r'\b(nude|naked|erotic|pornographic|bawdy|translucent)\b', value, re.I), value)
+        self.assertFalse({'gasping', 'panting', 'yawning', 'sighing'}.intersection(vocab['mechanisms']))
 
     def test_unchanged_original_source_hashes(self):
         manifest=json.loads((ROOT/'docs/SOURCE_EXTRACTION.json').read_text())
@@ -31,7 +93,7 @@ class OriginalEngineTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256((ROOT/entry['public']).read_bytes()).hexdigest(),entry['sha256'],entry['public'])
 
     def test_hosted_phrase_shrinks_on_original_musical_edges(self):
-        vocab=json.loads((ROOT/'mmv/engine/config/vocab.json').read_text())
+        vocab=json.loads((ROOT/'mmv/engine/config/vocab.json').read_text(encoding='utf-8'))
         for name in ('local_h3','wavespeed','seedance_2','seedance_2_5'):
             score=ScoreMap.from_json(FIXTURES/'score.json');backend=get_backend(name)
             result=plan(score,width=1024,height=576,vocab=vocab,seed=17,cast_size=1,ref_policy='all',backend=backend)
@@ -57,7 +119,7 @@ class OriginalEngineTests(unittest.TestCase):
         graph=json.loads(workflows[0].read_text())
         self.assertFalse(any('lora' in n.get('class_type','').lower() for n in graph.values()))
         for file in ('webapp/index.html','webapp/mondo_web.py'):
-            self.assertNotIn('nsfw_local',(ROOT/file).read_text())
+            self.assertNotIn('nsfw_local',(ROOT/file).read_text(encoding='utf-8'))
 
     def test_python_311_syntax(self):
         for directory in ('mmv','webapp'):

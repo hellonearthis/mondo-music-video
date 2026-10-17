@@ -98,6 +98,8 @@ class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(self.video)))
             self.end_headers()
             self.wfile.write(self.video)
+        elif self.path.startswith("/object_info/"):
+            self.reply(self.server.object_info.get(self.path.rsplit('/', 1)[-1], {}))
         elif self.path.startswith("/history/"):
             self.reply({} if self.hold else {"local-test": {"status": {"status_str": "success"},
                         "outputs": {"2": {"videos": [{"filename": self.server.last_filename, "subfolder": "", "type": "output"}]}}}})
@@ -163,6 +165,7 @@ class PublicAppTests(unittest.TestCase):
             self.worker_patch.start()
         self.client.put("/api/settings", json=settings).raise_for_status()
         reset_v2(self.server)
+        self.server.object_info = {}
         MockService.requests = []
         MockService.hold = False
         MockService.invalid_writer = False
@@ -366,9 +369,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.0.11")
+        self.assertEqual(api_version()["version"], "1.0.13")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.0.11", (root / "README.md").read_text())
+        self.assertIn("1.0.13", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_project_persistence_api(self):
@@ -716,9 +719,158 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/quote", json={"content": {"nudity": "invented"}}).status_code, 422)
         self.assertEqual(self.client.post("/api/quote", json={"kind": "film"}).status_code, 422)
 
+    def install_test_h3_models(self):
+        for category, name in [('vae', 'test_video_vae.safetensors'),
+                               ('diffusion_models', 'test_diffusion.safetensors')]:
+            folder = self.home / 'models' / category
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_text('test fixture; not real weights')
+
+    def custom_h3_workflow(self):
+        from mmv.pipeline import ENGINE
+        graph = read_json(ENGINE / 'workflows/h3_ref2video_audionodeadded.json')
+        graph['127']['inputs']['unet_name'] = 'my-current-model.safetensors'
+        graph['127']['inputs']['weight_dtype'] = 'operator-precision'
+        graph['custom-node'] = {'class_type': 'OperatorCustomNode', 'inputs': {'note': 'preserve me'}}
+        # Loader IDs are not required to match the bundled graph.
+        graph['527'] = graph.pop('127')
+        for node in graph.values():
+            for key, value in node['inputs'].items():
+                if isinstance(value, list) and value and value[0] == '127':
+                    node['inputs'][key] = ['527', *value[1:]]
+        path = self.home / 'operator-graph.json'
+        write_json(path, graph)
+        mapping = read_json(ENGINE / 'config/injection_map.json')
+        mapping.update(workflow=str(path), operator_note='preserve bindings too')
+        map_path = self.home / 'operator-map.json'
+        write_json(map_path, mapping)
+        return graph, mapping, map_path
+
+    def test_model_change_preserves_active_custom_graph_and_map(self):
+        self.install_test_h3_models()
+        graph, mapping, map_path = self.custom_h3_workflow()
+        settings = self.store.settings()
+        settings['workflow_map_path'] = str(map_path)
+        self.client.put('/api/settings', json=settings).raise_for_status()
+        response = self.client.get('/api/settings').json()
+        self.assertEqual(response['settings']['h3_models']['diffusion_model'], 'my-current-model.safetensors')
+        # A normal settings save must retain the selected map and model.
+        self.client.put('/api/settings', json=response['settings']).raise_for_status()
+        self.assertEqual(self.store.settings()['workflow_map_path'], str(map_path))
+        settings = response['settings']
+        settings['h3_models'] = {'diffusion_model': 'test_diffusion.safetensors'}
+        self.client.put('/api/settings', json=settings).raise_for_status()
+        saved_map = read_json(Path(self.store.settings()['workflow_map_path']))
+        saved_graph = read_json(Path(saved_map['workflow']))
+        expected = json.loads(json.dumps(graph))
+        expected['527']['inputs']['unet_name'] = 'test_diffusion.safetensors'
+        self.assertEqual(saved_graph, expected)
+        self.assertEqual({**saved_map, 'workflow': mapping['workflow']}, mapping)
+        # Keep the operator-owned sources intact, including precision and added nodes.
+        self.assertEqual(read_json(Path(mapping['workflow'])), graph)
+        self.assertEqual(read_json(map_path), mapping)
+
+    def test_ambiguous_model_loaders_are_not_silently_selected(self):
+        self.install_test_h3_models()
+        graph, mapping, map_path = self.custom_h3_workflow()
+        graph['another-loader'] = {'class_type': 'UNETLoader', 'inputs': {'unet_name': 'second-model.safetensors'}}
+        write_json(Path(mapping['workflow']), graph)
+        settings = {**self.store.settings(), 'workflow_map_path': str(map_path)}
+        self.client.put('/api/settings', json=settings).raise_for_status()
+        self.assertNotIn('diffusion_model', self.client.get('/api/settings').json()['settings']['h3_models'])
+        settings['h3_models'] = {'diffusion_model': 'test_diffusion.safetensors'}
+        response = self.client.put('/api/settings', json=settings)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('unambiguous', response.json()['detail'])
+        self.assertEqual(read_json(Path(mapping['workflow'])), graph)
+
+    def test_new_workflow_path_is_not_overridden_on_save(self):
+        _, _, map_path = self.custom_h3_workflow()
+        settings = self.client.get('/api/settings').json()['settings']
+        settings.pop('h3_models')  # Browser submits only explicit model changes.
+        settings['workflow_map_path'] = str(map_path)
+        self.client.put('/api/settings', json=settings).raise_for_status()
+        self.assertEqual(self.store.settings()['workflow_map_path'], str(map_path))
+
+    def test_model_discovery_falls_back_per_category(self):
+        self.install_test_h3_models()
+        self.server.object_info = {'VAELoader': {'VAELoader': {'input': {'required': {
+            'vae_name': [['live-video-vae.safetensors']]}}}}}
+        info = self.client.get('/api/settings').json()['h3_models_installed']
+        self.assertEqual(info['video_vae'], ['live-video-vae.safetensors'])
+        self.assertIn('test_diffusion.safetensors', info['diffusion_model'])
+
+    def test_unavailable_or_unsafe_model_selections_do_not_change_settings(self):
+        before = self.store.settings()
+        for models, status in [({'diffusion_model': 'not-installed.safetensors'}, 400),
+                               ({'diffusion_model': '../private.safetensors'}, 422),
+                               ({'unknown_role': 'test.safetensors'}, 422)]:
+            request = {**before, 'h3_models': models}
+            self.assertEqual(self.client.put('/api/settings', json=request).status_code, status)
+            self.assertEqual(self.store.settings(), before)
+
+    def test_h3_model_settings_roundtrip(self):
+        self.install_test_h3_models()
+        res = self.client.get("/api/settings")
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertIn("settings", body)
+        self.assertIn("h3_models", body["settings"])
+        self.assertIn("h3_models_installed", body)
+        self.assertIn("video_vae", body["settings"]["h3_models"])
+        self.assertIn("diffusion_model", body["settings"]["h3_models"])
+
+        settings = self.store.settings()
+        settings["h3_models"] = {
+            "video_vae": "test_video_vae.safetensors",
+            "diffusion_model": "test_diffusion.safetensors",
+        }
+        self.client.put("/api/settings", json=settings).raise_for_status()
+
+        updated = self.client.get("/api/settings").json()
+        self.assertEqual(updated["settings"]["h3_models"]["video_vae"], "test_video_vae.safetensors")
+        self.assertEqual(updated["settings"]["h3_models"]["diffusion_model"], "test_diffusion.safetensors")
+
+    def test_browse_fs(self):
+        res = self.client.get("/api/fs/browse")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("current", data)
+        self.assertIn("drives", data)
+        self.assertIn("folders", data)
+
+        sub = self.home / "subfolder_test"
+        sub.mkdir()
+        file_path = sub / "test.json"
+        file_path.write_text("{}")
+
+        res_folder = self.client.get(f"/api/fs/browse?path={self.home}&mode=folder")
+        self.assertEqual(res_folder.status_code, 200)
+        folder_names = [f["name"] for f in res_folder.json()["folders"]]
+        self.assertIn("subfolder_test", folder_names)
+
+        res_file = self.client.get(f"/api/fs/browse?path={sub}&mode=file&ext=.json")
+        self.assertEqual(res_file.status_code, 200)
+        file_names = [f["name"] for f in res_file.json()["files"]]
+        self.assertIn("test.json", file_names)
 
 
 class UtilityTests(unittest.TestCase):
+
+    def test_windows_json_read_retries_only_permission_errors(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        path = Mock()
+        path.exists.return_value = True
+        path.read_text.side_effect = [PermissionError('transient lock'), '{"ok": true}']
+        with patch('mmv.storage.os', SimpleNamespace(name='nt')), patch('mmv.storage.time.sleep'):
+            self.assertEqual(read_json(path), {'ok': True})
+        self.assertEqual(path.read_text.call_count, 2)
+        path.read_text.side_effect = PermissionError('not transient on POSIX')
+        with patch('mmv.storage.os', SimpleNamespace(name='posix')):
+            with self.assertRaises(PermissionError):
+                read_json(path)
+
 
     def test_single_session_and_interrupted_recovery(self):
         with tempfile.TemporaryDirectory() as temp:

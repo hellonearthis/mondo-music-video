@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import secrets
 import time
 import uuid
@@ -23,8 +24,109 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.11"
+MGL_APP_VERSION = "1.0.13"
 WEB = Path(__file__).parent
+
+
+H3_MODEL_ROLES = {
+    'video_vae': ('VAELoader', 'vae_name', 'vae'),
+    'audio_vae': ('VAELoader', 'vae_name', 'vae'),
+    'diffusion_model': ('UNETLoader', 'unet_name', 'diffusion_models'),
+    'text_encoder': ('CLIPLoader', 'clip_name', 'text_encoders'),
+}
+
+
+def _h3_workflow(settings):
+    from mmv.engine.comfy import WorkflowBuilder
+    engine = Path(__file__).parent.parent / 'mmv/engine'
+    return WorkflowBuilder.load(settings['workflow_map_path'], engine)
+
+
+def _h3_model_nodes(graph):
+    if not isinstance(graph, dict) or any(not isinstance(node, dict) for node in graph.values()):
+        raise ValueError('The selected file is not a workflow graph')
+    nodes = {}
+    for role, (loader, field, _) in H3_MODEL_ROLES.items():
+        matches = [key for key, node in graph.items() if node.get('class_type') == loader]
+        selected = None
+        if role in ('video_vae', 'audio_vae'):
+            decoder = 'VAEDecode' if role == 'video_vae' else 'VAEDecodeAudio'
+            connected = {node.get('inputs', {}).get('vae', [''])[0] for node in graph.values()
+                         if node.get('class_type') == decoder
+                         and isinstance(node.get('inputs', {}).get('vae'), list)
+                         and node['inputs']['vae']}
+            valid = connected.intersection(matches)
+            if len(valid) == 1:
+                selected = valid.pop()
+        if selected is None and len(matches) == 1:
+            selected = matches[0]
+        if selected is not None and isinstance(graph[selected].get('inputs', {}).get(field), str):
+            nodes[role] = selected
+    return nodes
+
+
+def _get_h3_model_info(store, settings=None):
+    import urllib.request
+    settings = settings or store.settings()
+    current = {}
+    try:
+        graph = _h3_workflow(settings).base
+        for role, node in _h3_model_nodes(graph).items():
+            current[role] = graph[node]['inputs'][H3_MODEL_ROLES[role][1]]
+    except (OSError, ValueError, KeyError, TypeError):
+        # Settings must remain editable when the selected workflow needs repair.
+        pass
+    installed = {role: [] for role in H3_MODEL_ROLES}
+    comfy_url = settings.get('comfy_url', '').rstrip('/')
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    discovered = {}
+    for loader, field, _ in H3_MODEL_ROLES.values():
+        if loader in discovered or not comfy_url:
+            continue
+        try:
+            with opener.open(f'{comfy_url}/object_info/{loader}', timeout=.25) as response:
+                data = json.load(response)
+            choices = data[loader]['input']['required'][field][0]
+            discovered[loader] = [name for name in choices if isinstance(name, str)] if isinstance(choices, list) else []
+        except (OSError, ValueError, KeyError, TypeError):
+            discovered[loader] = []
+    comfy_input = settings.get('comfy_input')
+    for role, (loader, _, category) in H3_MODEL_ROLES.items():
+        installed[role] = discovered.get(loader, [])
+        if not installed[role] and comfy_input:
+            folder = Path(comfy_input).expanduser().parent / 'models' / category
+            try:
+                installed[role] = sorted(p.relative_to(folder).as_posix() for p in folder.rglob('*.safetensors') if p.is_file())
+            except OSError:
+                pass
+    return {'current': current, 'installed': installed}
+
+
+def _update_h3_models(store, settings, models):
+    """Derive a private workflow snapshot; never overwrite the source graph/map."""
+    builder = _h3_workflow(settings)
+    nodes = _h3_model_nodes(builder.base)
+    info = _get_h3_model_info(store, settings)
+    changed = False
+    for role, name in models.items():
+        if role not in nodes:
+            raise ValueError(f'The selected workflow has no unambiguous {role} loader')
+        field = H3_MODEL_ROLES[role][1]
+        previous = builder.base[nodes[role]]['inputs'][field]
+        if name == previous:
+            continue
+        if name not in info['installed'][role]:
+            raise ValueError(f'{role}: choose a model reported installed by ComfyUI or its model folder')
+        builder.base[nodes[role]]['inputs'][field] = name
+        changed = True
+    if changed:
+        directory = store.home / 'config'
+        name = 'h3-selected-' + uuid.uuid4().hex
+        graph_path = directory / (name + '.json')
+        map_path = directory / (name + '-map.json')
+        write_json(graph_path, builder.base)
+        write_json(map_path, {**builder.map, 'workflow': str(graph_path)})
+        settings['workflow_map_path'] = str(map_path)
 
 
 def log_studio(store, message: str, level: str = "INFO"):
@@ -114,6 +216,16 @@ class Settings(StrictModel):
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
     topaz_models: str = ""
+    h3_models: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("h3_models")
+    @classmethod
+    def valid_h3_models(cls, models):
+        if any(key not in H3_MODEL_ROLES or not value or len(value) > 512
+               or value.startswith(('/', '\\')) or ':' in value
+               or '..' in value.replace('\\', '/').split('/') for key, value in models.items()):
+            raise ValueError('Use known H3 model roles and relative installed model names')
+        return models
 
     @field_validator("comfy_sdk_url")
     @classmethod
@@ -274,15 +386,76 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.get("/api/settings")
     def get_settings():
-        return {"settings": store.settings(), "keys": {name: bool(store.key(name)) for name in
+        s = store.settings()
+        info = _get_h3_model_info(store)
+        s["h3_models"] = info["current"]
+        return {"settings": s, "h3_models_installed": info["installed"],
+                "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
 
     @app.put("/api/settings")
     def settings(value: Settings):
         with jobs.lock:
             jobs.require_idle()
-            write_json(store.home / "settings.json", value.model_dump())
+            dump = value.model_dump()
+            h3_models = dump.pop("h3_models", None)
+            if h3_models:
+                _update_h3_models(store, dump, h3_models)
+            write_json(store.home / "settings.json", dump)
         return {"ok": True}
+
+    @app.get("/api/fs/browse")
+    def browse_fs(path: str = "", mode: Literal["folder", "file"] = "folder", ext: str = ""):
+        import string
+        drives = []
+        if os.name == "nt":
+            drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+        else:
+            drives = ["/"]
+
+        home = Path.home()
+        target = None
+        if path:
+            try:
+                candidate = Path(path).expanduser().resolve()
+                if candidate.is_file():
+                    target = candidate.parent
+                elif candidate.is_dir():
+                    target = candidate
+                elif candidate.parent.is_dir():
+                    target = candidate.parent
+            except Exception:
+                target = None
+
+        if not target or not target.is_dir():
+            target = home
+
+        folders = []
+        files = []
+        allowed_exts = [e.strip().lower() for e in ext.split(",") if e.strip()]
+        try:
+            for item in sorted(target.iterdir(), key=lambda x: x.name.lower()):
+                try:
+                    if item.name.startswith((".", "$")) or item.name in ("System Volume Information", "Recovery"):
+                        continue
+                    if item.is_dir():
+                        folders.append({"name": item.name, "path": str(item)})
+                    elif mode == "file" and item.is_file():
+                        if not allowed_exts or item.suffix.lower() in allowed_exts:
+                            files.append({"name": item.name, "path": str(item)})
+                except (PermissionError, OSError):
+                    continue
+        except (PermissionError, OSError):
+            pass
+
+        return {
+            "current": str(target),
+            "parent": str(target.parent) if target.parent != target else None,
+            "drives": drives,
+            "home": str(home),
+            "folders": folders,
+            "files": files,
+        }
 
     @app.put("/api/key")
     def key(value: KeyRequest):

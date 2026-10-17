@@ -1,5 +1,35 @@
 # Releases
 
+## 1.0.13 — Expanded SFW vocabulary and contributor thanks
+
+Imports the owner-authorized vocabulary data into the public music-video pool,
+with suggestive entries and incompatible mouth actions removed. Includes 269
+settings, 233 subjects, 256 mechanisms, 227 lighting choices, 185 tones, 111
+practical effects, 70 footage anchors and 31 costumes. Deduplicates tonal entries
+and retains the existing camera bands, shot scales and mouth-rigging contract.
+No private studio code, models, actors or runtime imports are added. The source
+extraction manifest records authorization, source/published hashes and counts.
+
+The original sampler, planner and casting code remain unchanged. The historical
+golden plan is preserved with a frozen legacy vocabulary fixture, alongside a
+new expanded-vocabulary golden plan. Cross-backend/seed checks verify unchanged
+timing and actor assignments. Adds a README thank-you to hellonearthis.
+
+## 1.0.12 — Reviewed model controls and setup guidance
+
+Integrates selected improvements from hellonearthis through `c1db1c6`: installed
+H3 model dropdowns, local path browsing, OAP help/inspection cards, Windows JSON
+read lock retries, and four-worker testing with pytest-xdist.
+
+Model changes now derive private copies of the active workflow and injection map,
+preserving custom nodes, loader IDs and precision settings. Unchanged selections
+do not override a newly chosen workflow. Ambiguous loaders and unavailable models
+are rejected. OAP summaries use the upstream display name, signing public key,
+content ratings and actual commercial rider without inferring permission.
+
+The original model defaults, workflow, vocabulary and golden plan remain intact.
+The expanded vocabulary and its direction guide are excluded from this delivery.
+
 ## 1.0.11 — Official Comfy SDK H3 rendering
 
 Adds an opt-in `comfy_sdk_h3` renderer using the official Python SDK and a

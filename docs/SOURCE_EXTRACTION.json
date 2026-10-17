@@ -203,5 +203,78 @@
       "wait_http"
     ],
     "adaptation": "original HTTP/start/stop/cleanup helpers; Windows process handling and ownership-only configurable service launch; no studio preemption"
+  },
+  {
+    "source": "mondo/config/vocab.json",
+    "public": "mmv/engine/config/vocab.json",
+    "sha256": "1032c9581e20b5db3f6c05b38b589b3792a8b5d171ba41d4f9b23c0228cdbaa3",
+    "published_sha256": "123bc6049d8e4d0e2fc3cebe9269ff2a62b95b78675c61d6f0a4a856f424c55d",
+    "authorization": "Owner explicitly supplied the vocabulary data file for an SFW public expansion on 2026-10-17. No other private files or runtime imports authorized.",
+    "adaptation": "Expanded SFW tables copied from owner-supplied data only; suggestive footage/wardrobe/tone/action entries and mouth-opening actions excluded; duplicate tonal entries removed; existing public rigging retained; camera bands and shot scales unchanged.",
+    "counts": {
+      "camera_by_energy": {
+        "source": 22,
+        "published": 22
+      },
+      "shot_scales": {
+        "source": 20,
+        "published": 20,
+        "excluded": 0,
+        "duplicates_removed": 0
+      },
+      "settings": {
+        "source": 269,
+        "published": 269,
+        "excluded": 0,
+        "duplicates_removed": 0
+      },
+      "subject_types": {
+        "source": 233,
+        "published": 233,
+        "excluded": 0,
+        "duplicates_removed": 0
+      },
+      "mechanisms": {
+        "source": 264,
+        "published": 256,
+        "excluded": 8,
+        "duplicates_removed": 0
+      },
+      "costume": {
+        "source": 33,
+        "published": 31,
+        "excluded": 2,
+        "duplicates_removed": 0
+      },
+      "tonal_registers": {
+        "source": 188,
+        "published": 185,
+        "excluded": 1,
+        "duplicates_removed": 2
+      },
+      "lighting": {
+        "source": 227,
+        "published": 227,
+        "excluded": 0,
+        "duplicates_removed": 0
+      },
+      "footage_anchors": {
+        "source": 72,
+        "published": 70,
+        "excluded": 2,
+        "duplicates_removed": 0
+      },
+      "practical_effects": {
+        "source": 111,
+        "published": 111,
+        "excluded": 0,
+        "duplicates_removed": 0
+      },
+      "rigging": {
+        "source": 8,
+        "published": 1,
+        "policy": "retain existing public mouth-rigging contract"
+      }
+    }
   }
 ]

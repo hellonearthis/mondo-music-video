@@ -1,9 +1,13 @@
-# Verification — 1.0.11
+# Verification — 1.0.13
 
 Run from a checkout:
 
 ```sh
 python -m pip install '.[comfy,mcp,test]'
+python -m pytest -q
+# Optional serial execution:
+python -m pytest -q -n 0
+# The existing unittest runner also remains supported:
 python -m unittest discover -s tests -v
 node --check webapp/app.js
 bash -n install.sh
@@ -20,6 +24,53 @@ hosted consent and request receipts; failed-writer render prevention; cancellati
 of the app's own local job; single-operation enforcement; agent CLI and real MCP
 transports; credentials; local HTTP boundaries; downloader integrity; and Topaz
 command construction with preservation of the source video.
+
+## 1.0.13 expanded vocabulary
+
+All **68 tests passed**, plus 28 subtests, in **25.29 seconds** with four
+workers. Both Chromium flows ran, and live temporary agent/browser test servers
+reported 1.0.13. Fresh version imports, Python compilation, JavaScript/shell
+syntax and whitespace checks passed. No user service was restarted.
+
+The supplied vocabulary data is copied as an owner-authorized SFW subset,
+recorded in SOURCE_EXTRACTION.json with original/published hashes and table
+counts. Tests rotate every expanded table through two complete cycles without
+repeated draws, check duplicates and obvious NSFW terms, retain fixed camera
+and rigging contracts, and verify the recorded published hash.
+
+The historical golden plan remains unchanged and uses a frozen legacy
+vocabulary fixture. A separate golden plan covers the expanded default. Tests
+compare structural timing, frame counts, cuts, reference slots and all three
+casting policies across four backends and three seeds. These checks preserve
+original engine parity while making the deliberate visual vocabulary change
+explicit. The full pipeline tests use the expanded default, not a test-only
+vocabulary override. No automated test reads the private source file or uses
+real models or paid/GPU generation.
+
+## Historical 1.0.12 reviewed integration
+
+All **65 tests passed**, plus eight subtests, in **23.74 seconds** using four
+workers on the Linux development environment. Both cached Chromium tests ran.
+JavaScript/shell syntax, Python compilation and whitespace checks passed, and a
+1.0.12 wheel built successfully. Fresh version imports and the live temporary
+agent/browser test app reported 1.0.12. The original bundled workflow, vocabulary
+and golden plan were also checked byte for byte against the published baseline.
+User services were not restarted; no real model switching or GPU work was run.
+
+The default pytest configuration uses four workers. During fork review, the same
+58 tests passed in 68.86 seconds with unittest and 23.18 seconds with four-worker
+pytest on this Linux environment. Timing depends on hardware and installed test
+extras; use `-n 0` when serial execution is preferred.
+
+Regression coverage checks active custom workflow/model preservation, immutable
+source graphs and maps, custom loader IDs, precision preservation, newly selected
+map paths, discovery fallback per model category, rejection of unavailable and
+ambiguous models, and bounded Windows permission-error retries. Cached Chromium
+checks installed model dropdowns, file/folder browsing, OAP guide tabs, actual
+signed package metadata, escaped display text, explicit signer trust and mobile
+layout. Existing SDK recovery, assembly, agent/MCP, OAP and golden-plan checks
+remain in the suite. All media/services are synthetic; no paid/GPU/Topaz work is
+performed by these tests.
 
 ## 1.0.11 Comfy SDK verification
 

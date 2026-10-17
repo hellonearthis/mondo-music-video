@@ -46,7 +46,16 @@ def write_json(path: Path, value, *, private=False):
 
 
 def read_json(path: Path, default=None):
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+    if not path.exists():
+        return default
+    for attempt in range(10):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except PermissionError:
+            if attempt == 9 or os.name != "nt":
+                raise
+            time.sleep(0.02)
+    return default
 
 
 def identifier(value: str) -> str:
