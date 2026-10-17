@@ -102,6 +102,69 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_song_preview_setup_guide_and_status_fallback(self):
+        import json
+        import threading
+        from playwright.sync_api import sync_playwright, expect
+        from mmv.storage import write_json
+        settings = self.fixture.store.settings()
+        command = json.dumps(['my-writer', '-m', "my-model's.gguf", '-c', '8192'])
+        settings['writer_launch'] = command
+        write_json(self.home / 'settings.json', settings)
+        with sync_playwright() as p:
+            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            done = threading.Event()
+            try:
+                page.goto(self.url)
+                expect(page.locator('#version')).to_have_text('1.1.2')
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(page.locator('.song-preview-wrap')).to_be_visible()
+                expect(page.locator('.song-preview')).to_have_attribute('src', __import__('re').compile(r'^blob:'))
+                expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded:')
+                page.wait_for_function('() => document.querySelector(".song-preview").readyState >= 1')
+                page.evaluate('() => saveProject()')
+                saved = self.fixture.client.get('/api/project').json()
+                assert saved.get('files', {}).get('video-form', {}).get('song'), saved
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                expect(page.locator('.song-preview')).to_have_attribute('src', __import__('re').compile(r'^/api/uploads/song/'))
+                page.locator('.nav[data-panel=settings]').click()
+                expect(page.locator('select[name=laya_device]')).to_have_value('cuda')
+                page.locator('#panel-settings > .panel-header-row .llama-help-btn').click()
+                expect(page.locator('#llama-helper-dialog')).to_be_visible()
+                expect(page.locator('#llama-current-json')).to_have_text(command)
+                page.locator('#writer-tuning-preset').select_option('hellonearthis')
+                preview = json.loads(page.locator('#llama-current-json').inner_text())
+                self.assertEqual(preview[preview.index('-m') + 1], "my-model's.gguf")
+                self.assertEqual(preview[preview.index('-c') + 1], '16384')
+                self.assertNotIn('--image-min-tokens', preview)
+                expect(page.locator('input[name=writer_launch]')).to_have_value(command)
+                page.locator('#apply-writer-tuning').click()
+                self.assertEqual(json.loads(page.locator('input[name=writer_launch]').input_value()), preview)
+                self.assertEqual(self.fixture.store.settings()['writer_launch'], command)
+                page.wait_for_function('() => sseConnected')
+                jobs = self.fixture.app.state.jobs
+                def operation(context):
+                    context.update('Live stream progress', 30)
+                    done.wait(10)
+                    return {'mock': True}
+                jobs.start('test', operation)
+                expect(page.locator('#status-message')).to_have_text('Live stream progress')
+                # Simulate a failed stream after it was connected; watchdog polling must survive.
+                page.evaluate('() => { sseSource.close(); sseSource.dispatchEvent(new Event("error")); }')
+                jobs.active.update('Polling fallback progress', 60)
+                expect(page.locator('#status-message')).to_have_text('Polling fallback progress', timeout=12000)
+                done.set()
+                expect(page.locator('#status-title')).to_have_text('COMPLETE', timeout=12000)
+                page.set_viewport_size({'width': 360, 'height': 800})
+                self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), 360)
+            finally:
+                done.set()
+                browser.close()
+
     def test_sdk_selection_preview_recovery_and_playback(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.configure_sdk()
@@ -115,7 +178,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.1.0')
+                expect(page.locator('#version')).to_have_text('1.1.2')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -41,3 +41,6 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 /* Resize the container rather than a native select, for consistent browser behavior. */
 .cast-picker{display:block;height:160px;min-height:110px;max-height:max(110px,70vh);resize:vertical;overflow:hidden;padding-bottom:12px;margin-top:8px;border-bottom:1px solid var(--line)}
 .cast-picker select.actor-select{height:100%;min-height:0;margin-top:0}
+
+.song-preview-wrap{margin:0 0 20px;background:var(--card);border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.song-preview{width:100%;height:34px;display:block;accent-color:var(--green)}

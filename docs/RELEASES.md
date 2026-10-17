@@ -1,5 +1,32 @@
 # Releases
 
+## 1.1.2 — Additional aspect ratios
+
+Music-video and ident shape selectors add 5:4, 4:5, 2:1, 1:2, 9:21, 3:1 and
+1:3. The 9:21 option sits immediately after 21:9. Local H3 and its SDK path
+use the selected shape with the existing model-grid dimension snapping.
+This publication also includes the reviewed fork improvements listed below.
+The launcher bounds shutdown time while live browser event streams are open.
+
+## 1.1.1 — Reviewed fork usability and diagnostics
+
+Reviewed hellonearthis's updates through `132c3d3` and integrated inline song
+playback (including saved-project reload), bounded live operation events with
+polling recovery, component-aware startup/worker errors and ComfyUI service logs.
+Logs redact configured API keys. Single-operation enforcement, paid consent,
+SDK receipt recovery and upstream OAP checks remain intact.
+
+Settings adds a Laya device selector and a writer setup/tuning guide. Existing
+model/workflow defaults remain in place. Optional hellonearthis presets preserve
+16k context/batch/image-token tuning and CUDA/MPS CPU fallback, and the optional
+reduced-flashing vocabulary retains the fork's smaller lighting/effects pools
+without changing the default vocabulary or its golden fixture. The Windows
+launcher exposes the alternate tuning and passes settings as UTF-8 JSON.
+
+The fork's prompting guide is adapted to this public engine's actual controls.
+Native Windows, real device fallback and GPU/paid generation require separate
+operator verification. See `LOCAL_WRITER_TUNING.md` for preset behavior.
+
 ## 1.1.0 — Studio usability release
 
 The browser tab now starts with the goose emoji: **🪿 Mondo Music Video**.

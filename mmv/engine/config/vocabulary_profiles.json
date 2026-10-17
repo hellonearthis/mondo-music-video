@@ -1,0 +1,20 @@
+{
+  "reduced_flashing": {
+    "label": "Reduced flash/strobe cues (hellonearthis)",
+    "exclude": {
+      "lighting": [
+        "direct on-camera flash",
+        "flashbulb pop",
+        "press flash",
+        "stroboscopic",
+        "ceiling fan strobe",
+        "passing-train strobe",
+        "light flash"
+      ],
+      "practical_effects": [
+        "Practical strobe effects",
+        "Practical flash-powder effects"
+      ]
+    }
+  }
+}

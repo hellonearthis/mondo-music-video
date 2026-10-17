@@ -77,14 +77,21 @@ def run(home, directory, *, resume=False):
     def llm(system, user):
         ok, text, error = call_llm(None, system, user, .7, 4096, 900,
                                    profile=(settings, store.key('MMV_WRITER_API_KEY')))
-        if not ok: raise ValueError(error or 'Writer returned no output')
-        if not isinstance(text, str) or not text.strip(): raise ValueError('Writer returned no text')
+        if not ok:
+            mode = "local llama.cpp" if settings.get('writer_mode') == 'local' else "API writer"
+            endpoint = runtime.safe_endpoint(settings.get('writer_url', ''))
+            raise ValueError(f"Writer ({mode} at {endpoint}) failed: {error or 'Writer returned no output'}")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"Writer ({settings.get('writer_model') or 'llama.cpp'}) returned empty text")
         return text
     if request['kind'] == 'harvest':
         progress('Harvesting visual style with the original style contract', 10)
-        response = request_json(settings['vision_url'].rstrip('/') + '/chat/completions',
-             {'model': settings['vision_model'], 'messages': [{'role':'user', 'content': style.build_harvest_payload([Path(p) for p in prepared['references']])}],
-              'max_tokens':4096, 'temperature':.4}, key=store.key('MMV_VISION_API_KEY'), timeout=900)
+        try:
+            response = request_json(settings['vision_url'].rstrip('/') + '/chat/completions',
+                 {'model': settings['vision_model'], 'messages': [{'role':'user', 'content': style.build_harvest_payload([Path(p) for p in prepared['references']])}],
+                  'max_tokens':4096, 'temperature':.4}, key=store.key('MMV_VISION_API_KEY'), timeout=900)
+        except Exception as exc:
+            raise ValueError(f"Vision service ({runtime.safe_endpoint(settings['vision_url'])}) failed during style harvest: {exc}") from exc
         card, aesthetic = style.parse_harvest_response(response['choices'][0]['message']['content'])
         if not card.strip() or not aesthetic.strip(): raise ValueError('Harvest did not return a style card and aesthetic directives')
         record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic, 'style_card':card}
@@ -123,14 +130,20 @@ def run(home, directory, *, resume=False):
         if settings['writer_mode'] == 'local':
             progress('Starting music-video writer', 2)
             writer_process = runtime.start_service(settings['writer_launch'],settings['writer_cwd'],
-                             settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log')
+                             settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log',
+                             name='llama.cpp (Writer)', launch_setting='writer_launch')
         prompts = {}
         validator = None
         if request['kind'] == 'video':
             from .engine.validators import LayaSemanticValidator
             validator = LayaSemanticValidator()
             progress('Loading Laya prompt reviewer', 3)
-            validator._load_agent()
+            try:
+                validator._load_agent()
+                if getattr(validator, "device", None):
+                    progress(f'Laya prompt reviewer loaded on {validator.device}', 3)
+            except Exception as exc:
+                raise ValueError(f"Laya semantic validator failed to load: {exc}") from exc
 
         if request['kind'] == 'ident':
             system = style.compose_ident_prompt()
@@ -229,7 +242,7 @@ def run(home, directory, *, resume=False):
                     write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
                     feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
                 else:
-                    raise ValueError(f'{seg.segment_id}: original prompt validation failed. See the validation report. Nothing rendered.')
+                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (schema/Laya review). See {directory / f"{seg.segment_id}.validation-{attempts}.json"}. Nothing rendered.')
             write_json(directory / 'prompts.json', prompts)
         if validator is not None:
             validator._agent = None
@@ -246,7 +259,8 @@ def run(home, directory, *, resume=False):
     progress('All prompts validated; opening renderer', 32)
     if request['backend'] == 'local_h3':
         runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
-                              settings['comfy_url'].rstrip('/')+'/system_stats',directory/'comfy-service.log')
+                              settings['comfy_url'].rstrip('/')+'/system_stats',directory/'comfy-service.log',
+                              name='ComfyUI', launch_setting='comfy_launch')
     rendered = {}
     sheets = casting.sheet_paths(prepared['casting']) if prepared['casting'] else {}
     url = urlparse(settings['comfy_url'])

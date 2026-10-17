@@ -72,20 +72,50 @@ def cleanup():
             pass
 
 
-def start_service(command_json, cwd, health_url, log):
+def safe_endpoint(value):
+    from urllib.parse import urlsplit, urlunsplit
+    url = urlsplit(value)
+    return urlunsplit((url.scheme, url.netloc.rsplit("@", 1)[-1], url.path, "", ""))
+
+
+def identify_service(health_url=None, log=None, command_json=None):
+    url_lower = str(health_url or "").lower()
+    log_lower = str(log or "").lower()
+    cmd_lower = str(command_json or "").lower()
+    if "8188" in url_lower or "system_stats" in url_lower or "comfy" in url_lower or "comfy" in log_lower or "comfy" in cmd_lower:
+        return "ComfyUI", "comfy_launch"
+    if "vision" in url_lower or "vision" in log_lower or "vision" in cmd_lower:
+        return "Vision service", "vision_url"
+    if "laya" in url_lower or "laya" in log_lower or "laya" in cmd_lower:
+        return "Laya", "laya_model_dir"
+    if "8080" in url_lower or "8081" in url_lower or "models" in url_lower or "writer" in url_lower or "llama" in url_lower or "writer" in log_lower or "llama" in cmd_lower:
+        return "llama.cpp (Writer)", "writer_launch"
+    return "Service", "launch command"
+
+
+def start_service(command_json, cwd, health_url, log, name=None, launch_setting=None):
     if http_ok(health_url):
         return None
+    detected_name, detected_setting = identify_service(health_url, log, command_json)
+    service_name = name or detected_name
+    setting_name = launch_setting or detected_setting
+
     if not command_json:
-        raise ValueError("Service is not running: " + health_url + ". Configure its launch command or start it before production.")
-    command = json.loads(command_json)
+        setting_hint = f" ({setting_name})" if setting_name and setting_name != "launch command" else ""
+        raise ValueError(f"{service_name} service is not running: {safe_endpoint(health_url)}. Configure its launch command{setting_hint} or start it before production.")
+    try:
+        command = json.loads(command_json)
+    except (ValueError, TypeError):
+        raise ValueError(f"{service_name} launch ({setting_name}) must be a JSON array of command arguments") from None
     if not isinstance(command,list) or not command or any(not isinstance(x,str) or not x for x in command):
-        raise ValueError("Service launch must be a JSON array of command arguments")
+        setting_hint = f" ({setting_name})" if setting_name and setting_name != "launch command" else ""
+        raise ValueError(f"{service_name} launch{setting_hint} must be a JSON array of command arguments")
     process = start_process(command,cwd=cwd or None,log=log)
     deadline = time.time()+900
     while time.time()<deadline:
         if process.poll() is not None:
-            raise ValueError("AI service stopped during startup; see " + str(log))
+            raise ValueError(f"{service_name} stopped during startup; see " + str(log))
         if http_ok(health_url): return process
         time.sleep(2)
     stop_process(process)
-    raise ValueError("AI service startup timed out; see " + str(log))
+    raise ValueError(f"{service_name} startup timed out; see " + str(log))

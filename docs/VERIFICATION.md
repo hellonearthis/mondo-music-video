@@ -1,4 +1,44 @@
-# Verification — 1.1.0
+# Verification — 1.1.2
+
+## 1.1.2 expanded aspect selectors
+
+Final publication check: **75 tests and 38 subtests passed in 30.32 seconds**,
+including all three Chromium flows, using temporary data and mock services.
+
+Verified all 13 aspect options in both music-video and ident dropdowns, including
+9:21 immediately after 21:9. Every option passed the API request schema and
+resolution planning for both local H3 and SDK H3 at 0.6 MP. Existing backend
+dimension-grid snapping is unchanged. The version consistency test passed;
+fresh version import and restarted live preview reported 1.1.2. The launcher
+bounds graceful shutdown so open event streams cannot indefinitely block exit.
+No GPU or paid generation ran. This release also includes the reviewed 1.1.1
+integration described below.
+
+## 1.1.1 reviewed fork integration
+
+Reviewed fork revision `132c3d3` (hellonearthis). The complete suite passed:
+**75 tests and 38 subtests in 29.99 seconds**, including all three Chromium flows.
+New checks cover song bytes and Range requests, blocked non-audio/symlink access,
+actual HTTP event delivery and disconnect cleanup, job diagnostic extraction and
+secret redaction, opt-in device selection, alternate vocabulary integrity, song
+playback/reload, model-preserving writer tuning and polling after a connected
+stream fails. Tests use temporary storage, synthetic media and mock inference;
+no paid, GPU or Topaz work ran.
+
+A fresh version-handler import and the restarted live preview reported 1.1.1.
+Python compilation, JavaScript syntax, shell syntax and diff whitespace checks
+passed. The original default vocabulary, golden fixture, planner/casting source,
+H3 workflow/map and storage defaults are unchanged. Friend-specific tuning,
+fallback and reduced-vocabulary settings are selectable alternatives.
+
+The 1.1.1 wheel and source distribution built successfully. The wheel contains
+the optional vocabulary profile; source archives contain only the four approved
+actor packages, with no local data, private keys or contest/video planning notes.
+All local application data remains ignored and untracked.
+
+Native PowerShell/Windows execution and real Laya device availability were not
+verified here. Device selection tests stub hardware and inference; they do not
+load a model. Real GPU SDK execution remains the separate operator check below.
 
 ## Optional public style presets
 

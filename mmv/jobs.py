@@ -38,6 +38,7 @@ class JobContext:
             write_json(self.manager.status_path, self.record)
             with self.log_path.open("a", encoding="utf-8") as stream:
                 stream.write(message + "\n")
+        self.manager.notify(dict(self.record), log_line=message)
 
     def wait(self, seconds):
         if self.cancelled.wait(seconds):
@@ -72,6 +73,22 @@ class JobContext:
                             process.wait()
                         self.check()
                 if process.returncode:
+                    detail = None
+                    try:
+                        if self.log_path and self.log_path.exists():
+                            with self.log_path.open("rb") as stream:
+                                stream.seek(max(0, self.log_path.stat().st_size - 16000))
+                                lines = [ln.strip() for ln in stream.read().decode("utf-8", errors="replace").splitlines() if ln.strip()]
+                            for ln in reversed(lines):
+                                if any(token in ln for token in ("Error:", "Exception:", "failed:", "MISSING:", "FAILED:")):
+                                    detail = ln
+                                    break
+                            if not detail and lines:
+                                detail = lines[-1]
+                    except Exception:
+                        pass
+                    if detail:
+                        raise ValueError(f"Media command failed: {detail}")
                     raise ValueError("Media command failed; see the operation log")
             finally:
                 if process.poll() is None:
@@ -86,12 +103,31 @@ class Jobs:
         self.lock = threading.RLock()
         self.active = None
         self.worker = None
+        self.subscribers = []
         self.status_path = store.home / "operation.json"
         self.last = read_json(self.status_path, {"state": "idle"})
         if self.last.get("state") in ("running", "cancelling"):
             self.last.update(state="interrupted", message="Application stopped during this operation. "
                              "Check remote request IDs before generating again.")
             write_json(self.status_path, self.last)
+
+    def subscribe(self, callback):
+        with self.lock:
+            self.subscribers.append(callback)
+        def unsubscribe():
+            with self.lock:
+                if callback in self.subscribers:
+                    self.subscribers.remove(callback)
+        return unsubscribe
+
+    def notify(self, status, log_line=None):
+        with self.lock:
+            subs = list(self.subscribers)
+        for sub in subs:
+            try:
+                sub(dict(status), log_line)
+            except Exception:
+                pass
 
     def require_idle(self):
         if self.active is not None:
@@ -109,6 +145,7 @@ class Jobs:
             context = JobContext(self, record)
             self.active, self.last = context, record
             write_json(self.status_path, record)
+            self.notify(record, log_line="Starting")
 
             def worker():
                 try:
@@ -131,6 +168,7 @@ class Jobs:
                         write_json(self.store.home / "runs" / record["id"] / "operation.json", record)
                         write_json(self.status_path, record)
                         self.active = None
+                    self.notify(record)
 
             self.worker = threading.Thread(target=worker, daemon=True)
             self.worker.start()
@@ -141,7 +179,9 @@ class Jobs:
             if self.active:
                 self.active.cancelled.set()
                 self.active.update("Cancellation requested", state="cancelling")
-            return dict(self.last)
+            status = dict(self.last)
+        self.notify(status, log_line="Cancellation requested")
+        return status
 
     def shutdown(self):
         self.cancel()

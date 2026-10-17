@@ -14,8 +14,9 @@ from typing import Literal
 from urllib.parse import urlparse
 
 import oap
+
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,7 +25,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.1.0"
+MGL_APP_VERSION = "1.1.2"
 WEB = Path(__file__).parent
 
 
@@ -153,7 +154,7 @@ class ProductionRequest(StrictModel):
     song: str = Field(default="", max_length=128)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     resolution: Literal["480p", "720p", "768p", "1080p", "2k", "4k"] = "768p"
-    aspect: Literal["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] = "16:9"
+    aspect: Literal["16:9", "9:16", "1:1", "4:3", "3:4", "5:4", "4:5", "2:1", "1:2", "21:9", "9:21", "3:1", "1:3"] = "16:9"
     direction: str = Field(default="", max_length=6000)
     style_id: str = Field(default="daylight", max_length=64)
     actors: list[str] = Field(default_factory=list, max_length=9)
@@ -175,6 +176,7 @@ class ProductionRequest(StrictModel):
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
     reuse_prompts: bool = True
+    vocabulary_profile: Literal["full", "reduced_flashing"] = "full"
 
     @field_validator("content")
     @classmethod
@@ -209,7 +211,7 @@ class Settings(StrictModel):
     comfy_launch: str = ""
     comfy_cwd: str = ""
     laya_model_dir: str = ""
-    laya_device: Literal["cpu", "cuda", "mps"] = "cuda"
+    laya_device: Literal["cpu", "cuda", "mps", "auto", "cuda_or_cpu", "mps_or_cpu"] = "cuda"
     vision_url: str = "http://127.0.0.1:8080/v1"
     vision_model: str = ""
     vision_key_env: Literal["MMV_VISION_API_KEY"] = "MMV_VISION_API_KEY"
@@ -330,13 +332,65 @@ def create_app(home=None, *, test_hosts=False):
 
     app.get("/api/version")(api_version)
 
-    @app.get("/api/status")
-    def status():
-        result = jobs.status()
+    def get_full_status(snapshot=None):
+        result = dict(snapshot) if snapshot is not None else jobs.status()
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
                                 and previous.get('backend') == 'comfy_sdk_h3')
         return result
+
+    @app.get("/api/status")
+    def status():
+        return get_full_status()
+
+    @app.get("/api/events")
+    async def events(request: Request):
+        queue = asyncio.Queue(maxsize=32)
+        loop = asyncio.get_running_loop()
+        closed = False
+
+        def enqueue(data):
+            if closed:
+                return
+            if queue.full():
+                queue.get_nowait()
+            queue.put_nowait(data)
+
+        def on_event(status_dict, log_line=None):
+            if not closed:
+                loop.call_soon_threadsafe(enqueue, {"status": get_full_status(status_dict), "log": log_line})
+
+        unsubscribe = jobs.subscribe(on_event)
+
+        async def event_generator():
+            nonlocal closed
+            try:
+                initial = get_full_status()
+                yield f"event: status\ndata: {json.dumps(initial)}\n\n"
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        data = await asyncio.wait_for(queue.get(), timeout=15.0)
+                        if "status" in data:
+                            yield f"event: status\ndata: {json.dumps(data['status'])}\n\n"
+                        if data.get("log"):
+                            yield f"event: log\ndata: {json.dumps({'message': data['log']})}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": keep-alive\n\n"
+            finally:
+                closed = True
+                unsubscribe()
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
 
     @app.post("/api/cancel")
     def cancel():
@@ -493,6 +547,23 @@ def create_app(home=None, *, test_hosts=False):
                     target.unlink(missing_ok=True)
                     raise
         return {"file": name, "name": file.filename}
+
+    @app.get("/api/uploads/song/{filename}")
+    def get_uploaded_song(filename: str):
+        path = inside(store.home / "uploads", filename)
+        suffix = path.suffix.lower()
+        if not path.is_file() or suffix not in (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".aiff"):
+            raise ValueError("Uploaded song not found")
+        media_types = {
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".flac": "audio/flac",
+            ".ogg": "audio/ogg",
+            ".m4a": "audio/mp4",
+            ".aac": "audio/aac",
+            ".aiff": "audio/aiff",
+        }
+        return FileResponse(path, media_type=media_types.get(suffix, "application/octet-stream"))
 
     @app.get("/api/actors")
     def list_actors():
@@ -723,7 +794,13 @@ def create_app(home=None, *, test_hosts=False):
             if writer_log.exists() and writer_log.stat().st_size > 0:
                 with writer_log.open("rb") as stream:
                     stream.seek(max(0, writer_log.stat().st_size - 16000))
-                    sections.append("\n--- Writer Service Output ---\n" + stream.read().decode(errors="replace"))
+                    sections.append("\n--- Writer Service Output (llama.cpp) ---\n" + stream.read().decode(errors="replace"))
+            # Include ComfyUI service output if present
+            comfy_log = directory / "comfy-service.log"
+            if comfy_log.exists() and comfy_log.stat().st_size > 0:
+                with comfy_log.open("rb") as stream:
+                    stream.seek(max(0, comfy_log.stat().st_size - 16000))
+                    sections.append("\n--- ComfyUI Service Output ---\n" + stream.read().decode(errors="replace"))
             # Include final operation status
             op_info = read_json(directory / "operation.json", {})
             if op_info.get("state") == "failed" and op_info.get("message"):
@@ -739,6 +816,10 @@ def create_app(home=None, *, test_hosts=False):
                 sections.append("\n=== Studio Server Event Log ===\n" + stream.read().decode(errors="replace"))
 
         content = "\n\n".join(filter(None, sections)).strip()
+        for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
+            secret = store.key(name)
+            if secret:
+                content = content.replace(secret, "[redacted]")
         return {"log": content or "No operation or server log recorded yet."}
 
     @app.post("/api/upscale")

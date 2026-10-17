@@ -238,7 +238,8 @@ def main(argv=None):
                 elif args.command == "serve":
                     import uvicorn
                     from webapp.mondo_web import create_app
-                    uvicorn.run(create_app(store.home), host="127.0.0.1", port=args.port, workers=1)
+                    uvicorn.run(create_app(store.home), host="127.0.0.1", port=args.port, workers=1,
+                                timeout_graceful_shutdown=5)
     except (ValueError, OSError) as exc:
         parser.exit(1, str(exc) + "\n")
 

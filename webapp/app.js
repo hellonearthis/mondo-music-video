@@ -315,6 +315,7 @@ async function restoreProject() {
       if (receipt) receipt.textContent = "Uploaded: " + state.songName;
       const songInput = form.querySelector(".song-input");
       if (songInput) songInput.required = false;
+      updateSongPreview(form, "/api/uploads/song/" + encodeURIComponent(state.song));
     }
     if (Array.isArray(fileState.references) && fileState.references.length) {
       state.references = fileState.references;
@@ -326,6 +327,21 @@ async function restoreProject() {
     }
     formFiles.set(form, state);
   });
+}
+
+function updateSongPreview(form, src) {
+  const wrap = form.querySelector(".song-preview-wrap");
+  const audio = form.querySelector(".song-preview");
+  if (!wrap || !audio) return;
+  if (src) {
+    audio.src = src;
+    wrap.hidden = false;
+  } else {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    wrap.hidden = true;
+  }
 }
 
 async function upload(file, kind) {
@@ -674,6 +690,16 @@ async function loadSettings() {
     } else if (name === "backend") {
       input = document.createElement("select");
       input.append(...Object.entries(catalog.backends).map(([key, card]) => option(key, card.name, `${card.name}: ${card.description || key}`)));
+    } else if (name === "laya_device") {
+      input = document.createElement("select");
+      input.append(
+        option("cuda_or_cpu", "CUDA with CPU fallback", "Use CUDA when available, otherwise CPU"),
+        option("mps_or_cpu", "MPS with CPU fallback", "Use MPS when available, otherwise CPU"),
+        option("auto", "Auto (CUDA, MPS, then CPU)", "Choose an available Laya device automatically"),
+        option("cpu", "CPU", "Run Laya validator on CPU"),
+        option("cuda", "CUDA", "Run Laya validator on NVIDIA GPU (CUDA)"),
+        option("mps", "MPS", "Run Laya validator on Apple Silicon (MPS)")
+      );
     } else {
       input = document.createElement("input");
       input.type = name.endsWith("call_estimate") ? "number" : "text";
@@ -712,6 +738,22 @@ async function loadSettings() {
       label.append(group);
     } else {
       label.append(input);
+      if (name === "writer_launch") {
+        const hint = document.createElement("div");
+        hint.style.marginTop = "4px";
+        const helpBtn = document.createElement("button");
+        helpBtn.type = "button";
+        helpBtn.className = "quiet llama-help-btn";
+        helpBtn.style.display = "inline";
+        helpBtn.style.padding = "0";
+        helpBtn.textContent = "ℹ️ Need help with token buffers or launch arguments? Open llama.cpp guide ↗";
+        helpBtn.onclick = event => {
+          event.preventDefault();
+          $("#panel-settings > .panel-header-row .llama-help-btn").click();
+        };
+        hint.append(helpBtn);
+        label.append(hint);
+      }
     }
     return label;
   });
@@ -790,28 +832,76 @@ function showQuote(request, quote) {
   $("#consent").checked = false; $("#preview-dialog").showModal();
 }
 
-async function poll() {
-  try {
-    const status = await (await api("/api/status")).json();
-    currentRun = status.id;
-    const busy = ["running", "cancelling"].includes(status.state);
-    $("#status-title").textContent = status.state === "idle" ? "READY WHEN YOU ARE" : status.state.toUpperCase();
-    $("#status-message").textContent = status.message || "One idea. One production at a time.";
-    $("#progress").value = status.progress || 0;
-    $("#cancel").hidden = !busy;
-    $("#resume-production").hidden = !status.can_resume;
-    $("#show-log").hidden = false;
-    $$(".operation-action").forEach(button => button.disabled = busy);
-    if (lastState && lastState !== status.state && !busy) { await Promise.all([loadActors(), loadStyles(), loadOutputs()]); }
-    lastState = status.state;
-    if (!$("#operation-log").hidden) await updateLogDisplay();
-  } catch (error) { $("#status-message").textContent = "Connection unavailable. The server may have stopped."; }
-  setTimeout(poll, 2000);
+async function applyStatus(status) {
+  if (!status || !status.state) return;
+  currentRun = status.id;
+  const busy = ["running", "cancelling"].includes(status.state);
+  $("#status-title").textContent = status.state === "idle" ? "READY WHEN YOU ARE" : status.state.toUpperCase();
+  $("#status-message").textContent = status.message || "One idea. One production at a time.";
+  $("#progress").value = status.progress || 0;
+  $("#cancel").hidden = !busy;
+  $("#resume-production").hidden = !status.can_resume;
+  $("#show-log").hidden = false;
+  $$(".operation-action").forEach(button => button.disabled = busy);
+  if (lastState && lastState !== status.state && !busy) {
+    await Promise.all([loadActors(), loadStyles(), loadOutputs()]);
+  }
+  lastState = status.state;
 }
+
+let sseSource = null;
+let sseConnected = false;
+let statusTimer = null;
+let lastStreamEvent = 0;
+
+function setupEventStream() {
+  if (typeof EventSource !== "undefined") {
+    try {
+      sseSource = new EventSource("/api/events");
+      sseSource.addEventListener("status", event => {
+        try {
+          const status = JSON.parse(event.data);
+          lastStreamEvent = Date.now();
+          sseConnected = true;
+          applyStatus(status).catch(error => notice(error.message));
+        } catch {}
+      });
+      sseSource.onerror = () => { sseConnected = false; };
+    } catch { sseConnected = false; }
+  }
+  // Keep one watchdog alive even while SSE is healthy, so disconnects and
+  // proxies buffering events cannot permanently stop operation updates.
+  fallbackPoll();
+}
+
+async function fallbackPoll() {
+  clearTimeout(statusTimer);
+  const busy = ["running", "cancelling"].includes(lastState);
+  const interval = busy ? 2000 : 10000;
+  try {
+    if (!sseConnected || Date.now() - lastStreamEvent > 20000) {
+      const status = await (await api("/api/status")).json();
+      await applyStatus(status);
+    }
+    if (!$("#operation-log").hidden) await updateLogDisplay();
+  } catch {
+    $("#status-message").textContent = "Connection unavailable. The server may have stopped.";
+  } finally {
+    statusTimer = setTimeout(fallbackPoll, interval);
+  }
+}
+window.addEventListener("pagehide", () => {
+  if (sseSource) sseSource.close();
+  clearTimeout(statusTimer);
+});
+window.addEventListener("pageshow", event => {
+  if (event.persisted) setupEventStream();
+});
 
 async function initialize() {
   initTooltips();
   setupOapGuide();
+  setupLlamaGuide();
   catalog = await (await api("/api/catalog")).json();
   const version = await (await api("/api/version")).json();
   $("#version").textContent = version.version; $("#oap-version").textContent = catalog.oap_version;
@@ -850,7 +940,15 @@ async function initialize() {
     const song = form.querySelector(".song-input");
     if (song) song.onchange = handle(async () => {
       const selected = song.files[0]; if (!selected) return;
-      const state = formFiles.get(form); state.song = undefined; state.songName = undefined; state.pending++;
+      const state = formFiles.get(form);
+      if (state.songObjectUrl) {
+        updateSongPreview(form, "");
+        URL.revokeObjectURL(state.songObjectUrl);
+        state.songObjectUrl = undefined;
+      }
+      state.songObjectUrl = URL.createObjectURL(selected);
+      updateSongPreview(form, state.songObjectUrl);
+      state.song = undefined; state.songName = undefined; state.pending++;
       song.disabled = true; form.querySelector(".song-receipt").textContent = "Uploading " + selected.name + "…";
       try {
         state.song = await upload(selected, "song");
@@ -859,7 +957,15 @@ async function initialize() {
         song.required = false;
         scheduleSave();
       }
-      catch (error) { form.querySelector(".song-receipt").textContent = "Upload failed; select the song again."; throw error; }
+      catch (error) {
+        if (state.songObjectUrl) {
+          URL.revokeObjectURL(state.songObjectUrl);
+          state.songObjectUrl = undefined;
+        }
+        updateSongPreview(form, "");
+        form.querySelector(".song-receipt").textContent = "Upload failed; select the song again.";
+        throw error;
+      }
       finally { state.pending--; song.disabled = false; }
     });
     form.querySelector(".refs-input").onchange = handle(async event => {
@@ -1034,6 +1140,53 @@ async function initialize() {
     }
   }
 
+  function setupLlamaGuide() {
+    const dialog = $("#llama-helper-dialog");
+    if (!dialog) return;
+    const picker = $("#writer-tuning-preset");
+    function commandPreview() {
+      const current = $("input[name=writer_launch]")?.value || "";
+      if (picker.value === "current") return current;
+      const args = JSON.parse(current);
+      if (!Array.isArray(args) || !args.length || args.some(arg => typeof arg !== "string")) {
+        throw new Error("Configure a JSON array launch command first.");
+      }
+      const options = {"-c": "16384", "--ctx-size": "16384", "-b": "2048", "--batch-size": "2048", "-ub": "1024", "--ubatch-size": "1024"};
+      if (args.some(arg => arg === "--mmproj" || arg.startsWith("--mmproj="))) options["--image-min-tokens"] = "1024";
+      const result = [args[0]];
+      for (let i = 1; i < args.length; i++) {
+        const flag = args[i].split("=", 1)[0];
+        if (Object.hasOwn(options, flag)) {
+          if (!args[i].includes("=")) i++;
+        } else result.push(args[i]);
+      }
+      result.push("-c", "16384", "-b", "2048", "-ub", "1024");
+      if (options["--image-min-tokens"]) result.push("--image-min-tokens", "1024");
+      return JSON.stringify(result);
+    }
+    function showPreview() {
+      try { $("#llama-current-json").textContent = commandPreview() || "No launch command configured."; }
+      catch { $("#llama-current-json").textContent = "Configure a valid JSON array launch command before choosing alternate tuning."; }
+    }
+    function openGuide() { picker.value = "current"; showPreview(); dialog.showModal(); }
+    $$(".llama-help-btn").forEach(button => button.onclick = openGuide);
+    picker.onchange = showPreview;
+    $$(".close-llama-dialog").forEach(button => button.onclick = () => dialog.close());
+    $("#copy-llama-json").onclick = handle(async () => {
+      const command = commandPreview();
+      if (!command) throw new Error("Configure a writer launch command first.");
+      if (!await copyToClipboard(command)) throw new Error("Could not copy the launch command.");
+      notice("Writer launch preview copied.");
+    });
+    $("#apply-writer-tuning").onclick = handle(async () => {
+      const command = commandPreview();
+      if (!command) throw new Error("Configure a writer launch command first.");
+      $("input[name=writer_launch]").value = command;
+      notice("Writer tuning applied to the field. Save settings to persist it.");
+      dialog.close();
+    });
+  }
+
   $("#inspect-oap").onclick = handle(async () => {
     const file = $("#oap-file").files[0]; if (!file) throw new Error("Choose an OAP package first");
     $("#oap-import-form").hidden = true;
@@ -1097,6 +1250,6 @@ async function initialize() {
   }
 
   await restoreProject();
-  poll();
+  setupEventStream();
 }
 initialize().catch(error => notice(error.message));

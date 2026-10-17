@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.1.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.1.2** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
@@ -44,6 +44,20 @@ private workflow copy; your original graph, bindings and precision settings are
 preserved. Nothing is downloaded or selected automatically. File/folder Browse
 buttons help configure local paths, and the OAP guide explains actors, reference
 images, signatures and content riders. See [model settings](docs/MODEL_SETTINGS.md).
+
+## Song preview, live status and setup tuning
+
+Listen to and scrub your uploaded song directly in the production form, including
+after reloading a saved project. Live operation updates fall back to polling if
+the stream disconnects. Service failures identify the failing component and
+include relevant writer/ComfyUI logs.
+
+The local writer guide offers optional hellonearthis tuning while preserving
+your selected model paths. Laya device and fallback modes are explicit choices;
+your existing CUDA and workflow defaults remain intact. An optional reduced
+flash/strobe vocabulary keeps the full expanded pool as the default. See
+[local writer tuning](docs/LOCAL_WRITER_TUNING.md) and
+[visual direction](docs/STUDIO_DIRECTION_PROMPTING.md).
 
 ## Four montage grammars, driven by your music
 
