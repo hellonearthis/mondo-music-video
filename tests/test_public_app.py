@@ -369,9 +369,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.0.17")
+        self.assertEqual(api_version()["version"], "1.0.18")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.0.17", (root / "README.md").read_text())
+        self.assertIn("1.0.18", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_uploaded_song_preview_endpoint(self):
@@ -384,6 +384,62 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(res.content, self.song)
         missing = self.client.get("/api/uploads/song/nonexistent.wav")
         self.assertEqual(missing.status_code, 400)
+
+    def test_services_status_endpoint(self):
+        res = self.client.get("/api/services/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("laya", data)
+        self.assertIn("writer", data)
+        self.assertIn("comfy", data)
+        self.assertIn("vision", data)
+        for key in ("laya", "writer", "comfy", "vision"):
+            svc = data[key]
+            self.assertIn("name", svc)
+            self.assertIn("role", svc)
+            self.assertIn("available", svc)
+            self.assertIn("activity", svc)
+            self.assertIn("detail", svc)
+            self.assertIn(svc["activity"], ("processing", "sleeping", "offline", "missing"))
+
+    def test_status_endpoint_includes_services(self):
+        res = self.client.get("/api/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("services", data)
+        self.assertIn("laya", data["services"])
+        self.assertIn("writer", data["services"])
+        self.assertIn("comfy", data["services"])
+
+    def test_services_activity_evaluation(self):
+        from mmv.services import _evaluate_service_activity
+        probed = {
+            "comfy": {"url": "http://127.0.0.1:8188", "available": True, "device": "RTX 4090", "queue_running": 0},
+            "writer": {"mode": "local", "url": "http://127.0.0.1:8081", "model": "qwen3", "available": True, "slots_processing": 0},
+            "laya": {"model_dir": "/mock/laya", "device": "cuda", "available": True},
+            "vision": {"url": "http://127.0.0.1:8081", "model": "vision", "available": True},
+        }
+        # When idle: all available services should be sleeping
+        idle_eval = _evaluate_service_activity(self.store, probed, {"state": "idle", "message": ""})
+        self.assertEqual(idle_eval["comfy"]["activity"], "sleeping")
+        self.assertEqual(idle_eval["writer"]["activity"], "sleeping")
+        self.assertEqual(idle_eval["laya"]["activity"], "sleeping")
+        self.assertEqual(idle_eval["vision"]["activity"], "sleeping")
+
+        # When actively rendering in comfy:
+        render_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Rendering passage 1"})
+        self.assertEqual(render_eval["comfy"]["activity"], "processing")
+        self.assertEqual(render_eval["writer"]["activity"], "sleeping")
+
+        # When actively writing prompts:
+        writer_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Writer developing passage direction"})
+        self.assertEqual(writer_eval["writer"]["activity"], "processing")
+        self.assertEqual(writer_eval["comfy"]["activity"], "sleeping")
+
+        # When Laya is reviewing:
+        laya_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Laya reviewing passage 2"})
+        self.assertEqual(laya_eval["laya"]["activity"], "processing")
+        self.assertEqual(laya_eval["comfy"]["activity"], "sleeping")
 
     def test_project_persistence_api(self):
         project = {

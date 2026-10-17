@@ -41,3 +41,56 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 /* Resize the container rather than a native select, for consistent browser behavior. */
 .cast-picker{display:block;height:160px;min-height:110px;max-height:max(110px,70vh);resize:vertical;overflow:hidden;padding-bottom:12px;margin-top:8px;border-bottom:1px solid var(--line)}
 .cast-picker select.actor-select{height:100%;min-height:0;margin-top:0}
+
+/* Service Dock & Engine Availability Monitor */
+.service-dock{background:#f0f3eb;border:1px solid #dbe2d4;border-radius:6px;padding:12px 16px;margin-top:-28px;margin-bottom:34px}
+.service-dock-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.service-dock-caption{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.service-dock-icon{font-size:12px;color:var(--green)}
+.service-dock-title{font-size:9.5px;letter-spacing:1.5px;color:var(--green);font-weight:700}
+.service-dock-sub{font-size:10.5px;color:var(--muted)}
+.service-dock-refresh{background:transparent;border:1px solid #c9d5c2;border-radius:3px;color:var(--green);font-size:10px;font-weight:600;padding:3px 9px;cursor:pointer;transition:all .15s ease}
+.service-dock-refresh:hover{background:#e3ebd9;border-color:#b4c4ab}
+.service-cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.service-card{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:10px 13px;display:flex;flex-direction:column;justify-content:center;transition:border-color .2s ease,box-shadow .2s ease}
+.service-card:hover{border-color:#b8c8ae}
+.service-card-head{display:flex;align-items:center;gap:7px}
+.service-name{font-size:12px;font-weight:700;color:var(--ink)}
+.service-role{font-size:10px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.service-detail{font-size:10px;color:var(--muted);line-height:1.4;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Status Indicators and Pulse Animations */
+.service-pulse-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.dot-processing{background:#16a34a;box-shadow:0 0 0 0 rgba(22,163,74,0.7);animation:service-pulse 1.8s infinite}
+.dot-sleeping{background:#4d7c57}
+.dot-missing{background:#d97706}
+.dot-offline{background:#9ca3af}
+
+@keyframes service-pulse{
+  0%{box-shadow:0 0 0 0 rgba(22,163,74,0.7);transform:scale(0.95)}
+  70%{box-shadow:0 0 0 6px rgba(22,163,74,0);transform:scale(1.05)}
+  100%{box-shadow:0 0 0 0 rgba(22,163,74,0);transform:scale(0.95)}
+}
+
+/* Service State Badges */
+.service-badge{font-size:8.5px;font-weight:700;letter-spacing:.6px;border-radius:10px;padding:2px 7px;text-transform:uppercase;white-space:nowrap}
+.badge-processing{background:#dcfce7;color:#15803d;border:1px solid #86efac}
+.badge-sleeping{background:#edf4eb;color:#3f5e49;border:1px solid #c8d8c5}
+.badge-missing{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.badge-offline{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
+
+/* Card Activity States */
+.service-card.card-processing{border-color:#86efac;background:#fcfffa}
+.service-card.card-missing{border-color:#fcd34d}
+
+/* Dark Mode Overrides for Service Dock */
+[data-theme=dark] .service-dock{background:#17221c;border-color:var(--line)}
+[data-theme=dark] .service-dock-refresh{border-color:#3d5244;color:#a4ccaa}
+[data-theme=dark] .service-dock-refresh:hover{background:#23332a}
+[data-theme=dark] .service-card{background:#1b2620;border-color:var(--line)}
+[data-theme=dark] .service-card.card-processing{border-color:#3d7052;background:#18281f}
+[data-theme=dark] .service-card.card-missing{border-color:#70592b}
+[data-theme=dark] .badge-processing{background:#1b3823;color:#86efac;border-color:#2a5736}
+[data-theme=dark] .badge-sleeping{background:#223328;color:#b2cdbb;border-color:#354d3e}
+[data-theme=dark] .badge-missing{background:#3d2f14;color:#fcd34d;border-color:#6c5424}
+[data-theme=dark] .badge-offline{background:#232b26;color:#8b9990;border-color:#38453d}

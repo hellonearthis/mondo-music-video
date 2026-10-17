@@ -1,5 +1,14 @@
 # Releases
 
+## 1.0.18 — Live Engine & Hardware Status Monitor (Laya, llama.cpp, ComfyUI, Vision)
+
+- **Dedicated Service Dock**: Live UI monitoring dock displaying the status of Laya, llama.cpp, ComfyUI, and Vision services with role descriptions, animated pulsing status dots, and badges.
+- **Active vs. Sleeping state detection**: Differentiates when engines are sleeping (idle standby ready for tasks) versus actively processing (ComfyUI rendering, llama.cpp generating prompts, or Laya reviewing prompt passages).
+- **Laya & llama.cpp availability probes**: Checks staged Laya model files and hardware device configuration (`cuda`, `mps`, `cpu`), and queries `llama-server` `/health` slots and OpenAI `/models` endpoints.
+- **ComfyUI GPU hardware detection**: Probes ComfyUI `/system_stats` and `/queue` to display the active GPU model name and queue count.
+- **Fast non-blocking caching & instant refresh**: Sub-millisecond status responses with low socket timeouts and a manual refresh trigger.
+- **`/api/services/status` endpoint**: Exposes live engine probe results for automated tooling and frontend polling.
+
 ## 1.0.17 — Integration of upstream features: starter cast, dark mode & resizable cast list
 
 - **Upstream starter cast packages**: Four owner-authorized starter actors (`animal_pig`, `robobabe1`, `henchman_1`, and `human_female_casual_01`) added in `examples/starter-cast` as signed OAP packages with manifest and verification.

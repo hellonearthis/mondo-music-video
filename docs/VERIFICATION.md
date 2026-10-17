@@ -1,4 +1,11 @@
-# Verification — 1.0.17
+# Verification — 1.0.18
+
+## 1.0.18 Live Engine & Hardware Status Monitor (Laya, llama.cpp, ComfyUI, Vision)
+
+- Verified live engine status reporting for Laya, llama.cpp, ComfyUI, and Vision via `/api/services/status`.
+- Verified state differentiation: actively processing vs. sleeping (ready/idle standby) vs. offline/unconfigured.
+- Verified service dock UI elements, pulse dot animations, and responsive layout across desktop and mobile viewports.
+- Verified version `1.0.18` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
 
 ## 1.0.17 Integration of upstream features (starter cast, dark mode, resizable cast list)
 

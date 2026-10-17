@@ -19,7 +19,7 @@ import oap
 class _PollingAccessFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
-        return not any(p in msg for p in ("/api/status", "/api/events", "/api/log/"))
+        return not any(p in msg for p in ("/api/status", "/api/events", "/api/log/", "/api/services"))
 
 logging.getLogger("uvicorn.access").addFilter(_PollingAccessFilter())
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -30,9 +30,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from mmv import actors, production
 from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
+from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.17"
+MGL_APP_VERSION = "1.0.18"
 WEB = Path(__file__).parent
 
 
@@ -343,11 +344,16 @@ def create_app(home=None, *, test_hosts=False):
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
                                 and previous.get('backend') == 'comfy_sdk_h3')
+        result['services'] = check_services(store, result)
         return result
 
     @app.get("/api/status")
     def status():
         return get_full_status()
+
+    @app.get("/api/services/status")
+    def services_status(force: bool = False):
+        return check_services(store, jobs.status(), force=force)
 
     @app.get("/api/events")
     async def events(request: Request):

@@ -37,6 +37,51 @@
   <progress id="progress" max="100" value="0" aria-label="Operation progress" data-tooltip="Progress percentage of active production" title="Progress percentage of active production"></progress><button id="cancel" class="quiet" hidden data-tooltip="Stop the currently active production run" title="Stop the currently active production run">Cancel operation</button><button id="resume-production" class="quiet operation-action" hidden>Review resume</button><button id="show-log" class="quiet" data-tooltip="Toggle the live operation log stream" title="Toggle the live operation log stream">View log</button><button id="copy-log" class="quiet" data-tooltip="Copy the operation log and diagnostics to your clipboard" title="Copy the operation log and diagnostics to your clipboard">Copy log</button><button id="clear-log" class="quiet" data-tooltip="Clear log history and reset the diagnostic log view" title="Clear log history and reset the diagnostic log view">Clear log</button>
   <pre id="operation-log" hidden data-tooltip="Real-time studio operation log output" title="Real-time studio operation log output"></pre></section>
 
+<section id="service-dock" class="service-dock" aria-label="Local AI engines and hardware status">
+  <div class="service-dock-header">
+    <div class="service-dock-caption"><span class="service-dock-icon">⚡</span> <strong class="service-dock-title">LOCAL ENGINES &amp; HARDWARE</strong> <span class="service-dock-sub">Live availability and active/sleeping state</span></div>
+    <button type="button" id="refresh-services" class="service-dock-refresh" data-tooltip="Probe local AI engines, hardware GPUs, and loaded models now" title="Probe local AI engines, hardware GPUs, and loaded models now">↻ Refresh status</button>
+  </div>
+  <div class="service-cards-grid">
+    <div id="service-card-laya" class="service-card" data-service="laya" data-tooltip="Laya: Local semantic prompt validator and consistency reviewer" title="Laya: Local semantic prompt validator and consistency reviewer">
+      <div class="service-card-head">
+        <span class="service-pulse-dot dot-offline" id="service-dot-laya"></span>
+        <span class="service-name">Laya</span>
+        <span class="service-role">Prompt Reviewer</span>
+        <span class="service-badge badge-offline" id="service-badge-laya">CHECKING</span>
+      </div>
+      <div class="service-detail" id="service-detail-laya">Checking weights...</div>
+    </div>
+    <div id="service-card-writer" class="service-card" data-service="writer" data-tooltip="llama.cpp: Local prompt writer, director, and lyric alignment model" title="llama.cpp: Local prompt writer, director, and lyric alignment model">
+      <div class="service-card-head">
+        <span class="service-pulse-dot dot-offline" id="service-dot-writer"></span>
+        <span class="service-name">llama.cpp</span>
+        <span class="service-role">Prompt Writer</span>
+        <span class="service-badge badge-offline" id="service-badge-writer">CHECKING</span>
+      </div>
+      <div class="service-detail" id="service-detail-writer">Connecting to llama-server...</div>
+    </div>
+    <div id="service-card-comfy" class="service-card" data-service="comfy" data-tooltip="ComfyUI: Video diffusion and audio generation engine" title="ComfyUI: Video diffusion and audio generation engine">
+      <div class="service-card-head">
+        <span class="service-pulse-dot dot-offline" id="service-dot-comfy"></span>
+        <span class="service-name">ComfyUI</span>
+        <span class="service-role">Video Renderer</span>
+        <span class="service-badge badge-offline" id="service-badge-comfy">CHECKING</span>
+      </div>
+      <div class="service-detail" id="service-detail-comfy">Connecting to ComfyUI...</div>
+    </div>
+    <div id="service-card-vision" class="service-card" data-service="vision" data-tooltip="Vision: Multimodal model for style harvesting and visual reference analysis" title="Vision: Multimodal model for style harvesting and visual reference analysis">
+      <div class="service-card-head">
+        <span class="service-pulse-dot dot-offline" id="service-dot-vision"></span>
+        <span class="service-name">Vision</span>
+        <span class="service-role">Style Harvester</span>
+        <span class="service-badge badge-offline" id="service-badge-vision">CHECKING</span>
+      </div>
+      <div class="service-detail" id="service-detail-vision">Connecting to vision endpoint...</div>
+    </div>
+  </div>
+</section>
+
 <section id="panel-video" class="panel"><div class="eyebrow">01 / THE MAIN EVENT</div><h1>Your song.<br><em>A world of its own.</em></h1><p class="intro">Your music drives the cuts. Beat and downbeat detection, energy-aware montage planning, and your chosen visual style shape a complete music video.</p>
 <form id="video-form" class="production-form" data-kind="video"><div class="form-grid"><div class="card"><div class="card-title"><span class="step">1</span> Set the direction</div>
   <label data-tooltip="Upload an audio master track to analyze beats, tempo, and sections" title="Upload an audio master track to analyze beats, tempo, and sections">Your song<input type="file" class="song-input" accept="audio/*" required data-tooltip="Choose WAV, MP3, FLAC, OGG, M4A, AAC, or AIFF (up to 256MB)" title="Choose WAV, MP3, FLAC, OGG, M4A, AAC, or AIFF (up to 256MB)"></label><div class="file-receipt song-receipt" data-tooltip="Uploaded song filename and status" title="Uploaded song filename and status">WAV, MP3, FLAC, OGG, M4A, AAC or AIFF · up to 256 MB</div><div class="song-preview-wrap" hidden><audio class="song-preview" controls preload="metadata" aria-label="Song audio preview" data-tooltip="Preview the selected song track" title="Preview the selected song track"></audio></div>

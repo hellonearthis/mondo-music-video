@@ -830,6 +830,68 @@ function showQuote(request, quote) {
   $("#consent").checked = false; $("#preview-dialog").showModal();
 }
 
+function renderServices(services) {
+  if (!services || typeof services !== "object") return;
+  const entries = [
+    { id: "laya", data: services.laya },
+    { id: "writer", data: services.writer },
+    { id: "comfy", data: services.comfy },
+    { id: "vision", data: services.vision }
+  ];
+  for (const { id, data } of entries) {
+    if (!data) continue;
+    const dot = $(`#service-dot-${id}`);
+    const badge = $(`#service-badge-${id}`);
+    const detail = $(`#service-detail-${id}`);
+    const card = $(`#service-card-${id}`);
+
+    const activity = data.activity || (data.available ? "sleeping" : "offline");
+
+    if (dot) {
+      dot.className = `service-pulse-dot dot-${activity}`;
+    }
+
+    if (badge) {
+      badge.className = `service-badge badge-${activity}`;
+      if (activity === "processing") {
+        badge.textContent = "PROCESSING";
+      } else if (activity === "sleeping") {
+        badge.textContent = "SLEEPING (READY)";
+      } else if (activity === "missing") {
+        badge.textContent = "NEEDS SETUP";
+      } else {
+        badge.textContent = "OFFLINE";
+      }
+    }
+
+    if (detail) {
+      detail.textContent = data.detail || (data.available ? "Ready" : "Offline");
+      detail.title = data.detail || "";
+    }
+
+    if (card) {
+      card.classList.toggle("card-processing", activity === "processing");
+      card.classList.toggle("card-missing", activity === "missing");
+    }
+  }
+}
+
+async function refreshServices(force = false) {
+  const btn = $("#refresh-services");
+  try {
+    if (btn) btn.disabled = true;
+    const resp = await api(`/api/services/status${force ? "?force=true" : ""}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      renderServices(data);
+    }
+  } catch (err) {
+    console.debug("Failed to fetch service status", err);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function applyStatus(status) {
   if (!status || !status.state) return;
   currentRun = status.id;
@@ -841,6 +903,9 @@ async function applyStatus(status) {
   $("#resume-production").hidden = !status.can_resume;
   $("#show-log").hidden = false;
   $$(".operation-action").forEach(button => button.disabled = busy);
+  if (status.services) {
+    renderServices(status.services);
+  }
   if (lastState && lastState !== status.state && !busy) {
     await Promise.all([loadActors(), loadStyles(), loadOutputs()]);
   }
@@ -1271,10 +1336,16 @@ async function initialize() {
     if (Object.keys(h3_models).length) raw.h3_models = h3_models;
     await json("/api/settings", raw, "PUT");
     await loadSettings();
+    await refreshServices(true);
     notice("Settings saved.");
   });
-  $("#key-form").onsubmit = handle(async event => { await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT"); event.target.elements.value.value = ""; await loadSettings(); notice("Key saved locally. The settings API does not return it."); });
+  $("#key-form").onsubmit = handle(async event => { await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT"); event.target.elements.value.value = ""; await loadSettings(); await refreshServices(true); notice("Key saved locally. The settings API does not return it."); });
   $("#upscale-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.scale = Number(body.scale); await json("/api/upscale", {...body, source: upscaleSource}); $("#upscale-dialog").close(); });
+
+  const refreshBtn = $("#refresh-services");
+  if (refreshBtn) {
+    refreshBtn.onclick = () => refreshServices(true);
+  }
 
   const pickerFilter = $("#picker-filter");
   if (pickerFilter) pickerFilter.oninput = () => renderPickerEntries();
@@ -1293,5 +1364,7 @@ async function initialize() {
 
   await restoreProject();
   setupEventStream();
+  await refreshServices();
+  setInterval(() => { refreshServices(); }, 8000);
 }
 initialize().catch(error => notice(error.message));

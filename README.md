@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.0.17** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.0.18** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
