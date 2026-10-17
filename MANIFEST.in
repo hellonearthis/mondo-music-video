@@ -14,3 +14,13 @@ include examples/starter-cast/animal_pig.oap
 include examples/starter-cast/robobabe1.oap
 include examples/starter-cast/henchman_1.oap
 include examples/starter-cast/human_female_casual_01.oap
+
+exclude docs/how_to_video.md
+
+include examples/style-presets/README.md examples/style-presets/manifest.json
+include examples/style-presets/sun_bleach.json
+include examples/style-presets/nature_doc.json
+include examples/style-presets/industrial_decay.json
+include examples/style-presets/noir_bw.json
+include examples/style-presets/gel_wash_psych.json
+include examples/style-presets/crt_1990s.json

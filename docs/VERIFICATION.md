@@ -1,4 +1,23 @@
-# Verification — 1.0.18
+# Verification — 1.1.1
+
+## 1.1.1 Upstream 1.1.0 merge & Live Engine Status Dock
+
+- Verified upstream 1.1.0 merge: goose browser title `🪿 Mondo Music Video`, six owner-approved SFW style presets in `examples/style-presets`, and demo exclusion boundaries.
+- Verified live service status dock, active/sleeping indicators, GPU detection, and `/api/services/status`.
+- Verified version `1.1.1` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
+
+## 1.1.0 Optional public style presets & browser title
+
+All six published preset hashes and API schemas were verified. Installing the
+six JSON files into temporary application storage exposed all six alongside
+Daylight Cinema through `/api/styles`. Public copies contain SFW costume/sound
+adaptations and explicit content boundaries; private local originals were not
+modified. The source distribution includes exactly these six presets, with no
+local actor/style data, credentials or private contest/video planning files.
+No paid or GPU operations ran.
+Verified that the HTML title is `🪿 Mondo Music Video`. The version consistency
+test passed; a fresh handler import and the restarted live preview both reported
+1.1.0. Diff whitespace checks passed. Imported styles remain local pending review.
 
 ## 1.0.18 Live Engine & Hardware Status Monitor (Laya, llama.cpp, ComfyUI, Vision)
 

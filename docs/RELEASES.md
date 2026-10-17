@@ -1,5 +1,19 @@
 # Releases
 
+## 1.1.1 — Upstream 1.1.0 merge & Live Engine Status Dock
+
+- **Upstream 1.1.0 features**: Merged upstream 1.1.0 release adding the goose browser title (`🪿 Mondo Music Video`), six owner-approved SFW visual style presets (`sun_bleach`, `nature_doc`, `industrial_decay`, `noir_bw`, `gel_wash_psych`, `crt_1990s`) in `examples/style-presets`, and demo file packaging rules.
+- **Live Engine & Hardware Dock**: Real-time status UI monitoring Laya, llama.cpp, ComfyUI, and Vision with GPU device detection, active/sleeping state differentiation, animated pulsing status dots, and `/api/services/status`.
+
+## 1.1.0 — Studio usability release
+
+The browser tab now starts with the goose emoji: **🪿 Mondo Music Video**.
+This minor release follows the SDK rendering integration, expanded vocabulary,
+model controls, dark mode and resizable casting improvements delivered across
+1.0.x. Six owner-reviewed styles are now available as optional presets in
+`examples/style-presets`, with installation instructions and integrity hashes.
+This asset-only addition leaves the application at 1.1.0.
+
 ## 1.0.18 — Live Engine & Hardware Status Monitor (Laya, llama.cpp, ComfyUI, Vision)
 
 - **Dedicated Service Dock**: Live UI monitoring dock displaying the status of Laya, llama.cpp, ComfyUI, and Vision services with role descriptions, animated pulsing status dots, and badges.

@@ -1,0 +1,41 @@
+{
+  "styles": [
+    {
+      "id": "sun_bleach",
+      "name": "Sun Bleach",
+      "file": "sun_bleach.json",
+      "sha256": "c4f30b559e9c343637e8e5e315e86e248c686fafe8e5a97611d078f4d259c8ef"
+    },
+    {
+      "id": "nature_doc",
+      "name": "Nature Documentary",
+      "file": "nature_doc.json",
+      "sha256": "5702ad01feab4761a4bd210d650e2dae2fbfa50597194e1a913872221cf874fa"
+    },
+    {
+      "id": "industrial_decay",
+      "name": "Industrial Decay",
+      "file": "industrial_decay.json",
+      "sha256": "2814ebbc439125c46cfd9e033a9008c83ee95067edee7fb4070dbf897515efd7"
+    },
+    {
+      "id": "noir_bw",
+      "name": "Noir B&W",
+      "file": "noir_bw.json",
+      "sha256": "c772712c229b8336f00c27ff1e0b0f660cf9368160b5b1ff8859eb8bd213aabb"
+    },
+    {
+      "id": "gel_wash_psych",
+      "name": "Gel Wash Psych",
+      "file": "gel_wash_psych.json",
+      "sha256": "51362153961cfe951f786840f5e2d5cc5d282da994abfda7086934722924ad71"
+    },
+    {
+      "id": "crt_1990s",
+      "name": "CRT 1990s",
+      "file": "crt_1990s.json",
+      "sha256": "3e74752d2b3d7cd021434e0a0a6c94d624d9f7578957de948bc0a68fdb59c328"
+    }
+  ],
+  "authorization": "Owner explicitly approved publishing these six styles on 2026-10-17. No other private styles or actors are authorized by this addition."
+}

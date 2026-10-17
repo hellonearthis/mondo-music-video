@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.0.18** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.1.1** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
@@ -16,7 +16,8 @@ passage to its planned frames, joins the picture, and restores your original son
 
 - Music videos with beat-driven cuts and energy-aware montage grammar.
 - Consistent reference-image actors with Open Actor Protocol built in.
-- Your own visual styles, including styles harvested from reference images.
+- Your own visual styles, including styles harvested from reference images, plus
+  six optional [style presets](examples/style-presets/README.md).
 - Animated production idents and opening or closing credits.
 - Finished videos to play, download, or upscale with your installed Topaz tools.
 

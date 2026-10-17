@@ -9,6 +9,10 @@
   must remain private: never stage, package, publish or copy their images or
   metadata into release artifacts. Keep `data/` and local `actors/` ignored.
   Do not broaden this allowlist without explicit owner authorization.
+- The six owner-authorized public style presets are `sun_bleach`, `nature_doc`,
+  `industrial_decay`, `noir_bw`, `gel_wash_psych` and `crt_1990s`, recorded in
+  `examples/style-presets/manifest.json`. Other private styles require separate
+  owner authorization before publication. Keep local `data/styles/` ignored.
 - Never import from a sibling studio checkout or link its Git object store.
 - Every delivered batch of program changes needs a new application version.
   The version source is `MGL_APP_VERSION` in `webapp/mondo_web.py`; update

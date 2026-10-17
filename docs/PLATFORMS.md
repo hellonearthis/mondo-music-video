@@ -1,4 +1,4 @@
-# Platform support — 1.0.18
+# Platform support — 1.1.1
 
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |

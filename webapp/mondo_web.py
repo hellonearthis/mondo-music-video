@@ -33,7 +33,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.18"
+MGL_APP_VERSION = "1.1.1"
 WEB = Path(__file__).parent
 
 

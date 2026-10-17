@@ -308,5 +308,47 @@
     "reference_sha256": "dc407b6a8fcb24da025538fc03147d1d6aa51acfb65e0c616f6f0f32126818c3",
     "authorization": "Owner explicitly authorized this actor for public distribution on 2026-10-17; authorization excludes every other roster actor.",
     "adaptation": "Signed OAP package with cleaned reference image and visual description/rider only; dedicated temporary signing identity; no voice assets, private keys, original studio metadata or runtime studio dependencies."
+  },
+  {
+    "source": "styles/sun_bleach/style.json and aesthetic.md",
+    "public": "examples/style-presets/sun_bleach.json",
+    "published_sha256": "c4f30b559e9c343637e8e5e315e86e248c686fafe8e5a97611d078f4d259c8ef",
+    "authorization": "Owner explicitly approved public distribution of this style on 2026-10-17.",
+    "adaptation": "Converted display_name to name and description to style_card; preserved aesthetic lighting/color/grain/camera directions. Public-only SFW curation replaces sheer/suggestive costume and sound cues, removes wet-flesh language, and adds explicit fully clothed/non-sexual content boundaries. Original private styles and studio render defaults are not modified or imported."
+  },
+  {
+    "source": "styles/nature_doc/style.json and aesthetic.md",
+    "public": "examples/style-presets/nature_doc.json",
+    "published_sha256": "5702ad01feab4761a4bd210d650e2dae2fbfa50597194e1a913872221cf874fa",
+    "authorization": "Owner explicitly approved public distribution of this style on 2026-10-17.",
+    "adaptation": "Converted display_name to name and description to style_card; preserved aesthetic lighting/color/grain/camera directions. Public-only SFW curation replaces sheer/suggestive costume and sound cues, removes wet-flesh language, and adds explicit fully clothed/non-sexual content boundaries. Original private styles and studio render defaults are not modified or imported."
+  },
+  {
+    "source": "styles/industrial_decay/style.json and aesthetic.md",
+    "public": "examples/style-presets/industrial_decay.json",
+    "published_sha256": "2814ebbc439125c46cfd9e033a9008c83ee95067edee7fb4070dbf897515efd7",
+    "authorization": "Owner explicitly approved public distribution of this style on 2026-10-17.",
+    "adaptation": "Converted display_name to name and description to style_card; preserved aesthetic lighting/color/grain/camera directions. Public-only SFW curation replaces sheer/suggestive costume and sound cues, removes wet-flesh language, and adds explicit fully clothed/non-sexual content boundaries. Original private styles and studio render defaults are not modified or imported."
+  },
+  {
+    "source": "styles/noir_bw/style.json and aesthetic.md",
+    "public": "examples/style-presets/noir_bw.json",
+    "published_sha256": "c772712c229b8336f00c27ff1e0b0f660cf9368160b5b1ff8859eb8bd213aabb",
+    "authorization": "Owner explicitly approved public distribution of this style on 2026-10-17.",
+    "adaptation": "Converted display_name to name and description to style_card; preserved aesthetic lighting/color/grain/camera directions. Public-only SFW curation replaces sheer/suggestive costume and sound cues, removes wet-flesh language, and adds explicit fully clothed/non-sexual content boundaries. Original private styles and studio render defaults are not modified or imported."
+  },
+  {
+    "source": "styles/gel_wash_psych/style.json and aesthetic.md",
+    "public": "examples/style-presets/gel_wash_psych.json",
+    "published_sha256": "51362153961cfe951f786840f5e2d5cc5d282da994abfda7086934722924ad71",
+    "authorization": "Owner explicitly approved public distribution of this style on 2026-10-17.",
+    "adaptation": "Converted display_name to name and description to style_card; preserved aesthetic lighting/color/grain/camera directions. Public-only SFW curation replaces sheer/suggestive costume and sound cues, removes wet-flesh language, and adds explicit fully clothed/non-sexual content boundaries. Original private styles and studio render defaults are not modified or imported."
+  },
+  {
+    "source": "styles/crt_1990s/style.json and aesthetic.md",
+    "public": "examples/style-presets/crt_1990s.json",
+    "published_sha256": "3e74752d2b3d7cd021434e0a0a6c94d624d9f7578957de948bc0a68fdb59c328",
+    "authorization": "Owner explicitly approved public distribution of this style on 2026-10-17.",
+    "adaptation": "Converted display_name to name and description to style_card; preserved aesthetic lighting/color/grain/camera directions. Public-only SFW curation replaces sheer/suggestive costume and sound cues, removes wet-flesh language, and adds explicit fully clothed/non-sexual content boundaries. Original private styles and studio render defaults are not modified or imported."
   }
 ]
