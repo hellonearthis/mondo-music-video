@@ -1,4 +1,4 @@
-# Platform support — 1.0.16
+# Platform support — 1.0.17
 
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |

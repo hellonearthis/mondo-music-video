@@ -1,11 +1,32 @@
 # Releases
 
+## 1.0.17 — Integration of upstream features: starter cast, dark mode & resizable cast list
+
+- **Upstream starter cast packages**: Four owner-authorized starter actors (`animal_pig`, `robobabe1`, `henchman_1`, and `human_female_casual_01`) added in `examples/starter-cast` as signed OAP packages with manifest and verification.
+- **Dark mode by default & concise actor cards**: Merged upstream default dark mode theme and concise actor identity card display.
+- **Resizable cast roster**: Merged upstream vertical resize handle for music-video cast roster.
+- **Service error diagnostics**: Comprehensive component attribution (`ComfyUI`, `llama.cpp (Writer)`, `Vision`, and `Laya`) in startup checks, operation logs, and job status.
+- **Inline song player & token buffer guides**: Retained audio preview player and llama.cpp multimodal configuration guide.
+
 ## 1.0.16 — Service error reporting & diagnostic service identification
 
 - **Component-aware service error reports**: Service health failures and startup exceptions now identify the specific failing component (`ComfyUI`, `llama.cpp (Writer)`, `Vision`, or `Laya`), the failed health URL, and the corresponding setting key (e.g. `comfy_launch`, `writer_launch`, `laya_model_dir`).
 - **Surface operation error detail in Job status**: `Jobs` now inspects the operation log to surface the exact component failure message in the status payload and UI instead of a generic command failure sentence.
 - **ComfyUI log inclusion**: `/api/log/{run_id}` now automatically includes `comfy-service.log` output when present alongside `writer-service.log` for immediate debugging in the studio log view.
 - **Laya & Writer validation context**: Wrapped Laya loading and Writer invocation in worker processes to clearly attribute missing dependencies, model directory errors, or network rejection to their respective services.
+
+## 1.0.16 (Upstream) — Resizable cast list
+
+The music-video cast list can be resized vertically using its lower-right
+handle, making larger rosters easier to browse. Its width follows the form,
+and existing selections and multiple-selection controls remain intact.
+
+## Optional starter cast — asset addition
+
+Four owner-authorized actors are available in `examples/starter-cast` as signed
+OAP packages: `animal_pig`, `robobabe1`, `henchman_1` and
+`human_female_casual_01`. Import instructions and SHA-256 hashes accompany them.
+All other roster actors remain private and ignored.
 
 ## 1.0.15 — Laya CPU fallback, device settings dropdown & llama.cpp token buffer guide
 
@@ -15,10 +36,23 @@
 - **llama.cpp Setup & Token Buffer modal dialog**: Added comprehensive guide dialog (`#llama-helper-dialog`) in the Web Studio with ready-to-copy JSON launch command, "Apply to Writer Launch" button, and technical explanations of context size, visual patch tokens, and service ports.
 - **Automated fallback regression test**: Added unit test in `test_original_engine.py` covering device fallback behaviors and updated `docs/SOURCE_EXTRACTION.json`.
 
+## 1.0.15 (Upstream) — Dark mode by default
+
+The studio opens in dark mode, including forms, dialogs, file browsing and OAP
+reports. A header toggle switches to light mode; the browser remembers the choice
+and applies it before the page paints. Theme switching works even when browser
+storage is unavailable.
+
 ## 1.0.14 — Inline song audio preview player & studio direction guide
 
 - **Inline song audio player**: Added `.song-preview-wrap` containing `<audio class="song-preview" controls>` right below `.song-input` and `.song-receipt`, enabling instant listening and scrubbing on selection via `URL.createObjectURL` and persistent server-backed playback via `GET /api/uploads/song/{filename}` across project reloads.
 - **Studio direction prompting guide**: Added `docs/STUDIO_DIRECTION_PROMPTING.md` mapping the 8 production departments, job contract structure, practical mechanisms sampling, and directorial UI controls.
+
+## 1.0.14 (Upstream) — Actor card overviews
+
+Actor cards show only the Identity section when a description includes structured
+visual details. Full actor descriptions remain available for generation and OAP
+export. Plain descriptions continue to display normally.
 
 ## 1.0.13 — Expanded SFW vocabulary and contributor thanks
 

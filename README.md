@@ -1,6 +1,9 @@
 # Mondo Music Video
 
-**Version 1.0.16** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.0.17** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+
+The studio defaults to dark mode. Use the header theme toggle for light mode; your
+browser remembers your choice.
 
 Turn your song into a complete music video. Mondo listens to the track, detects
 beats and downbeats, measures energy, and identifies musical sections. Its
@@ -19,7 +22,9 @@ passage to its planned frames, joins the picture, and restores your original son
 
 Use local models or supported API providers. One production runs at a time,
 with progress, logs and cancellation. You provide your media, models and API
-keys. No actors, model weights or third-party commercial software are bundled.
+keys. Four optional [starter actors](examples/starter-cast/README.md) are included
+as importable OAP packages. Model weights and third-party commercial software
+are not bundled.
 
 ## Official Comfy SDK rendering
 

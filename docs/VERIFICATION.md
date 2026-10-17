@@ -1,4 +1,28 @@
-# Verification — 1.0.16
+# Verification — 1.0.17
+
+## 1.0.17 Integration of upstream features (starter cast, dark mode, resizable cast list)
+
+- Verified four signed starter actor OAP packages in `examples/starter-cast` with checksums and manifest.
+- Verified default dark mode styling and theme toggle persistence.
+- Verified resizable cast list styling and browser interaction.
+- Verified service error reporting and diagnostic identification for ComfyUI, llama.cpp, Vision, and Laya.
+- Verified version `1.0.17` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
+
+## 1.0.16 (Upstream) resizable cast selector
+
+Both existing Chromium flows and the version consistency test passed. A separate browser check with the 85-actor local roster dragged the list, retained the selected actor, and confirmed no page overflow at a 360px viewport. Fresh handler import and live `/api/version` both reported 1.0.16.
+
+## Optional starter cast publication
+
+Verified exactly four signed OAP archives against their allowlist and SHA-256 manifest (`animal_pig.oap`, `henchman_1.oap`, `human_female_casual_01.oap`, `robobabe1.oap`). Each contains only `manifest.json` and `identity/reference.png`. All four imported into a temporary empty roster, retained their visual descriptions, and passed casting checks.
+
+## 1.0.15 (Upstream) default dark theme
+
+Verified default dark rendering, switching to light, preference persistence across reloads in both directions, and a visible toggle without page overflow at 360px. Desktop and mobile previews were visually inspected.
+
+## 1.0.14 (Upstream) actor card overviews
+
+All 68 tests and 28 subtests passed in 25.87 seconds, including existing Chromium flows. The display helper was checked against all 85 local actors: each returned its Identity overview, without Hair or later sections; plain descriptions remained intact. Full stored descriptions were unchanged.
 
 Run from a checkout:
 

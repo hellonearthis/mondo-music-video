@@ -47,3 +47,9 @@ desktop.ini
 
 # Local contest planning notes
 /docs/COMFY_CONTEST*.md
+
+# Only these owner-authorized starter actor packages may be published.
+!/examples/starter-cast/animal_pig.oap
+!/examples/starter-cast/robobabe1.oap
+!/examples/starter-cast/henchman_1.oap
+!/examples/starter-cast/human_female_casual_01.oap
