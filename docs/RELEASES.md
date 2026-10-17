@@ -1,5 +1,20 @@
 # Releases
 
+## 1.0.16 — Service error reporting & diagnostic service identification
+
+- **Component-aware service error reports**: Service health failures and startup exceptions now identify the specific failing component (`ComfyUI`, `llama.cpp (Writer)`, `Vision`, or `Laya`), the failed health URL, and the corresponding setting key (e.g. `comfy_launch`, `writer_launch`, `laya_model_dir`).
+- **Surface operation error detail in Job status**: `Jobs` now inspects the operation log to surface the exact component failure message in the status payload and UI instead of a generic command failure sentence.
+- **ComfyUI log inclusion**: `/api/log/{run_id}` now automatically includes `comfy-service.log` output when present alongside `writer-service.log` for immediate debugging in the studio log view.
+- **Laya & Writer validation context**: Wrapped Laya loading and Writer invocation in worker processes to clearly attribute missing dependencies, model directory errors, or network rejection to their respective services.
+
+## 1.0.15 — Laya CPU fallback, device settings dropdown & llama.cpp token buffer guide
+
+- **Graceful Laya hardware device fallback**: Added automatic fallback to `cpu` in `LayaSemanticValidator` when `laya_device` is configured for `cuda` or `mps` but CUDA/MPS is not compiled or available in PyTorch, preventing validator crashes on CPU environments.
+- **Laya device dropdown in Settings UI**: Rendered `laya_device` as a select dropdown with options for `cpu`, `cuda`, and `mps` in the Web Studio settings panel.
+- **llama.cpp token buffer and Qwen-VL grounding support**: Updated `start.ps1` with configurable `-ContextSize` (defaulting to 16,384 tokens), logical/physical batching (`-b 2048 -ub 1024`), and automated `--image-min-tokens 1024` injection when vision projectors are detected.
+- **llama.cpp Setup & Token Buffer modal dialog**: Added comprehensive guide dialog (`#llama-helper-dialog`) in the Web Studio with ready-to-copy JSON launch command, "Apply to Writer Launch" button, and technical explanations of context size, visual patch tokens, and service ports.
+- **Automated fallback regression test**: Added unit test in `test_original_engine.py` covering device fallback behaviors and updated `docs/SOURCE_EXTRACTION.json`.
+
 ## 1.0.14 — Inline song audio preview player & studio direction guide
 
 - **Inline song audio player**: Added `.song-preview-wrap` containing `<audio class="song-preview" controls>` right below `.song-input` and `.song-receipt`, enabling instant listening and scrubbing on selection via `URL.createObjectURL` and persistent server-backed playback via `GET /api/uploads/song/{filename}` across project reloads.

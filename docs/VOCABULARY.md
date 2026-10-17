@@ -13,9 +13,9 @@ at runtime.
 | Mechanisms | 5 | 256 |
 | Costume | 3 | 31 |
 | Tonal registers | 4 | 185 |
-| Lighting | 4 | 227 |
+| Lighting | 4 | 220 |
 | Footage anchors | 3 | 70 |
-| Practical effects | 2 | 111 |
+| Practical effects | 2 | 109 |
 | Shot scales | 20 | 20 |
 | Camera choices across energy bands | 22 | 22 |
 | Mouth-rigging clauses | 1 | 1 |

@@ -121,6 +121,34 @@ class OriginalEngineTests(unittest.TestCase):
         for file in ('webapp/index.html','webapp/mondo_web.py'):
             self.assertNotIn('nsfw_local',(ROOT/file).read_text(encoding='utf-8'))
 
+    def test_laya_device_fallback_when_device_unavailable(self):
+        import sys
+        from unittest.mock import MagicMock
+        from mmv.storage import Storage
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            (p / 'model.safetensors').touch()
+            (p / 'rl_agent_config.json').touch()
+            (p / 'tokenizer').mkdir()
+            (p / 'encoder').mkdir()
+            (p / 'encoder/config.json').touch()
+            mock_mod = MagicMock()
+            mock_agent_cls = MagicMock()
+            mock_agent_cls.return_value.cfg = {}
+            mock_mod.RLAgent = mock_agent_cls
+            with patch.dict(sys.modules, {'rl_agent_api': mock_mod}):
+                # Test cuda fallback when cuda unavailable
+                with patch.object(Storage, 'settings', return_value={'laya_device': 'cuda', 'laya_model_dir': str(p)}), \
+                     patch('torch.cuda.is_available', return_value=False):
+                    v = LayaSemanticValidator()
+                    v._load_agent()
+                    mock_agent_cls.assert_called_with(str(p), device='cpu')
+                # Test mps fallback when mps unavailable
+                with patch.object(Storage, 'settings', return_value={'laya_device': 'mps', 'laya_model_dir': str(p)}):
+                    v = LayaSemanticValidator()
+                    v._load_agent()
+                    mock_agent_cls.assert_called_with(str(p), device='cpu')
+
     def test_python_311_syntax(self):
         for directory in ('mmv','webapp'):
             for path in (ROOT/directory).rglob('*.py'):

@@ -240,8 +240,13 @@ class LayaSemanticValidator(ValidatorProfile):
                 f"LAYA DEPENDENCIES MISSING: the vendored inference modules "
                 f"failed to import ({e}) — torch and numpy must be "
                 "importable. Nothing was judged.") from e
+        import torch
         from ...storage import Storage
         device = Storage().settings()["laya_device"]
+        if device == "cuda" and not torch.cuda.is_available():
+            device = "cpu"
+        elif device == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
+            device = "cpu"
         try:
             agent = rl_agent_api.RLAgent(str(model_dir), device=device)
         except ImportError as e:

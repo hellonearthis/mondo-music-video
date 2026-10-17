@@ -669,6 +669,13 @@ async function loadSettings() {
     } else if (name === "backend") {
       input = document.createElement("select");
       input.append(...Object.entries(catalog.backends).map(([key, card]) => option(key, card.name, `${card.name}: ${card.description || key}`)));
+    } else if (name === "laya_device") {
+      input = document.createElement("select");
+      input.append(
+        option("cpu", "CPU", "Run Laya validator on CPU"),
+        option("cuda", "CUDA", "Run Laya validator on NVIDIA GPU (CUDA)"),
+        option("mps", "MPS", "Run Laya validator on Apple Silicon (MPS)")
+      );
     } else {
       input = document.createElement("input");
       input.type = name.endsWith("call_estimate") ? "number" : "text";
@@ -707,6 +714,23 @@ async function loadSettings() {
       label.append(group);
     } else {
       label.append(input);
+      if (name === "writer_launch") {
+        const hint = document.createElement("div");
+        hint.style.marginTop = "4px";
+        const helpBtn = document.createElement("button");
+        helpBtn.type = "button";
+        helpBtn.className = "quiet llama-help-btn";
+        helpBtn.style.display = "inline";
+        helpBtn.style.padding = "0";
+        helpBtn.textContent = "ℹ️ Need help with token buffers or launch arguments? Open llama.cpp guide ↗";
+        helpBtn.onclick = (e) => {
+          e.preventDefault();
+          const dialog = $("#llama-helper-dialog");
+          if (dialog) dialog.showModal();
+        };
+        hint.append(helpBtn);
+        label.append(hint);
+      }
     }
     return label;
   });
@@ -785,28 +809,93 @@ function showQuote(request, quote) {
   $("#consent").checked = false; $("#preview-dialog").showModal();
 }
 
-async function poll() {
+async function applyStatus(status) {
+  if (!status || !status.state) return;
+  currentRun = status.id;
+  const busy = ["running", "cancelling"].includes(status.state);
+  $("#status-title").textContent = status.state === "idle" ? "READY WHEN YOU ARE" : status.state.toUpperCase();
+  $("#status-message").textContent = status.message || "One idea. One production at a time.";
+  $("#progress").value = status.progress || 0;
+  $("#cancel").hidden = !busy;
+  $("#resume-production").hidden = !status.can_resume;
+  $("#show-log").hidden = false;
+  $$(".operation-action").forEach(button => button.disabled = busy);
+  if (lastState && lastState !== status.state && !busy) {
+    await Promise.all([loadActors(), loadStyles(), loadOutputs()]);
+  }
+  lastState = status.state;
+}
+
+let sseSource = null;
+let sseConnected = false;
+
+function setupEventStream() {
+  if (typeof EventSource === "undefined") {
+    fallbackPoll();
+    return;
+  }
+  if (sseSource) {
+    try { sseSource.close(); } catch {}
+  }
+  try {
+    sseSource = new EventSource("/api/events");
+    sseSource.onopen = () => {
+      sseConnected = true;
+    };
+    sseSource.addEventListener("status", async (event) => {
+      sseConnected = true;
+      try {
+        const status = JSON.parse(event.data);
+        await applyStatus(status);
+        if (!$("#operation-log").hidden && ["running", "cancelling"].includes(status.state)) {
+          await updateLogDisplay();
+        }
+      } catch (err) {}
+    });
+    sseSource.addEventListener("log", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (!$("#operation-log").hidden && data.message) {
+          const logElem = $("#operation-log");
+          if (logElem && !logElem.textContent.includes(data.message)) {
+            logElem.textContent += "\n" + data.message;
+          }
+        }
+      } catch (err) {}
+    });
+    sseSource.onerror = () => {
+      sseConnected = false;
+    };
+  } catch (err) {
+    sseConnected = false;
+    fallbackPoll();
+  }
+}
+
+async function fallbackPoll() {
+  if (sseConnected) return;
   try {
     const status = await (await api("/api/status")).json();
-    currentRun = status.id;
-    const busy = ["running", "cancelling"].includes(status.state);
-    $("#status-title").textContent = status.state === "idle" ? "READY WHEN YOU ARE" : status.state.toUpperCase();
-    $("#status-message").textContent = status.message || "One idea. One production at a time.";
-    $("#progress").value = status.progress || 0;
-    $("#cancel").hidden = !busy;
-    $("#resume-production").hidden = !status.can_resume;
-    $("#show-log").hidden = false;
-    $$(".operation-action").forEach(button => button.disabled = busy);
-    if (lastState && lastState !== status.state && !busy) { await Promise.all([loadActors(), loadStyles(), loadOutputs()]); }
-    lastState = status.state;
-    if (!$("#operation-log").hidden) await updateLogDisplay();
-  } catch (error) { $("#status-message").textContent = "Connection unavailable. The server may have stopped."; }
-  setTimeout(poll, 2000);
+    await applyStatus(status);
+    if (!$("#operation-log").hidden && ["running", "cancelling"].includes(status.state)) {
+      await updateLogDisplay();
+    }
+  } catch (error) {
+    $("#status-message").textContent = "Connection unavailable. The server may have stopped.";
+  }
+  const isBusy = lastState && ["running", "cancelling"].includes(lastState);
+  setTimeout(fallbackPoll, isBusy ? 2000 : 10000);
+}
+
+function poll() {
+  if (sseConnected) return;
+  fallbackPoll();
 }
 
 async function initialize() {
   initTooltips();
   setupOapGuide();
+  setupLlamaGuide();
   catalog = await (await api("/api/catalog")).json();
   const version = await (await api("/api/version")).json();
   $("#version").textContent = version.version; $("#oap-version").textContent = catalog.oap_version;
@@ -1044,6 +1133,81 @@ async function initialize() {
     }
   }
 
+  function setupLlamaGuide() {
+    const dialog = $("#llama-helper-dialog");
+    if (!dialog) return;
+
+    $$(".llama-help-btn").forEach(btn => {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        dialog.showModal();
+      };
+    });
+
+    $$(".close-llama-dialog").forEach(btn => {
+      btn.onclick = () => {
+        dialog.close();
+      };
+    });
+
+    $$("#llama-helper-dialog .nav-to-settings-btn").forEach(btn => {
+      btn.onclick = () => {
+        const settingsNav = document.querySelector('.nav[data-panel="settings"]');
+        if (settingsNav) settingsNav.click();
+        if (dialog.open) dialog.close();
+      };
+    });
+
+    $$(".llama-tab-btn").forEach(tabBtn => {
+      tabBtn.onclick = () => {
+        const tabId = tabBtn.dataset.tab;
+        $$(".llama-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
+        $$(".llama-tab-content").forEach(content => {
+          const matches = content.id === `llama-tab-${tabId}`;
+          content.classList.toggle("active", matches);
+          content.hidden = !matches;
+        });
+      };
+    });
+
+    const copyBtn = $("#copy-llama-json");
+    if (copyBtn) {
+      copyBtn.onclick = async () => {
+        const text = $("#llama-recommended-json")?.textContent?.trim() || "";
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.append(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          notice("Recommended llama.cpp launch JSON copied to clipboard.");
+          setTimeout(() => { if ($("#notice").textContent.startsWith("Recommended llama.cpp")) notice(""); }, 3000);
+        } catch (err) {
+          notice("Failed to copy: " + err.message);
+        }
+      };
+    }
+
+    const applyBtn = $("#apply-llama-json");
+    if (applyBtn) {
+      applyBtn.onclick = () => {
+        const text = $("#llama-recommended-json")?.textContent?.trim() || "";
+        const input = $('input[name="writer_launch"]');
+        if (input) {
+          input.value = text;
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          notice("Applied recommended launch arguments to Writer Launch field. Click 'Save settings' to persist.");
+        }
+        if (dialog.open) dialog.close();
+      };
+    }
+  }
+
   $("#inspect-oap").onclick = handle(async () => {
     const file = $("#oap-file").files[0]; if (!file) throw new Error("Choose an OAP package first");
     $("#oap-import-form").hidden = true;
@@ -1107,6 +1271,6 @@ async function initialize() {
   }
 
   await restoreProject();
-  poll();
+  setupEventStream();
 }
 initialize().catch(error => notice(error.message));

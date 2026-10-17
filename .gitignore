@@ -42,6 +42,7 @@ oap_outbox/
 .vscode/
 .DS_Store
 Thumbs.db
+desktop.ini
 *.bak
 
 # Local contest planning notes

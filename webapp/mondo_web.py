@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import secrets
@@ -14,8 +15,15 @@ from typing import Literal
 from urllib.parse import urlparse
 
 import oap
+
+class _PollingAccessFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p in msg for p in ("/api/status", "/api/events", "/api/log/"))
+
+logging.getLogger("uvicorn.access").addFilter(_PollingAccessFilter())
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,7 +32,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.0.14"
+MGL_APP_VERSION = "1.0.16"
 WEB = Path(__file__).parent
 
 
@@ -330,13 +338,55 @@ def create_app(home=None, *, test_hosts=False):
 
     app.get("/api/version")(api_version)
 
-    @app.get("/api/status")
-    def status():
+    def get_full_status():
         result = jobs.status()
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
                                 and previous.get('backend') == 'comfy_sdk_h3')
         return result
+
+    @app.get("/api/status")
+    def status():
+        return get_full_status()
+
+    @app.get("/api/events")
+    async def events(request: Request):
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def on_event(status_dict, log_line=None):
+            full_status = get_full_status()
+            loop.call_soon_threadsafe(queue.put_nowait, {"status": full_status, "log": log_line})
+
+        unsubscribe = jobs.subscribe(on_event)
+
+        async def event_generator():
+            try:
+                initial = get_full_status()
+                yield f"event: status\ndata: {json.dumps(initial)}\n\n"
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        data = await asyncio.wait_for(queue.get(), timeout=15.0)
+                        if "status" in data:
+                            yield f"event: status\ndata: {json.dumps(data['status'])}\n\n"
+                        if data.get("log"):
+                            yield f"event: log\ndata: {json.dumps({'message': data['log']})}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": keep-alive\n\n"
+            finally:
+                unsubscribe()
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
 
     @app.post("/api/cancel")
     def cancel():
@@ -740,7 +790,13 @@ def create_app(home=None, *, test_hosts=False):
             if writer_log.exists() and writer_log.stat().st_size > 0:
                 with writer_log.open("rb") as stream:
                     stream.seek(max(0, writer_log.stat().st_size - 16000))
-                    sections.append("\n--- Writer Service Output ---\n" + stream.read().decode(errors="replace"))
+                    sections.append("\n--- Writer Service Output (llama.cpp) ---\n" + stream.read().decode(errors="replace"))
+            # Include ComfyUI service output if present
+            comfy_log = directory / "comfy-service.log"
+            if comfy_log.exists() and comfy_log.stat().st_size > 0:
+                with comfy_log.open("rb") as stream:
+                    stream.seek(max(0, comfy_log.stat().st_size - 16000))
+                    sections.append("\n--- ComfyUI Service Output ---\n" + stream.read().decode(errors="replace"))
             # Include final operation status
             op_info = read_json(directory / "operation.json", {})
             if op_info.get("state") == "failed" and op_info.get("message"):

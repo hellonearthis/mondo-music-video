@@ -369,9 +369,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.0.14")
+        self.assertEqual(api_version()["version"], "1.0.16")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.0.14", (root / "README.md").read_text())
+        self.assertIn("1.0.16", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_uploaded_song_preview_endpoint(self):
@@ -408,6 +408,27 @@ class PublicAppTests(unittest.TestCase):
         res = self.client.post("/api/log/clear")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json(), {"status": "cleared"})
+
+    def test_sse_events_and_jobs_subscription(self):
+        notifications = []
+        unsub = self.app.state.jobs.subscribe(lambda st, log: notifications.append((st, log)))
+        self.app.state.jobs.notify({"state": "test_state"}, log_line="test_line")
+        unsub()
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0][0]["state"], "test_state")
+        self.assertEqual(notifications[0][1], "test_line")
+
+        with self.client.stream("GET", "/api/events") as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("text/event-stream", response.headers["content-type"])
+            lines = []
+            for line in response.iter_lines():
+                if line:
+                    lines.append(line)
+                if len(lines) >= 2:
+                    break
+            self.assertEqual(lines[0], "event: status")
+            self.assertIn('"state":', lines[1])
         self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
         self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
 
@@ -945,6 +966,52 @@ class UtilityTests(unittest.TestCase):
                     download_models(store, manifest)
                 network.assert_not_called()
 
+    def test_service_error_reporting_identifies_comfyui_and_launch_key(self):
+        from mmv import runtime
+        with patch.object(runtime, "http_ok", return_value=False):
+            with self.assertRaises(ValueError) as ctx:
+                runtime.start_service("", "", "http://127.0.0.1:8188/system_stats", Path("/tmp/comfy-service.log"))
+            msg = str(ctx.exception)
+            self.assertIn("ComfyUI service is not running", msg)
+            self.assertIn("http://127.0.0.1:8188/system_stats", msg)
+            self.assertIn("comfy_launch", msg)
+
+    def test_service_error_reporting_identifies_llama_and_launch_key(self):
+        from mmv import runtime
+        with patch.object(runtime, "http_ok", return_value=False):
+            with self.assertRaises(ValueError) as ctx:
+                runtime.start_service("", "", "http://127.0.0.1:8080/v1/models", Path("/tmp/writer-service.log"))
+            msg = str(ctx.exception)
+            self.assertIn("llama.cpp", msg)
+            self.assertIn("http://127.0.0.1:8080/v1/models", msg)
+            self.assertIn("writer_launch", msg)
+
+    def test_service_identification_vision_and_laya(self):
+        from mmv import runtime
+        name, key = runtime.identify_service(health_url="http://127.0.0.1:8080/v1/chat/completions", log="/tmp/vision.log")
+        self.assertIn("Vision", name)
+        name, key = runtime.identify_service(health_url=None, log="/tmp/laya.log")
+        self.assertIn("Laya", name)
+
+    def test_operation_log_endpoint_includes_comfy_log(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            run_dir = store.home / "runs" / "test_run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "operation.log").write_text("Starting pipeline\n", encoding="utf-8")
+            (run_dir / "comfy-service.log").write_text("ComfyUI startup output log", encoding="utf-8")
+            (run_dir / "writer-service.log").write_text("llama-server output log", encoding="utf-8")
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+            res = client.get("/api/log/test_run")
+            self.assertEqual(res.status_code, 200)
+            log_text = res.json()["log"]
+            self.assertIn("--- ComfyUI Service Output ---", log_text)
+            self.assertIn("ComfyUI startup output log", log_text)
+            self.assertIn("--- Writer Service Output (llama.cpp) ---", log_text)
+            self.assertIn("llama-server output log", log_text)
+
 
 if __name__ == "__main__":
     unittest.main()
+

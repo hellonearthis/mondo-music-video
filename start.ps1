@@ -16,6 +16,7 @@ param(
     [string]$Model = "",
     [int]$Port = 8091,
     [int]$LlamaPort = 8081,
+    [int]$ContextSize = 16384,
     [string]$LlamaDir = "C:\llamaCPP",
     [switch]$NoLlama,
     [switch]$NoBrowser,
@@ -36,6 +37,7 @@ if ($Help) {
     Write-Host "  -Model <name>      Select model matching name or substring"
     Write-Host "  -Port <int>        Mondo Studio web port (default: 8091)"
     Write-Host "  -LlamaPort <int>   llama-server port (default: 8081)"
+    Write-Host "  -ContextSize <int> llama-server context window token buffer (default: 16384)"
     Write-Host "  -LlamaDir <path>   llama.cpp installation directory (default: C:\llamaCPP)"
     Write-Host "  -NoLlama           Skip llama.cpp management (assume already running)"
     Write-Host "  -NoBrowser         Do not automatically open the browser"
@@ -190,7 +192,9 @@ if ($selectedModel) {
         "$serverExe",
         "-m", "$($selectedModel.RelativePath)",
         "-ngl", "99",
-        "-c", "8192",
+        "-c", "$ContextSize",
+        "-b", "2048",
+        "-ub", "1024",
         "--flash-attn", "on",
         "--host", "127.0.0.1",
         "--port", "$LlamaPort",
@@ -198,7 +202,7 @@ if ($selectedModel) {
         "--sleep-idle-seconds", "10"
     )
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
+        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)", "--image-min-tokens", "1024")
     }
     $launchJson = ($launchArgs | ConvertTo-Json -Compress)
 
@@ -208,18 +212,19 @@ if ($selectedModel) {
 
     # Sync to Mondo's storage settings using python helper
     $pyCode = @"
+import sys
 from mmv.storage import Storage, read_json, write_json
 store = Storage()
 s = store.settings()
 s['writer_url'] = 'http://127.0.0.1:$LlamaPort'
 s['writer_model'] = '$($selectedModel.DefaultAlias)'
 s['writer_mode'] = 'local'
-s['writer_launch'] = r'''$launchJson'''
+s['writer_launch'] = sys.stdin.read().strip()
 s['writer_cwd'] = r'''$LlamaDir'''
 $visionLines
 write_json(store.home / 'settings.json', s)
 "@
-    & $MmvPython -c $pyCode
+    $launchJson | & $MmvPython -c $pyCode
 }
 
 # Check/Launch llama-server
@@ -232,7 +237,9 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
         $serverArgs = @(
             "-m", (Join-Path $LlamaDir $selectedModel.RelativePath),
             "-ngl", "99",
-            "-c", "8192",
+            "-c", "$ContextSize",
+            "-b", "2048",
+            "-ub", "1024",
             "--flash-attn", "on",
             "--host", "127.0.0.1",
             "--port", "$LlamaPort",
@@ -240,7 +247,7 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
             "--sleep-idle-seconds", "10"
         )
         if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
+            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath), "--image-min-tokens", "1024")
         }
 
         Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $LlamaDir -WindowStyle Minimized

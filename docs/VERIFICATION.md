@@ -1,4 +1,4 @@
-# Verification — 1.0.14
+# Verification — 1.0.16
 
 Run from a checkout:
 
@@ -24,6 +24,23 @@ hosted consent and request receipts; failed-writer render prevention; cancellati
 of the app's own local job; single-operation enforcement; agent CLI and real MCP
 transports; credentials; local HTTP boundaries; downloader integrity; and Topaz
 command construction with preservation of the source video.
+
+## 1.0.16 Service error reporting & diagnostic service identification
+
+- Verified `identify_service` correctly identifies ComfyUI, llama.cpp (Writer), Vision, and Laya from URLs, logs, and command configurations.
+- Verified `start_service` error messages explicitly state the failing service name (e.g. `ComfyUI service is not running`), health URL, and the corresponding configuration key (`comfy_launch` or `writer_launch`).
+- Verified `Jobs.command` extracts and surfaces the underlying process failure detail in the operation status message.
+- Verified `/api/log/{run_id}` output includes `comfy-service.log` when present alongside `writer-service.log`.
+- Verified version `1.0.16` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
+
+## 1.0.15 Laya CPU fallback, device settings dropdown & llama.cpp token buffer guide
+
+- Verified automatic fallback from `cuda` and `mps` to `cpu` when PyTorch does not have CUDA/MPS support compiled or available.
+- Verified `laya_device` select dropdown in `webapp/app.js` with options for `cpu`, `cuda`, and `mps`.
+- Verified `start.ps1` with `-ContextSize` parameter, `--image-min-tokens 1024`, `-b 2048 -ub 1024`, and proper stdin piping for `writer_launch` JSON quoting.
+- Verified `#llama-helper-dialog` modal in `webapp/index.html` and `webapp/app.js` with launch JSON copying and "Apply to Writer Launch" action.
+- Verified `tests/test_original_engine.py` unit test coverage for device fallback.
+- Verified version `1.0.15` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
 
 ## 1.0.14 song preview player & studio direction guide
 
