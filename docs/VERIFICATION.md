@@ -1,4 +1,10 @@
-# Verification — 1.0.16
+# Verification — 1.1.0
+
+## 1.1.0 browser title
+
+Verified that the HTML title is `🪿 Mondo Music Video`. The version consistency
+test passed; a fresh handler import and the restarted live preview both reported
+1.1.0. Diff whitespace checks passed. Imported styles remain local pending review.
 
 ## 1.0.16 resizable cast selector
 

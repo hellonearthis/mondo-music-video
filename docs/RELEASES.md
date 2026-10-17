@@ -1,5 +1,12 @@
 # Releases
 
+## 1.1.0 — Studio usability release
+
+The browser tab now starts with the goose emoji: **🪿 Mondo Music Video**.
+This minor release follows the SDK rendering integration, expanded vocabulary,
+model controls, dark mode and resizable casting improvements delivered across
+1.0.x. The six newly imported styles are still local pending owner review.
+
 ## 1.0.16 — Resizable cast list
 
 The music-video cast list can be resized vertically using its lower-right

@@ -14,3 +14,5 @@ include examples/starter-cast/animal_pig.oap
 include examples/starter-cast/robobabe1.oap
 include examples/starter-cast/henchman_1.oap
 include examples/starter-cast/human_female_casual_01.oap
+
+exclude docs/how_to_video.md
