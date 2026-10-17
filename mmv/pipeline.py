@@ -18,6 +18,18 @@ from .storage import identifier, inside, read_json, write_json
 ENGINE = Path(__file__).parent / 'engine'
 
 
+def load_vocabulary(profile="full"):
+    vocab = read_json(ENGINE / 'config/vocab.json')
+    if profile == "full":
+        return vocab
+    profiles = read_json(ENGINE / 'config/vocabulary_profiles.json')
+    if profile not in profiles:
+        raise ValueError('Unknown visual vocabulary profile')
+    for key, excluded in profiles[profile]['exclude'].items():
+        vocab[key] = [value for value in vocab[key] if value not in excluded]
+    return vocab
+
+
 def references(store, request):
     refs, descriptions = actors.check_cast(store, request.get('actors', []), request['content'])
     for name in request.get('references', []):
@@ -139,7 +151,7 @@ def prepare(store, request):
     aspect_w, aspect_h = map(int, request['aspect'].split(':'))
     width, height = backend.plan_resolution(aspect_w, aspect_h, megapixels=request['megapixels'],
                                             resolution=request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None)
-    vocab = read_json(ENGINE / 'config/vocab.json')
+    vocab = load_vocabulary(request.get('vocabulary_profile', 'full'))
     roster = roster_for(store, request, refs)
     p = plan(score, width=width, height=height, vocab=vocab, seed=request['seed'], slug='music-video',
              bars_per_phrase=request['bars_per_phrase'], ref_policy=request['ref_policy'],

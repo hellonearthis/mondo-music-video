@@ -170,8 +170,8 @@
   {
     "source": "mondo/mondo/validators/laya_semantic.py",
     "public": "mmv/engine/validators/laya_semantic.py",
-    "sha256": "bc6c1c3e5817dd8c42a8381ec36e7e98396b03934def664943c99a7187f0d488",
-    "adaptation": "public model/device settings; music-only clipboard removes script-breakdown question; original inference, decisions and corrective feedback retained"
+    "sha256": "57e60cd4477b93d5066d81ded0f41f9b03627d3c74fffbabee8d5885574e781e",
+    "adaptation": "public model/device settings with explicit optional auto and CUDA/MPS-to-CPU fallback modes; music-only clipboard removes script-breakdown question; original inference, decisions and corrective feedback retained"
   },
   {
     "source": "mondo/mondo/validators/laya/rl_common.py",

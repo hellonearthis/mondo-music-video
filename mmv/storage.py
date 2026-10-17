@@ -79,6 +79,8 @@ DEFAULT_STYLE = {
 }
 
 DEFAULTS = {
+    "writer_api_profile": "", "vision_api_profile": "", "video_api_profile": "",
+    "auto_updates": False,
     "backend": "local_h3", "comfy_url": "http://127.0.0.1:8188",
     "workflow_map_path": str(Path(__file__).parent / "engine/config/injection_map.json"),
     "comfy_input": "", "comfy_output": "", "comfy_sdk_url": "http://127.0.0.1:8189",
@@ -96,7 +98,8 @@ class Storage:
         self.home = Path(home or default_home()).resolve()
         for name in ("actors", "styles", "uploads", "runs", "exports", "models", "cache"):
             (self.home / name).mkdir(parents=True, exist_ok=True)
-        if not (self.home / "styles/daylight.json").exists():
+        removed_styles = read_json(self.home / "removed-assets.json", {}).get("styles", [])
+        if not (self.home / "styles/daylight.json").exists() and "daylight" not in removed_styles:
             write_json(self.home / "styles/daylight.json", DEFAULT_STYLE)
 
     def settings(self):
@@ -105,20 +108,43 @@ class Storage:
             settings["workflow_map_path"] = DEFAULTS["workflow_map_path"]
         if not settings["laya_model_dir"]:
             settings["laya_model_dir"] = str(self.home / "models/laya")
-        return settings
+        from .api_profiles import resolve
+        return resolve(self, settings)
 
     def key(self, name="WAVESPEED_API_KEY"):
+        from .api_profiles import KEYS, selected
+        for role, credential in KEYS.items():
+            if name == credential:
+                profile = selected(self, self.settings(), role)
+                if profile is not None:
+                    return profile.get("key", "")
         return os.environ.get(name) or read_json(self.home / "secrets.json", {}).get(name, "")
 
     def save_key(self, name, value):
         if name not in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
             raise ValueError("Unknown credential")
+        from .api_profiles import KEYS, records
+        for role, credential in KEYS.items():
+            profile_name = self.settings().get(role + "_api_profile")
+            if name == credential and profile_name:
+                profiles = records(self)
+                profiles[profile_name]["key"] = value
+                write_json(self.home / "api-profiles.json", profiles, private=True)
+                return
         secrets = read_json(self.home / "secrets.json", {})
         if value:
             secrets[name] = value
         else:
             secrets.pop(name, None)
         write_json(self.home / "secrets.json", secrets, private=True)
+
+    def secret_values(self):
+        from .api_profiles import records
+        values = list(read_json(self.home / "secrets.json", {}).values())
+        values.extend(item.get("key", "") for item in records(self).values())
+        values.extend(os.environ.get(name, "") for name in
+                      ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"))
+        return sorted({v for v in values if isinstance(v, str) and v}, key=len, reverse=True)
 
     def actor(self, actor_id):
         return read_json(self.home / "actors" / identifier(actor_id) / "actor.json")

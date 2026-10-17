@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "outputs", "settings"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "outputs", "settings", "update"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, outputs, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -79,6 +79,50 @@ def create_server(base_url=None):
     def inspect_oap(filename: str, allow_unsigned: bool = False) -> dict[str, Any]:
         """Inspect a previously uploaded OAP package; unsigned packages require explicit acceptance."""
         return invoke(client.inspect_oap, filename, allow_unsigned)
+
+    @server.tool(annotations=ToolAnnotations(destructive_hint=True))
+    def delete_actor(actor_id: str, confirm: bool = False) -> dict[str, Any]:
+        """Delete a local actor/reference/package only with user authorization (confirm=true); videos/exports stay."""
+        return invoke(client.delete_actor, actor_id, confirm)
+
+    @server.tool(annotations=ToolAnnotations(destructive_hint=True))
+    def delete_style(style_id: str, confirm: bool = False) -> dict[str, Any]:
+        """Delete a local style only with user authorization (confirm=true). Completed videos stay."""
+        return invoke(client.delete_style, style_id, confirm)
+
+    @server.tool()
+    def select_api_profile(name: str) -> dict[str, Any]:
+        """Select a saved API profile for its role while idle. Inspect settings for profiles/costs first; no generation."""
+        return invoke(client.select_api_profile, name)
+
+    @server.tool()
+    def add_api_profile(name: str, role: Literal["writer", "vision", "video"], settings: dict,
+                        key_env: str = "") -> dict[str, Any]:
+        """Add a private API profile without overwriting another. key_env names a secret in the MCP process environment; never supply a literal key."""
+        return invoke(client.add_api_profile, name, role, settings, key_env)
+
+    @server.tool(annotations=ToolAnnotations(destructive_hint=True))
+    def remove_api_profile(name: str, confirm: bool = False) -> dict[str, Any]:
+        """Remove a saved API profile/key only with user authorization. An active profile returns to manual configuration."""
+        return invoke(client.remove_api_profile, name, confirm)
+
+    @server.tool()
+    def update_studio_settings(changes: dict) -> dict[str, Any]:
+        """Change supported service/model/profile/auto-update settings while idle; not executable commands or secret values. No generation."""
+        return invoke(client.update_settings, changes)
+
+    @server.tool()
+    def install_starter_assets(accept_starter_signer: bool = False, restore_removed: bool = False) -> dict[str, Any]:
+        """Install only bundled public actors/styles while idle. Signer acceptance and restoring deletions must reflect explicit user choices."""
+        return invoke(client.install_starter_assets, accept_starter_signer, restore_removed)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def inspect_api_models(url: str, key_env: str = "") -> dict[str, Any]:
+        """GET a provider's advertised /models without generation. Remote HTTPS only; key_env names an authorized secret variable, not its value."""
+        from .provider_setup import inspect_writer
+        def inspect():
+            return inspect_writer(url, key_env=key_env or None)
+        return invoke(inspect)
 
     @server.tool()
     def import_oap(filename: str, actor_id: str = "", allow_unsigned: bool = False, accept_unknown: bool = False) -> dict[str, Any]:

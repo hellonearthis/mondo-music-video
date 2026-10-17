@@ -243,10 +243,19 @@ class LayaSemanticValidator(ValidatorProfile):
         import torch
         from ...storage import Storage
         device = Storage().settings()["laya_device"]
-        if device == "cuda" and not torch.cuda.is_available():
-            device = "cpu"
-        elif device == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
-            device = "cpu"
+        if device == "auto":
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+        elif device in ("cuda_or_cpu", "mps_or_cpu"):
+            if device == "cuda_or_cpu":
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+            else:
+                device = "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu"
+        self.device = device
         try:
             agent = rl_agent_api.RLAgent(str(model_dir), device=device)
         except ImportError as e:

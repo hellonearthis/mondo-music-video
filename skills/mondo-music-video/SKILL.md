@@ -6,6 +6,15 @@ description: Operate a local Mondo Music Video app to create music videos or ide
 
 # Mondo Music Video
 
+For a fresh installation request, follow
+[../../docs/INSTALL_WITH_AGENT.md](../../docs/INSTALL_WITH_AGENT.md) first.
+That guide covers hardware inspection, model recommendations, download approval,
+configuration and readiness checks. The operation instructions below assume an
+installed application.
+If this skill was installed from a wheel without repository documentation,
+read the guide from the user's checkout or the
+[public repository](https://github.com/hodgemann/mondo-music-video/blob/main/docs/INSTALL_WITH_AGENT.md).
+
 Use the running local app, normally `http://127.0.0.1:8091`. Its single-operation
 guard, OAP checks and preview/consent flow remain authoritative. Do not import a
 private studio checkout or invoke a renderer directly to bypass this workflow.
@@ -65,6 +74,22 @@ local signing keys or the application's private data directory. Export only the
 actor package or finished output the user requested, to a new destination.
 
 ## Other operations
+
+Use `inspect_studio(kind="settings")` for available API profiles, then
+`add_api_profile`, `select_api_profile` or `remove_api_profile` for requested
+account changes. Removing an account/key or deleting an actor/style requires
+explicit user authorization before setting `confirm=true`. Profile removal
+restores manual configuration if it was active. Secrets belong in the private
+Settings form or an explicitly designated existing `key_env`, never literal
+tool arguments/results. Do not automatically switch accounts after a paid failure.
+
+`update_studio_settings` supports model, endpoint, profile, Laya and optional
+auto-update choices, excluding executable commands and secret values.
+`inspect_api_models` only lists advertised models; it does not verify inference.
+`install_starter_assets` supplies the public starter actors/styles. Review its
+returned public signer and riders before accepting the signer. Preserve existing
+assets and prior deletions; restore removed starters only when requested.
+After an application upgrade, reconnect the MCP client to refresh its tools.
 
 Harvest uses the configured vision service and its per-call cost estimate.
 Generate idents separately, then select their completed output IDs for opening

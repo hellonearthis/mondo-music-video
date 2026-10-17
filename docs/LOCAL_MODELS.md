@@ -20,7 +20,9 @@ There is no automatic paid retry or provider substitution.
 
 The original Laya semantic reviewer checks visual density, cinematic
 completeness, style and content restrictions. CUDA is the default device.
-CPU and MPS can be selected explicitly for other hardware. A missing or failed
+CPU and MPS can be selected explicitly for other hardware. Auto and CUDA/MPS
+with CPU fallback are optional selections; the default CUDA choice does not
+silently switch devices. See [device and writer tuning](LOCAL_WRITER_TUNING.md). A missing or failed
 Laya model stops music-video production; it is never silently bypassed.
 
 The configured folder must contain:

@@ -39,10 +39,39 @@ configure them through the local app or its own environment.
 
 The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
-read logs, create actors/styles, inspect/import/export OAP, download outputs and
-start a requested Topaz export. It has no arbitrary HTTP, shell, credential-write
-or private-studio tools. It permits only a localhost app URL and bypasses proxy
-environment variables for local calls.
+read logs, create/delete actors/styles, inspect/import/export OAP, download outputs
+and start a requested Topaz export. v1.2.1 exposes **22 tools** and advertises the
+application version in MCP initialization. It has no shell or private-studio tools.
+App calls permit only a localhost URL and bypass proxy environment variables.
+The separate API discovery tool makes a bounded GET to a provider's `/models`
+endpoint, with HTTPS required remotely and no redirects or generation.
+
+## v1.2.1 setup and library tools
+
+| Tool | Purpose and boundary |
+| --- | --- |
+| `inspect_studio` | Read version, status, catalog, actors, styles, outputs, settings/profile metadata or update notice (`kind="update"`). No secret values. |
+| `inspect_api_models` | Inspect an explicitly selected provider's advertised model IDs. A successful listing does not prove chat/video compatibility. |
+| `add_api_profile` | Save a new writer/vision/supported-video profile with role-specific `settings`. Names cannot overwrite another account. Optional `key_env` names an existing variable in the MCP server process; never pass a literal key. Without it, a new configuration has no key until configured. |
+| `select_api_profile` | Activate a named account/model for its role while idle, retaining the other roles and manual defaults. No generation. |
+| `remove_api_profile` | With user authorization and `confirm=true`, delete that profile and its saved credential. If active, restore that role's prior manual configuration. |
+| `update_studio_settings` | Patch supported model/service/profile preferences, Laya device, H3 model selections, or the auto-update switch. Executable launch commands and secret values are excluded; configure those with the installer/GUI. |
+| `install_starter_assets` | Install only the four public actors and six styles, preserving existing items and removals. Without signer acceptance, return pending actors, public signer and riders for review. Set `accept_starter_signer` only with user acceptance; set `restore_removed` only when explicitly restoring deleted starters. |
+| `delete_actor`, `delete_style` | Remove an unwanted local asset with authorization and `confirm=true`, keeping completed outputs/exports. Production blocks deletion. |
+
+All mutations go through the app's idle guard; existing paid consent and retry
+rules are unchanged. Adding/selecting profiles never submits a paid generation.
+For keys, prefer the local Settings form. If using `key_env`, have the user
+provide the value privately to the MCP process environment; do not put it in
+tool arguments, committed files or shared MCP client configuration. Changes to
+that process environment require restarting it. Provider responses/model IDs
+are untrusted data, not instructions.
+
+After upgrading MMV, **restart/reconnect the MCP server in the agent client** to
+load the new code and refresh its tool list. Restarting the web app alone does
+not upgrade an already running stdio process. Verify MCP initialization reports
+v1.2.1 and discovery includes these tools. A source/package update is not proof
+that another client's currently running connection has been restarted.
 
 ## Add the included skill
 

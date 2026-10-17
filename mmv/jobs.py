@@ -76,7 +76,9 @@ class JobContext:
                     detail = None
                     try:
                         if self.log_path and self.log_path.exists():
-                            lines = [ln.strip() for ln in self.log_path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+                            with self.log_path.open("rb") as stream:
+                                stream.seek(max(0, self.log_path.stat().st_size - 16000))
+                                lines = [ln.strip() for ln in stream.read().decode("utf-8", errors="replace").splitlines() if ln.strip()]
                             for ln in reversed(lines):
                                 if any(token in ln for token in ("Error:", "Exception:", "failed:", "MISSING:", "FAILED:")):
                                     detail = ln
@@ -155,10 +157,8 @@ class Jobs:
                 except Exception as exc:
                     # Avoid exposing response bodies or credentials from external services.
                     message = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
-                    for name in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
-                        secret = self.store.key(name)
-                        if secret:
-                            message = message.replace(secret, "[redacted]")
+                    for secret in self.store.secret_values():
+                        message = message.replace(secret, "[redacted]")
                     context.update(message, state="failed")
                 finally:
                     with self.lock:

@@ -1,9 +1,100 @@
 # Releases
 
-## 1.1.1 — Upstream 1.1.0 merge & Live Engine Status Dock
+## 1.2.2 — Upstream 1.2.1 merge & Live Engine Status Dock
 
-- **Upstream 1.1.0 features**: Merged upstream 1.1.0 release adding the goose browser title (`🪿 Mondo Music Video`), six owner-approved SFW visual style presets (`sun_bleach`, `nature_doc`, `industrial_decay`, `noir_bw`, `gel_wash_psych`, `crt_1990s`) in `examples/style-presets`, and demo file packaging rules.
-- **Live Engine & Hardware Dock**: Real-time status UI monitoring Laya, llama.cpp, ComfyUI, and Vision with GPU device detection, active/sleeping state differentiation, animated pulsing status dots, and `/api/services/status`.
+- **Upstream 1.2.1 Features**:
+  - Integrated public starter assets installation (`install-starter-assets`) and confirmed local library deletion.
+  - Expanded MCP server with 22 tools.
+  - Agent installation guidance (`docs/INSTALL_WITH_AGENT.md`) and multi-account private API profiles (`mmv/api_profiles.py`).
+  - Opt-in startup repository updates and checkout lease management (`mmv/updates.py`).
+  - Thirteen picture aspect ratios including 9:21 and 21:9.
+- **Live Engine & Hardware Dock**:
+  - Retained dedicated real-time status monitor UI for Laya, llama.cpp, ComfyUI, and Vision.
+  - Live GPU device inspection, active queue count, and sleeping vs. processing state detection.
+  - Fast sub-millisecond cached probing with `/api/services/status`.
+
+## 1.2.1 — Starter installation and local library deletion
+
+The Linux/WSL/macOS and PowerShell installers install the six public styles and
+include a verified, signer-approved import of the four public starter actors.
+The same step is available as `install-starter-assets`, including from wheels.
+Noninteractive actor import requires explicit starter-signer acceptance; pending
+actors are reported. Existing assets are preserved and the complete bundle is
+checked before import. Only the authorized public assets are packaged.
+
+Actor and style cards now offer confirmed local deletion. Active production
+blocks deletion and stale previews are invalidated. Completed videos and exports
+remain. Deletions survive restarts and setup reruns, including Daylight; starter
+restoration is an explicit `--restore` action. Agent setup and public asset guides
+now describe the integrated installation and library controls.
+
+MCP now exposes 22 tools, including actor/style deletion, API profile creation,
+selection/removal, bounded settings updates, public starter installation and
+read-only API model discovery. Explicit confirmations protect destructive tools;
+credentials can be imported from a designated process environment variable and
+never appear in results. Active-profile removal restores manual configuration.
+Existing stdio clients need reconnecting to load the new tool list.
+
+## 1.2.0 — Agent installation and multiple API profiles
+
+A repository installation handoff guides agents through hardware inspection,
+model choices, explicit large-download approval, configuration and readiness.
+Setup asks about existing API providers and documents how to configure compatible
+writer/vision APIs or implement a reviewed video adapter. The new `inspect-api`
+command performs a bounded, read-only model listing without generating, changing
+settings, or following redirects. It does not establish inference compatibility.
+Named private API profiles retain multiple accounts/models, with independent
+writer, vision and supported hosted-video selectors in Settings and agent CLI
+commands. Each selection uses its own credential; returning to manual settings
+restores the previous configuration. No account/provider is used as an automatic
+paid fallback. Keys from inactive profiles are also redacted from operation logs.
+Existing providers, model/workflow defaults and paid-consent rules are preserved.
+The collaborator fork remains at reviewed revision `764ca66`.
+
+Thanks to Abandoned Muse for her inspiration and patience.
+
+## 1.1.3 — Optional startup updates
+
+Launch-time checks follow the installation's own tracked remote and branch.
+Automatic installation is **off by default**; the UI reports available versions
+with a repository link. A saved Settings switch enables installation at the next
+launch, with clean fast-forward checks, staged wheel builds, preservation of
+installed Comfy/MCP extras, ignored-file collision protection and re-exec into
+the new code. Failures during installation attempt application-package recovery
+and stop startup for environment repair. Active/interrupted work and local
+changes prevent automatic replacement.
+
+A checkout-wide runtime lease prevents another launcher updating a live app.
+Source-only/wheel-only and native-platform limits are documented in `UPDATES.md`.
+The collaborator fork was checked through `764ca66`; its separate hardware dock
+is recorded for focused follow-up in `COLLABORATOR_REVIEW.md`.
+
+## 1.1.2 — Additional aspect ratios
+
+Music-video and ident shape selectors add 5:4, 4:5, 2:1, 1:2, 9:21, 3:1 and
+1:3. The 9:21 option sits immediately after 21:9. Local H3 and its SDK path
+use the selected shape with the existing model-grid dimension snapping.
+This publication also includes the reviewed fork improvements listed below.
+The launcher bounds shutdown time while live browser event streams are open.
+
+## 1.1.1 — Reviewed fork usability and diagnostics
+
+Reviewed hellonearthis's updates through `132c3d3` and integrated inline song
+playback (including saved-project reload), bounded live operation events with
+polling recovery, component-aware startup/worker errors and ComfyUI service logs.
+Logs redact configured API keys. Single-operation enforcement, paid consent,
+SDK receipt recovery and upstream OAP checks remain intact.
+
+Settings adds a Laya device selector and a writer setup/tuning guide. Existing
+model/workflow defaults remain in place. Optional hellonearthis presets preserve
+16k context/batch/image-token tuning and CUDA/MPS CPU fallback, and the optional
+reduced-flashing vocabulary retains the fork's smaller lighting/effects pools
+without changing the default vocabulary or its golden fixture. The Windows
+launcher exposes the alternate tuning and passes settings as UTF-8 JSON.
+
+The fork's prompting guide is adapted to this public engine's actual controls.
+Native Windows, real device fallback and GPU/paid generation require separate
+operator verification. See `LOCAL_WRITER_TUNING.md` for preset behavior.
 
 ## 1.1.0 — Studio usability release
 

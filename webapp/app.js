@@ -363,11 +363,26 @@ async function loadStyles() {
   $$(".style-select").forEach(select => {
     const old = select.value;
     select.replaceChildren(...styles.map(style => option(style.id, style.name, `${style.name} (${style.id})`)));
+    if (!styles.length) {
+      const empty = option("", "No styles yet — add one in Styles");
+      empty.disabled = true;
+      select.replaceChildren(empty);
+    }
     if (styles.some(x => x.id === old)) select.value = old;
   });
   $("#style-list").replaceChildren(...styles.map(style => {
     const card = text("article", "", "card", `Style card: ${style.name}`);
     card.append(text("h2", style.name), text("p", style.direction));
+    const remove = text("button", "Delete style", "quiet operation-action", `Delete ${style.name} from this machine`);
+    remove.type = "button";
+    remove.onclick = handle(async () => {
+      if (!window.confirm(`Delete style “${style.name}” from this machine? Completed videos are kept.`)) return;
+      await api(`/api/styles/${encodeURIComponent(style.id)}`, {method: "DELETE"});
+      await loadStyles();
+      scheduleSave();
+      notice("Style deleted from your local collection.");
+    });
+    card.append(remove);
     return card;
   }));
 }
@@ -414,6 +429,16 @@ async function loadActors() {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     });
     card.append(image, text("h2", actor.name), text("p", actorOverview(actor)), text("p", actor.oap ? "OAP imported · original package preserved" : "OAP ready · signed on export"), button);
+    const remove = text("button", "Delete actor", "quiet operation-action", `Delete ${actor.name} from this machine`);
+    remove.type = "button";
+    remove.onclick = handle(async () => {
+      if (!window.confirm(`Delete actor “${actor.name}”, their reference image and imported package from this machine? Export first if you want a backup. Completed videos and earlier exports are kept.`)) return;
+      await api(`/api/actors/${encodeURIComponent(actor.id)}`, {method: "DELETE"});
+      await loadActors();
+      scheduleSave();
+      notice("Actor deleted from your local cast.");
+    });
+    card.append(remove);
     return card;
   }));
   if (!actors.length) $("#actor-list").append(text("div", "Your cast starts here. Create an actor or import a full OAP package below.", "empty", "No actors currently in your studio library"));
@@ -448,6 +473,8 @@ async function loadOutputs() {
 }
 
 const settingLabels = {
+  writer_api_profile: "Writer API profile", vision_api_profile: "Vision API profile", video_api_profile: "Video API profile",
+  auto_updates: "Automatic updates",
   comfy_sdk_url: "Local Comfy API proxy URL",
   backend: "Default renderer", comfy_url: "ComfyUI service URL", comfy_input: "ComfyUI input folder (shared local path)", comfy_output: "ComfyUI output folder (shared local path)",
   writer_launch: "Local writer launch command (JSON arguments)", writer_cwd: "Writer working folder", comfy_launch: "ComfyUI launch command (JSON arguments)", comfy_cwd: "ComfyUI working folder",
@@ -463,6 +490,7 @@ const settingLabels = {
 };
 
 const settingTooltips = {
+  auto_updates: "At the next launch, install tracked repository updates automatically. Turn off to check and notify only.",
   comfy_sdk_url: "Official Comfy API v2 proxy on this machine, usually http://127.0.0.1:8189",
   backend: "Default video generation engine for music videos and idents",
   comfy_url: "HTTP URL for your running ComfyUI service instance",
@@ -684,7 +712,16 @@ async function loadSettings() {
     const tip = settingTooltips[name] || settingLabels[name] || name;
     const label = text("label", settingLabels[name] || name, "", tip);
     let input;
-    if (name === "writer_mode") {
+    if (name.endsWith("_api_profile")) {
+      const role = name.replace("_api_profile", "");
+      input = document.createElement("select");
+      input.append(option("", "Manual configuration", "Use the individual settings below"));
+      input.append(...(data.api_profiles || []).filter(p => p.role === role).map(p => option(p.name, p.name)));
+    } else if (name === "auto_updates") {
+      input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = Boolean(value);
+    } else if (name === "writer_mode") {
       input = document.createElement("select");
       input.append(option("local", "Local", "Local writer engine"), option("api", "API", "Hosted cloud API provider"));
     } else if (name === "backend") {
@@ -693,6 +730,9 @@ async function loadSettings() {
     } else if (name === "laya_device") {
       input = document.createElement("select");
       input.append(
+        option("cuda_or_cpu", "CUDA with CPU fallback", "Use CUDA when available, otherwise CPU"),
+        option("mps_or_cpu", "MPS with CPU fallback", "Use MPS when available, otherwise CPU"),
+        option("auto", "Auto (CUDA, MPS, then CPU)", "Choose an available Laya device automatically"),
         option("cpu", "CPU", "Run Laya validator on CPU"),
         option("cuda", "CUDA", "Run Laya validator on NVIDIA GPU (CUDA)"),
         option("mps", "MPS", "Run Laya validator on Apple Silicon (MPS)")
@@ -744,10 +784,9 @@ async function loadSettings() {
         helpBtn.style.display = "inline";
         helpBtn.style.padding = "0";
         helpBtn.textContent = "ℹ️ Need help with token buffers or launch arguments? Open llama.cpp guide ↗";
-        helpBtn.onclick = (e) => {
-          e.preventDefault();
-          const dialog = $("#llama-helper-dialog");
-          if (dialog) dialog.showModal();
+        helpBtn.onclick = event => {
+          event.preventDefault();
+          $("#panel-settings > .panel-header-row .llama-help-btn").click();
         };
         hint.append(helpBtn);
         label.append(hint);
@@ -789,6 +828,20 @@ async function loadSettings() {
     fields.push(label);
   }
 
+  for (const role of ["writer", "vision", "video"]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quiet";
+    button.textContent = `Save configured ${role} API as a profile`;
+    button.onclick = handle(async () => {
+      const name = window.prompt(`Profile ID for the saved ${role} settings (lowercase letters, numbers, underscores or hyphens). Save your settings and key first.`);
+      if (!name) return;
+      await json("/api/api-profiles", {name, role}, "POST");
+      await loadSettings();
+      notice("API profile saved privately. Select it and save Settings to activate it.");
+    });
+    fields.push(button);
+  }
   $("#settings-fields").replaceChildren(...fields);
   $("#key-status").textContent = Object.entries(data.keys).map(([name, set]) => `${name}: ${set ? "configured" : "not set"}`).join(" · ");
   return data.settings;
@@ -891,7 +944,6 @@ async function refreshServices(force = false) {
     if (btn) btn.disabled = false;
   }
 }
-
 async function applyStatus(status) {
   if (!status || !status.state) return;
   currentRun = status.id;
@@ -914,74 +966,90 @@ async function applyStatus(status) {
 
 let sseSource = null;
 let sseConnected = false;
+let statusTimer = null;
+let lastStreamEvent = 0;
 
 function setupEventStream() {
-  if (typeof EventSource === "undefined") {
-    fallbackPoll();
-    return;
-  }
-  if (sseSource) {
-    try { sseSource.close(); } catch {}
-  }
-  try {
-    sseSource = new EventSource("/api/events");
-    sseSource.onopen = () => {
-      sseConnected = true;
-    };
-    sseSource.addEventListener("status", async (event) => {
-      sseConnected = true;
-      try {
-        const status = JSON.parse(event.data);
-        await applyStatus(status);
-        if (!$("#operation-log").hidden && ["running", "cancelling"].includes(status.state)) {
-          await updateLogDisplay();
-        }
-      } catch (err) {}
-    });
-    sseSource.addEventListener("log", (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (!$("#operation-log").hidden && data.message) {
-          const logElem = $("#operation-log");
-          if (logElem && !logElem.textContent.includes(data.message)) {
-            logElem.textContent += "\n" + data.message;
+  if (typeof EventSource !== "undefined") {
+    try {
+      sseSource = new EventSource("/api/events");
+      sseSource.addEventListener("status", event => {
+        try {
+          const status = JSON.parse(event.data);
+          lastStreamEvent = Date.now();
+          sseConnected = true;
+          applyStatus(status).catch(error => notice(error.message));
+        } catch {}
+      });
+      sseSource.addEventListener("log", event => {
+        try {
+          const data = JSON.parse(event.data);
+          if (!$("#operation-log").hidden && data.message) {
+            const logElem = $("#operation-log");
+            if (logElem && !logElem.textContent.includes(data.message)) {
+              logElem.textContent += "\n" + data.message;
+            }
           }
-        }
-      } catch (err) {}
-    });
-    sseSource.onerror = () => {
-      sseConnected = false;
-    };
-  } catch (err) {
-    sseConnected = false;
-    fallbackPoll();
+        } catch {}
+      });
+      sseSource.onerror = () => { sseConnected = false; };
+    } catch { sseConnected = false; }
   }
+  // Keep one watchdog alive even while SSE is healthy, so disconnects and
+  // proxies buffering events cannot permanently stop operation updates.
+  fallbackPoll();
 }
 
 async function fallbackPoll() {
-  if (sseConnected) return;
+  clearTimeout(statusTimer);
+  const busy = ["running", "cancelling"].includes(lastState);
+  const interval = busy ? 2000 : 10000;
   try {
-    const status = await (await api("/api/status")).json();
-    await applyStatus(status);
-    if (!$("#operation-log").hidden && ["running", "cancelling"].includes(status.state)) {
-      await updateLogDisplay();
+    if (!sseConnected || Date.now() - lastStreamEvent > 20000) {
+      const status = await (await api("/api/status")).json();
+      await applyStatus(status);
     }
-  } catch (error) {
+    if (!$("#operation-log").hidden) await updateLogDisplay();
+  } catch {
     $("#status-message").textContent = "Connection unavailable. The server may have stopped.";
+  } finally {
+    statusTimer = setTimeout(fallbackPoll, interval);
   }
-  const isBusy = lastState && ["running", "cancelling"].includes(lastState);
-  setTimeout(fallbackPoll, isBusy ? 2000 : 10000);
 }
+window.addEventListener("pagehide", () => {
+  if (sseSource) sseSource.close();
+  clearTimeout(statusTimer);
+});
+window.addEventListener("pageshow", event => {
+  if (event.persisted) setupEventStream();
+});
 
-function poll() {
-  if (sseConnected) return;
-  fallbackPoll();
+async function loadUpdateStatus() {
+  try {
+    const status = await (await api("/api/update")).json();
+    const banner = $("#update-banner");
+    if (!status.available && !["updated", "failed", "unavailable"].includes(status.state)) return;
+    $("#update-message").textContent = status.message + (status.available && status.available_version && status.available_version !== "unknown" ? ` Available version: ${status.available_version}.` : "");
+    const link = $("#update-repository");
+    if (status.repository_url) {
+      const url = new URL(status.repository_url);
+      if (["https:", "http:"].includes(url.protocol)) {
+        link.href = url.href;
+        link.hidden = false;
+      }
+    }
+    banner.hidden = false;
+  } catch { /* Update availability must not block the studio UI. */ }
+}
 }
 
 async function initialize() {
   initTooltips();
   setupOapGuide();
   setupLlamaGuide();
+  loadUpdateStatus();
+  const refreshBtn = $("#refresh-services");
+  if (refreshBtn) refreshBtn.onclick = () => refreshServices(true);
   catalog = await (await api("/api/catalog")).json();
   const version = await (await api("/api/version")).json();
   $("#version").textContent = version.version; $("#oap-version").textContent = catalog.oap_version;
@@ -1022,6 +1090,7 @@ async function initialize() {
       const selected = song.files[0]; if (!selected) return;
       const state = formFiles.get(form);
       if (state.songObjectUrl) {
+        updateSongPreview(form, "");
         URL.revokeObjectURL(state.songObjectUrl);
         state.songObjectUrl = undefined;
       }
@@ -1223,75 +1292,48 @@ async function initialize() {
     const dialog = $("#llama-helper-dialog");
     if (!dialog) return;
 
-    $$(".llama-help-btn").forEach(btn => {
-      btn.onclick = (e) => {
-        e.preventDefault();
-        dialog.showModal();
-      };
-    });
-
-    $$(".close-llama-dialog").forEach(btn => {
-      btn.onclick = () => {
-        dialog.close();
-      };
-    });
-
-    $$("#llama-helper-dialog .nav-to-settings-btn").forEach(btn => {
-      btn.onclick = () => {
-        const settingsNav = document.querySelector('.nav[data-panel="settings"]');
-        if (settingsNav) settingsNav.click();
-        if (dialog.open) dialog.close();
-      };
-    });
-
-    $$(".llama-tab-btn").forEach(tabBtn => {
-      tabBtn.onclick = () => {
-        const tabId = tabBtn.dataset.tab;
-        $$(".llama-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
-        $$(".llama-tab-content").forEach(content => {
-          const matches = content.id === `llama-tab-${tabId}`;
-          content.classList.toggle("active", matches);
-          content.hidden = !matches;
-        });
-      };
-    });
-
-    const copyBtn = $("#copy-llama-json");
-    if (copyBtn) {
-      copyBtn.onclick = async () => {
-        const text = $("#llama-recommended-json")?.textContent?.trim() || "";
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
-          } else {
-            const ta = document.createElement("textarea");
-            ta.value = text;
-            document.body.append(ta);
-            ta.select();
-            document.execCommand("copy");
-            ta.remove();
-          }
-          notice("Recommended llama.cpp launch JSON copied to clipboard.");
-          setTimeout(() => { if ($("#notice").textContent.startsWith("Recommended llama.cpp")) notice(""); }, 3000);
-        } catch (err) {
-          notice("Failed to copy: " + err.message);
-        }
-      };
+    const picker = $("#writer-tuning-preset");
+    function commandPreview() {
+      const current = $("input[name=writer_launch]")?.value || "";
+      if (picker.value === "current") return current;
+      const args = JSON.parse(current);
+      if (!Array.isArray(args) || !args.length || args.some(arg => typeof arg !== "string")) {
+        throw new Error("Configure a JSON array launch command first.");
+      }
+      const options = {"-c": "16384", "--ctx-size": "16384", "-b": "2048", "--batch-size": "2048", "-ub": "1024", "--ubatch-size": "1024"};
+      if (args.some(arg => arg === "--mmproj" || arg.startsWith("--mmproj="))) options["--image-min-tokens"] = "1024";
+      const result = [args[0]];
+      for (let i = 1; i < args.length; i++) {
+        const flag = args[i].split("=", 1)[0];
+        if (Object.hasOwn(options, flag)) {
+          if (!args[i].includes("=")) i++;
+        } else result.push(args[i]);
+      }
+      result.push("-c", "16384", "-b", "2048", "-ub", "1024");
+      if (options["--image-min-tokens"]) result.push("--image-min-tokens", "1024");
+      return JSON.stringify(result);
     }
-
-    const applyBtn = $("#apply-llama-json");
-    if (applyBtn) {
-      applyBtn.onclick = () => {
-        const text = $("#llama-recommended-json")?.textContent?.trim() || "";
-        const input = $('input[name="writer_launch"]');
-        if (input) {
-          input.value = text;
-          input.dispatchEvent(new Event("change", { bubbles: true }));
-          notice("Applied recommended launch arguments to Writer Launch field. Click 'Save settings' to persist.");
-        }
-        if (dialog.open) dialog.close();
-      };
+    function showPreview() {
+      try { $("#llama-current-json").textContent = commandPreview() || "No launch command configured."; }
+      catch { $("#llama-current-json").textContent = "Configure a valid JSON array launch command before choosing alternate tuning."; }
     }
+    function openGuide() { picker.value = "current"; showPreview(); dialog.showModal(); }
+    $$(".llama-help-btn").forEach(button => button.onclick = openGuide);
+    picker.onchange = showPreview;
+    $$(".close-llama-dialog").forEach(button => button.onclick = () => dialog.close());
+    $("#copy-llama-json").onclick = handle(async () => {
+      const command = commandPreview();
+      if (!command) throw new Error("Configure a writer launch command first.");
+      if (!await copyToClipboard(command)) throw new Error("Could not copy the launch command.");
+      notice("Writer launch preview copied.");
+    });
+    $("#apply-writer-tuning").onclick = handle(async () => {
+      const command = commandPreview();
+      if (!command) throw new Error("Configure a writer launch command first.");
+      $("input[name=writer_launch]").value = command;
+      notice("Writer tuning applied to the field. Save settings to persist it.");
+      dialog.close();
+    });
   }
 
   $("#inspect-oap").onclick = handle(async () => {
@@ -1331,6 +1373,7 @@ async function initialize() {
       if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
       delete raw["h3_" + key];
     }
+    raw.auto_updates = event.target.elements.auto_updates.checked;
     raw.vision_call_estimate = Number(raw.vision_call_estimate);
     raw.writer_call_estimate = Number(raw.writer_call_estimate);
     if (Object.keys(h3_models).length) raw.h3_models = h3_models;

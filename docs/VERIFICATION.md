@@ -1,4 +1,145 @@
-# Verification — 1.1.1
+# Verification — 1.2.2
+
+## 1.2.2 Upstream 1.2.1 merge & Live Engine Status Dock
+
+- Verified upstream 1.2.1 merge: starter assets installation (`install-starter-assets`), local library deletion, 22 MCP tools, agent installation guidance, multi-account private API profiles, and opt-in startup updates.
+- Verified live service status dock, active/sleeping indicators, GPU detection, and `/api/services/status`.
+- Verified version `1.2.2` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
+
+## 1.2.1 starter installation and local library deletion
+
+The full suite passed **113 tests and 53 subtests in 36.22 seconds**, including
+six Chromium flows. Additional targeted starter tests passed **6 tests in
+10.42 seconds**, including a stubbed Python/pip shell-installer check for starter
+invocation, noninteractive signer acceptance, flag order and explicit opt-out.
+No dependencies were downloaded by that test. Native PowerShell execution
+remains an operator check; the script uses the same starter command/flags.
+
+Temporary-data tests verify all four signed OAP imports, preserved original
+packages, complete styles, existing/custom-ID preservation, corrupted-bundle
+refusal before import, pending signer acceptance, deletion blocked during active
+operations, deletion persistence across Storage recreation/installer reruns,
+explicit starter restoration, retained exports, and refusal to follow asset
+symlinks during deletion. Chromium verifies canceled/confirmed deletion, removal
+from cast/style selectors, reload persistence and absence of browser errors.
+Shell/JavaScript syntax and diff checks passed. No paid, GPU or Topaz work ran.
+
+MCP stdio discovery verifies 22 tools and app version 1.2.1. New tool tests cover
+API add/select/remove, confirmation refusal, no secret values in results, manual
+configuration restoration, bounded settings patches and update inspection,
+provider-model discovery with mocked HTTP, public starter signer review/import,
+actor/style deletion and explicit restoration. Profile activation/deletion,
+settings patches and starter imports refuse active operations. A final targeted
+provider run passed **7 tests and 10 subtests in 1.04 seconds**, including rejection
+of a provider that echoes its discovery credential in a model ID.
+
+Source and wheel packages include only the four authorized public actor packages
+and six complete style presets; bundle hashes and private-file exclusions were
+checked. An isolated installed-wheel import from outside the checkout installed
+all ten starters in temporary data, preserving signed OAP packages. Native
+PowerShell remains unverified. Existing MCP clients require a reconnect.
+
+Final operator checks freshly imported the 1.2.1 version handler, restarted the
+idle preview and confirmed live `/api/version` 1.2.1. A fresh stdio connection
+launched the installed wheel in isolated Python mode from outside the checkout:
+MCP initialization reported **1.2.1**, discovery returned **22 tools**, and its
+read-only version tool reached the live **1.2.1** app. This check changed no
+operator profiles, actors, styles or production data.
+
+## 1.2.0 agent installation and multiple API profiles
+
+The complete suite passed **104 tests and 52 subtests in 30.04 seconds**,
+including five Chromium flows. Profile checks exercise independent role/account
+selection, credential isolation from generic environment keys, key updates,
+manual configuration restoration, no silent overwrites, owner-only POSIX file
+permissions, invalid/cross-role profiles, active-operation guards and agent CLI
+save/list/activation. Browser verification switches writer accounts while
+retaining a separate vision account, saves a profile through Settings, and
+restores manual configuration. Additional targeted profile checks cover malformed
+configuration and redaction of an inactive account's key from historical logs.
+
+Mock API discovery checks cover GET-only requests, invalid URLs, missing keys,
+bounded/invalid responses, redacted errors and blocked redirects. The discovery
+CLI creates no application data and submits no generation. Local guide links
+and pinned writer metadata were checked. JavaScript/Python syntax and diff
+checks passed. Both source and wheel packages built; their contents include the new modules
+and source installation guides, with only the four authorized actor packages.
+Private profiles, data, secrets and contest notes are excluded. No real provider calls, paid generations, GPU inference
+or Topaz work ran.
+
+Fresh version-handler import and the restarted live `/api/version` report
+**1.2.0**. Native Windows execution and real provider chat/video compatibility
+remain operator checks. New video APIs require an adapter; this release supplies
+the agent implementation guide rather than a universal video API client.
+The collaborator fork remains `764ca66843843217d51c8708cb1e1fa952d9f364`.
+
+## 1.1.3 optional startup updater
+
+The complete suite passed **93 tests and 38 subtests in 28.48 seconds**, including
+four Chromium flows. Updates default off in storage and API settings. Browser
+checks verified the update/version notice, repository link, and toggling/saving
+the preference in both directions. Disposable local Git tests covered normal and
+non-default tracked branches, notify-only checks, clean fast-forward updates,
+re-exec arguments, checkout leases, unchanged private assets, ignored collisions,
+local changes/divergence, interrupted operations, offline preparation and package
+installation/recovery failures. Pip was mocked for these Git transaction tests.
+
+A separate offline check used actual pip to install, upgrade and restore a tiny
+mock application wheel in a disposable virtualenv; it did not modify the operator
+installation. Actual full-MMV upgrade/dependency recovery and native Windows
+restart remain operator checks. No paid, GPU or Topaz operations ran.
+
+Python compilation, JavaScript/shell syntax and diff checks passed. Both 1.1.3
+wheel and source packages built; the updater and update guide are included, and
+private data, credentials and contest/video planning notes are excluded. Update
+state/log files are explicitly ignored and excluded from source distributions.
+The four previously authorized actor packages remain the only packaged roster.
+
+Fresh handler import and the restarted live `/api/version` reported 1.1.3.
+The live settings endpoint confirmed `auto_updates: false`, and startup completed
+its tracked-repository check without installation. Collaborator revision
+`764ca66` was downloaded/reviewed for task-start context; the separate new dock
+is recorded in `COLLABORATOR_REVIEW.md` for focused follow-up.
+
+## 1.1.2 expanded aspect selectors
+
+Final publication check: **75 tests and 38 subtests passed in 30.32 seconds**,
+including all three Chromium flows, using temporary data and mock services.
+
+Verified all 13 aspect options in both music-video and ident dropdowns, including
+9:21 immediately after 21:9. Every option passed the API request schema and
+resolution planning for both local H3 and SDK H3 at 0.6 MP. Existing backend
+dimension-grid snapping is unchanged. The version consistency test passed;
+fresh version import and restarted live preview reported 1.1.2. The launcher
+bounds graceful shutdown so open event streams cannot indefinitely block exit.
+No GPU or paid generation ran. This release also includes the reviewed 1.1.1
+integration described below.
+
+## 1.1.1 reviewed fork integration
+
+Reviewed fork revision `132c3d3` (hellonearthis). The complete suite passed:
+**75 tests and 38 subtests in 29.99 seconds**, including all three Chromium flows.
+New checks cover song bytes and Range requests, blocked non-audio/symlink access,
+actual HTTP event delivery and disconnect cleanup, job diagnostic extraction and
+secret redaction, opt-in device selection, alternate vocabulary integrity, song
+playback/reload, model-preserving writer tuning and polling after a connected
+stream fails. Tests use temporary storage, synthetic media and mock inference;
+no paid, GPU or Topaz work ran.
+
+A fresh version-handler import and the restarted live preview reported 1.1.1.
+Python compilation, JavaScript syntax, shell syntax and diff whitespace checks
+passed. The original default vocabulary, golden fixture, planner/casting source,
+H3 workflow/map and storage defaults are unchanged. Friend-specific tuning,
+fallback and reduced-vocabulary settings are selectable alternatives.
+
+The 1.1.1 wheel and source distribution built successfully. The wheel contains
+the optional vocabulary profile; source archives contain only the four approved
+actor packages, with no local data, private keys or contest/video planning notes.
+All local application data remains ignored and untracked.
+
+Native PowerShell/Windows execution and real Laya device availability were not
+verified here. Device selection tests stub hardware and inference; they do not
+load a model. Real GPU SDK execution remains the separate operator check below.
 
 ## 1.1.1 Upstream 1.1.0 merge & Live Engine Status Dock
 

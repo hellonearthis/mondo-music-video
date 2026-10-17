@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import secrets
+import shutil
 import time
 import uuid
 import asyncio
@@ -33,7 +34,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.1.1"
+MGL_APP_VERSION = "1.2.2"
 WEB = Path(__file__).parent
 
 
@@ -162,7 +163,7 @@ class ProductionRequest(StrictModel):
     song: str = Field(default="", max_length=128)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     resolution: Literal["480p", "720p", "768p", "1080p", "2k", "4k"] = "768p"
-    aspect: Literal["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] = "16:9"
+    aspect: Literal["16:9", "9:16", "1:1", "4:3", "3:4", "5:4", "4:5", "2:1", "1:2", "21:9", "9:21", "3:1", "1:3"] = "16:9"
     direction: str = Field(default="", max_length=6000)
     style_id: str = Field(default="daylight", max_length=64)
     actors: list[str] = Field(default_factory=list, max_length=9)
@@ -184,6 +185,7 @@ class ProductionRequest(StrictModel):
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
     reuse_prompts: bool = True
+    vocabulary_profile: Literal["full", "reduced_flashing"] = "full"
 
     @field_validator("content")
     @classmethod
@@ -203,6 +205,10 @@ class ResumeRequest(StrictModel):
 
 
 class Settings(StrictModel):
+    writer_api_profile: str = ""
+    vision_api_profile: str = ""
+    video_api_profile: str = ""
+    auto_updates: bool = False
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
     comfy_sdk_url: str = "http://127.0.0.1:8189"
@@ -218,7 +224,7 @@ class Settings(StrictModel):
     comfy_launch: str = ""
     comfy_cwd: str = ""
     laya_model_dir: str = ""
-    laya_device: Literal["cpu", "cuda", "mps"] = "cuda"
+    laya_device: Literal["cpu", "cuda", "mps", "auto", "cuda_or_cpu", "mps_or_cpu"] = "cuda"
     vision_url: str = "http://127.0.0.1:8080/v1"
     vision_model: str = ""
     vision_key_env: Literal["MMV_VISION_API_KEY"] = "MMV_VISION_API_KEY"
@@ -226,6 +232,11 @@ class Settings(StrictModel):
     topaz_executable: str = ""
     topaz_models: str = ""
     h3_models: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("writer_api_profile", "vision_api_profile", "video_api_profile")
+    @classmethod
+    def valid_api_profile(cls, value):
+        return identifier(value) if value else ""
 
     @field_validator("h3_models")
     @classmethod
@@ -260,6 +271,18 @@ class Settings(StrictModel):
         if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
             raise ValueError("Use an HTTP(S) service URL without embedded credentials")
         return value.rstrip("/")
+
+
+class ApiProfileRequest(StrictModel):
+    name: str
+    role: Literal["writer", "vision", "video"]
+    settings: dict | None = None
+    key: str | None = Field(default=None, max_length=1000)
+
+
+class StarterRequest(StrictModel):
+    accept_starter_signer: bool = False
+    restore_removed: bool = False
 
 
 class KeyRequest(StrictModel):
@@ -339,8 +362,13 @@ def create_app(home=None, *, test_hosts=False):
 
     app.get("/api/version")(api_version)
 
-    def get_full_status():
-        result = jobs.status()
+    @app.get("/api/update")
+    def update_status():
+        from mmv.updates import public_status
+        return public_status(store)
+
+    def get_full_status(snapshot=None):
+        result = dict(snapshot) if snapshot is not None else jobs.status()
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
                                 and previous.get('backend') == 'comfy_sdk_h3')
@@ -357,16 +385,25 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.get("/api/events")
     async def events(request: Request):
-        queue = asyncio.Queue()
+        queue = asyncio.Queue(maxsize=32)
         loop = asyncio.get_running_loop()
+        closed = False
+
+        def enqueue(data):
+            if closed:
+                return
+            if queue.full():
+                queue.get_nowait()
+            queue.put_nowait(data)
 
         def on_event(status_dict, log_line=None):
-            full_status = get_full_status()
-            loop.call_soon_threadsafe(queue.put_nowait, {"status": full_status, "log": log_line})
+            if not closed:
+                loop.call_soon_threadsafe(enqueue, {"status": get_full_status(status_dict), "log": log_line})
 
         unsubscribe = jobs.subscribe(on_event)
 
         async def event_generator():
+            nonlocal closed
             try:
                 initial = get_full_status()
                 yield f"event: status\ndata: {json.dumps(initial)}\n\n"
@@ -382,6 +419,7 @@ def create_app(home=None, *, test_hosts=False):
                     except asyncio.TimeoutError:
                         yield ": keep-alive\n\n"
             finally:
+                closed = True
                 unsubscribe()
 
         return StreamingResponse(
@@ -442,10 +480,12 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.get("/api/settings")
     def get_settings():
+        from mmv.api_profiles import public_profiles
         s = store.settings()
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
+                "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
 
@@ -454,11 +494,54 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             dump = value.model_dump()
+            from mmv.api_profiles import resolve, save_settings
+            dump = Settings(**resolve(store, dump)).model_dump()
             h3_models = dump.pop("h3_models", None)
             if h3_models:
                 _update_h3_models(store, dump, h3_models)
-            write_json(store.home / "settings.json", dump)
+            save_settings(store, dump)
         return {"ok": True}
+
+    @app.post("/api/api-profiles")
+    def save_api_profile(value: ApiProfileRequest):
+        from mmv.api_profiles import FIELDS, KEYS, save_profile
+        with jobs.lock:
+            jobs.require_idle()
+            current = store.settings()
+            config = value.settings if value.settings is not None else {k: current[k] for k in FIELDS[value.role]}
+            credential = value.key if value.key is not None else (store.key(KEYS[value.role]) if value.settings is None else "")
+            return save_profile(store, value.name, value.role, config, credential)
+
+    @app.post("/api/api-profiles/{name}/activate")
+    def activate_api_profile(name: str):
+        from mmv.api_profiles import activate
+        with jobs.lock:
+            jobs.require_idle()
+            return activate(store, identifier(name))
+
+    @app.delete("/api/api-profiles/{name}")
+    def delete_api_profile(name: str):
+        from mmv.api_profiles import remove_profile
+        with jobs.lock:
+            jobs.require_idle()
+            result = remove_profile(store, identifier(name))
+            quotes.clear()
+            return result
+
+    @app.patch("/api/settings")
+    def patch_settings(changes: dict):
+        with jobs.lock:
+            jobs.require_idle()
+            return settings(Settings(**{**store.settings(), **changes}))
+
+    @app.post("/api/starter-assets")
+    def install_starter_assets(value: StarterRequest):
+        from mmv.starter_assets import install
+        with jobs.lock:
+            jobs.require_idle()
+            result = install(store, accept_signer=value.accept_starter_signer, restore=value.restore_removed)
+            quotes.clear()
+            return result
 
     @app.get("/api/fs/browse")
     def browse_fs(path: str = "", mode: Literal["folder", "file"] = "folder", ext: str = ""):
@@ -587,6 +670,22 @@ def create_app(home=None, *, test_hosts=False):
             raise ValueError("Actor not found")
         return FileResponse(inside(store.home / "actors" / actor_id, record["reference"]), media_type="image/png")
 
+    @app.delete("/api/actors/{actor_id}")
+    def delete_actor(actor_id: str):
+        from mmv.starter_assets import mark_removed
+        with jobs.lock:
+            jobs.require_idle()
+            actor_id = identifier(actor_id)
+            if (store.home / "actors" / actor_id).is_symlink():
+                raise ValueError("Cannot delete a linked actor directory")
+            target = inside(store.home / "actors", actor_id)
+            if not target.is_dir() or not (target / "actor.json").is_file():
+                raise ValueError("Actor not found")
+            mark_removed(store, "actors", actor_id)
+            shutil.rmtree(target)
+            quotes.clear()
+        return {"deleted": actor_id}
+
     @app.post("/api/actors/{actor_id}/export")
     def export_actor(actor_id: str):
         with jobs.lock:
@@ -625,6 +724,22 @@ def create_app(home=None, *, test_hosts=False):
                 raise ValueError("Style already exists; use a different ID")
             write_json(path, value.model_dump())
         return value.model_dump()
+
+    @app.delete("/api/styles/{style_id}")
+    def delete_style(style_id: str):
+        from mmv.starter_assets import mark_removed
+        with jobs.lock:
+            jobs.require_idle()
+            style_id = identifier(style_id)
+            if (store.home / "styles" / (style_id + ".json")).is_symlink():
+                raise ValueError("Cannot delete a linked style file")
+            target = inside(store.home / "styles", style_id + ".json")
+            if not target.is_file():
+                raise ValueError("Style not found")
+            mark_removed(store, "styles", style_id)
+            target.unlink()
+            quotes.clear()
+        return {"deleted": style_id}
 
     @app.post("/api/quote")
     def quote(value: ProductionRequest):
@@ -818,6 +933,8 @@ def create_app(home=None, *, test_hosts=False):
                 sections.append("\n=== Studio Server Event Log ===\n" + stream.read().decode(errors="replace"))
 
         content = "\n\n".join(filter(None, sections)).strip()
+        for secret in store.secret_values():
+            content = content.replace(secret, "[redacted]")
         return {"log": content or "No operation or server log recorded yet."}
 
     @app.post("/api/upscale")

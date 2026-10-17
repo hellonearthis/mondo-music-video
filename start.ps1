@@ -16,7 +16,16 @@ param(
     [string]$Model = "",
     [int]$Port = 8091,
     [int]$LlamaPort = 8081,
-    [int]$ContextSize = 16384,
+    [ValidateRange(512, 1048576)]
+    [int]$ContextSize = 8192,
+    [ValidateSet("current", "hellonearthis")]
+    [string]$TuningPreset = "current",
+    [ValidateRange(0, 1048576)]
+    [int]$BatchSize = 0,
+    [ValidateRange(0, 1048576)]
+    [int]$MicroBatchSize = 0,
+    [ValidateRange(0, 1048576)]
+    [int]$ImageMinTokens = 0,
     [string]$LlamaDir = "C:\llamaCPP",
     [switch]$NoLlama,
     [switch]$NoBrowser,
@@ -37,12 +46,23 @@ if ($Help) {
     Write-Host "  -Model <name>      Select model matching name or substring"
     Write-Host "  -Port <int>        Mondo Studio web port (default: 8091)"
     Write-Host "  -LlamaPort <int>   llama-server port (default: 8081)"
-    Write-Host "  -ContextSize <int> llama-server context window token buffer (default: 16384)"
+    Write-Host "  -TuningPreset <name> current (default) or hellonearthis (16k/vision batches)"
+    Write-Host "  -ContextSize <int> llama-server context window (default: 8192)"
+    Write-Host "  -BatchSize <int>   Optional logical batch size; 0 keeps server default"
+    Write-Host "  -MicroBatchSize <int> Optional micro-batch size; 0 keeps server default"
+    Write-Host "  -ImageMinTokens <int> Optional vision token minimum; 0 keeps server default"
     Write-Host "  -LlamaDir <path>   llama.cpp installation directory (default: C:\llamaCPP)"
     Write-Host "  -NoLlama           Skip llama.cpp management (assume already running)"
     Write-Host "  -NoBrowser         Do not automatically open the browser"
     Write-Host ""
     exit 0
+}
+
+if ($TuningPreset -eq "hellonearthis") {
+    if (-not $PSBoundParameters.ContainsKey("ContextSize")) { $ContextSize = 16384 }
+    if (-not $PSBoundParameters.ContainsKey("BatchSize")) { $BatchSize = 2048 }
+    if (-not $PSBoundParameters.ContainsKey("MicroBatchSize")) { $MicroBatchSize = 1024 }
+    if (-not $PSBoundParameters.ContainsKey("ImageMinTokens")) { $ImageMinTokens = 1024 }
 }
 
 $MmvProjectDir = $PSScriptRoot
@@ -193,8 +213,6 @@ if ($selectedModel) {
         "-m", "$($selectedModel.RelativePath)",
         "-ngl", "99",
         "-c", "$ContextSize",
-        "-b", "2048",
-        "-ub", "1024",
         "--flash-attn", "on",
         "--host", "127.0.0.1",
         "--port", "$LlamaPort",
@@ -204,32 +222,43 @@ if ($selectedModel) {
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
         $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)", "--image-min-tokens", "1024")
     }
-    $launchJson = ($launchArgs | ConvertTo-Json -Compress)
+    if ($BatchSize -gt 0) { $launchArgs += @("-b", "$BatchSize") }
+    if ($MicroBatchSize -gt 0) { $launchArgs += @("-ub", "$MicroBatchSize") }
+    if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) { $launchArgs += @("--image-min-tokens", "$ImageMinTokens") }
 
-    $visionLines = if ($selectedModel.HasVision) {
-        "s['vision_url'] = 'http://127.0.0.1:$LlamaPort'`ns['vision_model'] = '$($selectedModel.DefaultAlias)'`ns['vision_call_estimate'] = 0.0"
-    } else { "" }
-
-    # Sync to Mondo's storage settings using python helper
+    $settingsPayload = @{
+        writer_url = "http://127.0.0.1:$LlamaPort/v1"
+        writer_model = $selectedModel.DefaultAlias
+        writer_mode = "local"
+        writer_launch = (ConvertTo-Json -InputObject @($launchArgs) -Compress)
+        writer_cwd = $LlamaDir
+    }
+    if ($selectedModel.HasVision) {
+        $settingsPayload.vision_url = "http://127.0.0.1:$LlamaPort/v1"
+        $settingsPayload.vision_model = $selectedModel.DefaultAlias
+        $settingsPayload.vision_call_estimate = 0.0
+    }
     $pyCode = @"
-import sys
-from mmv.storage import Storage, read_json, write_json
+import json, sys
+from mmv.storage import Storage, write_json
 store = Storage()
 s = store.settings()
-s['writer_url'] = 'http://127.0.0.1:$LlamaPort'
-s['writer_model'] = '$($selectedModel.DefaultAlias)'
-s['writer_mode'] = 'local'
-s['writer_launch'] = sys.stdin.read().strip()
-s['writer_cwd'] = r'''$LlamaDir'''
-$visionLines
+s.update(json.load(sys.stdin))
 write_json(store.home / 'settings.json', s)
 "@
-    $launchJson | & $MmvPython -c $pyCode
+    $previousOutputEncoding = $OutputEncoding
+    try {
+        $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $settingsPayload | ConvertTo-Json -Compress | & $MmvPython -X utf8 -c $pyCode
+    } finally {
+        $OutputEncoding = $previousOutputEncoding
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Could not save selected model settings" }
 }
 
 # Check/Launch llama-server
 if (-not $NoLlama -and (Test-Path $serverExe)) {
-    $llamaUrl = "http://127.0.0.1:$LlamaPort/models"
+    $llamaUrl = "http://127.0.0.1:$LlamaPort/v1/models"
     $isLlamaRunning = Test-HttpOk $llamaUrl
 
     if (-not $isLlamaRunning -and $selectedModel) {
@@ -238,8 +267,6 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
             "-m", (Join-Path $LlamaDir $selectedModel.RelativePath),
             "-ngl", "99",
             "-c", "$ContextSize",
-            "-b", "2048",
-            "-ub", "1024",
             "--flash-attn", "on",
             "--host", "127.0.0.1",
             "--port", "$LlamaPort",
@@ -249,6 +276,10 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
         if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
             $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath), "--image-min-tokens", "1024")
         }
+
+        if ($BatchSize -gt 0) { $serverArgs += @("-b", "$BatchSize") }
+        if ($MicroBatchSize -gt 0) { $serverArgs += @("-ub", "$MicroBatchSize") }
+        if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) { $serverArgs += @("--image-min-tokens", "$ImageMinTokens") }
 
         Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $LlamaDir -WindowStyle Minimized
 

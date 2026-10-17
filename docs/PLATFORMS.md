@@ -1,4 +1,4 @@
-# Platform support — 1.1.1
+# Platform support — 1.2.2
 
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |
@@ -35,3 +35,14 @@ services and Chromium. Windows JSON lock retries are tested with simulated
 permission errors; native Windows filesystem browsing and real model switching
 remain operator checks. Parallel tests use four workers by default; use
 `python -m pytest -n 0` for a serial run.
+
+The 1.1.1 integration is verified on Linux using mock services and Chromium.
+The Windows launcher adds opt-in context/batch/image-token presets and UTF-8
+JSON settings transfer; native PowerShell execution remains unverified. Laya
+CPU fallback is selectable rather than silently changing an explicit CUDA/MPS
+choice. See [local writer tuning](LOCAL_WRITER_TUNING.md).
+
+Startup updater logic in 1.1.3 is covered on Linux with disposable Git remotes,
+mock installation, Chromium and offline real pip/mock-wheel checks. Native
+Windows locking, package replacement and restart still need operator verification.
+Automatic installation is off by default on every platform.

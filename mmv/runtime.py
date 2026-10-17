@@ -72,6 +72,12 @@ def cleanup():
             pass
 
 
+def safe_endpoint(value):
+    from urllib.parse import urlsplit, urlunsplit
+    url = urlsplit(value)
+    return urlunsplit((url.scheme, url.netloc.rsplit("@", 1)[-1], url.path, "", ""))
+
+
 def identify_service(health_url=None, log=None, command_json=None):
     url_lower = str(health_url or "").lower()
     log_lower = str(log or "").lower()
@@ -96,8 +102,11 @@ def start_service(command_json, cwd, health_url, log, name=None, launch_setting=
 
     if not command_json:
         setting_hint = f" ({setting_name})" if setting_name and setting_name != "launch command" else ""
-        raise ValueError(f"{service_name} service is not running: {health_url}. Configure its launch command{setting_hint} or start it before production.")
-    command = json.loads(command_json)
+        raise ValueError(f"{service_name} service is not running: {safe_endpoint(health_url)}. Configure its launch command{setting_hint} or start it before production.")
+    try:
+        command = json.loads(command_json)
+    except (ValueError, TypeError):
+        raise ValueError(f"{service_name} launch ({setting_name}) must be a JSON array of command arguments") from None
     if not isinstance(command,list) or not command or any(not isinstance(x,str) or not x for x in command):
         setting_hint = f" ({setting_name})" if setting_name and setting_name != "launch command" else ""
         raise ValueError(f"{service_name} launch{setting_hint} must be a JSON array of command arguments")

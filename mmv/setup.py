@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import getpass
 import hashlib
 import json
@@ -74,7 +75,7 @@ def configure_standard_graph(store, settings, ask):
 
 def configure(store):
     settings = store.settings()
-    print("Mondo Music Video setup — no models or actors are bundled.")
+    print("Mondo Music Video setup — model weights are not bundled; the installer handles starter actors/styles.")
     print("Data directory:", store.home)
 
     def ask(label, old=""):
@@ -217,28 +218,84 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("configure")
     sub.add_parser("doctor")
+    starter = sub.add_parser("install-starter-assets", help="Install the four public actors and six styles")
+    starter.add_argument("--accept-starter-signer", action="store_true", help="Explicitly accept the bundled actor signer")
+    starter.add_argument("--non-interactive", action="store_true")
+    starter.add_argument("--restore", action="store_true", help="Explicitly restore previously deleted starter assets")
+    api = sub.add_parser("inspect-api", help="List an API's advertised models without generating")
+    api.add_argument("url", help="OpenAI-compatible base URL, usually ending in /v1")
+    api.add_argument("--key-env", help="Environment variable containing the key; never pass a literal key")
+    sub.add_parser("list-api-profiles", help="List saved API configurations without exposing keys")
+    profile = sub.add_parser("save-api-profile", help="Save an additional named API configuration")
+    profile.add_argument("name")
+    profile.add_argument("--role", required=True, choices=("writer", "vision", "video"))
+    profile.add_argument("--config", required=True, type=Path, help="JSON file of settings for this role")
+    profile.add_argument("--key-env", help="Read and store the key from this environment variable")
+    activate = sub.add_parser("use-api-profile", help="Select a saved API configuration for its role")
+    activate.add_argument("name")
     serve = sub.add_parser("serve")
     serve.add_argument("--port", type=int, default=8091)
+    serve.add_argument("--no-auto-update", action="store_true", help="Check for updates without installing this launch")
     sub.add_parser("download-laya")
     models = sub.add_parser("download-models")
     models.add_argument("manifest")
     args = parser.parse_args(argv)
-    store = Storage(args.data_dir)
     try:
+        if args.command == "inspect-api":
+            from .provider_setup import inspect_writer
+            print(json.dumps(inspect_writer(args.url, key_env=args.key_env), indent=2))
+            return
+        store = Storage(args.data_dir)
         if args.command == "doctor":
             print(json.dumps(doctor(store), indent=2))
+        elif args.command == "list-api-profiles":
+            from .api_profiles import public_profiles
+            print(json.dumps(public_profiles(store), indent=2))
         else:
-            with SessionLock(store.home):
+            with ExitStack() as startup_locks:
+                startup_locks.enter_context(SessionLock(store.home))
+                if args.command == "serve":
+                    from .updates import repository_session
+                    startup_locks.enter_context(repository_session(store))
                 if args.command == "configure":
                     configure(store)
+                elif args.command == "install-starter-assets":
+                    from .starter_assets import SIGNER, install
+                    accepted = args.accept_starter_signer
+                    if not accepted and not args.non_interactive:
+                        print("Includes Hambo, Robotic Woman, Henchman #1 and Human Female Casual #1.")
+                        print("Signed OAP packages retain their content riders. Starter public key:", SIGNER)
+                        accepted = input("Accept this bundled starter-cast signer and import missing actors? Type yes: ").strip().lower() == "yes"
+                    print(json.dumps(install(store, accept_signer=accepted, restore=args.restore), indent=2))
                 elif args.command == "download-laya":
                     download_models(store, Path(__file__).parent / "engine/config/laya-download.json")
                 elif args.command == "download-models":
                     download_models(store, args.manifest)
+                elif args.command == "save-api-profile":
+                    from .api_profiles import save_profile
+                    key = os.environ.get(args.key_env, "") if args.key_env else ""
+                    if args.key_env and not key:
+                        raise ValueError("The named API key environment variable is empty or missing")
+                    print(json.dumps(save_profile(store, args.name, args.role,
+                        json.loads(args.config.read_text(encoding="utf-8")), key), indent=2))
+                elif args.command == "use-api-profile":
+                    from .api_profiles import activate
+                    print(json.dumps(activate(store, args.name), indent=2))
                 elif args.command == "serve":
+                    from .updates import startup_update
+                    print("Checking the installation's tracked repository for updates...", flush=True)
+                    update = startup_update(store, automatic=False if args.no_auto_update else None)
+                    print(update['message'], flush=True)
+                    if update.get('fatal'):
+                        raise ValueError(update['message'])
+                    if update.get('restart'):
+                        environment = {**os.environ, 'MMV_UPDATE_RESTART_COMMIT': update['installed_commit']}
+                        arguments = list(argv) if argv is not None else sys.argv[1:]
+                        os.execve(sys.executable, [sys.executable, '-m', 'mmv.setup', *arguments], environment)
                     import uvicorn
                     from webapp.mondo_web import create_app
-                    uvicorn.run(create_app(store.home), host="127.0.0.1", port=args.port, workers=1)
+                    uvicorn.run(create_app(store.home), host="127.0.0.1", port=args.port, workers=1,
+                                timeout_graceful_shutdown=5)
     except (ValueError, OSError) as exc:
         parser.exit(1, str(exc) + "\n")
 

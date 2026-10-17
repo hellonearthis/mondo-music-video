@@ -1,6 +1,28 @@
 # Mondo Music Video
 
-**Version 1.1.1** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.2.2** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+
+## Easy install — let your AI agent do it
+
+Give a coding agent with terminal access this one instruction:
+
+> Install this: https://github.com/hodgemann/mondo-music-video
+
+Your agent follows the repository's [installation guide](docs/INSTALL_WITH_AGENT.md):
+it checks your hardware, recommends suitable models, configures your services,
+and starts the app with the **four starter actors and six included styles**.
+Existing actors/styles are preserved, and actor imports include OAP signer
+review. **It asks before large downloads.** Already have API accounts?
+It can configure multiple [API profiles](docs/API_PROVIDER_SETUP.md) and select
+writing, vision and video services independently. A new video provider may need
+an adapter; the guide explains how an agent can build and verify one.
+
+Prefer to install it yourself? Jump to [manual installation](#install).
+
+The platform installers include starter assets too. Remove unwanted items with
+**Delete actor** or **Delete style** on their library cards. Deletions are
+confirmed and remembered across restarts and setup reruns; existing videos and
+exports are kept.
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
@@ -27,6 +49,14 @@ keys. Four optional [starter actors](examples/starter-cast/README.md) are includ
 as importable OAP packages. Model weights and third-party commercial software
 are not bundled.
 
+## Updates
+
+The launcher checks its tracked Git repository at startup. **Automatic
+installation is off by default**: an available update shows a notice and a link
+to that repository. Enable **Automatic updates** in Settings to install on the
+next launch, before production starts. Local changes and diverged branches are
+preserved, and user data stays private. See [update behavior and recovery](docs/UPDATES.md).
+
 ## Official Comfy SDK rendering
 
 Install `python -m pip install '.[comfy]'`, start the official local API proxy,
@@ -44,6 +74,20 @@ private workflow copy; your original graph, bindings and precision settings are
 preserved. Nothing is downloaded or selected automatically. File/folder Browse
 buttons help configure local paths, and the OAP guide explains actors, reference
 images, signatures and content riders. See [model settings](docs/MODEL_SETTINGS.md).
+
+## Song preview, live status and setup tuning
+
+Listen to and scrub your uploaded song directly in the production form, including
+after reloading a saved project. Live operation updates fall back to polling if
+the stream disconnects. Service failures identify the failing component and
+include relevant writer/ComfyUI logs.
+
+The local writer guide offers optional hellonearthis tuning while preserving
+your selected model paths. Laya device and fallback modes are explicit choices;
+your existing CUDA and workflow defaults remain intact. An optional reduced
+flash/strobe vocabulary keeps the full expanded pool as the default. See
+[local writer tuning](docs/LOCAL_WRITER_TUNING.md) and
+[visual direction](docs/STUDIO_DIRECTION_PROMPTING.md).
 
 ## Four montage grammars, driven by your music
 
@@ -83,6 +127,8 @@ for existing seeds; musical timing and actor assignments stay unchanged.
 See [vocabulary details](docs/VOCABULARY.md).
 
 ## Install
+
+Manual installation:
 
 Install **Python 3.11+**, **Git**, and **FFmpeg/ffprobe**, then:
 
@@ -148,6 +194,10 @@ The Actors tab imports and exports OAP packages, verifies their signatures and
 checks actor riders. No account, reporting or public actor sharing is required.
 
 ## Agent operation
+
+The v1.2.1 MCP server has 22 tools, including API profile add/select/remove,
+model/service preferences, starter installation and confirmed actor/style
+deletion. Reconnect the MCP client after upgrading to refresh its tool list.
 
 The included skill and optional MCP server let an agent operate the same app,
 including its OAP, review and production workflow:

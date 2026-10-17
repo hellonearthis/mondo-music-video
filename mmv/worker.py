@@ -79,7 +79,7 @@ def run(home, directory, *, resume=False):
                                    profile=(settings, store.key('MMV_WRITER_API_KEY')))
         if not ok:
             mode = "local llama.cpp" if settings.get('writer_mode') == 'local' else "API writer"
-            endpoint = settings.get('writer_url', '')
+            endpoint = runtime.safe_endpoint(settings.get('writer_url', ''))
             raise ValueError(f"Writer ({mode} at {endpoint}) failed: {error or 'Writer returned no output'}")
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"Writer ({settings.get('writer_model') or 'llama.cpp'}) returned empty text")
@@ -91,7 +91,7 @@ def run(home, directory, *, resume=False):
                  {'model': settings['vision_model'], 'messages': [{'role':'user', 'content': style.build_harvest_payload([Path(p) for p in prepared['references']])}],
                   'max_tokens':4096, 'temperature':.4}, key=store.key('MMV_VISION_API_KEY'), timeout=900)
         except Exception as exc:
-            raise ValueError(f"Vision service ({settings['vision_url']}) failed during style harvest: {exc}") from exc
+            raise ValueError(f"Vision service ({runtime.safe_endpoint(settings['vision_url'])}) failed during style harvest: {exc}") from exc
         card, aesthetic = style.parse_harvest_response(response['choices'][0]['message']['content'])
         if not card.strip() or not aesthetic.strip(): raise ValueError('Harvest did not return a style card and aesthetic directives')
         record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic, 'style_card':card}
@@ -140,6 +140,8 @@ def run(home, directory, *, resume=False):
             progress('Loading Laya prompt reviewer', 3)
             try:
                 validator._load_agent()
+                if getattr(validator, "device", None):
+                    progress(f'Laya prompt reviewer loaded on {validator.device}', 3)
             except Exception as exc:
                 raise ValueError(f"Laya semantic validator failed to load: {exc}") from exc
 
@@ -338,9 +340,8 @@ def main():
         try:run(home,directory,resume=len(sys.argv)>4 and sys.argv[4]=='resume')
         except Exception as exc:
             message=str(exc)
-            for key in ('WAVESPEED_API_KEY','MMV_WRITER_API_KEY','MMV_VISION_API_KEY','MMV_COMFY_API_KEY'):
-                value=Storage(home).key(key)
-                if value:message=message.replace(value,'[redacted]')
+            for value in Storage(home).secret_values():
+                message=message.replace(value,'[redacted]')
             print(type(exc).__name__+': '+message,flush=True)
             raise SystemExit(1)
         finally:
