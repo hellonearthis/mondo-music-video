@@ -1059,10 +1059,50 @@ async function preview(form) {
     }
   }
   if (request.kind === "ident") request.ident_seconds = Number(request.ident_seconds);
-  logSession(`Preview requested for kind='${request.kind}' backend='${request.backend}'`);
-  currentQuote = await json("/api/quote", request);
-  logSession(`Preview ready: quote_id='${currentQuote.id}' estimate=$${Number(currentQuote.estimate_usd).toFixed(2)}`);
-  showQuote(request, currentQuote);
+
+  const submitBtn = form.querySelector('button[type="submit"]') || form.querySelector(".action-bar .primary") || form.querySelector("button.primary");
+  const originalHtml = submitBtn ? submitBtn.innerHTML : null;
+  const originalCursor = document.body.style.cursor;
+
+  let busyText = "Processing preview…";
+  let noticeMsg = "Generating preview quote…";
+  if (request.kind === "video") {
+    busyText = "Analyzing audio & planning…";
+    noticeMsg = "Analyzing audio track and planning production cuts… This may take a few moments.";
+  } else if (request.kind === "harvest") {
+    busyText = "Analyzing references…";
+    noticeMsg = "Analyzing reference images for style harvest…";
+  } else if (request.kind === "ident") {
+    busyText = "Composing ident plan…";
+    noticeMsg = "Composing ident animation plan and preview quote…";
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.setAttribute("aria-busy", "true");
+    submitBtn.classList.add("processing");
+    submitBtn.innerHTML = `${busyText} <span class="spinner" aria-hidden="true"></span>`;
+  }
+  document.body.style.cursor = "wait";
+  notice(noticeMsg);
+
+  try {
+    logSession(`Preview requested for kind='${request.kind}' backend='${request.backend}'`);
+    currentQuote = await json("/api/quote", request);
+    logSession(`Preview ready: quote_id='${currentQuote.id}' estimate=$${Number(currentQuote.estimate_usd).toFixed(2)}`);
+    if ($("#notice") && $("#notice").textContent === noticeMsg) {
+      notice("");
+    }
+    showQuote(request, currentQuote);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.removeAttribute("aria-busy");
+      submitBtn.classList.remove("processing");
+      if (originalHtml !== null) submitBtn.innerHTML = originalHtml;
+    }
+    document.body.style.cursor = originalCursor;
+  }
 }
 
 function showQuote(request, quote) {
@@ -1350,13 +1390,46 @@ async function initialize() {
     };
   });
   $("#resume-production").onclick = handle(async () => {
-    const quote = await json("/api/resume/quote", {run_id: currentRun});
-    showQuote({kind: quote.kind}, quote);
+    const btn = $("#resume-production");
+    const orig = btn ? btn.innerHTML : null;
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
+        btn.innerHTML = 'Reviewing resume… <span class="spinner" aria-hidden="true"></span>';
+      }
+      notice("Loading resume preview…");
+      const quote = await json("/api/resume/quote", {run_id: currentRun});
+      if ($("#notice") && $("#notice").textContent === "Loading resume preview…") notice("");
+      showQuote({kind: quote.kind}, quote);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        if (orig !== null) btn.innerHTML = orig;
+      }
+    }
   });
   $("#start-production").onclick = handle(async () => {
     if (!$("#consent").checked) throw new Error("Accept the preview before starting");
-    logSession(`Starting production for quote '${currentQuote.id}'`);
-    await json("/api/start", {quote_id: currentQuote.id, consent: true}); $("#preview-dialog").close();
+    const btn = $("#start-production");
+    const orig = btn ? btn.innerHTML : null;
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
+        btn.innerHTML = 'Starting production… <span class="spinner" aria-hidden="true"></span>';
+      }
+      logSession(`Starting production for quote '${currentQuote.id}'`);
+      await json("/api/start", {quote_id: currentQuote.id, consent: true});
+      $("#preview-dialog").close();
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        if (orig !== null) btn.innerHTML = orig;
+      }
+    }
   });
   $("#cancel").onclick = handle(() => {
     logSession("Cancellation requested by operator");

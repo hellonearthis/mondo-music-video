@@ -144,3 +144,26 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 [data-theme=dark] .vocab-editor-pane{background:#15201a;border-color:var(--line)}
 [data-theme=dark] .vocab-checkbox-grid{background:#111b15;border-color:var(--line)}
 [data-theme=dark] .vocab-count-badge{background:#2c4032;color:#c5dfb9;border-color:#506b4b}
+
+/* Processing and spinner feedback for operation buttons */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(128, 128, 128, 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-left: 8px;
+  box-sizing: border-box;
+}
+button[aria-busy="true"], button.processing {
+  opacity: 0.9 !important;
+  cursor: wait !important;
+  pointer-events: none;
+}

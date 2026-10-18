@@ -1,5 +1,16 @@
 # Releases
 
+## 1.6.5 — Interactive preview processing feedback
+
+- **Immediate Visual & Interactive Processing Feedback**:
+  - Added real-time processing indicators when clicking **Preview production**, **Preview harvest**, and **Preview ident**:
+    - Disables submit button to prevent double-submits during audio analysis and cut planning.
+    - Updates button label contextually (`Analyzing audio & planning…`, `Analyzing references…`, `Composing ident plan…`) with an inline smooth circular spinner.
+    - Sets `aria-busy="true"` and updates document cursor to `wait`.
+    - Shows an active status notice banner (`Analyzing audio track and planning production cuts… This may take a few moments.`) that clears automatically upon completion.
+    - Restores button state, label, accessibility attributes, and cursor on completion or error.
+  - Added equivalent busy states and inline spinners to **Review resume** and **Start production** dialog actions.
+
 ## 1.6.4 — Visual vocabulary controls, custom presets & documentation guide
 
 - **Visual Vocabulary Documentation Guide**:
