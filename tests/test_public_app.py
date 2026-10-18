@@ -37,6 +37,8 @@ from mock_comfy_v2 import ComfyV2Mixin, reset_v2
 class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
     requests = []
     video = b""
+    # Clips returned before `video`, one per submission; lets tests stage a failing first render.
+    queued_videos = []
     hold = False
     invalid_writer = False
 
@@ -65,7 +67,7 @@ class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
             prefix = graph["148"]["inputs"]["filename_prefix"]
             target = self.server.output / (prefix + "_00001.mp4")
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(self.video)
+            target.write_bytes(type(self).queued_videos.pop(0) if type(self).queued_videos else self.video)
             self.server.last_filename = target.name
             self.reply({"prompt_id": "local-test", "node_errors": {}})
         elif self.path == "/chat/completions":
@@ -115,8 +117,15 @@ class PublicAppTests(unittest.TestCase):
         cls.media_temp = tempfile.TemporaryDirectory()
         directory = Path(cls.media_temp.name)
         video, song = directory / "test.mp4", directory / "test.wav"
+        # Moving, detailed footage passes the motion/framing gate like a real render.
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
-                        "color=c=teal:s=128x72:r=24:d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True)
+                        "testsrc2=s=128x72:r=24:d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True)
+        # A frozen, white-pillarboxed clip reproduces the real H3 failure the gate exists for.
+        frozen = directory / "frozen.mp4"
+        subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
+                        "color=c=teal:s=96x72:r=24:d=6", "-vf", "noise=alls=6:allf=0,pad=128:72:16:0:white",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(frozen)], check=True)
+        cls.frozen_video = frozen.read_bytes()
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
                         "sine=frequency=440:duration=1.1", str(song)], check=True)
         cls.song = song.read_bytes()
@@ -369,9 +378,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.4.0")
+        self.assertEqual(api_version()["version"], "1.5.0")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.4.0", (root / "README.md").read_text())
+        self.assertIn("1.5.0", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_project_persistence_api(self):

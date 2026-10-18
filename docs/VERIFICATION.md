@@ -1,4 +1,25 @@
-# Verification — 1.4.0
+# Verification — 1.5.0
+
+## 1.5.0 motion and framing quality gates
+
+The full suite passed **140 tests and 53 subtests**, with no skips (optional
+SDK and Playwright extras installed). New `tests/test_quality.py` covers moving,
+frozen, pillarboxed and dark-edged synthetic clips, a frozen shot inside a moving
+passage, inspection errors, prompt rules including negations and director
+framing requests, and production retry policy on the direct local renderer, the
+SDK path (separate receipts and jobs), WaveSpeed (one paid submission, warning
+only), persistent failures, unmeasurable retries and idents. Codex reviewed the
+design and implementation; all findings were adopted. Original engine source
+hashes are unchanged.
+
+Real GPU proof on the operator's RTX 4090 through `comfy_sdk_h3`: the request
+that produced a frozen, white-pillarboxed first passage in 1.4.0 was repeated
+with the same seed, cast and plan. The planner again chose a static camera; the
+writer, under the new rules, described visible subject and environmental motion
+and passed the prompt checks and Laya on the first attempt. Both passages passed
+the clip gate without a retry: passage 1 per-shot motion 2.03 (previously 0.05)
+with no borders; passage 2 per-shot motion 7.0-26.3. Visual review confirmed a
+full-frame moving first passage. The run took about nine minutes and cost $0.
 
 ## 1.4.0 Watch the song conduct
 
@@ -322,8 +343,42 @@ cancellation, OAP rejection before uploads, settings invalidation and token
 redaction. A browser test covers renderer selection, preview/consent, recovery
 and playback when cached Chromium and Playwright are installed.
 
-No real GPU or paid production has been run for this path. The operator check
-and reproduction instructions are in [COMFY_SDK.md](COMFY_SDK.md). Real GPU execution remains unverified.
+Reproduction instructions are in [COMFY_SDK.md](COMFY_SDK.md). The real GPU
+operator check below was later completed.
+
+### Real GPU operator check — October 18, 2026
+
+The owner authorized a short end-to-end production through `comfy_sdk_h3` on
+the development machine: an RTX 4090 (24 GB), ComfyUI 0.41.0 at commit
+`c06bf5f`, and the pinned SDK (`6d2dd72`) and proxy (`1569dc1`) installed with the
+`comfy` extra. The proxy ran on loopback port 8189 in front of ComfyUI on 8188.
+The writer was the local llama.cpp service and Laya ran on CUDA. The quote was
+$0.00 (`paid: false`) and consent was recorded before start.
+
+The 11.5-second, 99 BPM test song cast two public starter actors (Robotic Woman,
+then Hambo, section casting) at 736×416 (0.3 MP). Both passages passed Laya on
+the first review. Each passage's `comfy-request.json` recorded
+`backend: comfy_sdk_h3`, the loopback endpoint, SDK revision `6d2dd72`, state
+`succeeded` and a distinct proxy job ID. Passage 1 (73 frames) rendered in about
+17 minutes including model load; passage 2 (226 frames) took about 5 minutes.
+The assembly report shows both clips returned exactly the requested frames
+(delta 0) and were trimmed to 61 and 215 frames. The output is H.264/AAC,
+24 fps, 276 frames, exactly 11.5 seconds. The score view showed all seven
+planned cuts on beats, three on downbeats.
+
+The transport, receipts, timing and assembly worked, but the owner judged the
+creative result a failure: passage 1 is effectively a still image. Its mean
+frame-to-frame luminance change was 0.05 (0-255 scale, 184×104 grayscale),
+against 1.25 for the same quiet passage in an earlier run with a slow push-in and
+about 10 for both peak passages. The plan specified "The camera holds a static
+shot"; the writer then dropped the planned motion cue and described a
+motionless subject and static composition, and Laya accepted it. MMV checked
+only frame counts, so the frozen clip was assembled. The passage also rendered
+the sampled footage cue "Amateur cine-club footage" as a projected film frame
+with a white surround. Passage 2 showed the intended single-subject
+fragmentation. SDK execution on real GPU is verified for this environment;
+other GPUs, operating systems and ComfyUI or node versions are not. A
+motion-quality safeguard is proposed separately.
 
 ## Original-engine parity
 

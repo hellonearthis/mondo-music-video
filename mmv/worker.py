@@ -67,6 +67,7 @@ def run(home, directory, *, resume=False):
     from .engine import style, actor, casting, assemble
     from .engine.plan import ShotPlan
     from .engine.schema import WriterResponse, build_writer_request, assemble_prompt, validate_prompt, ValidationError, RIGGING_TAIL
+    from . import quality
     from .engine.writer import call_llm
     from .render import get_backend
     from .pipeline import ENGINE
@@ -180,6 +181,7 @@ def run(home, directory, *, resume=False):
         else:
             system = style.compose_writer_prompt(str(style_dir), actor_block=cast_block, restrictions=restrictions,
                         silent_mouths=effective_silent_mouths, lyrics=request['lyrics'] or None, direction=request['direction'] or None)
+            system += quality.WRITER_RULES
             (directory / 'writer_system.md').write_text(system, encoding='utf-8')
             jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
             cache_dir = store.home / 'cache' / 'prompts'
@@ -195,7 +197,7 @@ def run(home, directory, *, resume=False):
 
                 if reuse_prompts:
                     cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', system, job, seg, tags, cleared_at=cleared_at)
-                    if cached:
+                    if cached and not quality.prompt_problems(cached, seg, request['direction']):
                         if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in cached.lower():
                             soundscape_pos = cached.find("\noverall_soundscape:")
                             if soundscape_pos > 0:
@@ -222,7 +224,8 @@ def run(home, directory, *, resume=False):
                                 prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
                             else:
                                 prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
-                        problems = validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=effective_silent_mouths)
+                        problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=effective_silent_mouths)
+                                    + quality.prompt_problems(prompt, seg, request['direction']))
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
                         problems = [str(exc)]
                     if not problems:
@@ -286,14 +289,22 @@ def run(home, directory, *, resume=False):
             progress(f'Rendering musical passage {index+1} of {len(plan.segments)}', 35+int(45*index/len(plan.segments)))
             images = [(member['actor_id'],sheets[member['actor_id']]) for member in casting.cast_for(prepared['casting'],seg.segment_id)]
             if len(images) != seg.ref_image_slots: raise ValueError('Original cast/reference-slot contract disagrees; refusing render')
-            rendered[seg.segment_id] = backend.render_segment(segment_id=seg.segment_id,index=seg.index,slug=plan.slug,
-                prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
-                width=plan.width,height=plan.height,seed=request['seed']+seg.index,images=images,song=str(song),
-                audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
+            def render(segment_id, seed):
+                result = backend.render_segment(segment_id=segment_id,index=seg.index,slug=plan.slug,
+                    prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
+                    width=plan.width,height=plan.height,seed=seed,images=images,song=str(song),
+                    audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
+                video = result.get('video')
+                if not video or not Path(video).is_file() or assemble.probe_frames(video) < seg.trim_frames:
+                    raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')
+                return result
+            seed = request['seed']+seg.index
+            rendered[seg.segment_id] = render(seg.segment_id, seed)
             write_json(directory / 'renders.json', rendered)
-            video = rendered[seg.segment_id].get('video')
-            if not video or not Path(video).is_file() or assemble.probe_frames(video) < seg.trim_frames:
-                raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')
+            if request['kind'] == 'video':
+                rendered[seg.segment_id] = check_passage_quality(directory, backend, request, seg, index, len(plan.segments),
+                                                                 rendered[seg.segment_id], seed, render, progress)
+                write_json(directory / 'renders.json', rendered)
     finally:
         backend.close_render()
     progress('Assembling frame-exact music video', 85)
@@ -320,9 +331,61 @@ def run(home, directory, *, resume=False):
                 result=assemble.assemble_run(plan,rendered,song,directory/'assembly')
             output=directory/'music-video.mp4';shutil.copy2(result['video'],output)
     from .media import duration
+    warnings = [entry['warning'] for entry in read_json(directory / 'quality.json', {}).values() if entry.get('warning')]
     write_json(directory/'output.json',{'file':output.name,'duration':duration(output),'kind':request['kind'],
-                                       'title':request['title'] or 'Music video'})
+                                       'title':request['title'] or 'Music video',
+                                       **({'quality_warnings': warnings} if warnings else {})})
     progress('Complete',100)
+
+
+# Seeds for the single automatic re-render stay distinct from every passage's first seed.
+RETRY_SEED_OFFSET = 7919
+# Only these free local renderers may re-render a passage automatically; paid
+# renderers are never resubmitted, whatever their price card says.
+QUALITY_RETRY_BACKENDS = ('local_h3', 'comfy_sdk_h3')
+
+
+def check_passage_quality(directory, backend, request, seg, index, total, result, seed, render, progress):
+    """Inspect a rendered passage; re-render once on free local renderers; record the outcome.
+
+    Only a completed, structurally valid clip reaches this check: renderer errors,
+    including ambiguous SDK submissions, still stop the run before any retry. The
+    retry uses its own segment ID and a fixed seed, so SDK receipts stay exact and a
+    resumed run reaches the same decision and continues the same retry job.
+    """
+    from . import quality
+    starts = [shot.start_frame for shot in seg.shots]
+    borders = not quality.framing_requested(request.get('direction'))
+    inspect = lambda video, segment_id, attempt_seed: dict(
+        quality.inspect_clip(video, seg.trim_frames, starts, borders), segment_id=segment_id, seed=attempt_seed)
+    attempts = [inspect(result['video'], seg.segment_id, seed)]
+    chosen, used, warning = result, attempts[0], None
+    if attempts[0]['status'] == 'fail':
+        free = request['backend'] in QUALITY_RETRY_BACKENDS and backend.cost_for(seg.duration_input) == 0
+        if free:
+            progress(f"Passage {index+1} of {total} failed the quality check ({'; '.join(attempts[0]['problems'])}). "
+                     'Re-rendering it once with a new seed on the free local renderer', 35+int(45*index/total))
+            retry_id, retry_seed = seg.segment_id + '-r1', seed + RETRY_SEED_OFFSET
+            retry = render(retry_id, retry_seed)
+            attempts.append(inspect(retry['video'], retry_id, retry_seed))
+            # Passing beats a measured failure, which beats an unmeasurable clip;
+            # then fewer problems. The original wins ties.
+            rank = lambda a: ({'pass': 0, 'fail': 1}.get(a['status'], 2), len(a['problems']))
+            if rank(attempts[1]) < rank(attempts[0]):
+                chosen, used = retry, attempts[1]
+        if used['status'] != 'pass':
+            details = list(used['problems']) + [a['error'] for a in attempts if a.get('error')]
+            warning = (f"Passage {index+1}: {'; '.join(details)}"
+                       + ('' if free else ' (not re-rendered automatically on this renderer)'))
+    elif attempts[0]['status'] == 'error':
+        warning = f"Passage {index+1}: {attempts[0]['error']}"
+    status = ('ok' if used['status'] == 'pass' and len(attempts) == 1 else
+              'retried_ok' if used['status'] == 'pass' else used['status'])
+    report = read_json(directory / 'quality.json', {})
+    report[seg.segment_id] = {'status': status, 'attempts': attempts, 'used': used['segment_id'],
+                              **({'warning': warning} if warning else {})}
+    write_json(directory / 'quality.json', report)
+    return chosen
 
 
 def main():

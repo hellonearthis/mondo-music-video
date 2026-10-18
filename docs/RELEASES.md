@@ -1,5 +1,37 @@
 # Releases
 
+## 1.5.0 — Motion and framing quality gates
+
+A real Comfy SDK render produced a passage that was effectively a still image
+inside a white pillarbox frame. The plan asked for a static camera, the writer
+then described a motionless subject and static composition, and nothing checked
+the rendered clip beyond its frame count. Production now guards both ends.
+
+Before rendering, the music-video writer receives motion and framing rules, and
+a deterministic check returns prompts that declare a still image, describe a
+motionless subject under a static camera with nothing else moving, or use a
+framing device such as a projected film or letterbox. Negations ("no motion
+blur", "without black bars") are ignored, and framing devices the director asks
+for are allowed. Cached prompts that fail the check are not reused. Laya is
+unchanged: tested on the failing prompt, it could not judge motion confidently.
+
+After each passage renders, Mondo measures frame-to-frame motion within each
+planned shot, skipping cuts, and looks for uniform borders with a detailed
+interior. Flat black edges are reported as inconclusive rather than failed. On
+the free local renderers (`local_h3`, `comfy_sdk_h3`), a failing passage is
+re-rendered once with a fixed new seed under its own segment ID, so SDK
+receipts and resume stay exact; the better attempt is kept and the original
+wins ties. Paid renderers are never resubmitted. Remaining problems are
+assembled with a warning on the output card, in `/api/outputs` and for agents;
+`quality.json` in the run records every measurement. Idents are not gated.
+Original engine sources remain byte-identical.
+
+Codex reviewed the design before integration; its findings on resume safety,
+renderer allowlisting, per-shot measurement, dark-scene false positives,
+negated phrases, creative intent and inspection errors were adopted. A
+vision-model check with Qwen 3.8 27B judged single frames correctly in testing
+but needs VRAM orchestration with ComfyUI, so it is not yet in production.
+
 ## 1.4.0 — Watch the song conduct
 
 Every finished music video now has a synchronized musical score under its

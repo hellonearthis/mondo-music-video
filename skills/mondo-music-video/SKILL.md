@@ -53,7 +53,9 @@ and renderer configuration before starting; model failures stop production.
    seconds. An active operation rejects additional work; never simulate a queue.
 4. On completion, inspect outputs and provide the playback URL or save the
    requested file. To explain the result, `read_music_score` returns the beats,
-   energy, grammars and planned cuts; describe internal cuts as planned. On failure, inspect the operation log and request IDs. Never
+   energy, grammars and planned cuts; describe internal cuts as planned. If an
+   output lists `quality_warnings` (a near-still passage or borders), tell the
+   user; free local renderers already retried once, and paid work needs consent. On failure, inspect the operation log and request IDs. Never
    automatically resubmit paid work after a timeout or ambiguous submission.
 
 A preview expires after ten minutes and becomes invalid if relevant inputs or

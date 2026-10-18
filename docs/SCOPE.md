@@ -27,7 +27,10 @@ and user consent before submission. No automatic provider substitution.
 ## One operation at a time
 
 Generation, harvesting, idents, and upscale exports share a single-operation
-guard. If busy, the application asks the user to wait; it does not enqueue work.
+guard. Within one music-video production, a passage that fails the automatic
+motion/framing check may be re-rendered once with a new seed, only on free local
+renderers; paid renderers are never resubmitted automatically. This is a quality
+gate inside the operation, not a manual clip redo control. If busy, the application asks the user to wait; it does not enqueue work.
 Progress, logs, and cancellation remain available. Cancellation cannot undo a
 remote submission or guarantee that a provider will waive its charge.
 

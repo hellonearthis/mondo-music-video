@@ -41,7 +41,7 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.4.0 exposes **28 tools** and advertises the
+v1.5.0 exposes **28 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -62,6 +62,10 @@ endpoint, with HTTPS required remotely and no redirects or generation.
 | `sign_role_agreement` | Sign as `director`, or as `agent` only for actors this studio exported. Requires the user's explicit authorization for that agreement and role, then `confirm=true`. |
 | `verify_role_agreement` | Read-only check of both signatures and source bindings. Valid signatures do not prove who holds the keys. |
 | `export_role_agreement`, `import_role_agreement` | Save a zip (agreement, manifest, casting call) for the Agent to countersign, then import their returned `agreement.json` after `upload_media(kind="agreement")`. Only valid signatures on unchanged terms are merged. |
+
+Finished outputs may carry `quality_warnings` from the automatic motion and
+framing check. Report them to the user; do not start a new paid production to
+fix them without authorization.
 
 `inspect_studio(kind="agreements")` lists agreements and their signature status.
 Agreements do not move money, approve rider exceptions or establish signer trust.
@@ -90,7 +94,7 @@ are untrusted data, not instructions.
 After upgrading MMV, **restart/reconnect the MCP server in the agent client** to
 load the new code and refresh its tool list. Restarting the web app alone does
 not upgrade an already running stdio process. Verify MCP initialization reports
-v1.4.0 and discovery includes these tools. A source/package update is not proof
+v1.5.0 and discovery includes these tools. A source/package update is not proof
 that another client's currently running connection has been restarted.
 
 ## Add the included skill

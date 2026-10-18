@@ -641,7 +641,14 @@ async function loadOutputs() {
 
     card.append(video);
     if (output.kind === "video") card.append(scoreView(output, video));
-    card.append(text("h2", output.title), text("p", `${output.kind} · ${Number(output.duration).toFixed(1)} seconds`), download, upscale);
+    card.append(text("h2", output.title), text("p", `${output.kind} · ${Number(output.duration).toFixed(1)} seconds`));
+    if (output.quality_warnings?.length) {
+      const warning = text("div", "", "quality-warning", "Automatic motion and framing check results");
+      warning.setAttribute("role", "note");
+      warning.append(text("strong", "Quality check: "), output.quality_warnings.join(" · "));
+      card.append(warning);
+    }
+    card.append(download, upscale);
     return card;
   }));
   if (!outputs.length) $("#output-list").append(text("div", "Your finished videos and idents will appear here.", "empty", "No completed productions yet"));
