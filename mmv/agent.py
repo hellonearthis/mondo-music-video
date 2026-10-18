@@ -230,6 +230,10 @@ class AgentClient:
     def import_agreement(self, filename):
         return self._multipart("/api/agreements/import", {"filename": filename})
 
+    def music_score(self, output_file):
+        run_id = str(output_file).split("/")[0]
+        return self._json("GET", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/score")
+
     def upscale(self, source, model="ahq-12", scale=2):
         return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})
 

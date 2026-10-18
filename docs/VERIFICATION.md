@@ -1,4 +1,21 @@
-# Verification — 1.3.0
+# Verification — 1.4.0
+
+## 1.4.0 Watch the song conduct
+
+The full suite passed **110 tests and 53 subtests** (15 optional-extra skips).
+New `tests/test_score_view.py` covers seconds conversion, downbeat/beat/split cut
+classification, opening-ident offsets, refusal for idents, missing analysis and
+unknown runs, and absence of local paths. The agent test reads the score of a
+complete mocked production; MCP stdio discovery verifies 28 tools and 1.4.0.
+
+Chromium was driven against a copy of a real run (ad hoc Playwright script):
+caption updates, click seeking, playback sync, keyboard cut-to-cut seeking with
+Home/End, slider ARIA values, no growth in live views across repeated output
+refreshes, both themes, no horizontal overflow at 390 px and no page errors.
+Codex adversarial review found an observer leak and missing keyboard access;
+both were fixed and re-checked. The reinstalled live app on the operator's data
+reported `/api/version` 1.4.0 and served the score for its music video (seven
+planned cuts, all on beats, three on downbeats). No generation ran.
 
 ## 1.3.0 Open Actor Protocol 0.3
 

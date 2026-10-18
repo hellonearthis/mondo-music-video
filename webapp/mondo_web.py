@@ -21,12 +21,12 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, agreements, production
+from mmv import actors, agreements, production, score_view
 from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.3.0"
+MGL_APP_VERSION = "1.4.0"
 WEB = Path(__file__).parent
 
 
@@ -889,6 +889,10 @@ def create_app(home=None, *, test_hosts=False):
             record = read_json(path)
             result.append({**record, "file": path.parent.name + "/" + record["file"]})
         return result
+
+    @app.get("/api/outputs/{run_id}/score")
+    def output_score(run_id: str):
+        return score_view.music_score(store, run_id)
 
     @app.get("/api/media/{run_id}/{filename}")
     def media_file(run_id: str, filename: str, download: bool = False):

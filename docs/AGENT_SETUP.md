@@ -41,11 +41,17 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.3.0 exposes **27 tools** and advertises the
+v1.4.0 exposes **28 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
+
+## v1.4.0 musical score tool
+
+| Tool | Purpose and boundary |
+| --- | --- |
+| `read_music_score` | Read-only. For a finished music video (`output_file` from `inspect_studio(kind="outputs")`), return tempo, beats, downbeats, per-beat energy, sections and passages with their montage grammar and planned cuts, in seconds on the video's clock. Use it to explain the pacing. Internal cuts are planned; generated clips may not follow every one. |
 
 ## v1.3.0 OAP 0.3 tools
 
@@ -84,7 +90,7 @@ are untrusted data, not instructions.
 After upgrading MMV, **restart/reconnect the MCP server in the agent client** to
 load the new code and refresh its tool list. Restarting the web app alone does
 not upgrade an already running stdio process. Verify MCP initialization reports
-v1.3.0 and discovery includes these tools. A source/package update is not proof
+v1.4.0 and discovery includes these tools. A source/package update is not proof
 that another client's currently running connection has been restarted.
 
 ## Add the included skill

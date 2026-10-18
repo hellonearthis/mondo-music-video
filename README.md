@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.3.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.4.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -102,6 +102,12 @@ to select a grammar and place the shots and cuts.
 | High | **Chaotic multi-scene** | New subjects, settings and actions in discontinuous collisions. |
 | Peak | **Single-subject fragmentation** | A recurring subject seen through many angles and shot scales. |
 
+Open **Watch the song conduct** under any finished music video to see this
+happen. A synchronized score shows the energy curve, beats and downbeats, each
+passage's grammar and the planned cuts, with a playhead that follows playback.
+Click it to seek; a caption explains the current musical decision, such as a
+peak passage switching to single-subject fragmentation with a cut on a downbeat.
+
 These are the default energy-to-grammar assignments. The song's detected
 sections determine which grammars a production uses. Shot density, camera motion
 and shot scale respond to the musical energy; passage boundaries follow detected
@@ -199,9 +205,9 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.3.0 MCP server has 27 tools, including API profile add/select/remove,
+The v1.4.0 MCP server has 28 tools, including API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
-deletion, audition exports and OAP role agreements. Reconnect the MCP client after upgrading to refresh its tool list.
+deletion, audition exports, OAP role agreements and musical score reading. Reconnect the MCP client after upgrading to refresh its tool list.
 
 The included skill and optional MCP server let an agent operate the same app,
 including its OAP, review and production workflow:

@@ -168,6 +168,14 @@ def create_server(base_url=None):
         """Merge valid signatures from an uploaded, returned copy of an agreement drafted here."""
         return invoke(client.import_agreement, filename)
 
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def read_music_score(output_file: str) -> dict[str, Any]:
+        """Read a finished music video's beats, downbeats, energy, passages and planned cuts in seconds.
+
+        Use it to explain why the video is paced the way it is. Internal cuts are planned; the
+        generated clip may not follow every one exactly."""
+        return invoke(client.music_score, output_file)
+
     @server.tool()
     def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:
         """Start a requested Topaz export of a finished output using the configured user-owned installation."""

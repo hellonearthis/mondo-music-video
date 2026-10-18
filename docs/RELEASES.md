@@ -1,5 +1,26 @@
 # Releases
 
+## 1.4.0 — Watch the song conduct
+
+Every finished music video now has a synchronized musical score under its
+player. It draws the per-beat energy curve, beat and downbeat ticks, each
+passage colored by montage grammar, and the planner's cuts, with a playhead that
+follows playback and click-or-drag seeking. A caption names the current
+decision: section energy, grammar, shot scale, and whether the cut lands on a
+downbeat, a beat, or splits a long hold. Opening idents shift the score onto
+the video's clock. The view reads only saved run artifacts; it starts no
+generation and costs nothing.
+
+`/api/outputs/{run}/score`, the agent client and a new read-only MCP tool,
+`read_music_score` (28 tools), expose the same data without local paths,
+prompts or provider details. Cuts inside a passage are labelled as planned:
+assembly guarantees passage boundaries, but a generated clip may not follow
+every internal cut.
+
+The idea came from collaborative ideation between Claude Code and Codex: Codex
+independently ranked it first of three proposals for making the beat-driven
+montage visible in a short demo.
+
 ## 1.3.0 — Open Actor Protocol 0.3
 
 MMV now pins Open Actor Protocol 0.3.0 (`35902b1`), which adds the `jsonschema`
