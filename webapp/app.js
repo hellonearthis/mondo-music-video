@@ -1242,7 +1242,6 @@ async function loadUpdateStatus() {
     banner.hidden = false;
   } catch { /* Update availability must not block the studio UI. */ }
 }
-}
 
 async function initialize() {
   initTooltips();
@@ -1611,11 +1610,6 @@ async function initialize() {
   });
   $("#key-form").onsubmit = handle(async event => { await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT"); event.target.elements.value.value = ""; await loadSettings(); await refreshServices(true); notice("Key saved locally. The settings API does not return it."); });
   $("#upscale-form").onsubmit = handle(async event => { const body = Object.fromEntries(new FormData(event.target)); body.scale = Number(body.scale); await json("/api/upscale", {...body, source: upscaleSource}); $("#upscale-dialog").close(); });
-
-  const refreshBtn = $("#refresh-services");
-  if (refreshBtn) {
-    refreshBtn.onclick = () => refreshServices(true);
-  }
 
   const pickerFilter = $("#picker-filter");
   if (pickerFilter) pickerFilter.oninput = () => renderPickerEntries();
