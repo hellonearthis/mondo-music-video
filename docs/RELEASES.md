@@ -1,26 +1,150 @@
 # Releases
 
-## 1.2.3 — Test suite acceleration, SSE bounded snapshot & service probe optimization
+## 1.6.2 — Upstream 1.6.1 merge, test suite acceleration & Live Engine Status Dock
 
-- **Public App Test Suite Acceleration (`tests/test_public_app.py`)**:
-  - Pre-computes the fixture song `ScoreMap` analysis once in `PublicAppTests.setUpClass()` and seeds `self.home / "analysis"` in `setUp()`, eliminating redundant `librosa` subprocess launches across every test and cutting serial suite runtime in half (~35s → ~17.5s).
-  - Restores displaced log assertions in `test_clear_log_endpoint` and resolves synchronous `TestClient` SSE stream deadlock in `test_sse_events_and_jobs_subscription` via `/api/events?once=true`.
-- **Service Probe & SSE Enhancements (`mmv/services.py`, `webapp/mondo_web.py`)**:
-  - Scoped cached service probe results by `store.home`, used a proxy-bypass opener for local service checks, and reused the local writer `/models` probe when `vision_url` shares the same endpoint.
-  - Added optional `once: bool = False` query parameter to `/api/events` for non-blocking initial SSE snapshot inspection.
+- **Upstream 1.6.1, 1.6.0, 1.5.0, 1.4.0 & 1.3.0 Integration**:
+  - Merged RunPod agent installation (`docs/RUNPOD.md`) and H3 workflow setup guidance (`docs/H3_WORKFLOW_SETUP.md`).
+  - Integrated batched pixel and optional local vision quality checks (`mmv/quality.py`, `mmv/vision_check.py`, `mmv/vision_stage.py`) plus SDK local-completion fast-path recovery.
+  - Integrated synchronized musical score view (`mmv/score_view.py`, `/api/outputs/{run}/score`, `read_music_score` MCP tool).
+  - Integrated Open Actor Protocol 0.3.0 (`mmv/agreements.py`, audition exports, role agreements, and 28 MCP tools).
+- **Test Suite Acceleration & Live Engine Status Dock**:
+  - Pre-computed song `ScoreMap` analysis in `PublicAppTests.setUpClass()` and pre-built Git repository templates in `UpdateTests.setUpClass()`, cutting serial test execution time while preserving full subprocess and media verification.
+  - Added cross-platform Playwright Chromium cache discovery in `tests/test_browser.py` and `/api/events?once=true` bounded SSE snapshot support.
+  - Retained the Live Engine & Hardware Status Dock (`mmv/services.py`, `/api/services/status`) with store-scoped probe caching and proxy-bypass local probes.
 
-## 1.2.2 — Upstream 1.2.1 merge & Live Engine Status Dock
+## 1.6.1 — Agent installation on RunPod and selected H3 workflows
 
-- **Upstream 1.2.1 Features**:
-  - Integrated public starter assets installation (`install-starter-assets`) and confirmed local library deletion.
-  - Expanded MCP server with 22 tools.
-  - Agent installation guidance (`docs/INSTALL_WITH_AGENT.md`) and multi-account private API profiles (`mmv/api_profiles.py`).
-  - Opt-in startup repository updates and checkout lease management (`mmv/updates.py`).
-  - Thirteen picture aspect ratios including 9:21 and 21:9.
-- **Live Engine & Hardware Dock**:
-  - Retained dedicated real-time status monitor UI for Laya, llama.cpp, ComfyUI, and Vision.
-  - Live GPU device inspection, active queue count, and sleeping vs. processing state detection.
-  - Fast sub-millisecond cached probing with `/api/services/status`.
+Agent installation now includes a RunPod handoff for fresh, partial and existing
+setups: discover/reuse components, persist private data and models, configure
+SSH browser access, record restart steps and explain cloud rental charges.
+
+For local H3, the installing agent must adapt and activate a private graph/map
+for the selected model stack, checking loaders, precision, nodes, reference/audio
+connections and runtime overrides. Filename-only model changes are not treated
+as compatibility verification. These are agent procedures using existing workflow
+support, not automatic conversion of arbitrary H3 variants by the shell installer.
+
+RunPod and variant-specific end-to-end verification remain pending; installation
+readiness must reflect the actual operator-approved test result. No Pod was
+rented and no GPU generation was run for this release. The included skill,
+installation entry points and platform notes link the procedures.
+
+Codex prepared the guidance and release. The collaborator fork check found HEAD
+unchanged at `78f31ae33f50a9578043d2af33ce05158603ab86`; existing substantive
+review findings remain in [COLLABORATOR_REVIEW](COLLABORATOR_REVIEW.md).
+
+## 1.6.0 — Batched pixel and optional vision quality checks
+
+All passages render before pixel checks and one batch of free local retries.
+The optional **Vision quality check (slower)** is off by default and judges
+sampled single frames with a local vision-capable writer model and mmproj.
+Pixel measurements remain authoritative for motion. Vision mostly warns;
+unrequested framing devices in at least two sampled frames may use the same
+single retry budget. Paid renderers are never automatically resubmitted.
+
+Mondo swaps only services it owns: on direct H3 and SDK H3, close ComfyUI before
+preview and configure its launch command. The SDK proxy stays operator-managed.
+External ComfyUI is never stopped. Vision startup failure continues on pixel
+checks with a visible warning. Per-attempt judgments and hashes in `quality.json`
+support checkpoint reuse; `vision.json` records service notes.
+
+SDK recovery now validates a saved local completion before querying the proxy,
+so valid local media can survive proxy expiry without another submission.
+Fingerprints, receipt bindings, path confinement, hashes, decoding and frame
+counts guard that fast path; ambiguous submissions still require reconciliation.
+
+Codex implemented phase 1 SDK local-completion recovery and the phase 3 vision
+module with their tests, and completed orchestration tests, fixes and agent/docs
+coverage. Claude Code implemented batched quality orchestration, service swaps,
+preview diagnostics and UI wiring. The final fork check found HEAD unchanged at
+`78f31ae33f50a9578043d2af33ce05158603ab86`; previously recorded review findings
+remain unchanged. Final validation: 240 tests and 53 subtests passed, plus a $0
+RTX 4090 production with both passages passing pixel and vision checks, no
+retries or warnings, and a verified 11.5-second output. Hardware retry-path and
+platform limits are recorded in [VERIFICATION](VERIFICATION.md).
+
+
+## 1.5.0 — Motion and framing quality gates
+
+A real Comfy SDK render produced a passage that was effectively a still image
+inside a white pillarbox frame. The plan asked for a static camera, the writer
+then described a motionless subject and static composition, and nothing checked
+the rendered clip beyond its frame count. Production now guards both ends.
+
+Before rendering, the music-video writer receives motion and framing rules, and
+a deterministic check returns prompts that declare a still image, describe a
+motionless subject under a static camera with nothing else moving, or use a
+framing device such as a projected film or letterbox. Negations ("no motion
+blur", "without black bars") are ignored, and framing devices the director asks
+for are allowed. Cached prompts that fail the check are not reused. Laya is
+unchanged: tested on the failing prompt, it could not judge motion confidently.
+
+After each passage renders, Mondo measures frame-to-frame motion within each
+planned shot, skipping cuts, and looks for uniform borders with a detailed
+interior. Flat black edges are reported as inconclusive rather than failed. On
+the free local renderers (`local_h3`, `comfy_sdk_h3`), a failing passage is
+re-rendered once with a fixed new seed under its own segment ID, so SDK
+receipts and resume stay exact; the better attempt is kept and the original
+wins ties. Paid renderers are never resubmitted. Remaining problems are
+assembled with a warning on the output card, in `/api/outputs` and for agents;
+`quality.json` in the run records every measurement. Idents are not gated.
+Original engine sources remain byte-identical.
+
+Codex reviewed the design before integration; its findings on resume safety,
+renderer allowlisting, per-shot measurement, dark-scene false positives,
+negated phrases, creative intent and inspection errors were adopted. A
+vision-model check with Qwen 3.8 27B judged single frames correctly in testing
+but needs VRAM orchestration with ComfyUI, so it is not yet in production.
+
+## 1.4.0 — Watch the song conduct
+
+Every finished music video now has a synchronized musical score under its
+player. It draws the per-beat energy curve, beat and downbeat ticks, each
+passage colored by montage grammar, and the planner's cuts, with a playhead that
+follows playback and click-or-drag seeking. A caption names the current
+decision: section energy, grammar, shot scale, and whether the cut lands on a
+downbeat, a beat, or splits a long hold. Opening idents shift the score onto
+the video's clock. The view reads only saved run artifacts; it starts no
+generation and costs nothing.
+
+`/api/outputs/{run}/score`, the agent client and a new read-only MCP tool,
+`read_music_score` (28 tools), expose the same data without local paths,
+prompts or provider details. Cuts inside a passage are labelled as planned:
+assembly guarantees passage boundaries, but a generated clip may not follow
+every internal cut.
+
+The idea came from collaborative ideation between Claude Code and Codex: Codex
+independently ranked it first of three proposals for making the beat-driven
+montage visible in a short demo.
+
+## 1.3.0 — Open Actor Protocol 0.3
+
+MMV now pins Open Actor Protocol 0.3.0 (`35902b1`), which adds the `jsonschema`
+runtime dependency. Imported manifests are validated against OAP's bundled
+offline schemas before signature checks; errors name the JSON path. The four
+0.2 starter packages still validate, verify and import unchanged. New exports
+declare OAP 0.3.0; older OAP readers may reject them.
+
+Local actors can be exported as audition packages. Cast-only assets are listed
+by hash but left out; a reference can be marked audition-cleared when it is a
+prepared take. Imported actors still export only their preserved original.
+Importing a portfolio or audition package now reports a clear "no reference
+sheet" error instead of an internal failure when listed sheets are absent.
+
+Role agreements cast an actor with this studio as Director. A draft binds the
+actor's exact signed manifest and a generated casting call, and refuses rider
+conflicts. The Director key is stored separately from the export signing key.
+The studio can also sign as Agent for actors it exported. For outside actors, a
+bundle goes to the Agent and their returned `agreement.json` is imported; only
+valid signatures on unchanged terms are merged. The Actors tab, agent client,
+five new MCP tools (27 in total) and the skill cover the workflow. Agent and MCP
+signing requires explicit `confirm=true`. Agreements do not move money,
+approve rider exceptions or establish signer trust.
+
+The collaborator fork was checked at task start: its new revision `78f31ae`
+merges this repository's 1.2.1 into the fork's pending hardware dock and labels
+the result 1.2.2. Its dock and related changes were not part of this release and
+remain pending a focused review (see COLLABORATOR_REVIEW.md).
 
 ## 1.2.1 — Starter installation and local library deletion
 

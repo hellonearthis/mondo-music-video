@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.2.3** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.6.2** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -16,6 +16,10 @@ review. **It asks before large downloads.** Already have API accounts?
 It can configure multiple [API profiles](docs/API_PROVIDER_SETUP.md) and select
 writing, vision and video services independently. A new video provider may need
 an adapter; the guide explains how an agent can build and verify one.
+
+Installing on a RunPod GPU Pod? The agent also follows the
+[RunPod setup guide](docs/RUNPOD.md), covering fresh or existing stacks,
+persistent storage, private browser access and first-video verification.
 
 Prefer to install it yourself? Jump to [manual installation](#install).
 
@@ -101,6 +105,29 @@ to select a grammar and place the shots and cuts.
 | Mid | **Thematic multi-scene** | New subjects and settings connected by one thematic anchor. |
 | High | **Chaotic multi-scene** | New subjects, settings and actions in discontinuous collisions. |
 | Peak | **Single-subject fragmentation** | A recurring subject seen through many angles and shot scales. |
+
+Every passage also passes motion and framing checks. Before rendering, prompts
+that would produce a still image or a bordered picture are sent back to the
+writer. After rendering, each passage is measured for frozen shots and uniform
+borders; on free local renderers a failing passage is re-rendered once with a
+new seed, and anything still wrong appears as a warning on the finished video.
+Paid renderers are never resubmitted automatically.
+
+Checks now run as a batch after all passages render, with one shared retry
+budget per passage. Optionally enable **Vision quality check (slower)** (off by
+default) to inspect sampled single frames with your local vision-capable writer
+model and its mmproj. This adds model loading and judging time. Mondo stops and
+restarts only ComfyUI it launched, including on the SDK path; close ComfyUI
+before starting and configure its launch command. Vision checks mostly add
+warnings; repeated unrequested framing devices may use the same free local
+retry budget. Pixel checks remain authoritative for motion. If the vision model
+cannot start, production continues with pixel checks and a visible warning.
+
+Open **Watch the song conduct** under any finished music video to see this
+happen. A synchronized score shows the energy curve, beats and downbeats, each
+passage's grammar and the planned cuts, with a playhead that follows playback.
+Click it to seek; a caption explains the current musical decision, such as a
+peak passage switching to single-subject fragmentation with a cut on a downbeat.
 
 These are the default energy-to-grammar assignments. The song's detected
 sections determine which grammars a production uses. Shot density, camera motion
@@ -192,12 +219,16 @@ automatically. Uploaded references and song passages go to your chosen provider.
 
 The Actors tab imports and exports OAP packages, verifies their signatures and
 checks actor riders. No account, reporting or public actor sharing is required.
+With Open Actor Protocol 0.3, imported manifests are also schema-validated
+offline, local actors can be exported as audition packages that leave out
+cast-only assets, and role agreements record a casting between this studio
+(Director) and an actor's Agent, each signing with their own key.
 
 ## Agent operation
 
-The v1.2.1 MCP server has 22 tools, including API profile add/select/remove,
-model/service preferences, starter installation and confirmed actor/style
-deletion. Reconnect the MCP client after upgrading to refresh its tool list.
+The v1.6.1 MCP server has 28 tools, including API profile add/select/remove,
+model/service preferences, starter installation, confirmed actor/style
+deletion, audition exports, OAP role agreements and musical score reading. Reconnect the MCP client after upgrading to refresh its tool list.
 
 The included skill and optional MCP server let an agent operate the same app,
 including its OAP, review and production workflow:
@@ -235,4 +266,4 @@ Mondo Music Video is licensed under [Apache License 2.0](LICENSE). Third-party
 components retain their own licenses. [Open Actor Protocol](https://github.com/hodgemann/oap)
 is MIT-licensed. Laya inference code is attributed in [its vendor notice](mmv/engine/validators/laya/VENDOR.md).
 
-Copyright 2026 MAXIMUM GOOSE LABORATORIES.
+Copyright 2026 MAXIMUM GOOSE LABORATORY.

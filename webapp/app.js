@@ -420,15 +420,23 @@ async function loadActors() {
 
     const button = text("button", "Export OAP package", "secondary", `Export signed OAP package for ${actor.name}`);
     button.onclick = handle(async () => {
-      const response = await api(`/api/actors/${encodeURIComponent(actor.id)}/export`, {method: "POST"});
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = actor.id + ".oap";
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      await saveDownload(await api(`/api/actors/${encodeURIComponent(actor.id)}/export`, {method: "POST"}), actor.id + ".oap");
     });
     card.append(image, text("h2", actor.name), text("p", actorOverview(actor)), text("p", actor.oap ? "OAP imported · original package preserved" : "OAP ready · signed on export"), button);
+    if (!actor.oap) {
+      const cleared = document.createElement("input");
+      cleared.type = "checkbox";
+      const clearedLabel = text("label", "", "check audition-export", "Only check this if the reference is a cleaned or watermarked take you are willing to share with casting directors");
+      clearedLabel.append(cleared, " Reference is cleared for auditions");
+      const audition = text("button", "Export audition package", "quiet audition-button", `Export a signed audition package for ${actor.name}; cast-only assets are listed by hash but left out`);
+      audition.type = "button";
+      audition.onclick = handle(async () => {
+        const query = new URLSearchParams({tier: "audition", reference_clearance: cleared.checked ? "audition" : "cast"});
+        await saveDownload(await api(`/api/actors/${encodeURIComponent(actor.id)}/export?${query}`, {method: "POST"}), actor.id + "-audition.oap");
+        notice(cleared.checked ? "Audition package exported with the audition-cleared reference." : "Audition package exported. The cast-only reference is listed by hash but not included.");
+      });
+      card.append(clearedLabel, audition);
+    }
     const remove = text("button", "Delete actor", "quiet operation-action", `Delete ${actor.name} from this machine`);
     remove.type = "button";
     remove.onclick = handle(async () => {
@@ -442,10 +450,180 @@ async function loadActors() {
     return card;
   }));
   if (!actors.length) $("#actor-list").append(text("div", "Your cast starts here. Create an actor or import a full OAP package below.", "empty", "No actors currently in your studio library"));
+  const agreementActor = $("#agreement-form").elements.actor_id;
+  const chosen = agreementActor.value;
+  agreementActor.replaceChildren(...actors.map(actor => option(actor.id, actor.name)));
+  if (actors.some(actor => actor.id === chosen)) agreementActor.value = chosen;
+}
+async function saveDownload(response, filename) {
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+function shortDid(did) { return did && did.length > 34 ? did.slice(0, 22) + "…" + did.slice(-8) : did || "none"; }
+async function loadAgreements() {
+  const agreements = await (await api("/api/agreements")).json();
+  $("#agreement-list").replaceChildren(...agreements.map(agreement => {
+    const card = text("article", "", "card", `Role agreement ${agreement.id}`);
+    if (agreement.damaged) {
+      card.append(text("span", "Damaged record", "oap-badge-pill badge-invalid"), text("h3", agreement.id), text("p", agreement.issues.join("; ")));
+      return card;
+    }
+    const status = agreement.complete ? ["Signed by both parties", "badge-valid"]
+      : agreement.issues.length && agreement.signed.length ? ["Signature problem", "badge-invalid"]
+      : agreement.signed.length ? [`Signed by ${agreement.signed.join(" and ")}; awaiting countersignature`, "badge-unsigned"]
+      : ["Unsigned draft", "badge-unsigned"];
+    const compensation = agreement.compensation || {};
+    card.append(text("span", status[0], "oap-badge-pill " + status[1]), text("h3", agreement.title || agreement.id),
+      text("p", `${agreement.character || "Role"} · actor ${agreement.actor_id || "unknown"} · ${compensation.amount} ${compensation.currency}`),
+      text("p", `Agent ${shortDid(agreement.agent_did)}${agreement.local_agent ? " (this studio)" : ""}`, "", agreement.agent_did),
+      text("p", `Director ${shortDid(agreement.director_did)} (this studio)`, "", agreement.director_did));
+    if (agreement.issues.length && agreement.signed.length) card.append(text("p", agreement.issues.join("; ")));
+    const actions = text("div", "", "agreement-actions");
+    const path = `/api/agreements/${encodeURIComponent(agreement.id)}`;
+    const roles = ["director", ...(agreement.local_agent ? ["agent"] : [])].filter(role => !agreement.signed.includes(role));
+    for (const role of roles) {
+      const sign = text("button", `Sign as ${role}`, "secondary operation-action", `Sign this agreement with this studio's ${role} key`);
+      sign.type = "button";
+      sign.onclick = handle(async () => {
+        if (!window.confirm(`Sign “${agreement.title}” as ${role}? This commits the ${role} to ${compensation.amount} ${compensation.currency} and the casting call terms. Signatures cannot be withdrawn from copies already shared.`)) return;
+        await json(`${path}/sign`, {role});
+        await loadAgreements();
+        notice(`Signed as ${role}.`);
+      });
+      actions.append(sign);
+    }
+    const verify = text("button", "Verify", "secondary", "Check both signatures and the exact manifest and casting call bindings");
+    verify.type = "button";
+    verify.onclick = handle(async () => {
+      const result = await (await api(`${path}/verify`)).json();
+      notice(result.ok ? `Verified: both signatures are valid. ${result.note}` : `Not complete: ${result.issues.join("; ")}`);
+    });
+    const download = text("button", "Download bundle", "secondary", "Zip of agreement.json, manifest.json and casting_call.json for the other party");
+    download.type = "button";
+    download.onclick = handle(async () => saveDownload(await api(`${path}/bundle`, {method: "POST"}), agreement.id + "-agreement.zip"));
+    actions.append(verify, download);
+    card.append(actions);
+    return card;
+  }));
+  if (!agreements.length) $("#agreement-list").append(text("div", "No role agreements yet. Draft one below.", "empty"));
 }
 
+// One theme observer for all score views; loadOutputs disposes views before replacing cards.
+const scoreViews = new Set();
+new MutationObserver(() => scoreViews.forEach(view => view.draw())).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+const GRAMMAR_CLASSES = {"Standard": "standard", "Thematic multi-scene": "thematic", "Chaotic multi-scene": "chaotic", "Single-subject fragmentation": "fragmentation"};
+function scoreView(output, video) {
+  const box = text("details", "", "score-view");
+  box.append(text("summary", "Watch the song conduct", "", "Show the beats, energy and planned cuts behind this video"));
+  const canvas = document.createElement("canvas");
+  canvas.tabIndex = 0;
+  canvas.setAttribute("role", "slider");
+  canvas.setAttribute("aria-label", "Musical score position. Arrow keys jump between planned cuts; Home and End go to the start and end.");
+  canvas.setAttribute("aria-valuemin", "0");
+  const caption = text("p", "", "score-caption");
+  caption.setAttribute("aria-live", "polite");
+  const legend = text("div", "", "score-legend");
+  box.append(canvas, caption, legend);
+  let score = null, frame = 0, lastCaption = "";
+  const x = time => time / Math.max(score.duration || score.song_end, 0.001) * canvas.clientWidth;
+  function colors() {
+    const style = getComputedStyle(box);
+    const value = name => style.getPropertyValue(name).trim();
+    return {ink: value("--ink"), muted: value("--muted"), line: value("--line"), accent: value("--score-accent"),
+            grammar: Object.fromEntries(Object.values(GRAMMAR_CLASSES).map(key => [key, value("--score-" + key)]))};
+  }
+  function describe(time) {
+    if (time < score.offset) return "Opening ident · the song starts at " + score.offset.toFixed(1) + " s";
+    if (time >= score.song_end) return "Closing ident";
+    const passage = score.passages.find(item => time >= item.start && time < item.end) || score.passages.at(-1);
+    const index = passage.shots.findIndex((shot, i) => time >= shot.start && (time < shot.end || i === passage.shots.length - 1));
+    const shot = passage.shots[Math.max(index, 0)];
+    const cut = {passage: passage.on_downbeat ? "passage starts on a downbeat" : "passage start",
+                 downbeat: "cut on a downbeat", beat: "cut on a beat", split: "long hold split"}[shot.cut];
+    return `${passage.section} energy (${Number(passage.energy).toFixed(2)}) → ${passage.grammar}: ${passage.grammar_description} ` +
+      `Shot ${Math.max(index, 0) + 1} of ${passage.shots.length}, ${shot.shot_scale}, ${cut}. ` +
+      `${passage.shots.length} ${passage.shots.length === 1 ? "shot" : "shots"} across ${passage.beats} beats at ${Math.round(score.tempo_bpm)} BPM.`;
+  }
+  function draw() {
+    if (!score) return;
+    const ratio = window.devicePixelRatio || 1, width = canvas.clientWidth, height = canvas.clientHeight;
+    if (canvas.width !== Math.round(width * ratio)) { canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio); }
+    const ctx = canvas.getContext("2d"), c = colors();
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const band = 22, curveTop = band + 8, curveBottom = height - 20;
+    for (const passage of score.passages) {
+      ctx.fillStyle = c.grammar[GRAMMAR_CLASSES[passage.grammar]] || c.line;
+      ctx.fillRect(x(passage.start), 0, Math.max(1, x(passage.end) - x(passage.start) - 1), band);
+      ctx.strokeStyle = c.ink; ctx.globalAlpha = 0.55;
+      for (const shot of passage.shots.slice(1)) { ctx.beginPath(); ctx.moveTo(x(shot.start), 0); ctx.lineTo(x(shot.start), curveBottom); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.beginPath(); ctx.moveTo(x(score.offset), curveBottom);
+    for (const beat of score.beats) ctx.lineTo(x(beat.time), curveBottom - beat.energy * (curveBottom - curveTop));
+    ctx.lineTo(x(score.song_end), curveBottom); ctx.closePath();
+    ctx.fillStyle = c.accent; ctx.globalAlpha = 0.28; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = c.accent; ctx.lineWidth = 1.5; ctx.stroke(); ctx.lineWidth = 1;
+    for (const beat of score.beats) {
+      ctx.fillStyle = beat.downbeat ? c.ink : c.muted;
+      ctx.fillRect(x(beat.time) - (beat.downbeat ? 1 : 0.5), height - (beat.downbeat ? 16 : 9), beat.downbeat ? 2 : 1, beat.downbeat ? 16 : 9);
+    }
+    const now = video.currentTime || 0;
+    ctx.fillStyle = c.ink; ctx.fillRect(x(now) - 1, 0, 2, height);
+    const line = describe(now);
+    if (line !== lastCaption) { caption.textContent = line; lastCaption = line; }
+    canvas.setAttribute("aria-valuemax", String(end()));
+    canvas.setAttribute("aria-valuenow", now.toFixed(1));
+    canvas.setAttribute("aria-valuetext", `${now.toFixed(1)} seconds. ${line}`);
+  }
+  const end = () => score.duration || score.song_end;
+  function jump(time) { video.currentTime = Math.min(Math.max(0, time), end()); draw(); }
+  function loop() { draw(); if (!video.paused && !video.ended) frame = requestAnimationFrame(loop); }
+  function seek(event) {
+    if (!score) return;
+    const rect = canvas.getBoundingClientRect();
+    jump((event.clientX - rect.left) / rect.width * end());
+  }
+  canvas.addEventListener("keydown", event => {
+    if (!score) return;
+    const cuts = [0, ...score.passages.flatMap(passage => passage.shots.map(shot => shot.start)), end()];
+    const now = video.currentTime || 0;
+    const target = {ArrowRight: cuts.find(t => t > now + 0.05), ArrowUp: cuts.find(t => t > now + 0.05),
+                    ArrowLeft: cuts.filter(t => t < now - 0.05).at(-1), ArrowDown: cuts.filter(t => t < now - 0.05).at(-1),
+                    Home: 0, End: end()}[event.key];
+    if (target === undefined && !(event.key in {Home: 1, End: 1})) return;
+    event.preventDefault();
+    jump(target ?? now);
+  });
+  canvas.addEventListener("pointerdown", event => { canvas.setPointerCapture(event.pointerId); seek(event); });
+  canvas.addEventListener("pointermove", event => { if (canvas.hasPointerCapture(event.pointerId)) seek(event); });
+  video.addEventListener("play", () => { cancelAnimationFrame(frame); loop(); });
+  ["seeked", "pause", "timeupdate", "loadedmetadata"].forEach(name => video.addEventListener(name, draw));
+  const resize = new ResizeObserver(draw);
+  resize.observe(canvas);
+  const view = {draw, dispose: () => { resize.disconnect(); cancelAnimationFrame(frame); }};
+  scoreViews.add(view);
+  box.addEventListener("toggle", async () => {
+    if (!box.open || score) return draw();
+    try {
+      score = await (await api(`/api/outputs/${encodeURIComponent(output.file.split("/")[0])}/score`)).json();
+      legend.replaceChildren(...[...new Set(score.passages.map(passage => passage.grammar))].map(name => text("span", name, "score-key score-" + (GRAMMAR_CLASSES[name] || "other"))),
+        text("span", "energy", "score-key score-energy"), text("span", "beats · downbeats (tall)", "score-key score-beats"), text("span", "planned cuts", "score-key score-cuts"));
+      draw();
+    } catch (error) {
+      box.replaceChildren(text("summary", "Watch the song conduct"), text("p", error.message, "muted"));
+    }
+  });
+  return box;
+}
 async function loadOutputs() {
   const outputs = await (await api("/api/outputs")).json();
+  scoreViews.forEach(view => view.dispose());
+  scoreViews.clear();
   $("#output-list").replaceChildren(...outputs.map(output => {
     const card = text("article", "", "card", `Rendered output: ${output.title}`);
     const video = document.createElement("video");
@@ -461,7 +639,16 @@ async function loadOutputs() {
     const upscale = text("button", "Topaz upscale ↗", "quiet", `Upscale ${output.title} using Topaz Video AI`);
     upscale.onclick = () => { upscaleSource = output.file; $("#upscale-dialog").showModal(); };
 
-    card.append(video, text("h2", output.title), text("p", `${output.kind} · ${Number(output.duration).toFixed(1)} seconds`), download, upscale);
+    card.append(video);
+    if (output.kind === "video") card.append(scoreView(output, video));
+    card.append(text("h2", output.title), text("p", `${output.kind} · ${Number(output.duration).toFixed(1)} seconds`));
+    if (output.quality_warnings?.length) {
+      const warning = text("div", "", "quality-warning", "Automatic motion and framing check results");
+      warning.setAttribute("role", "note");
+      warning.append(text("strong", "Quality check: "), output.quality_warnings.join(" · "));
+      card.append(warning);
+    }
+    card.append(download, upscale);
     return card;
   }));
   if (!outputs.length) $("#output-list").append(text("div", "Your finished videos and idents will appear here.", "empty", "No completed productions yet"));
@@ -858,6 +1045,7 @@ async function preview(form) {
     for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) request[name] = Number(request[name]);
     request.silent_mouths = request.silent_mouths === "true";
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;
+    request.vision_quality_check = Boolean(form.elements.vision_quality_check?.checked);
     request.content = {};
     for (const category of Object.keys(catalog.ratings)) { request.content[category] = request["rating_" + category]; delete request["rating_" + category]; }
   }
@@ -873,6 +1061,10 @@ function showQuote(request, quote) {
   const summary = $("#quote-summary"); summary.replaceChildren();
   summary.append(text("p", request.kind === "harvest" ? "One visual style harvest." : `${currentQuote.clips} clips · ${currentQuote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
                  text("h2", `Estimated provider cost: $${Number(currentQuote.estimate_usd).toFixed(2)}`), text("p", currentQuote.note, "muted"));
+  if (request.vision_quality_check) {
+    summary.append(text("p", "Vision quality check on: after rendering, your local vision model inspects sampled frames. "
+      + "This adds several minutes and restarts ComfyUI; free local passages may be re-rendered once.", "muted"));
+  }
   if (currentQuote.analysis && request.kind === "video") {
     const a = currentQuote.analysis;
     summary.append(text("p", `Detected tempo: ${a.tempo_bpm.toFixed(1)} BPM · ${a.beats} beats · ${a.downbeats} downbeats · ${a.sections} sections · ${a.shots} shots · ${a.width} × ${a.height}`));
@@ -1068,8 +1260,14 @@ async function initialize() {
     select.onchange = scheduleSave;
     label.append(select);
     $(".ratings").append(label);
+    const agreementLabel = text("label", name.replaceAll("_", " "), "", `Project content rating for ${name.replaceAll("_", " ")}`);
+    const agreementSelect = document.createElement("select");
+    agreementSelect.name = "content_" + name;
+    agreementSelect.append(...levels.map(level => option(level, level)));
+    agreementLabel.append(agreementSelect);
+    $(".agreement-ratings").append(agreementLabel);
   }
-  const [settings] = await Promise.all([loadSettings(), loadActors(), loadStyles(), loadOutputs()]);
+  const [settings] = await Promise.all([loadSettings(), loadActors(), loadStyles(), loadOutputs(), loadAgreements()]);
   $$(".backend-select").forEach(select => { select.value = settings.backend; resolutionSelect(select.closest("form")); });
   $$(".nav[data-panel]").forEach(button => button.onclick = () => panel(button.dataset.panel));
   const teasers = {"Short films": "From screenplay to screen, with the full studio's film production tools.", "Micro Drama": "A home for episodic stories and serial drama in the full studio.", "Hodge TV": "Channel-surf broadcasts and programme variety in the full studio.", "The cutting room": "Editing and production refinement in the full studio.", "The Vault": "A library of archival footage in the full studio."};
@@ -1363,6 +1561,26 @@ async function initialize() {
     if ($("#oap-raw-toggle-wrap")) $("#oap-raw-toggle-wrap").hidden = true;
     notice("Actor successfully imported into your studio cast library.");
     await loadActors();
+  });
+  $("#agreement-form").onsubmit = handle(async event => {
+    const values = Object.fromEntries(new FormData(event.target));
+    const body = {content: {}};
+    for (const [key, value] of Object.entries(values)) {
+      if (key.startsWith("content_")) body.content[key.slice(8)] = value; else body[key] = value;
+    }
+    await json("/api/agreements", body);
+    event.target.elements.agreement_id.value = "";
+    await loadAgreements();
+    notice("Agreement drafted. Sign as Director, then send the bundle to the Agent to countersign.");
+  });
+  $("#import-agreement").onclick = handle(async () => {
+    const file = $("#agreement-file").files[0]; if (!file) throw new Error("Choose a signed agreement.json first");
+    const body = new FormData();
+    body.set("filename", await upload(file, "agreement"));
+    const result = await (await api("/api/agreements/import", {method: "POST", body})).json();
+    $("#agreement-file").value = "";
+    await loadAgreements();
+    notice(result.complete ? "Countersigned agreement imported; both signatures verify." : "Signatures imported; the agreement is not yet signed by both parties.");
   });
   $("#settings-form").onsubmit = handle(async event => {
     const raw = Object.fromEntries(new FormData(event.target));

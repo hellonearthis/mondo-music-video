@@ -11,6 +11,13 @@ a list of commands for them to run when you can run those commands yourself.
 This guide directs the agent; the shell installer itself does not automatically
 select or download a complete model stack.
 
+For RunPod installations, also follow [the RunPod handoff](RUNPOD.md). Discover
+and handle both fresh Pods and existing stacks; do not require the user to
+inventory them. Set persistent data/model locations before installing, arrange
+SSH browser forwarding, and account for cloud rental charges even when the
+local-renderer quote is $0. A Pod-specific end-to-end test is still required
+before claiming generation is verified.
+
 ## 1. Inspect before downloading
 
 Clone into a new, ordinary checkout if necessary. Read root `AGENTS.md` and the
@@ -84,7 +91,11 @@ macOS and weak/unknown hardware should not receive an assumed NVIDIA setup.
 Use official licensed models for a fresh setup. The bundled graph contains
 example filenames, including a custom text encoder name; these are not a
 download shopping list. Put selected filenames in a private workflow copy,
-leaving shipped graphs and existing user workflows unchanged. Review the
+leaving shipped graphs and existing user workflows unchanged. **The agent must
+adapt and activate that graph for the selected H3 stack**, including required
+loader, precision, node and injection-map changes; follow
+[H3 workflow setup](H3_WORKFLOW_SETUP.md). A filename change alone is not a
+compatibility check. Review the
 [MiniMax license](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE),
 including its commercial-use conditions. Do not promise a commercial license.
 
@@ -154,7 +165,10 @@ download helper's path boundary to write elsewhere.
 Configure using the app's Settings UI/API or the supported configurator. See
 [LOCAL_MODELS.md](LOCAL_MODELS.md) and [MODEL_SETTINGS.md](MODEL_SETTINGS.md).
 Set actual writer model ID/URL, Laya folder/device, renderer paths and launch
-commands. Use a private workflow copy for fresh H3 selections. Stop the app
+commands. For every local H3 installation, complete
+[H3 workflow setup](H3_WORKFLOW_SETUP.md) for the chosen stack, whether existing
+or newly downloaded. Activate its private map and inspect a built submission
+graph before the operator-approved inference test. Stop the app
 before offline settings edits; preserve unrelated settings. Avoid concurrent
 GPU residency where possible: managed writer/render services can be sequenced
 by the app. Leave automatic updates off unless the user requests them.

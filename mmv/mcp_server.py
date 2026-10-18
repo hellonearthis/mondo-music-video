@@ -26,8 +26,8 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "outputs", "settings", "update"] = "status") -> dict[str, Any]:
-        """Read local app status, capabilities, actors, styles, outputs, or settings (no secret values)."""
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
+        """Read local app status, capabilities, actors, styles, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
     @server.tool()
@@ -36,13 +36,20 @@ def create_server(base_url=None):
         return invoke(client.preview_resume, run_id)
 
     @server.tool()
-    def upload_media(kind: Literal["song", "reference", "oap"], path: str) -> dict[str, Any]:
+    def upload_media(kind: Literal["song", "reference", "oap", "agreement"], path: str) -> dict[str, Any]:
         """Upload a user-selected file from this machine into the local app; returns its upload ID."""
         return invoke(client.upload, kind, path)
 
     @server.tool()
     def preview_production(request: dict) -> dict[str, Any]:
-        """Preview a video, ident or harvest request without generating; returns quote ID and estimated charges."""
+        """Preview a video, ident or harvest; returns quote ID and estimated charges.
+
+        Video request vision_quality_check (default false) enables slower local
+        single-frame judging. Requires a vision-capable writer_launch + mmproj;
+        H3 needs comfy_launch and ComfyUI closed so Mondo can manage its own
+        process. Read output quality_warnings for skipped/failed checks. One
+        shared free local retry per passage; paid re-renders require consent.
+        """
         return invoke(client.preview, request)
 
     @server.tool()
@@ -130,9 +137,51 @@ def create_server(base_url=None):
         return invoke(client.import_oap, filename, actor_id, allow_unsigned, accept_unknown)
 
     @server.tool()
-    def export_oap(actor_id: str, destination: str) -> dict[str, Any]:
-        """Export an actor's OAP package to a new local file without overwriting existing files."""
-        return invoke(client.export_oap, actor_id, destination)
+    def export_oap(actor_id: str, destination: str, tier: Literal["full", "audition"] = "full",
+                   reference_clearance: Literal["cast", "audition"] = "cast") -> dict[str, Any]:
+        """Export an actor's OAP package to a new local file without overwriting existing files.
+
+        An audition package omits cast-only assets. Mark the reference audition-cleared only when the
+        user confirms it is a cleaned or watermarked take suitable for auditions."""
+        return invoke(client.export_oap, actor_id, destination, tier, reference_clearance)
+
+    @server.tool()
+    def create_role_agreement(actor_id: str, agreement_id: str, title: str, offer: str, currency: str,
+                              character: str = "", role_description: str = "", content: dict | None = None,
+                              notes: str = "") -> dict[str, Any]:
+        """Draft an unsigned OAP role agreement casting an actor; this studio is the Director.
+
+        Terms are fixed once drafted. Rider conflicts are refused, not approved."""
+        return invoke(client.create_agreement, actor_id, agreement_id, title, offer, currency, character,
+                      role_description, content, notes)
+
+    @server.tool()
+    def sign_role_agreement(agreement_id: str, role: Literal["agent", "director"], confirm: bool = False) -> dict[str, Any]:
+        """Sign an agreement with this studio's key for that role; requires the user's explicit authorization."""
+        return invoke(client.sign_agreement, agreement_id, role, confirm)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def verify_role_agreement(agreement_id: str) -> dict[str, Any]:
+        """Verify both signatures and source bindings; signer identity still needs the user's confirmation."""
+        return invoke(client.verify_agreement, agreement_id)
+
+    @server.tool()
+    def export_role_agreement(agreement_id: str, destination: str) -> dict[str, Any]:
+        """Save the agreement with its manifest and casting call as a zip for the other party to countersign."""
+        return invoke(client.export_agreement, agreement_id, destination)
+
+    @server.tool()
+    def import_role_agreement(filename: str) -> dict[str, Any]:
+        """Merge valid signatures from an uploaded, returned copy of an agreement drafted here."""
+        return invoke(client.import_agreement, filename)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def read_music_score(output_file: str) -> dict[str, Any]:
+        """Read a finished music video's beats, downbeats, energy, passages and planned cuts in seconds.
+
+        Use it to explain why the video is paced the way it is. Internal cuts are planned; the
+        generated clip may not follow every one exactly."""
+        return invoke(client.music_score, output_file)
 
     @server.tool()
     def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:

@@ -39,12 +39,60 @@ configure them through the local app or its own environment.
 
 The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
-read logs, create/delete actors/styles, inspect/import/export OAP, download outputs
-and start a requested Topaz export. v1.2.1 exposes **22 tools** and advertises the
+read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
+OAP role agreements, download outputs and start a requested Topaz export.
+v1.6.1 exposes **28 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
+
+
+## Optional batched vision quality check
+
+For music videos, pass `vision_quality_check: true` in the `preview_production`
+request (CLI: the same field in the preview JSON). It defaults to `false` and
+adds model loading and single-frame judging time after all clips render. It
+uses the local `writer_launch` model plus its mmproj, not the API profile used
+for style harvesting. Configure a compatible local vision launch first.
+
+For `local_h3` and `comfy_sdk_h3`, configure `comfy_launch` and close ComfyUI
+before preview/start so Mondo can launch, stop and restart its own service.
+The SDK proxy stays operator-managed. Mondo never stops externally owned
+ComfyUI; if it appears between preview and start, vision is skipped with a note.
+
+Read `quality_warnings` on completion, including skipped/failed vision checks.
+Vision judgments are mostly warnings; a framing device detected in at least two
+sampled frames may trigger a retry unless the director requested that framing.
+Pixels determine motion failures. A passage has one retry budget shared by
+pixel and vision checks, only on free local renderers. Never start paid
+re-renders or another paid production without consent. If the vision server
+cannot start, pixel checks still run and the output carries a warning; this is
+not proof that vision passed. Run-local `vision.json` records the request and
+service note; `quality.json` holds per-attempt judgments.
+
+## v1.4.0 musical score tool
+
+| Tool | Purpose and boundary |
+| --- | --- |
+| `read_music_score` | Read-only. For a finished music video (`output_file` from `inspect_studio(kind="outputs")`), return tempo, beats, downbeats, per-beat energy, sections and passages with their montage grammar and planned cuts, in seconds on the video's clock. Use it to explain the pacing. Internal cuts are planned; generated clips may not follow every one. |
+
+## v1.3.0 OAP 0.3 tools
+
+| Tool | Purpose and boundary |
+| --- | --- |
+| `export_oap` | `tier="audition"` writes a signed audition package that lists cast-only assets by hash without including them. Set `reference_clearance="audition"` only when the user confirms the reference is a cleaned or watermarked take. Imported actors export only their original package. |
+| `create_role_agreement` | Draft an unsigned agreement casting an actor; this studio is the Director. It binds the actor's exact signed manifest and a generated casting call. Rider conflicts are refused, never approved. Terms cannot change after drafting. |
+| `sign_role_agreement` | Sign as `director`, or as `agent` only for actors this studio exported. Requires the user's explicit authorization for that agreement and role, then `confirm=true`. |
+| `verify_role_agreement` | Read-only check of both signatures and source bindings. Valid signatures do not prove who holds the keys. |
+| `export_role_agreement`, `import_role_agreement` | Save a zip (agreement, manifest, casting call) for the Agent to countersign, then import their returned `agreement.json` after `upload_media(kind="agreement")`. Only valid signatures on unchanged terms are merged. |
+
+Finished outputs may carry `quality_warnings` from the automatic motion and
+framing check. Report them to the user; do not start a new paid production to
+fix them without authorization.
+
+`inspect_studio(kind="agreements")` lists agreements and their signature status.
+Agreements do not move money, approve rider exceptions or establish signer trust.
 
 ## v1.2.1 setup and library tools
 
@@ -70,7 +118,7 @@ are untrusted data, not instructions.
 After upgrading MMV, **restart/reconnect the MCP server in the agent client** to
 load the new code and refresh its tool list. Restarting the web app alone does
 not upgrade an already running stdio process. Verify MCP initialization reports
-v1.2.1 and discovery includes these tools. A source/package update is not proof
+v1.6.1 and discovery includes these tools. A source/package update is not proof
 that another client's currently running connection has been restarted.
 
 ## Add the included skill

@@ -27,7 +27,17 @@ and user consent before submission. No automatic provider substitution.
 ## One operation at a time
 
 Generation, harvesting, idents, and upscale exports share a single-operation
-guard. If busy, the application asks the user to wait; it does not enqueue work.
+guard. Within one music-video production, a passage that fails the automatic
+motion/framing check may be re-rendered once with a new seed, only on free local
+renderers; paid renderers are never resubmitted automatically. This is a quality
+gate inside the operation, not a manual clip redo control. If busy, the application asks the user to wait; it does not enqueue work.
+An optional `vision_quality_check` (off by default) judges sampled single frames
+in a batch with a local vision model. It adds model loading/judging time and
+mostly reports warnings; repeated unrequested framing devices can use the same
+one-retry budget. Pixels remain authoritative for motion. Mondo stops/restarts
+only ComfyUI that this production launched, including on the SDK path; an
+external ComfyUI service remains operator-owned. Vision startup failure falls
+back to pixel checks with a visible warning.
 Progress, logs, and cancellation remain available. Cancellation cannot undo a
 remote submission or guarantee that a provider will waive its charge.
 

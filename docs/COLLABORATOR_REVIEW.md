@@ -1,5 +1,23 @@
 # Collaborator review record
 
+## October 18, 2026 — OAP 0.3 integration
+
+Fetched hellonearthis's fork into an isolated temporary checkout at task start.
+The new head `78f31ae33f50a9578043d2af33ce05158603ab86` is a merge of this
+repository's 1.2.1 (`d6aa193`) into the fork's `764ca66`, labeled fork version
+1.2.2. Compared with `d6aa193` it carries the pending hardware status dock
+(`180b237`), earlier fork changes from `14ee458` not adopted in 1.1.2 (Laya torch
+import placement, validation message wording, `--image-min-tokens 1024` for
+vision models in `start.ps1`, vocabulary counts and an engine test), and merge
+content of its own: a server-sent `log` event listener in `app.js`, dock refresh
+wiring, a longer page title, two test adjustments and version/doc relabeling.
+None of it was integrated in this OAP release; it was outside the assigned task
+and has not yet had a full review. The dock and these items remain deferred, not
+rejected, pending the focused integration pass described below.
+
+This release is numbered 1.3.0 so it does not collide with the fork's 1.2.2
+label for a different build.
+
 ## October 17, 2026 — starter assets in agent installation
 
 Fetched the isolated collaborator checkout; origin/main is still

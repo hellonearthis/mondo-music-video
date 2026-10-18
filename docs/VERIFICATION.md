@@ -1,17 +1,182 @@
-# Verification — 1.2.3
+# Verification — 1.6.2
 
-## 1.2.3 Test suite acceleration, SSE bounded snapshot & service probe optimization
+## 1.6.2 Upstream 1.6.1 merge, test suite acceleration & Live Engine Status Dock (2026-10-19)
 
-- Verified `tests/test_public_app.py` pre-computed song analysis cache in `setUpClass()`, reducing serial execution time by ~50% while preserving full subprocess coverage.
+- Verified merge of upstream `1.6.1` (`7f87f91`) including OAP 0.3.0 (`mmv/agreements.py`), musical score view (`mmv/score_view.py`), motion/framing pixel quality gates (`mmv/quality.py`), optional local vision quality checks (`mmv/vision_check.py`, `mmv/vision_stage.py`), SDK local-completion fast-path recovery, and RunPod/H3 setup guides.
+- Verified `tests/test_public_app.py` pre-computed song analysis cache in `setUpClass()` and `tests/test_updates.py` pre-computed Git repository templates in `setUpClass()`.
 - Verified `/api/events?once=true` non-blocking initial SSE stream snapshot in `test_sse_events_and_jobs_subscription` and live `httpx.stream` event delivery in `EventStreamTests`.
 - Verified `mmv/services.py` store-scoped probe caching, proxy-bypass opener, and shared local vision/writer endpoint deduplication.
-- Verified version `1.2.3` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
+- Verified version `1.6.2` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
 
-## 1.2.2 Upstream 1.2.1 merge & Live Engine Status Dock
+## 1.6.1 RunPod installation guidance (2026-10-18)
 
-- Verified upstream 1.2.1 merge: starter assets installation (`install-starter-assets`), local library deletion, 22 MCP tools, agent installation guidance, multi-account private API profiles, and opt-in startup updates.
-- Verified live service status dock, active/sleeping indicators, GPU detection, and `/api/services/status`.
-- Verified version `1.2.2` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
+The final tree passed `.venv/bin/python -m pytest -q` outside the sandbox:
+**240 tests and 53 subtests**, no skips (75.69 s). A fresh-process import of
+`api_version()` returned **1.6.1**; package metadata, README, agent discovery
+and version assertions were updated together. The existing user service was
+not restarted for this guidance release; no live 1.6.1 claim is made.
+
+Local Markdown links, RunPod shell example syntax (`bash -n`) and
+`git diff --check` passed. Earlier socket-free checks built the existing H3 graph
+with zero, one and two synthetic image references plus song audio, confirming
+resolved tags, preserved loader parameters and the effective 20-step injection.
+No graph was submitted for these checks.
+
+The documentation was checked against the implementation's loopback binding,
+Host/origin guards, private workflow/model selection, environment/data paths and
+both H3 render paths. Official RunPod SSH, storage and exposed-port documentation
+and ComfyUI H3 guidance were consulted on 2026-10-18. The fork HEAD remained
+`78f31ae33f50a9578043d2af33ce05158603ab86`, matching the prior reviewed revision.
+
+**No RunPod Pod was provisioned and no fresh RunPod installation or alternative
+H3 variant was tested.** The guides require agent-side discovery, private
+workflow adaptation/activation and deliberate operator-approved inference before
+claiming readiness. They do not implement automatic arbitrary-workflow
+conversion. No GPU/paid/Topaz work or model downloads were performed for 1.6.1.
+
+## 1.6.0 final release verification (2026-10-18)
+
+After the user authorized the same-song $0 GPU test and release on success,
+Codex ran `.venv/bin/python -m pytest -q` outside the sandbox on the final
+implementation: **240 tests and 53 subtests passed**, no skips (80.76 s).
+Freshly imported and live `/api/version` handlers both reported **1.6.0**.
+JavaScript syntax and `git diff --check` passed.
+
+Real RTX 4090 SDK production `f33d46265cb24ef3a51a31d32fb12036` reused the
+11.5-second Interdimensional Lover song, seed 23, robobabe1 and animal_pig,
+at 736×416, with `vision_quality_check: true`. The quote and consent recorded
+**$0**. The operator's existing ComfyUI was deliberately stopped under explicit
+user authorization before preview; Mondo then launched and owned its renderer.
+Both passages rendered through the existing SDK proxy and passed batched pixel
+checks (motion **2.018** and **13.487**, no uniform borders).
+
+Mondo stopped its ComfyUI, GPU memory dropped to approximately 1.5 GiB, and the
+local Qwen vision model started and judged both passages. Both vision verdicts
+were **pass**, with no problems. `vision.json` recorded requested/ran true and a
+null note; no retry or warning occurred. The vision service shut down after
+judging and GPU memory returned to approximately 1.2 GiB. Final output decoded
+without errors: **276 video frames, 11.5 seconds, 736×416, with audio**. A sampled
+contact sheet was inspected. Generated media and private run data remain local.
+
+This live run verifies the normal renderer-to-vision handoff, proxy rendering,
+judging and cleanup. A vision-triggered renderer restart/retry was not exercised
+on real hardware because neither clip failed; that path is covered by mock tests.
+Windows/macOS model swaps remain unverified.
+
+The task-start fork check returned unchanged HEAD
+`78f31ae33f50a9578043d2af33ce05158603ab86`; prior substantive findings and deferred
+integration work remain in [COLLABORATOR_REVIEW](COLLABORATOR_REVIEW.md).
+
+## 1.6.0 earlier sandbox completion (2026-10-18)
+
+Outside the Codex sandbox, Claude Code ran the full suite on the integrated
+checkout: **240 tests and 53 subtests passed**, no skips, and a freshly imported
+version handler reported 1.6.0. At that handoff, real GPU use of the vision
+check was not yet verified; see the final verification above.
+
+Codex ran the following selection in the main checkout, with the existing
+`.venv`, synthetic temporary media and mocked services:
+
+```sh
+.venv/bin/python -m pytest -q -n 0 tests/test_vision_stage.py tests/test_sdk_recovery.py tests/test_vision_check.py tests/test_quality.py::ClipInspectionTests tests/test_quality.py::PromptRuleTests tests/test_original_engine.py
+```
+
+Result: **111 tests and 20 subtests passed**, no skips (21.75 s).
+Breakdown: orchestration/agent discovery 27, SDK recovery 22, vision module 45,
+pixel inspection/prompt rules 8, original engine 9. Vision HTTP fixtures used
+their in-process mocked transport fallback because the sandbox cannot bind
+local sockets. This does not verify real HTTP service transport.
+
+The new orchestration tests cover service ownership and swap order, restart
+before vision retries, Qwen startup failures as warning-only verdicts, occupied
+vision-port refusal, startup ownership races, request flag default/opt-in,
+preview errors on both H3 backends, external ComfyUI skip notes, SDK launch
+behavior, persisted `vision.json`/output warnings, and interrupted checks.
+Pure batch tests cover pixel-first retries, one shared budget per passage,
+pixel-authoritative selection, paid/unlisted renderer guards, hash-keyed verdict
+reuse and spent-retry recovery. Agent preview preserves the flag through a
+mocked transport; in-process MCP discovery still exposes 28 tools and includes
+the new preview documentation. An exploratory MCP tool invocation stalled in
+the sandbox and was interrupted; the final selection tests discovery only.
+The full MCP stdio/HTTP transport checks were not run.
+
+A separate fresh Python process imported `api_version()` and returned **1.6.0**;
+pyproject.toml and README matched. No live `/api/version` request was made, and
+no claim is made about an existing running app's version. `node --check
+webapp/app.js`, `bash -n install.sh` and `git diff --check` passed. Original engine
+hashes passed in the selected tests. Browser version assertions were updated
+but browser tests were not run.
+
+The full suite was **not run** in this takeover: local-socket tests require an
+unrestricted environment. User/Claude must run `.venv/bin/python -m pytest -q`
+outside the sandbox. The earlier 213-test handoff result predates these changes
+and is not validation of this final tree. Phase 4 still requires an explicitly
+operator-run GPU production with vision enabled, ComfyUI initially closed and
+the proxy available. Vision startup failure deliberately completes using pixel
+checks with a warning. No paid, GPU, Topaz or network work occurred here; the
+fork update check was deferred under the user's offline instruction. Nothing
+was committed, pushed, tagged or published.
+
+## 1.5.0 motion and framing quality gates
+
+The full suite passed **140 tests and 53 subtests**, with no skips (optional
+SDK and Playwright extras installed). New `tests/test_quality.py` covers moving,
+frozen, pillarboxed and dark-edged synthetic clips, a frozen shot inside a moving
+passage, inspection errors, prompt rules including negations and director
+framing requests, and production retry policy on the direct local renderer, the
+SDK path (separate receipts and jobs), WaveSpeed (one paid submission, warning
+only), persistent failures, unmeasurable retries and idents. Codex reviewed the
+design and implementation; all findings were adopted. Original engine source
+hashes are unchanged.
+
+Real GPU proof on the operator's RTX 4090 through `comfy_sdk_h3`: the request
+that produced a frozen, white-pillarboxed first passage in 1.4.0 was repeated
+with the same seed, cast and plan. The planner again chose a static camera; the
+writer, under the new rules, described visible subject and environmental motion
+and passed the prompt checks and Laya on the first attempt. Both passages passed
+the clip gate without a retry: passage 1 per-shot motion 2.03 (previously 0.05)
+with no borders; passage 2 per-shot motion 7.0-26.3. Visual review confirmed a
+full-frame moving first passage. The run took about nine minutes and cost $0.
+
+## 1.4.0 Watch the song conduct
+
+The full suite passed **110 tests and 53 subtests** (15 optional-extra skips).
+New `tests/test_score_view.py` covers seconds conversion, downbeat/beat/split cut
+classification, opening-ident offsets, refusal for idents, missing analysis and
+unknown runs, and absence of local paths. The agent test reads the score of a
+complete mocked production; MCP stdio discovery verifies 28 tools and 1.4.0.
+
+Chromium was driven against a copy of a real run (ad hoc Playwright script):
+caption updates, click seeking, playback sync, keyboard cut-to-cut seeking with
+Home/End, slider ARIA values, no growth in live views across repeated output
+refreshes, both themes, no horizontal overflow at 390 px and no page errors.
+Codex adversarial review found an observer leak and missing keyboard access;
+both were fixed and re-checked. The reinstalled live app on the operator's data
+reported `/api/version` 1.4.0 and served the score for its music video (seven
+planned cuts, all on beats, three on downbeats). No generation ran.
+
+## 1.3.0 Open Actor Protocol 0.3
+
+With OAP 0.3.0 (`35902b1`) installed, the full suite passed **107 tests and 53
+subtests** (15 skipped: optional Comfy SDK and Playwright/SDK browser flows). The
+new `tests/test_oap_v03.py` covers audition exports (cast assets omitted, hashes
+kept, audition-cleared reference included, imported actors refused), schema
+rejection with JSON paths, local two-role signing, outside-Agent countersigning
+through a returned agreement, altered-terms and forged-signature refusal, rider
+conflicts, and fail-closed verification when a stored manifest or casting call
+is missing, damaged or substituted. Agent client tests cover the same workflow
+and the `confirm` guard; MCP stdio discovery verifies 27 tools and version 1.3.0.
+The four 0.2 starter packages still schema-validate and verify under 0.3.
+
+The Actors tab was driven in Chromium against a temporary data directory (an
+ad hoc Playwright script, not a committed test): audition export, drafting,
+Director and Agent signing, verification and bundle download, with no page
+errors, both themes, and no horizontal overflow at 390 px. Codex adversarial
+review found two fail-open verification cases; both were fixed and tested. A
+locally built wheel contains `mmv/agreements.py` and pins OAP 0.3.0. No paid,
+GPU or Topaz work ran. A freshly imported version handler and the restarted live
+app's `/api/version` both reported 1.3.0 against the operator's existing data
+(85 actors loaded). Native Windows/macOS runs were not performed.
 
 ## 1.2.1 starter installation and local library deletion
 
@@ -312,8 +477,42 @@ cancellation, OAP rejection before uploads, settings invalidation and token
 redaction. A browser test covers renderer selection, preview/consent, recovery
 and playback when cached Chromium and Playwright are installed.
 
-No real GPU or paid production has been run for this path. The operator check
-and reproduction instructions are in [COMFY_SDK.md](COMFY_SDK.md). Real GPU execution remains unverified.
+Reproduction instructions are in [COMFY_SDK.md](COMFY_SDK.md). The real GPU
+operator check below was later completed.
+
+### Real GPU operator check — October 18, 2026
+
+The owner authorized a short end-to-end production through `comfy_sdk_h3` on
+the development machine: an RTX 4090 (24 GB), ComfyUI 0.41.0 at commit
+`c06bf5f`, and the pinned SDK (`6d2dd72`) and proxy (`1569dc1`) installed with the
+`comfy` extra. The proxy ran on loopback port 8189 in front of ComfyUI on 8188.
+The writer was the local llama.cpp service and Laya ran on CUDA. The quote was
+$0.00 (`paid: false`) and consent was recorded before start.
+
+The 11.5-second, 99 BPM test song cast two public starter actors (Robotic Woman,
+then Hambo, section casting) at 736×416 (0.3 MP). Both passages passed Laya on
+the first review. Each passage's `comfy-request.json` recorded
+`backend: comfy_sdk_h3`, the loopback endpoint, SDK revision `6d2dd72`, state
+`succeeded` and a distinct proxy job ID. Passage 1 (73 frames) rendered in about
+17 minutes including model load; passage 2 (226 frames) took about 5 minutes.
+The assembly report shows both clips returned exactly the requested frames
+(delta 0) and were trimmed to 61 and 215 frames. The output is H.264/AAC,
+24 fps, 276 frames, exactly 11.5 seconds. The score view showed all seven
+planned cuts on beats, three on downbeats.
+
+The transport, receipts, timing and assembly worked, but the owner judged the
+creative result a failure: passage 1 is effectively a still image. Its mean
+frame-to-frame luminance change was 0.05 (0-255 scale, 184×104 grayscale),
+against 1.25 for the same quiet passage in an earlier run with a slow push-in and
+about 10 for both peak passages. The plan specified "The camera holds a static
+shot"; the writer then dropped the planned motion cue and described a
+motionless subject and static composition, and Laya accepted it. MMV checked
+only frame counts, so the frozen clip was assembled. The passage also rendered
+the sampled footage cue "Amateur cine-club footage" as a projected film frame
+with a white surround. Passage 2 showed the intended single-subject
+fragmentation. SDK execution on real GPU is verified for this environment;
+other GPUs, operating systems and ComfyUI or node versions are not. A
+motion-quality safeguard is proposed separately.
 
 ## Original-engine parity
 

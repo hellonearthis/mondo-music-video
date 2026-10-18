@@ -116,6 +116,22 @@ def prepare(store, request):
         from .engine.comfy import WorkflowBuilder
         WorkflowBuilder.load(settings['workflow_map_path'], ENGINE)
         check_proxy(settings['comfy_sdk_url'], store.key('MMV_COMFY_API_KEY'))
+    if kind == 'video' and request.get('vision_quality_check'):
+        from .runtime import http_ok
+        from .vision_check import vision_command
+        from .vision_stage import VISION_PORT
+        try:
+            vision_command(settings['writer_launch'], VISION_PORT)
+        except ValueError as exc:
+            raise ValueError(f'Vision quality check unavailable: {exc} Turn the check off or configure a local '
+                             'vision-capable writer model.') from None
+        if request['backend'] in ('local_h3', 'comfy_sdk_h3'):
+            if not settings.get('comfy_launch'):
+                raise ValueError('Vision quality check needs a ComfyUI launch command in Settings so Mondo can '
+                                 'restart ComfyUI around the vision model. Configure it or turn the check off.')
+            if http_ok(settings['comfy_url'].rstrip('/') + '/system_stats'):
+                raise ValueError('Vision quality check needs Mondo to start ComfyUI itself so it can free the GPU '
+                                 'for the vision model, but ComfyUI is already running. Close ComfyUI, or turn the check off.')
     style = store.style(request['style_id'])
     if kind == 'video':
         if not request.get('song'):

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -11,6 +12,7 @@ from urllib.parse import urlsplit
 
 from .engine.backends.local_h3 import LocalH3Backend
 from .engine.backends.base import BackendError
+from .engine import assemble
 from .engine.comfy import WorkflowBuilder, slice_audio
 from .storage import identifier, read_json, write_json
 
@@ -103,6 +105,53 @@ def cancel_requests(directory, url, key=''):
         session.close()
 
 
+def completion_media(directory, result, minimum):
+    files = {}
+    for kind in ('video', 'audio'):
+        value = result.get(kind)
+        if not value:
+            if kind == 'video':
+                raise ValueError('Missing completed video')
+            continue
+        path = Path(value)
+        resolved = path.resolve()
+        if not resolved.is_relative_to(directory.resolve()) or not resolved.is_file() or path.suffix == '.partial' or resolved.suffix == '.partial':
+            raise ValueError('Completed media is outside the segment directory or incomplete')
+        size = resolved.stat().st_size
+        if not size:
+            raise ValueError('Empty completed media')
+        subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-i', str(resolved),
+                        '-f', 'null', '-'], check=True, capture_output=True, timeout=assemble.PROBE_TIMEOUT_S)
+        digest = hashlib.sha256()
+        with resolved.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(chunk)
+        files[kind] = {'path': str(resolved.relative_to(directory.resolve())),
+                       'sha256': digest.hexdigest(), 'size': size}
+    frames = assemble.probe_frames(result['video'])
+    if frames < max(1, minimum):
+        raise ValueError('Completed video is shorter than the required frames')
+    return files, frames
+
+
+def local_completion(directory, record, minimum):
+    if record.get('state') != 'succeeded':
+        return None
+    try:
+        manifest = read_json(directory / 'completion.json', {})
+        result = read_json(directory / 'result.json', {})
+        if (manifest.get('job_id') != record['job_id'] or manifest.get('fingerprint') != record['fingerprint']
+                or manifest.get('endpoint') != record['endpoint'] or result.get('request_id') != record['job_id']
+                or result.get('backend') != 'comfy_sdk_h3'):
+            return None
+        files, frames = completion_media(directory, result, minimum)
+        if manifest.get('files') == files and manifest.get('frame_count') == frames:
+            return result
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError, subprocess.SubprocessError):
+        pass
+    return None
+
+
 class ComfySdkH3Backend(LocalH3Backend):
     name = 'comfy_sdk_h3'
 
@@ -138,6 +187,9 @@ class ComfySdkH3Backend(LocalH3Backend):
                 raise BackendError('Saved Comfy request has different inputs. Refusing a new submission.')
             if not record.get('job_id'):
                 raise BackendError('Comfy submission outcome is unknown. Inspect comfy-request.json and the proxy; do not resubmit.')
+            completed = local_completion(directory, record, job['gen_frames'])
+            if completed is not None:
+                return completed
             remote = self.session.jobs.get(record['job_id'])
         else:
             audio = directory / 'passage.wav'
@@ -189,6 +241,7 @@ class ComfySdkH3Backend(LocalH3Backend):
         write_json(receipt_path, record)
         if remote.status != 'succeeded':
             raise BackendError(f'Comfy job {remote.id} ended {remote.status}; no replacement generation submitted.')
+        (directory / 'completion.json').unlink(missing_ok=True)
         result = {'video': '', 'audio': '', 'request_id': remote.id, 'backend': self.name}
         for kind, suffix in (('video', '.mp4'), ('audio', '.wav')):
             candidates = [o for o in remote.outputs if o.content_type.startswith(kind + '/')]
@@ -209,6 +262,12 @@ class ComfySdkH3Backend(LocalH3Backend):
             partial.replace(destination)
             result[kind] = str(destination)
         write_json(directory / 'result.json', result)
+        try:
+            files, frames = completion_media(directory, result, job['gen_frames'])
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return result
+        write_json(directory / 'completion.json', {'job_id': remote.id, 'fingerprint': fingerprint,
+                   'endpoint': self.url, 'files': files, 'frame_count': frames})
         return result
 
     def close_render(self):
