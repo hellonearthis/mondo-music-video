@@ -1,13 +1,34 @@
 """Browser smoke against temporary services when Chromium is already installed."""
 import importlib.util
+import os
 import unittest
 from pathlib import Path
 
 from test_agent import LiveAppFixture
 
 
+def _cached_chromium():
+    roots = [Path.home() / '.cache/ms-playwright']
+    if os.environ.get('PLAYWRIGHT_BROWSERS_PATH'):
+        roots.insert(0, Path(os.environ['PLAYWRIGHT_BROWSERS_PATH']))
+    if os.environ.get('LOCALAPPDATA'):
+        roots.append(Path(os.environ['LOCALAPPDATA']) / 'ms-playwright')
+    roots.append(Path.home() / 'Library/Caches/ms-playwright')
+    patterns = (
+        'chromium-*/chrome-linux*/chrome',
+        'chromium-*/chrome-win*/chrome.exe',
+        'chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium',
+    )
+    found = []
+    for root in roots:
+        if root.exists():
+            for pattern in patterns:
+                found.extend(root.glob(pattern))
+    return found
+
+
 @unittest.skipUnless(importlib.util.find_spec('playwright') and importlib.util.find_spec('comfy_sdk')
-                     and list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome')),
+                     and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
     def test_delete_local_actor_and_style_with_confirmation(self):
@@ -17,7 +38,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         actors.create_actor(self.fixture.store, 'disposable', 'Disposable Actor', 'Overview', picture())
         self.fixture.client.post('/api/styles', json={'id': 'disposable', 'name': 'Disposable Style', 'direction': 'Daylight'}).raise_for_status()
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             errors = []
@@ -59,7 +80,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         save_profile(store, 'vision-account', 'vision', {'vision_url': 'https://vision.example/v1',
             'vision_model': 'vision-model'}, 'private-vision')
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             errors = []
@@ -108,7 +129,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         manifest, _ = actors.package_info(package)
         source_bytes = Path(mapping['workflow']).read_bytes()
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             errors = []
@@ -195,13 +216,13 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         settings['writer_launch'] = command
         write_json(self.home / 'settings.json', settings)
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.2.1')
+                expect(page.locator('#version')).to_have_text('1.2.3')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -256,7 +277,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             'message': 'An update is available. Automatic installation is turned off.',
             'available_version': '9.0.0', 'repository_url': 'https://github.com/example/mmv'})
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             try:
@@ -286,7 +307,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         self.fixture.configure_sdk()
         self.fixture.server.v2_download_fail = True
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             kwargs = {'executable_path': str(cached[-1])} if cached else {}
             browser = p.chromium.launch(headless=True, **kwargs)
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
@@ -294,7 +315,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.2.2')
+                expect(page.locator('#version')).to_have_text('1.2.3')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

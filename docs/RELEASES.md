@@ -1,5 +1,14 @@
 # Releases
 
+## 1.2.3 — Test suite acceleration, SSE bounded snapshot & service probe optimization
+
+- **Public App Test Suite Acceleration (`tests/test_public_app.py`)**:
+  - Pre-computes the fixture song `ScoreMap` analysis once in `PublicAppTests.setUpClass()` and seeds `self.home / "analysis"` in `setUp()`, eliminating redundant `librosa` subprocess launches across every test and cutting serial suite runtime in half (~35s → ~17.5s).
+  - Restores displaced log assertions in `test_clear_log_endpoint` and resolves synchronous `TestClient` SSE stream deadlock in `test_sse_events_and_jobs_subscription` via `/api/events?once=true`.
+- **Service Probe & SSE Enhancements (`mmv/services.py`, `webapp/mondo_web.py`)**:
+  - Scoped cached service probe results by `store.home`, used a proxy-bypass opener for local service checks, and reused the local writer `/models` probe when `vision_url` shares the same endpoint.
+  - Added optional `once: bool = False` query parameter to `/api/events` for non-blocking initial SSE snapshot inspection.
+
 ## 1.2.2 — Upstream 1.2.1 merge & Live Engine Status Dock
 
 - **Upstream 1.2.1 Features**:

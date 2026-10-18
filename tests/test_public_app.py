@@ -5,6 +5,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from mmv import actors, media, render
+from mmv.api_profiles import save_settings
 from mmv.jobs import Jobs, BusyError
 from mmv.setup import SessionLock, doctor, download_models
 from mmv.storage import Storage, inside, read_json, write_json
@@ -114,12 +116,15 @@ class PublicAppTests(unittest.TestCase):
     def setUpClass(cls):
         cls.media_temp = tempfile.TemporaryDirectory()
         directory = Path(cls.media_temp.name)
-        video, song = directory / "test.mp4", directory / "test.wav"
+        video, song, score_path = directory / "test.mp4", directory / "test.wav", directory / "score.json"
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
                         "color=c=teal:s=128x72:r=24:d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True)
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
                         "sine=frequency=440:duration=1.1", str(song)], check=True)
+        subprocess.run([sys.executable, "-m", "mmv.worker", "analyze", str(song), str(score_path), "4"], check=True)
         cls.song = song.read_bytes()
+        cls.song_analysis_digest = hashlib.sha256(cls.song + b"4").hexdigest()
+        cls.song_analysis_bytes = score_path.read_bytes()
         MockService.video = video.read_bytes()
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), MockService)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
@@ -141,7 +146,15 @@ class PublicAppTests(unittest.TestCase):
         self.store = self.app.state.store
         (self.home / "comfy-input").mkdir()
         (self.home / "comfy-output").mkdir()
+        analysis_dir = self.home / "analysis"
+        analysis_dir.mkdir(exist_ok=True)
+        (analysis_dir / f"{self.song_analysis_digest}.json").write_bytes(self.song_analysis_bytes)
         self.server.output = self.home / "comfy-output"
+        reset_v2(self.server)
+        self.server.object_info = {}
+        MockService.requests = []
+        MockService.hold = False
+        MockService.invalid_writer = False
         settings = self.store.settings()
         settings.update(comfy_url=self.url, comfy_input=str(self.home / "comfy-input"), comfy_output=str(self.home / "comfy-output"),
                         laya_model_dir=os.environ.get("MMV_TEST_LAYA_MODEL_DIR", str(self.home / "models/laya")), laya_device="cuda",
@@ -163,12 +176,7 @@ class PublicAppTests(unittest.TestCase):
                 return original_command(context, argv, **kwargs)
             self.worker_patch = patch("mmv.jobs.JobContext.command",test_command)
             self.worker_patch.start()
-        self.client.put("/api/settings", json=settings).raise_for_status()
-        reset_v2(self.server)
-        self.server.object_info = {}
-        MockService.requests = []
-        MockService.hold = False
-        MockService.invalid_writer = False
+        save_settings(self.store, settings)
 
     def tearDown(self):
         if hasattr(self,"worker_patch"): self.worker_patch.stop()
@@ -369,9 +377,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.2.2")
+        self.assertEqual(api_version()["version"], "1.2.3")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.2.2", (root / "README.md").read_text())
+        self.assertIn("1.2.3", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_uploaded_song_preview_endpoint(self):
@@ -464,6 +472,8 @@ class PublicAppTests(unittest.TestCase):
         res = self.client.post("/api/log/clear")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json(), {"status": "cleared"})
+        self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
+        self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
 
     def test_sse_events_and_jobs_subscription(self):
         notifications = []
@@ -474,19 +484,12 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(notifications[0][0]["state"], "test_state")
         self.assertEqual(notifications[0][1], "test_line")
 
-        with self.client.stream("GET", "/api/events") as response:
+        with self.client.stream("GET", "/api/events?once=true") as response:
             self.assertEqual(response.status_code, 200)
             self.assertIn("text/event-stream", response.headers["content-type"])
-            lines = []
-            for line in response.iter_lines():
-                if line:
-                    lines.append(line)
-                if len(lines) >= 2:
-                    break
+            lines = [line for line in response.iter_lines() if line]
             self.assertEqual(lines[0], "event: status")
             self.assertIn('"state":', lines[1])
-        self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
-        self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
 
     def test_clear_cache_endpoint(self):
         cache_dir = self.home / "cache" / "prompts"

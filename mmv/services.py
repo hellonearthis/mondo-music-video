@@ -8,16 +8,19 @@ import urllib.request
 from pathlib import Path
 
 _last_probe_time = 0.0
+_cached_probe_home = None
 _cached_probe_results = None
 _CACHE_TTL_SECONDS = 2.5
 
 
 def check_services(store, active_job=None, force: bool = False) -> dict:
-    global _last_probe_time, _cached_probe_results
+    global _last_probe_time, _cached_probe_home, _cached_probe_results
     now = time.time()
 
-    if force or _cached_probe_results is None or (now - _last_probe_time > _CACHE_TTL_SECONDS):
+    if (force or _cached_probe_results is None or _cached_probe_home != store.home
+            or (now - _last_probe_time > _CACHE_TTL_SECONDS)):
         _cached_probe_results = _probe_raw_services(store)
+        _cached_probe_home = store.home
         _last_probe_time = now
 
     return _evaluate_service_activity(store, _cached_probe_results, active_job)
@@ -25,6 +28,7 @@ def check_services(store, active_job=None, force: bool = False) -> dict:
 
 def _probe_raw_services(store) -> dict:
     settings = store.settings()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     results = {}
 
     # 1. ComfyUI
@@ -41,7 +45,7 @@ def _probe_raw_services(store) -> dict:
     if comfy_url:
         try:
             req = urllib.request.Request(f"{comfy_url}/system_stats", headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=0.35) as resp:
+            with opener.open(req, timeout=0.35) as resp:
                 if resp.status == 200:
                     comfy["available"] = True
                     try:
@@ -54,7 +58,7 @@ def _probe_raw_services(store) -> dict:
                         pass
                     try:
                         q_req = urllib.request.Request(f"{comfy_url}/queue", headers={"Accept": "application/json"})
-                        with urllib.request.urlopen(q_req, timeout=0.25) as q_resp:
+                        with opener.open(q_req, timeout=0.25) as q_resp:
                             queue = json.load(q_resp)
                             comfy["queue_running"] = len(queue.get("queue_running", []))
                             comfy["queue_pending"] = len(queue.get("queue_pending", []))
@@ -82,13 +86,13 @@ def _probe_raw_services(store) -> dict:
     elif writer_url:
         try:
             req = urllib.request.Request(f"{writer_url}/models", headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=0.35) as resp:
+            with opener.open(req, timeout=0.35) as resp:
                 if resp.status == 200:
                     writer["available"] = True
                     try:
                         base = writer_url.rsplit("/v1", 1)[0]
                         h_req = urllib.request.Request(f"{base}/health", headers={"Accept": "application/json"})
-                        with urllib.request.urlopen(h_req, timeout=0.25) as h_resp:
+                        with opener.open(h_req, timeout=0.25) as h_resp:
                             h_data = json.load(h_resp)
                             writer["slots_processing"] = h_data.get("slots_processing", 0)
                     except Exception:
@@ -124,14 +128,18 @@ def _probe_raw_services(store) -> dict:
         "error": None,
     }
     if vision_url:
-        try:
-            req = urllib.request.Request(f"{vision_url}/models", headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=0.3) as resp:
-                if resp.status == 200:
-                    vision["available"] = True
-        except Exception as exc:
-            vision["available"] = False
-            vision["error"] = str(exc)
+        if vision_url == writer_url and writer_mode == "local":
+            vision["available"] = writer["available"]
+            vision["error"] = writer["error"]
+        else:
+            try:
+                req = urllib.request.Request(f"{vision_url}/models", headers={"Accept": "application/json"})
+                with opener.open(req, timeout=0.3) as resp:
+                    if resp.status == 200:
+                        vision["available"] = True
+            except Exception as exc:
+                vision["available"] = False
+                vision["error"] = str(exc)
     results["vision"] = vision
 
     return results

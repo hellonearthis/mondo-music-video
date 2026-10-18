@@ -8,6 +8,7 @@ venv/
 *.egg-info/
 build/
 dist/
+.antigravity/
 
 # Local configuration, credentials and keys
 .env

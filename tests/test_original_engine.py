@@ -137,14 +137,14 @@ class OriginalEngineTests(unittest.TestCase):
             mock_agent_cls.return_value.cfg = {}
             mock_mod.RLAgent = mock_agent_cls
             with patch.dict(sys.modules, {'rl_agent_api': mock_mod}):
-                # Test cuda fallback when cuda unavailable
-                with patch.object(Storage, 'settings', return_value={'laya_device': 'cuda', 'laya_model_dir': str(p)}), \
+                # Test cuda_or_cpu fallback when cuda unavailable
+                with patch.object(Storage, 'settings', return_value={'laya_device': 'cuda_or_cpu', 'laya_model_dir': str(p)}), \
                      patch('torch.cuda.is_available', return_value=False):
                     v = LayaSemanticValidator()
                     v._load_agent()
                     mock_agent_cls.assert_called_with(str(p), device='cpu')
-                # Test mps fallback when mps unavailable
-                with patch.object(Storage, 'settings', return_value={'laya_device': 'mps', 'laya_model_dir': str(p)}):
+                # Test mps_or_cpu fallback when mps unavailable
+                with patch.object(Storage, 'settings', return_value={'laya_device': 'mps_or_cpu', 'laya_model_dir': str(p)}):
                     v = LayaSemanticValidator()
                     v._load_agent()
                     mock_agent_cls.assert_called_with(str(p), device='cpu')

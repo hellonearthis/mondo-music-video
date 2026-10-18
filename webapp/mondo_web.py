@@ -34,7 +34,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.2.2"
+MGL_APP_VERSION = "1.2.3"
 WEB = Path(__file__).parent
 
 
@@ -384,7 +384,7 @@ def create_app(home=None, *, test_hosts=False):
         return check_services(store, jobs.status(), force=force)
 
     @app.get("/api/events")
-    async def events(request: Request):
+    async def events(request: Request, once: bool = False):
         queue = asyncio.Queue(maxsize=32)
         loop = asyncio.get_running_loop()
         closed = False
@@ -407,6 +407,14 @@ def create_app(home=None, *, test_hosts=False):
             try:
                 initial = get_full_status()
                 yield f"event: status\ndata: {json.dumps(initial)}\n\n"
+                if once:
+                    while not queue.empty():
+                        data = queue.get_nowait()
+                        if "status" in data:
+                            yield f"event: status\ndata: {json.dumps(data['status'])}\n\n"
+                        if data.get("log"):
+                            yield f"event: log\ndata: {json.dumps({'message': data['log']})}\n\n"
+                    return
                 while True:
                     if await request.is_disconnected():
                         break

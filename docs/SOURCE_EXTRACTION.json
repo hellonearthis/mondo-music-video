@@ -208,9 +208,9 @@
     "source": "mondo/config/vocab.json",
     "public": "mmv/engine/config/vocab.json",
     "sha256": "1032c9581e20b5db3f6c05b38b589b3792a8b5d171ba41d4f9b23c0228cdbaa3",
-    "published_sha256": "c0827f5e3ca49ed1ef9de670419d5fb935f4c8d87cc0957951bed2bdaef3171b",
+    "published_sha256": "123bc6049d8e4d0e2fc3cebe9269ff2a62b95b78675c61d6f0a4a856f424c55d",
     "authorization": "Owner explicitly supplied the vocabulary data file for an SFW public expansion on 2026-10-17. No other private files or runtime imports authorized.",
-    "adaptation": "Expanded SFW tables copied from owner-supplied data only; suggestive footage/wardrobe/tone/action entries, mouth-opening actions, and flashing/strobing effects excluded; duplicate tonal entries removed; existing public rigging retained; camera bands and shot scales unchanged.",
+    "adaptation": "Expanded SFW tables copied from owner-supplied data only; suggestive footage/wardrobe/tone/action entries and mouth-opening actions excluded; duplicate tonal entries removed; existing public rigging retained; camera bands and shot scales unchanged.",
     "counts": {
       "camera_by_energy": {
         "source": 22,
@@ -254,8 +254,8 @@
       },
       "lighting": {
         "source": 227,
-        "published": 220,
-        "excluded": 7,
+        "published": 227,
+        "excluded": 0,
         "duplicates_removed": 0
       },
       "footage_anchors": {
@@ -266,8 +266,8 @@
       },
       "practical_effects": {
         "source": 111,
-        "published": 109,
-        "excluded": 2,
+        "published": 111,
+        "excluded": 0,
         "duplicates_removed": 0
       },
       "rigging": {

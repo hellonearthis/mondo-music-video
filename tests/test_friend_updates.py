@@ -44,8 +44,12 @@ class MediaAndDiagnosticsTests(unittest.TestCase):
                 self.assertEqual(client.get('/api/uploads/song/private.json').status_code, 400)
                 outside = store.home / 'outside.wav'
                 outside.write_bytes(data)
-                (store.home / 'uploads/escape.wav').symlink_to(outside)
-                self.assertEqual(client.get('/api/uploads/song/escape.wav').status_code, 400)
+                try:
+                    (store.home / 'uploads/escape.wav').symlink_to(outside)
+                except OSError:
+                    pass
+                else:
+                    self.assertEqual(client.get('/api/uploads/song/escape.wav').status_code, 400)
                 self.assertEqual(client.get('/api/uploads/song/missing.wav').status_code, 400)
 
     def test_named_service_errors_and_safe_endpoints(self):

@@ -1,4 +1,11 @@
-# Verification — 1.2.2
+# Verification — 1.2.3
+
+## 1.2.3 Test suite acceleration, SSE bounded snapshot & service probe optimization
+
+- Verified `tests/test_public_app.py` pre-computed song analysis cache in `setUpClass()`, reducing serial execution time by ~50% while preserving full subprocess coverage.
+- Verified `/api/events?once=true` non-blocking initial SSE stream snapshot in `test_sse_events_and_jobs_subscription` and live `httpx.stream` event delivery in `EventStreamTests`.
+- Verified `mmv/services.py` store-scoped probe caching, proxy-bypass opener, and shared local vision/writer endpoint deduplication.
+- Verified version `1.2.3` across `webapp/mondo_web.py`, `pyproject.toml`, `README.md`, CLI, MCP, and live `/api/version`.
 
 ## 1.2.2 Upstream 1.2.1 merge & Live Engine Status Dock
 
