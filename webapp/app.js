@@ -1287,6 +1287,7 @@ async function initialize() {
   initTooltips();
   setupOapGuide();
   setupLlamaGuide();
+  setupVocabGuide();
   loadUpdateStatus();
   const refreshBtn = $("#refresh-services");
   if (refreshBtn) refreshBtn.onclick = () => refreshServices(true);
@@ -1545,11 +1546,11 @@ async function initialize() {
       };
     });
 
-    $$(".oap-tab-btn").forEach(tabBtn => {
+    $$("#oap-helper-dialog .oap-tab-btn").forEach(tabBtn => {
       tabBtn.onclick = () => {
         const tabId = tabBtn.dataset.tab;
-        $$(".oap-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
-        $$(".oap-tab-content").forEach(content => {
+        $$("#oap-helper-dialog .oap-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
+        $$("#oap-helper-dialog .oap-tab-content").forEach(content => {
           const matches = content.id === `tab-${tabId}`;
           content.classList.toggle("active", matches);
           content.hidden = !matches;
@@ -1613,6 +1614,89 @@ async function initialize() {
       notice("Writer tuning applied to the field. Save settings to persist it.");
       dialog.close();
     });
+  }
+
+  let vocabDocLoaded = false;
+  async function loadVocabGuideMarkdown() {
+    if (vocabDocLoaded) return;
+    const rawPre = $("#vocab-guide-raw");
+    if (!rawPre) return;
+    try {
+      const resp = await api("/api/vocabulary/guide");
+      if (resp.ok) {
+        const data = await resp.json();
+        rawPre.textContent = data.markdown || "Guide content empty.";
+        vocabDocLoaded = true;
+      } else {
+        rawPre.textContent = "Could not load the vocabulary guide.";
+      }
+    } catch {
+      rawPre.textContent = "Error fetching vocabulary guide from server.";
+    }
+  }
+
+  function setupVocabGuide() {
+    const dialog = $("#vocab-helper-dialog");
+    if (!dialog) return;
+
+    $$(".vocab-help-btn").forEach(btn => {
+      btn.onclick = () => {
+        loadVocabGuideMarkdown();
+        dialog.showModal();
+      };
+    });
+
+    $$(".close-vocab-dialog").forEach(btn => {
+      btn.onclick = () => {
+        dialog.close();
+      };
+    });
+
+    $$(".nav-to-vocab-btn").forEach(btn => {
+      btn.onclick = () => {
+        if (dialog.open) dialog.close();
+        const customizerDialog = $("#vocabulary-dialog");
+        if (customizerDialog) {
+          const openBtn = $("#open-vocab-dialog");
+          if (openBtn) openBtn.click();
+          else customizerDialog.showModal();
+        }
+      };
+    });
+
+    $$("#vocab-helper-dialog .vocab-tab-btn").forEach(tabBtn => {
+      tabBtn.onclick = () => {
+        const tabId = tabBtn.dataset.tab;
+        $$("#vocab-helper-dialog .vocab-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
+        $$("#vocab-helper-dialog .oap-tab-content").forEach(content => {
+          const matches = content.id === `tab-${tabId}`;
+          content.classList.toggle("active", matches);
+          content.hidden = !matches;
+        });
+        if (tabId === "vocab-doc") {
+          loadVocabGuideMarkdown();
+        }
+      };
+    });
+
+    const copyBtn = $("#copy-vocab-doc-btn");
+    if (copyBtn) {
+      copyBtn.onclick = handle(async () => {
+        await loadVocabGuideMarkdown();
+        const rawPre = $("#vocab-guide-raw");
+        const text = rawPre ? rawPre.textContent : "";
+        if (!text || text.startsWith("Error") || text.startsWith("Could not")) {
+          throw new Error("No guide document available to copy.");
+        }
+        if (!await copyToClipboard(text)) throw new Error("Could not copy document to clipboard.");
+        notice("Vocabulary Architecture Guide copied to clipboard.");
+        const status = $("#vocab-doc-status");
+        if (status) {
+          status.textContent = "Copied to clipboard!";
+          setTimeout(() => { if (status) status.textContent = ""; }, 3000);
+        }
+      });
+    }
   }
 
   $("#inspect-oap").onclick = handle(async () => {

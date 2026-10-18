@@ -387,9 +387,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.5")
+        self.assertEqual(api_version()["version"], "1.6.6")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.5", (root / "README.md").read_text())
+        self.assertIn("1.6.6", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_uploaded_song_preview_endpoint(self):
@@ -1177,6 +1177,14 @@ class UtilityTests(unittest.TestCase):
             # Cannot delete built-in profile
             res = client.delete("/api/vocabularies/full")
             self.assertEqual(res.status_code, 400)
+
+            # GET /api/vocabulary/guide
+            res = client.get("/api/vocabulary/guide")
+            self.assertEqual(res.status_code, 200)
+            guide_data = res.json()
+            self.assertIn("markdown", guide_data)
+            self.assertIn("Visual Vocabulary", guide_data["markdown"])
+            self.assertIn("title", guide_data)
 
 
 if __name__ == "__main__":

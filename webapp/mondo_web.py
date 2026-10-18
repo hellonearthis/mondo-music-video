@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.5"
+MGL_APP_VERSION = "1.6.6"
 WEB = Path(__file__).parent
 
 
@@ -871,6 +871,13 @@ def create_app(home=None, *, test_hosts=False):
             "profiles": profiles,
             "vocabularies": presets,
         }
+
+    @app.get("/api/vocabulary/guide")
+    def get_vocabulary_guide():
+        guide_path = Path(__file__).parent.parent / "docs" / "VOCABULARY_GUIDE.md"
+        if not guide_path.exists():
+            return {"title": "Vocabulary Architecture Guide", "markdown": "Guide not found on disk."}
+        return {"title": "Visual Vocabulary Architecture & Customization Guide", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
     def list_vocabularies():

@@ -171,3 +171,27 @@ button[aria-busy="true"], button.processing {
   cursor: wait !important;
   pointer-events: none;
 }
+
+.vocab-guide-pre {
+  max-height: 380px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8f9f4;
+  border: 1px solid #d5decb;
+  border-radius: 6px;
+  padding: 14px;
+}
+[data-theme=dark] .vocab-guide-pre {
+  background: #15201a;
+  border-color: var(--line);
+}
+.vocab-guide-doc-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
