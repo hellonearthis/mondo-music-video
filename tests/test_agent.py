@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -96,13 +97,33 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
             self.agent.import_oap(upload, "blue_copy")
         self.assertEqual(self.agent.import_oap(upload, "blue_copy", accept_unknown=True)["id"], "blue_copy")
 
+    def test_audition_export_and_role_agreement_through_agent(self):
+        self.agent.create_actor("blue", "Blue", "A blue jacket", str(self.reference))
+        receipt = self.agent.export_oap("blue", str(self.home / "blue-audition.oap"), tier="audition")
+        self.assertGreater(receipt["bytes"], 0)
+        drafted = self.agent.create_agreement("blue", "agent_role", "Neon Rain", "150.00", "USD")
+        self.assertFalse(drafted["complete"])
+        with self.assertRaisesRegex(ValueError, "authorization"):
+            self.agent.sign_agreement("agent_role", "director")
+        self.agent.sign_agreement("agent_role", "director", confirm=True)
+        self.agent.sign_agreement("agent_role", "agent", confirm=True)
+        self.assertTrue(self.agent.verify_agreement("agent_role")["complete"])
+        self.assertEqual([x["id"] for x in self.agent.inspect("agreements")], ["agent_role"])
+        bundle = self.home / "agreement.zip"
+        self.agent.export_agreement("agent_role", str(bundle))
+        with zipfile.ZipFile(bundle) as archive:
+            signed = self.home / "returned.json"
+            signed.write_bytes(archive.read("agreement.json"))
+        upload = self.agent.upload("agreement", str(signed))["file"]
+        self.assertTrue(self.agent.import_agreement(upload)["complete"])
+
     def test_cli_json_and_rejected_missing_consent(self):
         env = {**os.environ, "MMV_URL": self.url,
                "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.2.1")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.3.0")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -110,7 +131,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.2.1")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.3.0")
 
     def test_create_style_and_upload_reference(self):
         style = self.agent.create_style("cool", "Cool", "Cool blue light")
@@ -158,7 +179,9 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 22)
+                self.assertEqual(len(names), 27)
+                self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
+                    'export_role_agreement', 'import_role_agreement'} <= names)
                 self.assertIn("preview_resume", names)
                 self.assertIn("preview_production", names)
                 self.assertTrue({'delete_actor', 'delete_style', 'add_api_profile', 'remove_api_profile',
@@ -167,7 +190,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.2.1")
+                self.assertEqual(result.structured_content["data"]["version"], "1.3.0")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)

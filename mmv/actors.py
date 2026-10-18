@@ -69,6 +69,10 @@ def package_info(path, *, allow_unsigned=False):
             manifest = json.loads(archive.read("manifest.json"))
         if not isinstance(manifest, dict):
             raise ValueError("OAP manifest must be an object")
+        # Bundled offline schemas accept 0.1-0.3 manifests and unknown extension keys.
+        validation = oap.validate_document(manifest)
+        if not validation["ok"]:
+            raise ValueError("OAP manifest failed schema validation: " + "; ".join(validation["issues"][:10]))
         if any(not isinstance(manifest.get(name, {}), dict) for name in ("identity", "visual", "agent", "rider")):
             raise ValueError("Invalid OAP identity, visual, agent or rider record")
         visual = manifest.get("visual", {})
@@ -98,10 +102,13 @@ def import_actor(store, path, actor_id, *, allow_unsigned=False, accept_unknown=
     target = store.home / "actors" / actor_id
     if target.exists():
         raise ValueError("Actor already exists; imports never overwrite actors")
+    with zipfile.ZipFile(path) as archive:
+        present = set(archive.namelist())
+    # Portfolio and audition tiers list cast-cleared sheets by hash without including them.
     sheets = [entry for entry in manifest.get("visual", {}).get("sheets", [])
-              if entry.get("role") == "reference_sheet"]
+              if entry.get("role") == "reference_sheet" and entry["file"] in present]
     if not sheets:
-        raise ValueError("No reference sheet. Import a full OAP package, not a portfolio")
+        raise ValueError("No reference sheet. Import a full OAP package, not a portfolio or audition package")
     with tempfile.TemporaryDirectory(dir=target.parent) as temp:
         stage = Path(temp)
         with zipfile.ZipFile(path) as archive:
@@ -120,12 +127,20 @@ def import_actor(store, path, actor_id, *, allow_unsigned=False, accept_unknown=
     return record
 
 
-def export_actor(store, actor_id):
+def export_actor(store, actor_id, *, tier="full", reference_clearance="cast"):
+    """Export a signed package. Audition packages omit assets cleared only for cast."""
+    if tier not in ("full", "audition"):
+        raise ValueError("Export tier must be full or audition")
+    if reference_clearance not in ("cast", "audition"):
+        raise ValueError("Reference clearance must be cast or audition")
     record = store.actor(actor_id)
     if not record:
         raise ValueError("Actor not found")
     directory = store.home / "actors" / actor_id
     if (directory / "original.oap").exists():
+        if tier != "full" or reference_clearance != "cast":
+            raise ValueError("Imported actors export only their original package; "
+                             "request audition packages from the actor's Agent")
         return directory / "original.oap"
     key_path = store.home / "signing-identity.json"
     identity = read_json(key_path)
@@ -140,7 +155,7 @@ def export_actor(store, actor_id):
     manifest["rider"] = record["rider"]
     manifest["visual"].update(core_identity=record["description"],
                                visual_contract=record["description"],
-                               sheets=[{"file": "identity/reference.png", "clearance": "cast",
+                               sheets=[{"file": "identity/reference.png", "clearance": reference_clearance,
                                         "sha256": None, "role": "reference_sheet"}])
     output = store.home / "exports" / (actor_id + "-" + uuid.uuid4().hex + ".oap")
     with tempfile.TemporaryDirectory() as temp:
@@ -148,7 +163,7 @@ def export_actor(store, actor_id):
         (stage / "identity").mkdir()
         shutil.copyfile(inside(directory, record["reference"]), stage / "identity/reference.png")
         write_json(stage / "manifest.json", manifest)
-        oap.package_actor(str(stage), str(output), tier="full", sign_key=identity["_private"])
+        oap.package_actor(str(stage), str(output), tier=tier, sign_key=identity["_private"])
     if not oap.verify_package(str(output), require_signature=True, strict=True)["ok"]:
         output.unlink()
         raise ValueError("Export did not pass OAP verification")

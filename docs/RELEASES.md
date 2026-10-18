@@ -1,5 +1,34 @@
 # Releases
 
+## 1.3.0 — Open Actor Protocol 0.3
+
+MMV now pins Open Actor Protocol 0.3.0 (`35902b1`), which adds the `jsonschema`
+runtime dependency. Imported manifests are validated against OAP's bundled
+offline schemas before signature checks; errors name the JSON path. The four
+0.2 starter packages still validate, verify and import unchanged. New exports
+declare OAP 0.3.0; older OAP readers may reject them.
+
+Local actors can be exported as audition packages. Cast-only assets are listed
+by hash but left out; a reference can be marked audition-cleared when it is a
+prepared take. Imported actors still export only their preserved original.
+Importing a portfolio or audition package now reports a clear "no reference
+sheet" error instead of an internal failure when listed sheets are absent.
+
+Role agreements cast an actor with this studio as Director. A draft binds the
+actor's exact signed manifest and a generated casting call, and refuses rider
+conflicts. The Director key is stored separately from the export signing key.
+The studio can also sign as Agent for actors it exported. For outside actors, a
+bundle goes to the Agent and their returned `agreement.json` is imported; only
+valid signatures on unchanged terms are merged. The Actors tab, agent client,
+five new MCP tools (27 in total) and the skill cover the workflow. Agent and MCP
+signing requires explicit `confirm=true`. Agreements do not move money,
+approve rider exceptions or establish signer trust.
+
+The collaborator fork was checked at task start: its new revision `78f31ae`
+merges this repository's 1.2.1 into the fork's pending hardware dock and labels
+the result 1.2.2. Its dock and related changes were not part of this release and
+remain pending a focused review (see COLLABORATOR_REVIEW.md).
+
 ## 1.2.1 — Starter installation and local library deletion
 
 The Linux/WSL/macOS and PowerShell installers install the six public styles and

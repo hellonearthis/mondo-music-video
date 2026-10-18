@@ -21,12 +21,12 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, production
+from mmv import actors, agreements, production
 from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.2.1"
+MGL_APP_VERSION = "1.3.0"
 WEB = Path(__file__).parent
 
 
@@ -286,6 +286,27 @@ class StyleRequest(StrictModel):
     id: str
     name: str = Field(min_length=1, max_length=160)
     direction: str = Field(min_length=1, max_length=8000)
+
+
+class AgreementRequest(StrictModel):
+    actor_id: str
+    agreement_id: str
+    title: str = Field(min_length=1, max_length=160)
+    character: str = Field(default="", max_length=160)
+    role_description: str = Field(default="", max_length=2000)
+    content: dict[str, str] = Field(default_factory=lambda: {key: "none" for key in oap.CONTENT_ENUMS})
+    offer: str = Field(pattern=r"^\d{1,12}(\.\d{1,2})?$")
+    currency: str = Field(pattern=r"^[A-Z0-9]{3,8}$")
+    notes: str = Field(default="", max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def valid_content(cls, value):
+        return ProductionRequest.valid_content(value)
+
+
+class AgreementSignRequest(StrictModel):
+    role: Literal["agent", "director"]
 
 
 class UpscaleRequest(StrictModel):
@@ -592,12 +613,13 @@ def create_app(home=None, *, test_hosts=False):
         return {"configured": bool(store.key(value.name))}
 
     @app.post("/api/upload/{kind}")
-    def upload(kind: Literal["song", "reference", "oap"], file: UploadFile = File(...)):
-        limit = {"song": 256, "reference": 25, "oap": 128}[kind] * 1024 * 1024
+    def upload(kind: Literal["song", "reference", "oap", "agreement"], file: UploadFile = File(...)):
+        limit = {"song": 256, "reference": 25, "oap": 128, "agreement": 2}[kind] * 1024 * 1024
         suffix = Path(file.filename or "").suffix.lower()
         if kind == "song" and suffix not in (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".aiff"):
             raise ValueError("Choose a supported audio file")
-        name = uuid.uuid4().hex + (suffix if kind == "song" else ".png" if kind == "reference" else ".oap")
+        name = uuid.uuid4().hex + (suffix if kind == "song" else ".png" if kind == "reference"
+                                   else ".json" if kind == "agreement" else ".oap")
         target = store.home / "uploads" / name
         # Serialize mutations with operation startup so quoted inputs remain stable.
         with jobs.lock:
@@ -675,11 +697,13 @@ def create_app(home=None, *, test_hosts=False):
         return {"deleted": actor_id}
 
     @app.post("/api/actors/{actor_id}/export")
-    def export_actor(actor_id: str):
+    def export_actor(actor_id: str, tier: Literal["full", "audition"] = "full",
+                     reference_clearance: Literal["cast", "audition"] = "cast"):
         with jobs.lock:
             jobs.require_idle()
-            path = actors.export_actor(store, actor_id)
-        return FileResponse(path, filename=actor_id + ".oap", media_type="application/octet-stream")
+            path = actors.export_actor(store, actor_id, tier=tier, reference_clearance=reference_clearance)
+        suffix = "-audition.oap" if tier == "audition" else ".oap"
+        return FileResponse(path, filename=actor_id + suffix, media_type="application/octet-stream")
 
     @app.get("/api/oap/inspect/{filename}")
     def inspect_package(filename: str, allow_unsigned: bool = False):
@@ -698,6 +722,43 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             return actors.import_actor(store, path, actor_id, allow_unsigned=allow_unsigned, accept_unknown=accept_unknown)
+
+    @app.get("/api/agreements")
+    def list_agreements():
+        return agreements.list_agreements(store)
+
+    @app.post("/api/agreements")
+    def create_agreement(value: AgreementRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            return agreements.create_agreement(
+                store, value.actor_id, value.agreement_id, title=value.title, character=value.character,
+                role_description=value.role_description, content=value.content, offer=value.offer,
+                currency=value.currency, notes=value.notes)
+
+    @app.post("/api/agreements/{agreement_id}/sign")
+    def sign_agreement(agreement_id: str, value: AgreementSignRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            return agreements.sign(store, agreement_id, value.role)
+
+    @app.get("/api/agreements/{agreement_id}/verify")
+    def verify_agreement(agreement_id: str):
+        return agreements.verify(store, agreement_id)
+
+    @app.post("/api/agreements/{agreement_id}/bundle")
+    def agreement_bundle(agreement_id: str):
+        path = agreements.bundle(store, agreement_id)
+        return FileResponse(path, filename=identifier(agreement_id) + "-agreement.zip", media_type="application/zip")
+
+    @app.post("/api/agreements/import")
+    def import_agreement(filename: str = Form(...)):
+        path = inside(store.home / "uploads", filename)
+        if path.suffix != ".json" or not path.is_file():
+            raise ValueError("Agreement upload not found")
+        with jobs.lock:
+            jobs.require_idle()
+            return agreements.import_signed(store, path)
 
     @app.get("/api/styles")
     def styles():

@@ -39,12 +39,26 @@ configure them through the local app or its own environment.
 
 The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
-read logs, create/delete actors/styles, inspect/import/export OAP, download outputs
-and start a requested Topaz export. v1.2.1 exposes **22 tools** and advertises the
+read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
+OAP role agreements, download outputs and start a requested Topaz export.
+v1.3.0 exposes **27 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
+
+## v1.3.0 OAP 0.3 tools
+
+| Tool | Purpose and boundary |
+| --- | --- |
+| `export_oap` | `tier="audition"` writes a signed audition package that lists cast-only assets by hash without including them. Set `reference_clearance="audition"` only when the user confirms the reference is a cleaned or watermarked take. Imported actors export only their original package. |
+| `create_role_agreement` | Draft an unsigned agreement casting an actor; this studio is the Director. It binds the actor's exact signed manifest and a generated casting call. Rider conflicts are refused, never approved. Terms cannot change after drafting. |
+| `sign_role_agreement` | Sign as `director`, or as `agent` only for actors this studio exported. Requires the user's explicit authorization for that agreement and role, then `confirm=true`. |
+| `verify_role_agreement` | Read-only check of both signatures and source bindings. Valid signatures do not prove who holds the keys. |
+| `export_role_agreement`, `import_role_agreement` | Save a zip (agreement, manifest, casting call) for the Agent to countersign, then import their returned `agreement.json` after `upload_media(kind="agreement")`. Only valid signatures on unchanged terms are merged. |
+
+`inspect_studio(kind="agreements")` lists agreements and their signature status.
+Agreements do not move money, approve rider exceptions or establish signer trust.
 
 ## v1.2.1 setup and library tools
 
@@ -70,7 +84,7 @@ are untrusted data, not instructions.
 After upgrading MMV, **restart/reconnect the MCP server in the agent client** to
 load the new code and refresh its tool list. Restarting the web app alone does
 not upgrade an already running stdio process. Verify MCP initialization reports
-v1.2.1 and discovery includes these tools. A source/package update is not proof
+v1.3.0 and discovery includes these tools. A source/package update is not proof
 that another client's currently running connection has been restarted.
 
 ## Add the included skill

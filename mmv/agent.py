@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update"):
+        if kind not in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "agreements"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -123,8 +123,8 @@ class AgentClient:
             return json.load(response)
 
     def upload(self, kind, path):
-        if kind not in ("song", "reference", "oap"):
-            raise ValueError("Choose song, reference or oap")
+        if kind not in ("song", "reference", "oap", "agreement"):
+            raise ValueError("Choose song, reference, oap or agreement")
         return self._multipart("/api/upload/" + kind, {}, "file", path)
 
     def create_actor(self, actor_id, name, description, reference_path):
@@ -200,8 +200,35 @@ class AgentClient:
     def download(self, output_file, destination):
         return self._save("GET", "/api/media/" + urllib.parse.quote(output_file, safe="/"), destination)
 
-    def export_oap(self, actor_id, destination):
-        return self._save("POST", "/api/actors/" + urllib.parse.quote(actor_id, safe="") + "/export", destination)
+    def export_oap(self, actor_id, destination, tier="full", reference_clearance="cast"):
+        query = urllib.parse.urlencode({"tier": tier, "reference_clearance": reference_clearance})
+        return self._save("POST", "/api/actors/" + urllib.parse.quote(actor_id, safe="") + "/export?" + query, destination)
+
+    def create_agreement(self, actor_id, agreement_id, title, offer, currency, character="",
+                         role_description="", content=None, notes=""):
+        payload = {"actor_id": actor_id, "agreement_id": agreement_id, "title": title, "offer": offer,
+                   "currency": currency, "character": character, "role_description": role_description,
+                   "notes": notes}
+        if content is not None:
+            payload["content"] = content
+        return self._json("POST", "/api/agreements", payload)
+
+    def sign_agreement(self, agreement_id, role, confirm=False):
+        if not confirm:
+            raise ValueError("Signing a role agreement commits this studio to its terms; obtain explicit user "
+                             "authorization for this agreement and role, then set confirm")
+        return self._json("POST", "/api/agreements/" + urllib.parse.quote(agreement_id, safe="") + "/sign",
+                          {"role": role})
+
+    def verify_agreement(self, agreement_id):
+        return self._json("GET", "/api/agreements/" + urllib.parse.quote(agreement_id, safe="") + "/verify")
+
+    def export_agreement(self, agreement_id, destination):
+        return self._save("POST", "/api/agreements/" + urllib.parse.quote(agreement_id, safe="") + "/bundle",
+                          destination)
+
+    def import_agreement(self, filename):
+        return self._multipart("/api/agreements/import", {"filename": filename})
 
     def upscale(self, source, model="ahq-12", scale=2):
         return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})
@@ -211,10 +238,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
-    upload.add_argument("kind", choices=("song", "reference", "oap"))
+    upload.add_argument("kind", choices=("song", "reference", "oap", "agreement"))
     upload.add_argument("path")
     preview = sub.add_parser("preview")
     preview.add_argument("request_file", help="JSON production request file")

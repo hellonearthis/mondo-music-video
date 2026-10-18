@@ -1,4 +1,27 @@
-# Verification — 1.2.1
+# Verification — 1.3.0
+
+## 1.3.0 Open Actor Protocol 0.3
+
+With OAP 0.3.0 (`35902b1`) installed, the full suite passed **107 tests and 53
+subtests** (15 skipped: optional Comfy SDK and Playwright/SDK browser flows). The
+new `tests/test_oap_v03.py` covers audition exports (cast assets omitted, hashes
+kept, audition-cleared reference included, imported actors refused), schema
+rejection with JSON paths, local two-role signing, outside-Agent countersigning
+through a returned agreement, altered-terms and forged-signature refusal, rider
+conflicts, and fail-closed verification when a stored manifest or casting call
+is missing, damaged or substituted. Agent client tests cover the same workflow
+and the `confirm` guard; MCP stdio discovery verifies 27 tools and version 1.3.0.
+The four 0.2 starter packages still schema-validate and verify under 0.3.
+
+The Actors tab was driven in Chromium against a temporary data directory (an
+ad hoc Playwright script, not a committed test): audition export, drafting,
+Director and Agent signing, verification and bundle download, with no page
+errors, both themes, and no horizontal overflow at 390 px. Codex adversarial
+review found two fail-open verification cases; both were fixed and tested. A
+locally built wheel contains `mmv/agreements.py` and pins OAP 0.3.0. No paid,
+GPU or Topaz work ran. A freshly imported version handler and the restarted live
+app's `/api/version` both reported 1.3.0 against the operator's existing data
+(85 actors loaded). Native Windows/macOS runs were not performed.
 
 ## 1.2.1 starter installation and local library deletion
 

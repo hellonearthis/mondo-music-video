@@ -420,15 +420,23 @@ async function loadActors() {
 
     const button = text("button", "Export OAP package", "secondary", `Export signed OAP package for ${actor.name}`);
     button.onclick = handle(async () => {
-      const response = await api(`/api/actors/${encodeURIComponent(actor.id)}/export`, {method: "POST"});
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = actor.id + ".oap";
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      await saveDownload(await api(`/api/actors/${encodeURIComponent(actor.id)}/export`, {method: "POST"}), actor.id + ".oap");
     });
     card.append(image, text("h2", actor.name), text("p", actorOverview(actor)), text("p", actor.oap ? "OAP imported · original package preserved" : "OAP ready · signed on export"), button);
+    if (!actor.oap) {
+      const cleared = document.createElement("input");
+      cleared.type = "checkbox";
+      const clearedLabel = text("label", "", "check audition-export", "Only check this if the reference is a cleaned or watermarked take you are willing to share with casting directors");
+      clearedLabel.append(cleared, " Reference is cleared for auditions");
+      const audition = text("button", "Export audition package", "quiet audition-button", `Export a signed audition package for ${actor.name}; cast-only assets are listed by hash but left out`);
+      audition.type = "button";
+      audition.onclick = handle(async () => {
+        const query = new URLSearchParams({tier: "audition", reference_clearance: cleared.checked ? "audition" : "cast"});
+        await saveDownload(await api(`/api/actors/${encodeURIComponent(actor.id)}/export?${query}`, {method: "POST"}), actor.id + "-audition.oap");
+        notice(cleared.checked ? "Audition package exported with the audition-cleared reference." : "Audition package exported. The cast-only reference is listed by hash but not included.");
+      });
+      card.append(clearedLabel, audition);
+    }
     const remove = text("button", "Delete actor", "quiet operation-action", `Delete ${actor.name} from this machine`);
     remove.type = "button";
     remove.onclick = handle(async () => {
@@ -442,6 +450,66 @@ async function loadActors() {
     return card;
   }));
   if (!actors.length) $("#actor-list").append(text("div", "Your cast starts here. Create an actor or import a full OAP package below.", "empty", "No actors currently in your studio library"));
+  const agreementActor = $("#agreement-form").elements.actor_id;
+  const chosen = agreementActor.value;
+  agreementActor.replaceChildren(...actors.map(actor => option(actor.id, actor.name)));
+  if (actors.some(actor => actor.id === chosen)) agreementActor.value = chosen;
+}
+async function saveDownload(response, filename) {
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+function shortDid(did) { return did && did.length > 34 ? did.slice(0, 22) + "…" + did.slice(-8) : did || "none"; }
+async function loadAgreements() {
+  const agreements = await (await api("/api/agreements")).json();
+  $("#agreement-list").replaceChildren(...agreements.map(agreement => {
+    const card = text("article", "", "card", `Role agreement ${agreement.id}`);
+    if (agreement.damaged) {
+      card.append(text("span", "Damaged record", "oap-badge-pill badge-invalid"), text("h3", agreement.id), text("p", agreement.issues.join("; ")));
+      return card;
+    }
+    const status = agreement.complete ? ["Signed by both parties", "badge-valid"]
+      : agreement.issues.length && agreement.signed.length ? ["Signature problem", "badge-invalid"]
+      : agreement.signed.length ? [`Signed by ${agreement.signed.join(" and ")}; awaiting countersignature`, "badge-unsigned"]
+      : ["Unsigned draft", "badge-unsigned"];
+    const compensation = agreement.compensation || {};
+    card.append(text("span", status[0], "oap-badge-pill " + status[1]), text("h3", agreement.title || agreement.id),
+      text("p", `${agreement.character || "Role"} · actor ${agreement.actor_id || "unknown"} · ${compensation.amount} ${compensation.currency}`),
+      text("p", `Agent ${shortDid(agreement.agent_did)}${agreement.local_agent ? " (this studio)" : ""}`, "", agreement.agent_did),
+      text("p", `Director ${shortDid(agreement.director_did)} (this studio)`, "", agreement.director_did));
+    if (agreement.issues.length && agreement.signed.length) card.append(text("p", agreement.issues.join("; ")));
+    const actions = text("div", "", "agreement-actions");
+    const path = `/api/agreements/${encodeURIComponent(agreement.id)}`;
+    const roles = ["director", ...(agreement.local_agent ? ["agent"] : [])].filter(role => !agreement.signed.includes(role));
+    for (const role of roles) {
+      const sign = text("button", `Sign as ${role}`, "secondary operation-action", `Sign this agreement with this studio's ${role} key`);
+      sign.type = "button";
+      sign.onclick = handle(async () => {
+        if (!window.confirm(`Sign “${agreement.title}” as ${role}? This commits the ${role} to ${compensation.amount} ${compensation.currency} and the casting call terms. Signatures cannot be withdrawn from copies already shared.`)) return;
+        await json(`${path}/sign`, {role});
+        await loadAgreements();
+        notice(`Signed as ${role}.`);
+      });
+      actions.append(sign);
+    }
+    const verify = text("button", "Verify", "secondary", "Check both signatures and the exact manifest and casting call bindings");
+    verify.type = "button";
+    verify.onclick = handle(async () => {
+      const result = await (await api(`${path}/verify`)).json();
+      notice(result.ok ? `Verified: both signatures are valid. ${result.note}` : `Not complete: ${result.issues.join("; ")}`);
+    });
+    const download = text("button", "Download bundle", "secondary", "Zip of agreement.json, manifest.json and casting_call.json for the other party");
+    download.type = "button";
+    download.onclick = handle(async () => saveDownload(await api(`${path}/bundle`, {method: "POST"}), agreement.id + "-agreement.zip"));
+    actions.append(verify, download);
+    card.append(actions);
+    return card;
+  }));
+  if (!agreements.length) $("#agreement-list").append(text("div", "No role agreements yet. Draft one below.", "empty"));
 }
 
 async function loadOutputs() {
@@ -990,8 +1058,14 @@ async function initialize() {
     select.onchange = scheduleSave;
     label.append(select);
     $(".ratings").append(label);
+    const agreementLabel = text("label", name.replaceAll("_", " "), "", `Project content rating for ${name.replaceAll("_", " ")}`);
+    const agreementSelect = document.createElement("select");
+    agreementSelect.name = "content_" + name;
+    agreementSelect.append(...levels.map(level => option(level, level)));
+    agreementLabel.append(agreementSelect);
+    $(".agreement-ratings").append(agreementLabel);
   }
-  const [settings] = await Promise.all([loadSettings(), loadActors(), loadStyles(), loadOutputs()]);
+  const [settings] = await Promise.all([loadSettings(), loadActors(), loadStyles(), loadOutputs(), loadAgreements()]);
   $$(".backend-select").forEach(select => { select.value = settings.backend; resolutionSelect(select.closest("form")); });
   $$(".nav[data-panel]").forEach(button => button.onclick = () => panel(button.dataset.panel));
   const teasers = {"Short films": "From screenplay to screen, with the full studio's film production tools.", "Micro Drama": "A home for episodic stories and serial drama in the full studio.", "Hodge TV": "Channel-surf broadcasts and programme variety in the full studio.", "The cutting room": "Editing and production refinement in the full studio.", "The Vault": "A library of archival footage in the full studio."};
@@ -1284,6 +1358,26 @@ async function initialize() {
     if ($("#oap-raw-toggle-wrap")) $("#oap-raw-toggle-wrap").hidden = true;
     notice("Actor successfully imported into your studio cast library.");
     await loadActors();
+  });
+  $("#agreement-form").onsubmit = handle(async event => {
+    const values = Object.fromEntries(new FormData(event.target));
+    const body = {content: {}};
+    for (const [key, value] of Object.entries(values)) {
+      if (key.startsWith("content_")) body.content[key.slice(8)] = value; else body[key] = value;
+    }
+    await json("/api/agreements", body);
+    event.target.elements.agreement_id.value = "";
+    await loadAgreements();
+    notice("Agreement drafted. Sign as Director, then send the bundle to the Agent to countersign.");
+  });
+  $("#import-agreement").onclick = handle(async () => {
+    const file = $("#agreement-file").files[0]; if (!file) throw new Error("Choose a signed agreement.json first");
+    const body = new FormData();
+    body.set("filename", await upload(file, "agreement"));
+    const result = await (await api("/api/agreements/import", {method: "POST", body})).json();
+    $("#agreement-file").value = "";
+    await loadAgreements();
+    notice(result.complete ? "Countersigned agreement imported; both signatures verify." : "Signatures imported; the agreement is not yet signed by both parties.");
   });
   $("#settings-form").onsubmit = handle(async event => {
     const raw = Object.fromEntries(new FormData(event.target));

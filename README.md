@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.2.1** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.3.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -192,12 +192,16 @@ automatically. Uploaded references and song passages go to your chosen provider.
 
 The Actors tab imports and exports OAP packages, verifies their signatures and
 checks actor riders. No account, reporting or public actor sharing is required.
+With Open Actor Protocol 0.3, imported manifests are also schema-validated
+offline, local actors can be exported as audition packages that leave out
+cast-only assets, and role agreements record a casting between this studio
+(Director) and an actor's Agent, each signing with their own key.
 
 ## Agent operation
 
-The v1.2.1 MCP server has 22 tools, including API profile add/select/remove,
-model/service preferences, starter installation and confirmed actor/style
-deletion. Reconnect the MCP client after upgrading to refresh its tool list.
+The v1.3.0 MCP server has 27 tools, including API profile add/select/remove,
+model/service preferences, starter installation, confirmed actor/style
+deletion, audition exports and OAP role agreements. Reconnect the MCP client after upgrading to refresh its tool list.
 
 The included skill and optional MCP server let an agent operate the same app,
 including its OAP, review and production workflow:
