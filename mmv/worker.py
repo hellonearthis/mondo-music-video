@@ -379,17 +379,18 @@ def run(home, directory, *, resume=False):
     finally:
         backend.close_render()
     progress('Assembling frame-exact music video', 85)
+    video_encoder = settings.get('video_encoder', 'libx264')
     if request['kind'] == 'ident':
         output = directory / 'ident.mp4'
-        assemble.trim_to_frames(rendered[plan.segments[0].segment_id]['video'], output, plan.total_frames)
+        assemble.trim_to_frames(rendered[plan.segments[0].segment_id]['video'], output, plan.total_frames, encoder=video_encoder)
     else:
         opening, closing = request.get('start_ident'), request.get('end_ident')
         if opening and closing:
             # Original primitives, one encode per raw clip, stream-copy join and song mux.
             work=directory/'assembly/work';work.mkdir(parents=True,exist_ok=True)
-            clips=[assemble.trim_to_frames(rendered[s.segment_id]['video'],work/(s.segment_id+'.mp4'),s.trim_frames) for s in plan.segments]
+            clips=[assemble.trim_to_frames(rendered[s.segment_id]['video'],work/(s.segment_id+'.mp4'),s.trim_frames, encoder=video_encoder) for s in plan.segments]
             first=inside(store.home/'runs',opening);last=inside(store.home/'runs',closing)
-            clips=[assemble.normalize_clip(first,work/'opening.mp4')]+clips+[assemble.normalize_clip(last,work/'closing.mp4')]
+            clips=[assemble.normalize_clip(first,work/'opening.mp4', encoder=video_encoder)]+clips+[assemble.normalize_clip(last,work/'closing.mp4', encoder=video_encoder)]
             picture=assemble.concat_video(clips,work/'picture.mp4',work)
             audio=[assemble.extract_audio(first,work/'opening.wav'),assemble.extract_audio(song,work/'song.wav'),assemble.extract_audio(last,work/'closing.wav')]
             track=assemble.concat_audio(audio,work/'song-with-idents.wav',work)
@@ -397,9 +398,9 @@ def run(home, directory, *, resume=False):
         else:
             if opening or closing:
                 result=assemble.assemble_run_with_ident(plan,rendered,song,inside(store.home/'runs',opening or closing),
-                      'start' if opening else 'end',directory/'assembly')
+                      'start' if opening else 'end',directory/'assembly', encoder=video_encoder)
             else:
-                result=assemble.assemble_run(plan,rendered,song,directory/'assembly')
+                result=assemble.assemble_run(plan,rendered,song,directory/'assembly', encoder=video_encoder)
             output=directory/'music-video.mp4';shutil.copy2(result['video'],output)
     from .media import duration
     warnings = [entry['warning'] for entry in read_json(directory / 'quality.json', {}).values() if entry.get('warning')]

@@ -90,6 +90,7 @@ DEFAULTS = {
     "vision_url": "http://127.0.0.1:8080/v1", "vision_model": "",
     "vision_key_env": "MMV_VISION_API_KEY", "vision_call_estimate": 0.0,
     "topaz_executable": "", "topaz_models": "",
+    "video_encoder": "libx264",
 }
 
 

@@ -16,6 +16,7 @@ AGENT_SETTINGS = {
     "auto_updates", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
     "vision_url", "vision_model", "vision_call_estimate", "laya_model_dir", "laya_device", "h3_models",
     "writer_api_profile", "vision_api_profile", "video_api_profile", "comfy_url", "comfy_sdk_url",
+    "video_encoder",
 }
 
 

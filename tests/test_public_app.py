@@ -387,10 +387,58 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.6")
+        self.assertEqual(api_version()["version"], "1.6.7")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.6", (root / "README.md").read_text())
+        self.assertIn("1.6.7", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
+
+    def test_video_encoding_settings_and_probing(self):
+        from mmv.video_encoding import VIDEO_ENCODERS, get_encoder_args, probe_encoder_support
+
+        # Test valid encoders produce ffmpeg arguments
+        for enc_id, conf in VIDEO_ENCODERS.items():
+            args = get_encoder_args(enc_id)
+            self.assertIn("-c:v", args)
+            self.assertIn(enc_id, args)
+            if conf.get("tag"):
+                self.assertIn("-tag:v", args)
+                self.assertIn(conf["tag"], args)
+
+        # Fallback for unknown encoder
+        fallback = get_encoder_args("invalid_codec_name")
+        self.assertIn("libx264", fallback)
+
+        # Probing without live hardware execution
+        encoders = probe_encoder_support(check_hardware=False)
+        self.assertTrue(len(encoders) >= 6)
+        encoder_ids = [e["id"] for e in encoders]
+        self.assertIn("libx264", encoder_ids)
+        self.assertIn("hevc_nvenc", encoder_ids)
+
+        # GET /api/system/encoders
+        res = self.client.get("/api/system/encoders")
+        self.assertEqual(res.status_code, 200)
+        system_encoders = res.json()["encoders"]
+        self.assertTrue(len(system_encoders) >= 6)
+
+        # GET /api/settings includes video_encoder and video_encoders list
+        res = self.client.get("/api/settings")
+        self.assertEqual(res.status_code, 200)
+        settings_data = res.json()
+        self.assertIn("video_encoder", settings_data["settings"])
+        self.assertIn("video_encoders", settings_data)
+
+        # PUT /api/settings accepts valid encoders
+        settings = self.store.settings()
+        settings["video_encoder"] = "hevc_nvenc"
+        put_res = self.client.put("/api/settings", json=settings)
+        self.assertEqual(put_res.status_code, 200)
+        self.assertEqual(self.store.settings()["video_encoder"], "hevc_nvenc")
+
+        # PUT /api/settings rejects invalid encoders
+        settings["video_encoder"] = "invalid_turbo_codec"
+        bad_res = self.client.put("/api/settings", json=settings)
+        self.assertEqual(bad_res.status_code, 422)
 
     def test_uploaded_song_preview_endpoint(self):
         up = self.client.post("/api/upload/song", files={"file": ("track.wav", self.song, "audio/wav")})

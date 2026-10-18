@@ -33,6 +33,7 @@ def doctor(store):
               "laya_model_directory": settings["laya_model_dir"], "laya_device": settings["laya_device"],
               "laya_files_present": all((Path(settings["laya_model_dir"]) / name).exists() for name in
                  ("model.safetensors", "rl_agent_config.json", "tokenizer/tokenizer.json", "encoder/config.json")), "api_key_configured": bool(store.key()),
+              "video_encoder": settings.get("video_encoder", "libx264"),
               "topaz_configured": bool(settings["topaz_executable"])}
     gpu = shutil.which("nvidia-smi")
     if gpu:

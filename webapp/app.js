@@ -676,6 +676,7 @@ const settingLabels = {
   workflow_map_path: "Workflow binding map JSON path",
   vision_url: "Vision service URL (OpenAI-compatible /v1)", vision_model: "Vision model name", vision_key_env: "Vision credential name",
   vision_call_estimate: "Vision estimate per call, USD (0 for local)", topaz_executable: "Installed Topaz FFmpeg executable path", topaz_models: "Installed Topaz models folder",
+  video_encoder: "Video format & encoder (FFmpeg)",
   h3_video_vae: "H3 video VAE model",
   h3_audio_vae: "H3 audio VAE model",
   h3_diffusion_model: "H3 reference-to-video diffusion model",
@@ -706,6 +707,7 @@ const settingTooltips = {
   vision_call_estimate: "Estimated cost in USD per vision style-harvest call",
   topaz_executable: "Path to Topaz Video AI ffmpeg.exe binary for upscaling",
   topaz_models: "Folder path containing installed Topaz AI model weight files",
+  video_encoder: "Video encoding format and hardware acceleration for final assembled MP4s: standard AVC / H.264 (libx264 default), HEVC / H.265 (libx265), or GPU hardware encoders (NVIDIA NVENC, Intel QSV, AMD AMF, Apple VideoToolbox).",
   h3_video_vae: "Video VAE safetensors filename for MiniMax H3 (node 119)",
   h3_audio_vae: "Audio VAE safetensors filename for MiniMax H3 (node 120)",
   h3_diffusion_model: "Reference-to-video UNET diffusion model for MiniMax H3 (node 127)",
@@ -930,6 +932,23 @@ async function loadSettings() {
         option("cuda", "CUDA", "Run Laya validator on NVIDIA GPU (CUDA)"),
         option("mps", "MPS", "Run Laya validator on Apple Silicon (MPS)")
       );
+    } else if (name === "video_encoder") {
+      input = document.createElement("select");
+      const encoders = data.video_encoders || [
+        {id: "libx264", name: "AVC / H.264 (libx264 - Default, Universal)", available: true},
+        {id: "libx265", name: "HEVC / H.265 (libx265 - Software, High compression)", available: true},
+        {id: "hevc_nvenc", name: "HEVC / H.265 (NVIDIA NVENC Hardware acceleration)", available: false},
+        {id: "hevc_qsv", name: "HEVC / H.265 (Intel QuickSync Hardware acceleration)", available: false},
+        {id: "hevc_amf", name: "HEVC / H.265 (AMD AMF Hardware acceleration)", available: false},
+        {id: "hevc_videotoolbox", name: "HEVC / H.265 (Apple VideoToolbox Hardware acceleration)", available: false}
+      ];
+      encoders.forEach(enc => {
+        let tag = "";
+        if (enc.available) tag = " [Detected & Ready]";
+        else if (enc.installed) tag = " [Compiled in FFmpeg]";
+        else tag = " [Not detected]";
+        input.append(option(enc.id, `${enc.name}${tag}`, enc.description || enc.name));
+      });
     } else {
       input = document.createElement("input");
       input.type = name.endsWith("call_estimate") ? "number" : "text";
@@ -982,6 +1001,14 @@ async function loadSettings() {
           $("#panel-settings > .panel-header-row .llama-help-btn").click();
         };
         hint.append(helpBtn);
+        label.append(hint);
+      } else if (name === "video_encoder") {
+        const hint = document.createElement("div");
+        hint.className = "settings-note";
+        hint.style.marginTop = "6px";
+        hint.style.fontSize = "0.85em";
+        hint.style.opacity = "0.9";
+        hint.innerHTML = '💡 <strong>Verify system encoders:</strong> Run <code>ffmpeg -encoders | findstr /i hevc</code> (Windows) or <code>ffmpeg -encoders | grep -i hevc</code> (macOS/Linux) in your terminal to see which hardware encoders your FFmpeg build was compiled with.';
         label.append(hint);
       }
     }

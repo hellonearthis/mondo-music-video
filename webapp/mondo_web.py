@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.6"
+MGL_APP_VERSION = "1.6.7"
 WEB = Path(__file__).parent
 
 
@@ -279,7 +279,19 @@ class Settings(StrictModel):
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
     topaz_models: str = ""
+    video_encoder: str = "libx264"
     h3_models: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("video_encoder")
+    @classmethod
+    def valid_video_encoder(cls, value):
+        from mmv.video_encoding import VIDEO_ENCODERS, DEFAULT_ENCODER
+        if not value or not isinstance(value, str):
+            return DEFAULT_ENCODER
+        val = value.strip().lower()
+        if val in VIDEO_ENCODERS:
+            return val
+        raise ValueError(f"Unknown video encoder '{value}'. Choose from: {', '.join(VIDEO_ENCODERS.keys())}")
 
     @field_validator("writer_api_profile", "vision_api_profile", "video_api_profile")
     @classmethod
@@ -559,13 +571,20 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/settings")
     def get_settings():
         from mmv.api_profiles import public_profiles
+        from mmv.video_encoding import probe_encoder_support
         s = store.settings()
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
                 "api_profiles": public_profiles(store),
+                "video_encoders": probe_encoder_support(check_hardware=True),
                 "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
+
+    @app.get("/api/system/encoders")
+    def get_system_encoders():
+        from mmv.video_encoding import probe_encoder_support
+        return {"encoders": probe_encoder_support(check_hardware=True)}
 
     @app.put("/api/settings")
     def settings(value: Settings):
