@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.5.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.6.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -109,6 +109,16 @@ borders; on free local renderers a failing passage is re-rendered once with a
 new seed, and anything still wrong appears as a warning on the finished video.
 Paid renderers are never resubmitted automatically.
 
+Checks now run as a batch after all passages render, with one shared retry
+budget per passage. Optionally enable **Vision quality check (slower)** (off by
+default) to inspect sampled single frames with your local vision-capable writer
+model and its mmproj. This adds model loading and judging time. Mondo stops and
+restarts only ComfyUI it launched, including on the SDK path; close ComfyUI
+before starting and configure its launch command. Vision checks mostly add
+warnings; repeated unrequested framing devices may use the same free local
+retry budget. Pixel checks remain authoritative for motion. If the vision model
+cannot start, production continues with pixel checks and a visible warning.
+
 Open **Watch the song conduct** under any finished music video to see this
 happen. A synchronized score shows the energy curve, beats and downbeats, each
 passage's grammar and the planned cuts, with a playhead that follows playback.
@@ -212,7 +222,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.5.0 MCP server has 28 tools, including API profile add/select/remove,
+The v1.6.0 MCP server has 28 tools, including API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements and musical score reading. Reconnect the MCP client after upgrading to refresh its tool list.
 

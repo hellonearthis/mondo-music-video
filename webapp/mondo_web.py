@@ -26,7 +26,7 @@ from mmv.jobs import BusyError, Jobs
 from mmv.render import CATALOG
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.5.0"
+MGL_APP_VERSION = "1.6.0"
 WEB = Path(__file__).parent
 
 
@@ -177,6 +177,7 @@ class ProductionRequest(StrictModel):
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
     reuse_prompts: bool = True
+    vision_quality_check: bool = False
     vocabulary_profile: Literal["full", "reduced_flashing"] = "full"
 
     @field_validator("content")

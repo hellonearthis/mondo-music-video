@@ -1,4 +1,88 @@
-# Verification — 1.5.0
+# Verification — 1.6.0
+
+
+## 1.6.0 final release verification (2026-10-18)
+
+After the user authorized the same-song $0 GPU test and release on success,
+Codex ran `.venv/bin/python -m pytest -q` outside the sandbox on the final
+implementation: **240 tests and 53 subtests passed**, no skips (80.76 s).
+Freshly imported and live `/api/version` handlers both reported **1.6.0**.
+JavaScript syntax and `git diff --check` passed.
+
+Real RTX 4090 SDK production `f33d46265cb24ef3a51a31d32fb12036` reused the
+11.5-second Interdimensional Lover song, seed 23, robobabe1 and animal_pig,
+at 736×416, with `vision_quality_check: true`. The quote and consent recorded
+**$0**. The operator's existing ComfyUI was deliberately stopped under explicit
+user authorization before preview; Mondo then launched and owned its renderer.
+Both passages rendered through the existing SDK proxy and passed batched pixel
+checks (motion **2.018** and **13.487**, no uniform borders).
+
+Mondo stopped its ComfyUI, GPU memory dropped to approximately 1.5 GiB, and the
+local Qwen vision model started and judged both passages. Both vision verdicts
+were **pass**, with no problems. `vision.json` recorded requested/ran true and a
+null note; no retry or warning occurred. The vision service shut down after
+judging and GPU memory returned to approximately 1.2 GiB. Final output decoded
+without errors: **276 video frames, 11.5 seconds, 736×416, with audio**. A sampled
+contact sheet was inspected. Generated media and private run data remain local.
+
+This live run verifies the normal renderer-to-vision handoff, proxy rendering,
+judging and cleanup. A vision-triggered renderer restart/retry was not exercised
+on real hardware because neither clip failed; that path is covered by mock tests.
+Windows/macOS model swaps remain unverified.
+
+The task-start fork check returned unchanged HEAD
+`78f31ae33f50a9578043d2af33ce05158603ab86`; prior substantive findings and deferred
+integration work remain in [COLLABORATOR_REVIEW](COLLABORATOR_REVIEW.md).
+
+## 1.6.0 earlier sandbox completion (2026-10-18)
+
+Outside the Codex sandbox, Claude Code ran the full suite on the integrated
+checkout: **240 tests and 53 subtests passed**, no skips, and a freshly imported
+version handler reported 1.6.0. At that handoff, real GPU use of the vision
+check was not yet verified; see the final verification above.
+
+Codex ran the following selection in the main checkout, with the existing
+`.venv`, synthetic temporary media and mocked services:
+
+```sh
+.venv/bin/python -m pytest -q -n 0 tests/test_vision_stage.py tests/test_sdk_recovery.py tests/test_vision_check.py tests/test_quality.py::ClipInspectionTests tests/test_quality.py::PromptRuleTests tests/test_original_engine.py
+```
+
+Result: **111 tests and 20 subtests passed**, no skips (21.75 s).
+Breakdown: orchestration/agent discovery 27, SDK recovery 22, vision module 45,
+pixel inspection/prompt rules 8, original engine 9. Vision HTTP fixtures used
+their in-process mocked transport fallback because the sandbox cannot bind
+local sockets. This does not verify real HTTP service transport.
+
+The new orchestration tests cover service ownership and swap order, restart
+before vision retries, Qwen startup failures as warning-only verdicts, occupied
+vision-port refusal, startup ownership races, request flag default/opt-in,
+preview errors on both H3 backends, external ComfyUI skip notes, SDK launch
+behavior, persisted `vision.json`/output warnings, and interrupted checks.
+Pure batch tests cover pixel-first retries, one shared budget per passage,
+pixel-authoritative selection, paid/unlisted renderer guards, hash-keyed verdict
+reuse and spent-retry recovery. Agent preview preserves the flag through a
+mocked transport; in-process MCP discovery still exposes 28 tools and includes
+the new preview documentation. An exploratory MCP tool invocation stalled in
+the sandbox and was interrupted; the final selection tests discovery only.
+The full MCP stdio/HTTP transport checks were not run.
+
+A separate fresh Python process imported `api_version()` and returned **1.6.0**;
+pyproject.toml and README matched. No live `/api/version` request was made, and
+no claim is made about an existing running app's version. `node --check
+webapp/app.js`, `bash -n install.sh` and `git diff --check` passed. Original engine
+hashes passed in the selected tests. Browser version assertions were updated
+but browser tests were not run.
+
+The full suite was **not run** in this takeover: local-socket tests require an
+unrestricted environment. User/Claude must run `.venv/bin/python -m pytest -q`
+outside the sandbox. The earlier 213-test handoff result predates these changes
+and is not validation of this final tree. Phase 4 still requires an explicitly
+operator-run GPU production with vision enabled, ComfyUI initially closed and
+the proxy available. Vision startup failure deliberately completes using pixel
+checks with a warning. No paid, GPU, Topaz or network work occurred here; the
+fork update check was deferred under the user's offline instruction. Nothing
+was committed, pushed, tagged or published.
 
 ## 1.5.0 motion and framing quality gates
 

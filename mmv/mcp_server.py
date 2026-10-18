@@ -42,7 +42,14 @@ def create_server(base_url=None):
 
     @server.tool()
     def preview_production(request: dict) -> dict[str, Any]:
-        """Preview a video, ident or harvest request without generating; returns quote ID and estimated charges."""
+        """Preview a video, ident or harvest; returns quote ID and estimated charges.
+
+        Video request vision_quality_check (default false) enables slower local
+        single-frame judging. Requires a vision-capable writer_launch + mmproj;
+        H3 needs comfy_launch and ComfyUI closed so Mondo can manage its own
+        process. Read output quality_warnings for skipped/failed checks. One
+        shared free local retry per passage; paid re-renders require consent.
+        """
         return invoke(client.preview, request)
 
     @server.tool()

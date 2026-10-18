@@ -21,6 +21,7 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
   "beats_per_bar": 4,
   "bars_per_phrase": 8,
   "seed": 0,
+  "vision_quality_check": false,
   "conceptual_theme": "",
   "lyrics": "",
   "ref_policy": "all",

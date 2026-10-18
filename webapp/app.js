@@ -1045,6 +1045,7 @@ async function preview(form) {
     for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) request[name] = Number(request[name]);
     request.silent_mouths = request.silent_mouths === "true";
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;
+    request.vision_quality_check = Boolean(form.elements.vision_quality_check?.checked);
     request.content = {};
     for (const category of Object.keys(catalog.ratings)) { request.content[category] = request["rating_" + category]; delete request["rating_" + category]; }
   }
@@ -1060,6 +1061,10 @@ function showQuote(request, quote) {
   const summary = $("#quote-summary"); summary.replaceChildren();
   summary.append(text("p", request.kind === "harvest" ? "One visual style harvest." : `${currentQuote.clips} clips · ${currentQuote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
                  text("h2", `Estimated provider cost: $${Number(currentQuote.estimate_usd).toFixed(2)}`), text("p", currentQuote.note, "muted"));
+  if (request.vision_quality_check) {
+    summary.append(text("p", "Vision quality check on: after rendering, your local vision model inspects sampled frames. "
+      + "This adds several minutes and restarts ComfyUI; free local passages may be re-rendered once.", "muted"));
+  }
   if (currentQuote.analysis && request.kind === "video") {
     const a = currentQuote.analysis;
     summary.append(text("p", `Detected tempo: ${a.tempo_bpm.toFixed(1)} BPM · ${a.beats} beats · ${a.downbeats} downbeats · ${a.sections} sections · ${a.shots} shots · ${a.width} × ${a.height}`));

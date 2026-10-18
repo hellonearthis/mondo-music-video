@@ -1,5 +1,36 @@
 # Releases
 
+## 1.6.0 — Batched pixel and optional vision quality checks
+
+All passages render before pixel checks and one batch of free local retries.
+The optional **Vision quality check (slower)** is off by default and judges
+sampled single frames with a local vision-capable writer model and mmproj.
+Pixel measurements remain authoritative for motion. Vision mostly warns;
+unrequested framing devices in at least two sampled frames may use the same
+single retry budget. Paid renderers are never automatically resubmitted.
+
+Mondo swaps only services it owns: on direct H3 and SDK H3, close ComfyUI before
+preview and configure its launch command. The SDK proxy stays operator-managed.
+External ComfyUI is never stopped. Vision startup failure continues on pixel
+checks with a visible warning. Per-attempt judgments and hashes in `quality.json`
+support checkpoint reuse; `vision.json` records service notes.
+
+SDK recovery now validates a saved local completion before querying the proxy,
+so valid local media can survive proxy expiry without another submission.
+Fingerprints, receipt bindings, path confinement, hashes, decoding and frame
+counts guard that fast path; ambiguous submissions still require reconciliation.
+
+Codex implemented phase 1 SDK local-completion recovery and the phase 3 vision
+module with their tests, and completed orchestration tests, fixes and agent/docs
+coverage. Claude Code implemented batched quality orchestration, service swaps,
+preview diagnostics and UI wiring. The final fork check found HEAD unchanged at
+`78f31ae33f50a9578043d2af33ce05158603ab86`; previously recorded review findings
+remain unchanged. Final validation: 240 tests and 53 subtests passed, plus a $0
+RTX 4090 production with both passages passing pixel and vision checks, no
+retries or warnings, and a verified 11.5-second output. Hardware retry-path and
+platform limits are recorded in [VERIFICATION](VERIFICATION.md).
+
+
 ## 1.5.0 — Motion and framing quality gates
 
 A real Comfy SDK render produced a passage that was effectively a still image

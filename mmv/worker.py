@@ -260,10 +260,15 @@ def run(home, directory, *, resume=False):
         if any(not isinstance(prompts.get(seg.segment_id), str) or not prompts[seg.segment_id] for seg in plan.segments):
             raise ValueError('Resume requires saved validated prompts for every passage')
     progress('All prompts validated; opening renderer', 32)
-    if request['backend'] == 'local_h3':
-        runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
-                              settings['comfy_url'].rstrip('/')+'/system_stats',directory/'comfy-service.log',
-                              name='ComfyUI', launch_setting='comfy_launch')
+    vision_wanted = request['kind'] == 'video' and request.get('vision_quality_check')
+    def start_comfy():
+        # Returns a handle only when this production launched ComfyUI; None means it was already running.
+        return runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
+                                     settings['comfy_url'].rstrip('/')+'/system_stats',directory/'comfy-service.log',
+                                     name='ComfyUI', launch_setting='comfy_launch')
+    comfy_process = None
+    if request['backend'] == 'local_h3' or (request['backend'] == 'comfy_sdk_h3' and vision_wanted):
+        comfy_process = start_comfy()
     rendered = {}
     sheets = casting.sheet_paths(prepared['casting']) if prepared['casting'] else {}
     url = urlparse(settings['comfy_url'])
@@ -285,26 +290,45 @@ def run(home, directory, *, resume=False):
         song = inside(store.home / 'uploads', request['song']) if request['kind'] == 'video' else directory / 'silence.wav'
         if request['kind'] == 'ident':
             subprocess.run(['ffmpeg','-nostdin','-y','-v','error','-f','lavfi','-i','anullsrc=r=44100:cl=stereo','-t',str(plan.segments[0].gen_frames/24),str(song)],check=True)
-        for index, seg in enumerate(plan.segments):
-            progress(f'Rendering musical passage {index+1} of {len(plan.segments)}', 35+int(45*index/len(plan.segments)))
+        def render_passage(seg, segment_id, seed):
             images = [(member['actor_id'],sheets[member['actor_id']]) for member in casting.cast_for(prepared['casting'],seg.segment_id)]
             if len(images) != seg.ref_image_slots: raise ValueError('Original cast/reference-slot contract disagrees; refusing render')
-            def render(segment_id, seed):
-                result = backend.render_segment(segment_id=segment_id,index=seg.index,slug=plan.slug,
-                    prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
-                    width=plan.width,height=plan.height,seed=seed,images=images,song=str(song),
-                    audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
-                video = result.get('video')
-                if not video or not Path(video).is_file() or assemble.probe_frames(video) < seg.trim_frames:
-                    raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')
-                return result
-            seed = request['seed']+seg.index
-            rendered[seg.segment_id] = render(seg.segment_id, seed)
+            result = backend.render_segment(segment_id=segment_id,index=seg.index,slug=plan.slug,
+                prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
+                width=plan.width,height=plan.height,seed=seed,images=images,song=str(song),
+                audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
+            video = result.get('video')
+            if not video or not Path(video).is_file() or assemble.probe_frames(video) < seg.trim_frames:
+                raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')
+            return result
+        for index, seg in enumerate(plan.segments):
+            progress(f'Rendering musical passage {index+1} of {len(plan.segments)}', 35+int(40*index/len(plan.segments)))
+            rendered[seg.segment_id] = render_passage(seg, seg.segment_id, request['seed']+seg.index)
             write_json(directory / 'renders.json', rendered)
-            if request['kind'] == 'video':
-                rendered[seg.segment_id] = check_passage_quality(directory, backend, request, seg, index, len(plan.segments),
-                                                                 rendered[seg.segment_id], seed, render, progress)
-                write_json(directory / 'renders.json', rendered)
+        if request['kind'] == 'video':
+            vision, vision_note = None, None
+            if vision_wanted:
+                from . import quality
+                from .vision_stage import VisionStage
+                uses_comfy = request['backend'] in ('local_h3', 'comfy_sdk_h3')
+                if uses_comfy and comfy_process is None:
+                    vision_note = ('Vision check skipped: ComfyUI was already running outside Mondo, so it was not '
+                                   'stopped to make room for the vision model. Close ComfyUI before starting to let Mondo manage it.')
+                else:
+                    vision = VisionStage(settings, directory, plan, quality.framing_requested(request.get('direction')),
+                                         comfy_process, start_comfy if uses_comfy else None, progress)
+            quality_completed = False
+            try:
+                # All passages exist before model swaps; vision retries share one further swap batch.
+                rendered = run_quality_stage(directory, backend, request, plan, rendered, render_passage, progress, vision)
+                quality_completed = True
+            finally:
+                if vision is not None:
+                    vision.close()
+                    vision_note = vision.note()
+                write_json(directory / 'vision.json', {'requested': True, 'ran': quality_completed and vision is not None and not vision_note,
+                                                       'note': vision_note} if vision_wanted else {'requested': False})
+            write_json(directory / 'renders.json', rendered)
     finally:
         backend.close_render()
     progress('Assembling frame-exact music video', 85)
@@ -332,6 +356,9 @@ def run(home, directory, *, resume=False):
             output=directory/'music-video.mp4';shutil.copy2(result['video'],output)
     from .media import duration
     warnings = [entry['warning'] for entry in read_json(directory / 'quality.json', {}).values() if entry.get('warning')]
+    vision_note = read_json(directory / 'vision.json', {}).get('note')
+    if vision_note:
+        warnings.insert(0, vision_note)
     write_json(directory/'output.json',{'file':output.name,'duration':duration(output),'kind':request['kind'],
                                        'title':request['title'] or 'Music video',
                                        **({'quality_warnings': warnings} if warnings else {})})
@@ -343,48 +370,139 @@ RETRY_SEED_OFFSET = 7919
 # Only these free local renderers may re-render a passage automatically; paid
 # renderers are never resubmitted, whatever their price card says.
 QUALITY_RETRY_BACKENDS = ('local_h3', 'comfy_sdk_h3')
+# Passing beats a measured failure, which beats an unmeasurable clip.
+_PIXEL = {'pass': 0, 'fail': 1}
+_VISION = {'fail': 1, 'error': 2}
 
 
-def check_passage_quality(directory, backend, request, seg, index, total, result, seed, render, progress):
-    """Inspect a rendered passage; re-render once on free local renderers; record the outcome.
+def _rank(attempt):
+    vision = attempt.get('vision') or {}
+    return (_PIXEL.get(attempt['status'], 2), _VISION.get(vision.get('status'), 0),
+            len(attempt['problems']) + len(vision.get('problems', [])))
 
-    Only a completed, structurally valid clip reaches this check: renderer errors,
-    including ambiguous SDK submissions, still stop the run before any retry. The
-    retry uses its own segment ID and a fixed seed, so SDK receipts stay exact and a
-    resumed run reaches the same decision and continues the same retry job.
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run_quality_stage(directory, backend, request, plan, rendered, render_passage, progress, vision=None):
+    """Check every rendered passage, then re-render failures once as a batch; record outcomes.
+
+    Only completed, structurally valid clips reach this stage: renderer errors,
+    including ambiguous SDK submissions, have already stopped the run. Each passage
+    has one retry budget, used only on free local renderers, under a deterministic
+    segment ID and seed, so SDK receipts stay exact. Every attempt records its clip
+    hash; a resumed run reuses saved verdicts for unchanged clips and recovers
+    spent retries instead of discarding them.
+
+    `vision`, when supplied, has `judge(items)` and `prepare_render()`. `judge`
+    receives [(segment_id, attempt, result)] and returns {attempt_segment_id:
+    {'status': 'pass'|'warn'|'fail'|'error', 'problems': [...], 'retry': bool}}.
+    It is called for the chosen attempts, then once more for vision retries, so a
+    production swaps renderer -> vision -> renderer -> vision at most.
+    `prepare_render()` runs before rendering vision retries.
     """
     from . import quality
-    starts = [shot.start_frame for shot in seg.shots]
     borders = not quality.framing_requested(request.get('direction'))
-    inspect = lambda video, segment_id, attempt_seed: dict(
-        quality.inspect_clip(video, seg.trim_frames, starts, borders), segment_id=segment_id, seed=attempt_seed)
-    attempts = [inspect(result['video'], seg.segment_id, seed)]
-    chosen, used, warning = result, attempts[0], None
-    if attempts[0]['status'] == 'fail':
-        free = request['backend'] in QUALITY_RETRY_BACKENDS and backend.cost_for(seg.duration_input) == 0
-        if free:
-            progress(f"Passage {index+1} of {total} failed the quality check ({'; '.join(attempts[0]['problems'])}). "
-                     'Re-rendering it once with a new seed on the free local renderer', 35+int(45*index/total))
-            retry_id, retry_seed = seg.segment_id + '-r1', seed + RETRY_SEED_OFFSET
-            retry = render(retry_id, retry_seed)
-            attempts.append(inspect(retry['video'], retry_id, retry_seed))
-            # Passing beats a measured failure, which beats an unmeasurable clip;
-            # then fewer problems. The original wins ties.
-            rank = lambda a: ({'pass': 0, 'fail': 1}.get(a['status'], 2), len(a['problems']))
-            if rank(attempts[1]) < rank(attempts[0]):
-                chosen, used = retry, attempts[1]
-        if used['status'] != 'pass':
-            details = list(used['problems']) + [a['error'] for a in attempts if a.get('error')]
-            warning = (f"Passage {index+1}: {'; '.join(details)}"
-                       + ('' if free else ' (not re-rendered automatically on this renderer)'))
-    elif attempts[0]['status'] == 'error':
-        warning = f"Passage {index+1}: {attempts[0]['error']}"
-    status = ('ok' if used['status'] == 'pass' and len(attempts) == 1 else
-              'retried_ok' if used['status'] == 'pass' else used['status'])
-    report = read_json(directory / 'quality.json', {})
-    report[seg.segment_id] = {'status': status, 'attempts': attempts, 'used': used['segment_id'],
-                              **({'warning': warning} if warning else {})}
-    write_json(directory / 'quality.json', report)
+    free = request['backend'] in QUALITY_RETRY_BACKENDS and all(
+        backend.cost_for(seg.duration_input) == 0 for seg in plan.segments)
+    by_id = {seg.segment_id: seg for seg in plan.segments}
+    total = len(plan.segments)
+    saved = read_json(directory / 'quality.json', {})
+    report, results = {}, {}
+
+    def inspect(seg, result, segment_id, seed):
+        digest = _sha256(result['video'])
+        previous = next((a for a in saved.get(seg.segment_id, {}).get('attempts', [])
+                         if a.get('segment_id') == segment_id and a.get('sha256') == digest
+                         and a.get('status') in ('pass', 'fail')), None)
+        if previous is not None:
+            return dict(previous)
+        found = quality.inspect_clip(result['video'], seg.trim_frames, [s.start_frame for s in seg.shots], borders)
+        return dict(found, segment_id=segment_id, seed=seed, sha256=digest)
+
+    def save():
+        write_json(directory / 'quality.json', report)
+
+    progress('Checking every passage for motion and framing', 76)
+    for seg in plan.segments:
+        attempt = inspect(seg, rendered[seg.segment_id], seg.segment_id, request['seed'] + seg.index)
+        report[seg.segment_id] = {'attempts': [attempt],
+                                  'retry_used': bool(saved.get(seg.segment_id, {}).get('retry_used'))}
+        results[seg.segment_id] = [rendered[seg.segment_id]]
+    save()
+
+    def retry(candidates, label):
+        for number, segment_id in enumerate(candidates):
+            seg, entry = by_id[segment_id], report[segment_id]
+            progress(f"Re-rendering passage {seg.index+1} of {total} once with a new seed ({label}; "
+                     f"{number+1} of {len(candidates)})", 78)
+            retry_id, retry_seed = segment_id + '-r1', entry['attempts'][0]['seed'] + RETRY_SEED_OFFSET
+            entry['retry_used'] = True
+            save()
+            result = render_passage(seg, retry_id, retry_seed)
+            entry['attempts'].append(inspect(seg, result, retry_id, retry_seed))
+            results[segment_id].append(result)
+            save()
+
+    def best(segment_id):
+        attempts = report[segment_id]['attempts']
+        # The original wins ties; min returns the first of equal ranks.
+        return min(range(len(attempts)), key=lambda i: _rank(attempts[i]))
+
+    if free:
+        # A crash after a retry was spent recovers it through its receipt instead of skipping it.
+        recover = [s for s, e in report.items() if e['retry_used']]
+        failing = [s for s, e in report.items() if e['attempts'][0]['status'] == 'fail' and not e['retry_used']]
+        if recover:
+            retry(recover, 'recovering an earlier retry')
+        if failing:
+            # Pixel failures are retried before any vision swap, while the renderer's models are loaded.
+            retry(failing, 'motion/framing check')
+
+    def judge(segment_ids, which):
+        items = [(s, report[s]['attempts'][i], results[s][i]) for s in segment_ids for i in which(s)]
+        pending = [item for item in items if not item[1].get('vision')]
+        verdicts = vision.judge(pending) if pending else {}
+        for segment_id, attempt, _ in pending:
+            attempt['vision'] = verdicts.get(attempt['segment_id']) or {
+                'status': 'error', 'problems': ['vision check returned no verdict'], 'retry': False}
+        save()
+
+    if vision is not None:
+        progress('Vision check of every passage', 80)
+        judge(list(report), lambda s: [best(s)])
+        candidates = [s for s, e in report.items() if not e['retry_used'] and
+                      (e['attempts'][best(s)].get('vision') or {}).get('retry')]
+        if free and candidates:
+            vision.prepare_render()
+            retry(candidates, 'vision check')
+            judge(candidates, lambda s: [len(report[s]['attempts']) - 1])
+
+    chosen = {}
+    for segment_id, entry in report.items():
+        index, pick = by_id[segment_id].index, best(segment_id)
+        used = entry['attempts'][pick]
+        chosen[segment_id] = results[segment_id][pick]
+        entry['used'] = used['segment_id']
+        vision_verdict = used.get('vision') or {}
+        details = ([] if used['status'] == 'pass' else list(used['problems']))
+        details += [a['error'] for a in entry['attempts'] if a.get('error')]
+        if vision_verdict.get('status') in ('warn', 'fail', 'error'):
+            details += ['vision: ' + p for p in vision_verdict.get('problems', [])]
+        clean = used['status'] == 'pass' and vision_verdict.get('status') not in ('fail', 'error')
+        entry['status'] = ('ok' if clean and pick == 0 else 'retried_ok' if clean else
+                           used['status'] if used['status'] != 'pass' else 'vision_' + vision_verdict['status'])
+        entry.pop('warning', None)
+        if details:
+            entry['warning'] = (f"Passage {index+1}: {'; '.join(details)}"
+                                + ('' if free or used['status'] == 'pass' else
+                                   ' (not re-rendered automatically on this renderer)'))
+    save()
     return chosen
 
 

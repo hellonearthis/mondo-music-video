@@ -1,4 +1,4 @@
-# Comfy SDK H3 — 1.0.11
+# Comfy SDK H3 — 1.6.0
 
 Mondo can run its existing H3 workflow through the official Comfy Python SDK
 and the official Comfy API v2 proxy. Select **H3 / Comfy SDK (local proxy)** in
@@ -48,8 +48,18 @@ forwards media to your ComfyUI installation.
 This release accepts only loopback proxy URLs. It does not connect to Comfy
 Cloud, managed deployments or Router. The SDK renderer has no platform API
 charge; a separately configured API writer still appears in the production
-quote and requires consent. Start both ComfyUI and the proxy yourself; Mondo
-does not take ownership of those services.
+quote and requires consent. With the vision check off, start both ComfyUI and
+the proxy yourself.
+
+With **Vision quality check (slower)** enabled (`vision_quality_check: true`,
+off by default), configure `comfy_launch` and close ComfyUI before preview.
+Mondo launches ComfyUI even on the SDK path, then stops its own ComfyUI process
+to load the local vision-capable writer model with mmproj. If a vision-triggered
+free retry is needed, it restarts ComfyUI and then judges the retry batch.
+The proxy on 8189 can stay running and remains operator-managed. External
+ComfyUI is never stopped; preview rejects it, and a startup race produces a
+visible skip note. This adds model loading and judging time. Vision startup
+failure leaves pixel checks active and reports a warning. No paid retry occurs.
 
 ## Workflow and environment
 
@@ -97,6 +107,12 @@ than retried. Keep the receipt; do not delete it to force generation.
 
 For a known running/completed job or a failed download, select **Review resume**
 in Mondo's operation controls, review the new preview, accept it and start.
+A validated local completion can now recover even when the proxy's job expired,
+without querying or submitting to the proxy. This requires matching input and
+receipt bindings, confined local paths, a matching media hash, decodable media
+and enough frames. Invalid local completions fall back to the receipt recovery
+rules below.
+
 Original media, settings, workflow and actor permissions are rechecked. The
 writer and Laya are not rerun: recovery uses the already validated prompts.
 Existing job IDs are polled/downloaded; only passages never submitted may start
@@ -152,7 +168,8 @@ that job, and the final video plays with the original song and planned duration.
 Save the run's receipt and workflow plus a screen recording of the SDK renderer
 selection, proxy job and final output. Keep media and private state outside Git.
 
-Real H3/GPU execution through this new path has **not** been verified. Automated
+Earlier SDK GPU runs are recorded in [verification](VERIFICATION.md). The 1.6.0
+vision swap/retry path still needs a deliberate operator GPU check; automated
 transport/assembly checks do not establish model quality or GPU compatibility.
 
 The [Comfy announcement](https://blog.comfy.org/p/comfy-api-is-live-deploy-comfyui)

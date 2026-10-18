@@ -58,6 +58,19 @@ and renderer configuration before starting; model failures stop production.
    user; free local renderers already retried once, and paid work needs consent. On failure, inspect the operation log and request IDs. Never
    automatically resubmit paid work after a timeout or ambiguous submission.
 
+For the optional slower batched vision check, set `vision_quality_check: true`
+in the video preview request (default `false`). Explain the extra model loading
+and judging time. It needs a local vision-capable `writer_launch` with mmproj;
+this is separate from API vision for style harvesting. On direct H3 and SDK H3,
+configure `comfy_launch` and ask the operator to close ComfyUI before preview so
+Mondo can manage its own service. The SDK proxy can remain running. Mondo only
+stops/restarts ComfyUI it launched. External ComfyUI causes a skip note if it
+appears after preview. Inspect and report `quality_warnings`, including vision
+startup failures/skips; those do not mean vision passed. Vision mostly warns;
+repeated unrequested framing devices can use the passage's single free local
+retry budget, shared with pixel checks. Pixels decide motion. Never start paid
+re-renders without user consent.
+
 A preview expires after ten minutes and becomes invalid if relevant inputs or
 settings change. Request a new preview and reassess any paid authorization rather
 than forging a quote or treating an expired one as a retry instruction.

@@ -143,30 +143,123 @@ class ProductionRetryTests(unittest.TestCase):
         listed = self.fixture.client.get("/api/outputs").json()[0]
         self.assertIn("near-still", listed["quality_warnings"][0])
 
-    def test_unmeasurable_retry_never_replaces_a_measured_attempt(self):
+    def stage(self, clips, retry_clips, vision=None, backend_name="local_h3", cost=0.0, inspect=None, directory=None):
+        """Run the batched stage on two fake passages; returns (chosen stems, report, render calls)."""
         from mmv import worker
-        real, calls = quality.inspect_clip, []
+        calls = []
+        temp = None if directory else tempfile.TemporaryDirectory()
+        directory = Path(directory or temp.name)
+        try:
+            paths = {}
+            for name, data in {"good": self.good, "frozen": self.frozen}.items():
+                paths[name] = directory / (name + ".mp4")
+                paths[name].write_bytes(data)
+            segs = [types.SimpleNamespace(segment_id=f"seg00{i}", index=i, trim_frames=96, duration_input=4.0,
+                                          shots=[types.SimpleNamespace(start_frame=0)]) for i in range(2)]
+            rendered = {seg.segment_id: {"video": str(paths[clips[i]])} for i, seg in enumerate(segs)}
+            def render_passage(seg, segment_id, seed):
+                calls.append((segment_id, seed))
+                return {"video": str(paths[retry_clips[seg.index]])}
+            backend = types.SimpleNamespace(cost_for=lambda seconds: cost)
+            context = patch("mmv.quality.inspect_clip", inspect) if inspect else patch.dict(os.environ, {})
+            with context:
+                chosen = worker.run_quality_stage(directory, backend, {"backend": backend_name, "direction": "", "seed": 10},
+                                                  types.SimpleNamespace(segments=segs), rendered, render_passage,
+                                                  lambda *a: None, vision)
+            report = read_json(directory / "quality.json")
+            return {k: Path(v["video"]).stem for k, v in chosen.items()}, report, calls
+        finally:
+            if temp:
+                temp.cleanup()
 
+    @property
+    def good(self):
+        return public_fixtures.MockService.video
+
+    class FakeVision:
+        def __init__(self, verdicts):
+            self.verdicts, self.events = verdicts, []
+
+        def judge(self, items):
+            self.events.append(("judge", [attempt["segment_id"] for _, attempt, _ in items]))
+            return {attempt["segment_id"]: self.verdicts.get(attempt["segment_id"], {"status": "pass", "problems": [], "retry": False})
+                    for _, attempt, _ in items}
+
+        def prepare_render(self):
+            self.events.append(("prepare_render",))
+
+    def test_batch_retries_every_failure_after_all_checks(self):
+        used, report, calls = self.stage(["frozen", "frozen"], ["good", "frozen"])
+        self.assertEqual(calls, [("seg000-r1", 10 + 7919), ("seg001-r1", 11 + 7919)])
+        self.assertEqual(used, {"seg000": "good", "seg001": "frozen"})
+        self.assertEqual((report["seg000"]["status"], report["seg001"]["status"]), ("retried_ok", "fail"))
+        self.assertEqual(report["seg001"]["used"], "seg001")
+        self.assertIn("near-still", report["seg001"]["warning"])
+
+    def test_vision_rejected_original_is_replaced_by_a_judged_retry(self):
+        fail = {"status": "fail", "problems": ["projected film frame in 3 frames"], "retry": True}
+        vision = self.FakeVision({"seg001": fail})
+        used, report, calls = self.stage(["frozen", "good"], ["good", "good"], vision=vision)
+        # Pixel retry first (seg000), then one swap back for the vision retry (seg001), then its judgment.
+        self.assertEqual([c[0] for c in calls], ["seg000-r1", "seg001-r1"])
+        self.assertEqual(vision.events, [("judge", ["seg000-r1", "seg001"]), ("prepare_render",), ("judge", ["seg001-r1"])])
+        self.assertEqual(used, {"seg000": "good", "seg001": "good"})
+        self.assertEqual((report["seg001"]["used"], report["seg001"]["status"]), ("seg001-r1", "retried_ok"))
+        self.assertNotIn("warning", report["seg001"])
+
+    def test_vision_retry_that_is_also_rejected_keeps_the_original(self):
+        fail = {"status": "fail", "problems": ["projected film frame"], "retry": True}
+        vision = self.FakeVision({"seg001": fail, "seg001-r1": dict(fail, problems=["projected film frame", "text"])})
+        used, report, calls = self.stage(["good", "good"], ["good", "good"], vision=vision)
+        self.assertEqual(report["seg001"]["used"], "seg001")
+        self.assertEqual(report["seg001"]["status"], "vision_fail")
+        self.assertIn("vision: projected film frame", report["seg001"]["warning"])
+
+    def test_vision_warnings_never_retry_and_paid_renderers_skip_vision_retries(self):
+        warn = {"status": "warn", "problems": ["possible distortion"], "retry": False}
+        vision = self.FakeVision({"seg000": warn})
+        used, report, calls = self.stage(["good", "good"], ["good", "good"], vision=vision)
+        self.assertEqual(calls, [])
+        self.assertEqual(report["seg000"]["status"], "ok")
+        self.assertIn("vision: possible distortion", report["seg000"]["warning"])
+        fail = {"status": "fail", "problems": ["border"], "retry": True}
+        used, report, calls = self.stage(["good", "good"], ["good", "good"], vision=self.FakeVision({"seg000": fail}),
+                                         backend_name="wavespeed", cost=0.4)
+        self.assertEqual(calls, [])
+
+    def test_resume_recovers_spent_retries_and_reuses_saved_verdicts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            fail = {"status": "fail", "problems": ["projected film frame"], "retry": True}
+            first = self.FakeVision({"seg001": fail})
+            self.stage(["frozen", "good"], ["good", "good"], vision=first, directory=temp)
+            real, count = quality.inspect_clip, []
+            def flaky(video, *args, **kwargs):
+                count.append(video)
+                return {"status": "error", "problems": [], "error": "decoder busy"}
+            again = self.FakeVision({"seg001": fail})
+            used, report, calls = self.stage(["frozen", "good"], ["good", "good"], vision=again, inspect=flaky, directory=temp)
+        # Unchanged clips reuse saved measurements and verdicts: no new inspection or vision call.
+        self.assertEqual(count, [])
+        self.assertEqual([c[0] for c in calls], ["seg000-r1", "seg001-r1"])
+        self.assertEqual(again.events, [])
+        self.assertEqual(used, {"seg000": "good", "seg001": "good"})
+
+    def test_paid_or_unlisted_renderers_never_retry(self):
+        for name, cost in (("wavespeed", 0.4), ("seedance_2", 0.0), ("local_h3", 0.7)):
+            used, report, calls = self.stage(["frozen", "good"], ["good", "good"], backend_name=name, cost=cost)
+            self.assertEqual(calls, [], name)
+            self.assertIn("not re-rendered automatically", report["seg000"]["warning"])
+
+    def test_unmeasurable_retry_never_replaces_a_measured_attempt(self):
+        real, count = quality.inspect_clip, []
         def flaky(video, *args, **kwargs):
-            calls.append(video)
-            return real(video, *args, **kwargs) if len(calls) == 1 else {
+            count.append(video)
+            return real(video, *args, **kwargs) if len(count) <= 2 else {
                 "status": "error", "problems": [], "error": "could not inspect clip: decoder timeout"}
-        seg = types.SimpleNamespace(segment_id="seg000", trim_frames=96, duration_input=4.0,
-                                    shots=[types.SimpleNamespace(start_frame=0)])
-        backend = types.SimpleNamespace(cost_for=lambda seconds: 0.0)
-        with tempfile.TemporaryDirectory() as temp, patch("mmv.quality.inspect_clip", flaky):
-            directory = Path(temp)
-            frozen = directory / "frozen.mp4"
-            frozen.write_bytes(self.frozen)
-            first = {"video": str(frozen)}
-            chosen = worker.check_passage_quality(
-                directory, backend, {"backend": "local_h3", "direction": ""}, seg, 0, 1, first, 10,
-                lambda segment_id, seed: {"video": str(frozen)}, lambda *args: None)
-            report = read_json(directory / "quality.json")["seg000"]
-        self.assertIs(chosen, first)
-        self.assertEqual((report["used"], report["status"]), ("seg000", "fail"))
-        self.assertIn("near-still", report["warning"])
-        self.assertIn("decoder timeout", report["warning"])
+        used, report, calls = self.stage(["frozen", "good"], ["good", "good"], inspect=flaky)
+        self.assertEqual(used["seg000"], "frozen")
+        self.assertEqual((report["seg000"]["used"], report["seg000"]["status"]), ("seg000", "fail"))
+        self.assertIn("decoder timeout", report["seg000"]["warning"])
 
     def test_clean_render_is_not_resubmitted(self):
         run, report, output = self.produce()
