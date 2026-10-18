@@ -1421,8 +1421,13 @@ async function initialize() {
         btn.setAttribute("aria-busy", "true");
         btn.innerHTML = 'Starting production… <span class="spinner" aria-hidden="true"></span>';
       }
+      sessionLogs.length = 0;
+      if ($("#operation-log")) {
+        $("#operation-log").textContent = "Starting production…\n";
+      }
       logSession(`Starting production for quote '${currentQuote.id}'`);
-      await json("/api/start", {quote_id: currentQuote.id, consent: true});
+      const started = await json("/api/start", {quote_id: currentQuote.id, consent: true});
+      if (started && started.id) currentRun = started.id;
       $("#preview-dialog").close();
     } finally {
       if (btn) {

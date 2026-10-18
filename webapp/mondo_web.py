@@ -1000,6 +1000,13 @@ def create_app(home=None, *, test_hosts=False):
                                    "estimate_usd": 0 if quoted.get("resume_run") else prepared["estimate"], "quote_id": value.quote_id,
                                    "fingerprint": quoted["fingerprint"]}
             quotes.pop(value.quote_id)
+            write_json(store.home / "log_cleared.json", {"cleared_at": time.time()})
+            studio_log = store.home / "studio.log"
+            if studio_log.exists():
+                try:
+                    studio_log.write_text("", encoding="utf-8")
+                except Exception:
+                    pass
             log_studio(store, f"Starting production for kind='{request.get('kind', 'video')}'")
             return jobs.start(request["kind"], lambda context: production.produce(
                 store, request, prepared, context, resume=bool(quoted.get("resume_run"))),
@@ -1056,19 +1063,25 @@ def create_app(home=None, *, test_hosts=False):
         cleared_info = read_json(store.home / "log_cleared.json", {})
         cleared_at = float(cleared_info.get("cleared_at", 0))
 
+        active_id = None
+        try:
+            active_id = jobs.status().get("id")
+        except Exception:
+            pass
+
         sections = []
         if run_id == "latest" or not run_id:
             runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                    if p.stat().st_mtime >= cleared_at]
+                    if p.name == active_id or p.stat().st_mtime >= cleared_at]
             directory = runs[0] if runs else None
         else:
             directory = store.home / "runs" / identifier(run_id)
-            if not directory.exists() or directory.stat().st_mtime < cleared_at:
+            if not directory.exists() or (directory.name != active_id and directory.stat().st_mtime < cleared_at):
                 runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                        if p.stat().st_mtime >= cleared_at]
+                        if p.name == active_id or p.stat().st_mtime >= cleared_at]
                 directory = runs[0] if runs else None
 
-        if directory and directory.is_dir() and directory.stat().st_mtime >= cleared_at:
+        if directory and directory.is_dir() and (directory.name == active_id or directory.stat().st_mtime >= cleared_at):
             path = directory / "operation.log"
             if path.exists():
                 with path.open("rb") as stream:
