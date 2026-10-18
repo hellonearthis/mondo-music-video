@@ -117,7 +117,7 @@
 <label data-tooltip="How cast members are distributed across sequential montage passages" title="How cast members are distributed across sequential montage passages">Cast assignment<select name="casting_policy" data-tooltip="Random selection, sequential rotation, or hold across entire musical section" title="Random selection, sequential rotation, or hold across entire musical section"><option value="random">Seeded random</option><option value="rotate">Rotate</option><option value="section">Hold through musical section</option></select></label>
 <label data-tooltip="Controls whether shots feature solo actors or ensemble combinations" title="Controls whether shots feature solo actors or ensemble combinations">Ensemble<select name="ensemble_mode" data-tooltip="Solo actors only, always combined ensemble, or mixed balance" title="Solo actors only, always combined ensemble, or mixed balance"><option value="off">One actor at a time</option><option value="mixed">Mixed</option><option value="always">Always</option></select></label>
 <label data-tooltip="Maximum number of cast actors appearing simultaneously in a single passage" title="Maximum number of cast actors appearing simultaneously in a single passage">Actors on screen<input name="on_screen" type="number" min="1" max="9" value="1" data-tooltip="Maximum simultaneous actors in frame" title="Maximum simultaneous actors in frame"></label>
-<label data-tooltip="Facial movement policy: suppresses lip flap during vocal sections (skipped for instrumental tracks)" title="Facial movement policy: suppresses lip flap during vocal sections (skipped for instrumental tracks)">Facial movement<select name="silent_mouths" data-tooltip="Silent mouths avoids out-of-sync lip flap during vocal sections; natural allows full expression (skipped for instrumental tracks)" title="Silent mouths avoids out-of-sync lip flap during vocal sections; natural allows full expression (skipped for instrumental tracks)"><option value="true">Silent mouths (when lyrics present)</option><option value="false">Natural expressions</option></select></label><div class="cache-row"><label class="check" data-tooltip="Resume previously written and validated passage prompts instead of regenerating from scratch" title="Resume previously written and validated passage prompts instead of regenerating from scratch"><input name="reuse_prompts" type="checkbox" checked> Reuse validated passage prompts</label><button type="button" id="clear-cache" class="quiet" data-tooltip="Delete all cached passage prompts from disk so writer regenerates fresh" title="Delete all cached passage prompts from disk so writer regenerates fresh">Clear prompt cache</button></div><label class="check" data-tooltip="After rendering, your local Qwen vision model inspects sampled frames for borders, framing devices and visual defects. Takes several minutes longer and restarts ComfyUI, which Mondo must start itself. Free local passages may be re-rendered once. Catches more problems, but can miss defects or flag intentional effects." title="After rendering, your local Qwen vision model inspects sampled frames for borders, framing devices and visual defects. Takes several minutes longer and restarts ComfyUI, which Mondo must start itself. Free local passages may be re-rendered once. Catches more problems, but can miss defects or flag intentional effects."><input name="vision_quality_check" type="checkbox"> Vision quality check <small>(slower)</small></label><label data-tooltip="Attach an animated ident clip as the opening title card" title="Attach an animated ident clip as the opening title card">Opening ident<select name="start_ident" class="ident-select" data-tooltip="Choose a previously rendered ident to precede the music video" title="Choose a previously rendered ident to precede the music video"><option value="">None</option></select></label><label data-tooltip="Attach an animated ident clip as the closing credits" title="Attach an animated ident clip as the closing credits">Closing ident<select name="end_ident" class="ident-select" data-tooltip="Choose a previously rendered ident to follow the music video" title="Choose a previously rendered ident to follow the music video"><option value="">None</option></select></label><div class="ratings" data-tooltip="Open Actor Protocol content rating ceiling for this production" title="Open Actor Protocol content rating ceiling for this production"></div><label>Visual vocabulary<select name="vocabulary_profile"><option value="full">Full vocabulary (current default)</option><option value="reduced_flashing">Reduced flash/strobe cues (hellonearthis)</option></select></label><small>The reduced profile omits selected flash and strobe cues from the planner. Generated footage still needs review.</small></details>
+<label data-tooltip="Facial movement policy: suppresses lip flap during vocal sections (skipped for instrumental tracks)" title="Facial movement policy: suppresses lip flap during vocal sections (skipped for instrumental tracks)">Facial movement<select name="silent_mouths" data-tooltip="Silent mouths avoids out-of-sync lip flap during vocal sections; natural allows full expression (skipped for instrumental tracks)" title="Silent mouths avoids out-of-sync lip flap during vocal sections; natural allows full expression (skipped for instrumental tracks)"><option value="true">Silent mouths (when lyrics present)</option><option value="false">Natural expressions</option></select></label><div class="cache-row"><label class="check" data-tooltip="Resume previously written and validated passage prompts instead of regenerating from scratch" title="Resume previously written and validated passage prompts instead of regenerating from scratch"><input name="reuse_prompts" type="checkbox" checked> Reuse validated passage prompts</label><button type="button" id="clear-cache" class="quiet" data-tooltip="Delete all cached passage prompts from disk so writer regenerates fresh" title="Delete all cached passage prompts from disk so writer regenerates fresh">Clear prompt cache</button></div><label class="check" data-tooltip="After rendering, your local Qwen vision model inspects sampled frames for borders, framing devices and visual defects. Takes several minutes longer and restarts ComfyUI, which Mondo must start itself. Free local passages may be re-rendered once. Catches more problems, but can miss defects or flag intentional effects." title="After rendering, your local Qwen vision model inspects sampled frames for borders, framing devices and visual defects. Takes several minutes longer and restarts ComfyUI, which Mondo must start itself. Free local passages may be re-rendered once. Catches more problems, but can miss defects or flag intentional effects."><input name="vision_quality_check" type="checkbox"> Vision quality check <small>(slower)</small></label><label data-tooltip="Attach an animated ident clip as the opening title card" title="Attach an animated ident clip as the opening title card">Opening ident<select name="start_ident" class="ident-select" data-tooltip="Choose a previously rendered ident to precede the music video" title="Choose a previously rendered ident to precede the music video"><option value="">None</option></select></label><label data-tooltip="Attach an animated ident clip as the closing credits" title="Attach an animated ident clip as the closing credits">Closing ident<select name="end_ident" class="ident-select" data-tooltip="Choose a previously rendered ident to follow the music video" title="Choose a previously rendered ident to follow the music video"><option value="">None</option></select></label><div class="ratings" data-tooltip="Open Actor Protocol content rating ceiling for this production" title="Open Actor Protocol content rating ceiling for this production"></div><div class="vocab-row"><label data-tooltip="Visual vocabulary rotation pools used by the music-video planner" title="Visual vocabulary rotation pools used by the music-video planner">Visual vocabulary<select name="vocabulary_profile" id="vocab-profile-select"><option value="full">Full vocabulary (current default)</option><option value="reduced_flashing">Reduced flash/strobe cues (hellonearthis)</option></select></label><button type="button" id="open-vocab-dialog" class="secondary" data-tooltip="Customize vocabulary: filter built-in entries, add your own keywords, or save reusable presets">Customize vocabulary… <span id="vocab-custom-badge" class="vocab-badge" hidden>Customized</span></button></div><small>Select a visual vocabulary preset or customize category pools directly. The reduced profile omits selected flash and strobe cues.</small></details>
   <div class="action-bar"><button class="primary operation-action" type="submit" data-tooltip="Analyze audio, generate shot plan, and preview costs before rendering" title="Analyze audio, generate shot plan, and preview costs before rendering">Preview production <span>↗</span></button><small>Review the plan and any estimated charges before generation.</small></div>
 </div></div></form></section>
 
@@ -156,6 +156,80 @@
 <h3>Vision and service URLs</h3><p>Style Harvest needs a vision-capable service. If your model needs a projector, load its matching <code>--mmproj</code> file. Image-token options vary by model and llama.cpp version. Use the OpenAI-compatible base URL, usually ending in <code>/v1</code>; MMV appends <code>/chat/completions</code> for generation and <code>/models</code> for health checks.</p>
 <p>The Windows launcher accepts <code>-ContextSize</code> to choose a context size. This does not replace the current model. Check the service log for startup errors before increasing memory settings.</p>
 <button type="button" class="secondary close-llama-dialog">Close guide</button>
+</dialog>
+<dialog id="vocabulary-dialog" class="vocab-dialog" data-tooltip="Customize visual vocabulary pools for this production or save presets" title="Customize visual vocabulary pools for this production or save presets">
+  <form method="dialog"><button class="dialog-close" aria-label="Close vocabulary customizer" data-tooltip="Dismiss vocabulary dialog" title="Dismiss vocabulary dialog">×</button></form>
+  <div class="eyebrow">VISUAL VOCABULARY ENGINE</div>
+  <h2>Customize Vocabulary</h2>
+  <p class="intro">Fine-tune the rotation pools that the Mondo music-video planner samples for camera, lighting, settings, and props. Filter built-in keywords, add custom terms, or replace categories completely.</p>
+  
+  <div class="vocab-dialog-header">
+    <div class="vocab-preset-loader">
+      <label>Load from preset or profile:
+        <select id="vocab-dialog-preset-select">
+          <option value="full">Full vocabulary (Built-in)</option>
+          <option value="reduced_flashing">Reduced flash/strobe cues (hellonearthis)</option>
+        </select>
+      </label>
+      <button type="button" id="vocab-load-preset-btn" class="secondary">Load Preset</button>
+      <button type="button" id="vocab-delete-preset-btn" class="quiet operation-action" style="color:var(--muted);display:none;">Delete preset</button>
+    </div>
+  </div>
+
+  <div class="vocab-tabs-container">
+    <div class="vocab-category-tabs" id="vocab-category-tabs">
+      <!-- Tabs generated via JavaScript -->
+    </div>
+  </div>
+
+  <div class="vocab-editor-pane" id="vocab-editor-pane">
+    <div class="vocab-pane-header">
+      <div class="vocab-pane-title-group">
+        <h3 id="vocab-active-category-title">Settings</h3>
+        <span id="vocab-active-count-badge" class="vocab-count-badge">0 active</span>
+      </div>
+      <div class="vocab-mode-group">
+        <label>Mode:
+          <select id="vocab-category-mode">
+            <option value="append">Append / Filter Built-in Pool</option>
+            <option value="replace">Use Only My Custom Entries</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="vocab-builtin-section" id="vocab-builtin-section">
+      <div class="vocab-filter-toolbar">
+        <input type="text" id="vocab-search-input" placeholder="Search entries in this category..." autocomplete="off">
+        <div class="vocab-filter-buttons">
+          <button type="button" id="vocab-select-all-btn" class="quiet">Select all</button>
+          <button type="button" id="vocab-clear-all-btn" class="quiet">Clear all</button>
+          <button type="button" id="vocab-reset-cat-btn" class="quiet">Reset category</button>
+        </div>
+      </div>
+      <div class="vocab-checkbox-grid" id="vocab-checkbox-grid">
+        <!-- Checkboxes generated dynamically -->
+      </div>
+    </div>
+
+    <div class="vocab-custom-section">
+      <label>Add custom entries (one per line, up to 240 chars each):
+        <textarea id="vocab-custom-textarea" rows="4" placeholder="e.g. brutalist concrete amphitheater&#10;abandoned neon bowling alley&#10;misty pine grove"></textarea>
+      </label>
+    </div>
+  </div>
+
+  <div class="vocab-dialog-footer">
+    <div class="vocab-save-preset-box">
+      <input type="text" id="vocab-preset-id" placeholder="Preset ID (e.g. vintage_indie)" pattern="[a-z0-9][a-z0-9_-]{0,63}">
+      <input type="text" id="vocab-preset-name" placeholder="Display name (e.g. Vintage Indie)">
+      <button type="button" id="vocab-save-preset-btn" class="secondary">Save as Preset</button>
+    </div>
+    <div class="vocab-dialog-actions">
+      <button type="button" id="vocab-reset-all-btn" class="quiet">Reset all customizations</button>
+      <button type="button" id="vocab-apply-btn" class="primary">Apply to Current Video</button>
+    </div>
+  </div>
 </dialog>
 <div id="studio-tooltip" class="studio-tooltip" role="tooltip" hidden></div>
 </body></html>

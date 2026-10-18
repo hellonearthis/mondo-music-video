@@ -17,16 +17,92 @@ from .storage import identifier, inside, read_json, write_json
 
 ENGINE = Path(__file__).parent / 'engine'
 
+VOCAB_TABLES = (
+    'settings',
+    'subject_types',
+    'mechanisms',
+    'lighting',
+    'tonal_registers',
+    'costume',
+    'footage_anchors',
+    'practical_effects',
+    'shot_scales',
+)
 
-def load_vocabulary(profile="full"):
-    vocab = read_json(ENGINE / 'config/vocab.json')
-    if profile == "full":
+
+def apply_vocabulary_overrides(vocab, overrides):
+    if not overrides:
         return vocab
-    profiles = read_json(ENGINE / 'config/vocabulary_profiles.json')
-    if profile not in profiles:
-        raise ValueError('Unknown visual vocabulary profile')
-    for key, excluded in profiles[profile]['exclude'].items():
-        vocab[key] = [value for value in vocab[key] if value not in excluded]
+    if not isinstance(overrides, dict):
+        raise ValueError('Vocabulary overrides must be a dictionary of categories')
+    for key, spec in overrides.items():
+        if key not in VOCAB_TABLES:
+            raise ValueError(f"Unknown vocabulary category '{key}'")
+        if not isinstance(spec, dict):
+            raise ValueError(f"Invalid vocabulary override for '{key}'")
+        mode = spec.get('mode', 'append')
+        if mode not in ('append', 'replace'):
+            raise ValueError(f"Vocabulary override mode for '{key}' must be 'append' or 'replace'")
+        raw_add = spec.get('add', [])
+        raw_exclude = spec.get('exclude', [])
+        if not isinstance(raw_add, list) or not isinstance(raw_exclude, list):
+            raise ValueError(f"Vocabulary 'add' and 'exclude' lists for '{key}' must be arrays")
+        added = []
+        seen_add = set()
+        for item in raw_add:
+            if not isinstance(item, str):
+                raise ValueError(f"Vocabulary entries in '{key}' must be strings")
+            cleaned = item.strip()
+            if not cleaned:
+                continue
+            if len(cleaned) > 240:
+                raise ValueError(f"Vocabulary entry in '{key}' exceeds 240 characters")
+            if cleaned not in seen_add:
+                seen_add.add(cleaned)
+                added.append(cleaned)
+        excluded = {item.strip() for item in raw_exclude if isinstance(item, str) and item.strip()}
+        if mode == 'replace':
+            pool = [item for item in added if item not in excluded]
+        else:
+            pool = [value for value in vocab.get(key, []) if value not in excluded]
+            existing = set(pool)
+            for item in added:
+                if item not in existing and item not in excluded:
+                    existing.add(item)
+                    pool.append(item)
+        if not pool:
+            raise ValueError(f"Vocabulary category '{key}' cannot be empty; keep or add at least one entry")
+        vocab[key] = pool
+    return vocab
+
+
+def load_vocabulary(profile="full", store=None, custom=None):
+    vocab = read_json(ENGINE / 'config/vocab.json')
+    if profile and profile != "full":
+        profiles = read_json(ENGINE / 'config/vocabulary_profiles.json')
+        if profile in profiles:
+            for key, excluded in profiles[profile].get('exclude', {}).items():
+                if key in vocab and isinstance(vocab[key], list):
+                    excluded_set = set(excluded)
+                    vocab[key] = [value for value in vocab[key] if value not in excluded_set]
+        elif store is not None:
+            preset = store.vocabulary(profile)
+            base_profile = preset.get('base_profile', 'full')
+            if base_profile and base_profile != 'full':
+                if base_profile not in profiles:
+                    raise ValueError('Unknown base visual vocabulary profile')
+                for key, excluded in profiles[base_profile].get('exclude', {}).items():
+                    if key in vocab and isinstance(vocab[key], list):
+                        excluded_set = set(excluded)
+                        vocab[key] = [value for value in vocab[key] if value not in excluded_set]
+            apply_vocabulary_overrides(vocab, preset.get('tables', {}))
+        else:
+            raise ValueError('Unknown visual vocabulary profile')
+    if custom:
+        apply_vocabulary_overrides(vocab, custom)
+    for key in VOCAB_TABLES:
+        if not vocab.get(key):
+            raise ValueError(f"Vocabulary category '{key}' cannot be empty; keep or add at least one entry")
     return vocab
 
 
@@ -171,7 +247,7 @@ def prepare(store, request):
     aspect_w, aspect_h = map(int, request['aspect'].split(':'))
     width, height = backend.plan_resolution(aspect_w, aspect_h, megapixels=request['megapixels'],
                                             resolution=request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None)
-    vocab = load_vocabulary(request.get('vocabulary_profile', 'full'))
+    vocab = load_vocabulary(request.get('vocabulary_profile', 'full'), store=store, custom=request.get('custom_vocabulary'))
     roster = roster_for(store, request, refs)
     p = plan(score, width=width, height=height, vocab=vocab, seed=request['seed'], slug='music-video',
              bars_per_phrase=request['bars_per_phrase'], ref_policy=request['ref_policy'],

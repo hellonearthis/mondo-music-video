@@ -1,6 +1,16 @@
 # Releases
 
-## 1.6.3 — LLM & Vision token reductions and single-pass frame extraction
+## 1.6.4 — Visual vocabulary controls, custom presets & documentation guide
+
+- **Visual Vocabulary Documentation Guide**:
+  - Published [`docs/VOCABULARY_GUIDE.md`](docs/VOCABULARY_GUIDE.md) detailing the role of `mmv/engine/config/vocab.json`, `VocabSampler` sampling weights, montage assignments, and customization architecture.
+- **Three-Part Vocabulary Customization**:
+  - **Per-Video Overrides**: Production requests support `custom_vocabulary` overrides (`mode: "append" | "replace"`, `add`, `exclude`) per category pool, persisted in project draft state and quoted productions.
+  - **Reusable Presets**: Added `/api/vocabularies` endpoint (`POST`, `GET`, `DELETE`) storing user presets in `MMV_HOME/vocabularies/<id>.json`, selectable directly from the Visual vocabulary dropdown alongside built-in `full` and `reduced_flashing`.
+  - **Interactive Web UI Customizer**: Added a **Customize vocabulary...** dialog modal in the Web UI with category tabs (`settings`, `lighting`, `mechanisms`, `costume`, `tonal_registers`, `subject_types`, `footage_anchors`, `practical_effects`, `shot_scales`), entry search/filtering, bulk select/clear, custom keyword input, preset save/delete, and active customization badge.
+- **Agent Client & MCP Server Coverage**:
+  - Added `save_vocabulary` and `delete_vocabulary` methods to `mmv/agent.py` and `mmv/mcp_server.py` (`save_vocabulary_preset`, `delete_vocabulary_preset`).
+  - Added `vocabularies` and `vocabulary` inspection support in agent client and MCP server.
 
 - **LLM & Vision Token Usage Reductions**:
   - Compacted per-passage JSON user requests in `mmv/worker.py` (`_compact_writer_job`), omitting `indent=2` whitespace and empty dialogue stubs (`lines`, `direction`, `part`) for a ~25–30% token reduction per segment.

@@ -96,7 +96,7 @@ DEFAULTS = {
 class Storage:
     def __init__(self, home=None):
         self.home = Path(home or default_home()).resolve()
-        for name in ("actors", "styles", "uploads", "runs", "exports", "models", "cache"):
+        for name in ("actors", "styles", "vocabularies", "uploads", "runs", "exports", "models", "cache"):
             (self.home / name).mkdir(parents=True, exist_ok=True)
         removed_styles = read_json(self.home / "removed-assets.json", {}).get("styles", [])
         if not (self.home / "styles/daylight.json").exists() and "daylight" not in removed_styles:
@@ -153,4 +153,10 @@ class Storage:
         result = read_json(self.home / "styles" / (identifier(style_id) + ".json"))
         if result is None:
             raise ValueError("Style not found")
+        return result
+
+    def vocabulary(self, vocab_id):
+        result = read_json(self.home / "vocabularies" / (identifier(vocab_id) + ".json"))
+        if result is None:
+            raise ValueError("Unknown visual vocabulary profile")
         return result

@@ -30,11 +30,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mmv import actors, agreements, production, score_view
 from mmv.jobs import BusyError, Jobs
+from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.3"
+MGL_APP_VERSION = "1.6.4"
 WEB = Path(__file__).parent
 
 
@@ -161,6 +162,35 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class VocabularyTableOverride(StrictModel):
+    mode: Literal["append", "replace"] = "append"
+    add: list[str] = Field(default_factory=list, max_length=500)
+    exclude: list[str] = Field(default_factory=list, max_length=500)
+
+
+class VocabularyRequest(StrictModel):
+    id: str = Field(max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=1000)
+    base_profile: Literal["full", "reduced_flashing"] = "full"
+    tables: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+
+    @field_validator("id")
+    @classmethod
+    def valid_id(cls, value):
+        value = identifier(value)
+        if value in ("full", "reduced_flashing"):
+            raise ValueError("Cannot overwrite a built-in visual vocabulary profile")
+        return value
+
+    @field_validator("tables")
+    @classmethod
+    def valid_tables(cls, value):
+        if any(k not in VOCAB_TABLES for k in value):
+            raise ValueError("Unknown vocabulary category")
+        return value
+
+
 class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
@@ -190,7 +220,20 @@ class ProductionRequest(StrictModel):
     end_ident: str = Field(default="", max_length=128)
     reuse_prompts: bool = True
     vision_quality_check: bool = False
-    vocabulary_profile: Literal["full", "reduced_flashing"] = "full"
+    vocabulary_profile: str = Field(default="full", max_length=64)
+    custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+
+    @field_validator("vocabulary_profile")
+    @classmethod
+    def valid_vocabulary_profile(cls, value):
+        return identifier(value) if value else "full"
+
+    @field_validator("custom_vocabulary")
+    @classmethod
+    def valid_custom_vocabulary(cls, value):
+        if any(k not in VOCAB_TABLES for k in value):
+            raise ValueError("Unknown vocabulary category")
+        return value
 
     @field_validator("content")
     @classmethod
@@ -332,6 +375,7 @@ class ProjectState(StrictModel):
     panel: Literal["video", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
     forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
+    custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     details_open: bool = False
     log_open: bool = False
 
@@ -814,6 +858,53 @@ def create_app(home=None, *, test_hosts=False):
             target.unlink()
             quotes.clear()
         return {"deleted": style_id}
+
+    @app.get("/api/vocabulary")
+    def get_vocabulary():
+        engine_cfg = Path(__file__).parent.parent / "mmv/engine/config"
+        base = read_json(engine_cfg / "vocab.json", {})
+        profiles = read_json(engine_cfg / "vocabulary_profiles.json", {})
+        presets = [read_json(path) for path in sorted((store.home / "vocabularies").glob("*.json"))]
+        return {
+            "categories": list(VOCAB_TABLES),
+            "base": {k: base.get(k, []) for k in VOCAB_TABLES},
+            "profiles": profiles,
+            "vocabularies": presets,
+        }
+
+    @app.get("/api/vocabularies")
+    def list_vocabularies():
+        return [read_json(path) for path in sorted((store.home / "vocabularies").glob("*.json"))]
+
+    @app.post("/api/vocabularies")
+    def save_vocabulary(value: VocabularyRequest):
+        vocab_id = identifier(value.id)
+        path = store.home / "vocabularies" / (vocab_id + ".json")
+        payload = value.model_dump()
+        with jobs.lock:
+            jobs.require_idle()
+            if path.is_symlink():
+                raise ValueError("Cannot overwrite a linked vocabulary file")
+            load_vocabulary(value.base_profile, store=store, custom=payload["tables"])
+            write_json(path, payload)
+            quotes.clear()
+        return payload
+
+    @app.delete("/api/vocabularies/{vocab_id}")
+    def delete_vocabulary(vocab_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            vocab_id = identifier(vocab_id)
+            if vocab_id in ("full", "reduced_flashing"):
+                raise ValueError("Cannot delete a built-in visual vocabulary profile")
+            if (store.home / "vocabularies" / (vocab_id + ".json")).is_symlink():
+                raise ValueError("Cannot delete a linked vocabulary file")
+            target = inside(store.home / "vocabularies", vocab_id + ".json")
+            if not target.is_file():
+                raise ValueError("Vocabulary preset not found")
+            target.unlink()
+            quotes.clear()
+        return {"deleted": vocab_id}
 
     @app.post("/api/quote")
     def quote(value: ProductionRequest):

@@ -387,9 +387,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.3")
+        self.assertEqual(api_version()["version"], "1.6.4")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.3", (root / "README.md").read_text())
+        self.assertIn("1.6.4", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_uploaded_song_preview_endpoint(self):
@@ -1108,6 +1108,75 @@ class UtilityTests(unittest.TestCase):
         self.assertNotIn("Scenographic mode\n", harvest_ident)
         self.assertIn("Scenographic mode\n", sceno_ident)
         self.assertNotIn("IMAGE-TO-VIDEO IDENT (SCENOGRAPHIC)", sceno_ident)
+
+    def test_vocabulary_customization_and_api_endpoints(self):
+        from mmv.pipeline import load_vocabulary
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            # Test 1: load_vocabulary defaults
+            full_vocab = load_vocabulary("full")
+            self.assertIn("settings", full_vocab)
+            self.assertGreater(len(full_vocab["settings"]), 200)
+
+            # Test 2: custom_vocabulary overrides (append & replace)
+            custom_overrides = {
+                "settings": {"mode": "append", "add": ["custom_cyberpunk_neon_alley"], "exclude": [full_vocab["settings"][0]]},
+                "lighting": {"mode": "replace", "add": ["monochrome laser beam", "candlelight"], "exclude": []},
+            }
+            custom_vocab = load_vocabulary("full", store=store, custom=custom_overrides)
+            self.assertIn("custom_cyberpunk_neon_alley", custom_vocab["settings"])
+            self.assertNotIn(full_vocab["settings"][0], custom_vocab["settings"])
+            self.assertEqual(custom_vocab["lighting"], ["monochrome laser beam", "candlelight"])
+
+            # Test 3: empty category error guard
+            with self.assertRaises(ValueError) as ctx:
+                load_vocabulary("full", store=store, custom={"lighting": {"mode": "replace", "add": []}})
+            self.assertIn("lighting' cannot be empty", str(ctx.exception))
+
+            # Test 4: API endpoints for vocabulary
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+
+            # GET /api/vocabulary
+            res = client.get("/api/vocabulary")
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertIn("categories", data)
+            self.assertIn("settings", data["categories"])
+            self.assertIn("base", data)
+            self.assertIn("profiles", data)
+
+            # POST /api/vocabularies (save preset)
+            preset_payload = {
+                "id": "my_synthwave_preset",
+                "name": "My Synthwave Preset",
+                "description": "80s retro neon aesthetic",
+                "base_profile": "full",
+                "tables": {
+                    "lighting": {"mode": "replace", "add": ["magenta neon grid", "cyan laser glow"], "exclude": []}
+                }
+            }
+            res = client.post("/api/vocabularies", json=preset_payload)
+            self.assertEqual(res.status_code, 200)
+
+            # Verify preset loaded via store
+            saved_preset_vocab = load_vocabulary("my_synthwave_preset", store=store)
+            self.assertEqual(saved_preset_vocab["lighting"], ["magenta neon grid", "cyan laser glow"])
+
+            # GET /api/vocabularies
+            res = client.get("/api/vocabularies")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(len(res.json()), 1)
+            self.assertEqual(res.json()[0]["id"], "my_synthwave_preset")
+
+            # DELETE /api/vocabularies/my_synthwave_preset
+            res = client.delete("/api/vocabularies/my_synthwave_preset")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json(), {"deleted": "my_synthwave_preset"})
+
+            # Cannot delete built-in profile
+            res = client.delete("/api/vocabularies/full")
+            self.assertEqual(res.status_code, 400)
 
 
 if __name__ == "__main__":
