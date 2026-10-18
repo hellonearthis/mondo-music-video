@@ -289,7 +289,10 @@ def run(home, directory, *, resume=False):
                     write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
                     feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
                 else:
-                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (evaluated by Laya and schema validator). See {directory / f"{seg.segment_id}.validation-{attempts}.json"}. Nothing rendered.')
+                    hint = ""
+                    if settings.get('writer_mode') == 'local':
+                        hint = " Note: Incomplete responses, JSON formatting errors, or shot-count mismatches often indicate your local writer's context allocation size (-c) or token limit is too small (see Settings > Local writer setup guide)."
+                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (evaluated by Laya and schema validator). See {directory / f"{seg.segment_id}.validation-{attempts}.json"}.{hint} Nothing rendered.')
             write_json(directory / 'prompts.json', prompts)
         if validator is not None:
             validator._agent = None
