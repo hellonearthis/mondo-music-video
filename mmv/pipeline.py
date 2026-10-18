@@ -143,7 +143,11 @@ def prepare(store, request):
         if not song.is_file():
             raise ValueError('Upload a song first')
         # Cache only original analysis, keyed by the audio bytes and meter.
-        digest = hashlib.sha256(song.read_bytes() + str(request['beats_per_bar']).encode()).hexdigest()
+        song_hash = hashlib.sha256()
+        with song.open('rb') as stream:
+            hashlib.file_digest(stream, lambda: song_hash)
+        song_hash.update(str(request['beats_per_bar']).encode())
+        digest = song_hash.hexdigest()
         score_path = store.home / 'analysis' / (digest + '.json')
         score_path.parent.mkdir(exist_ok=True)
         if not score_path.exists():
@@ -210,7 +214,9 @@ def fingerprint(store, request, prepared):
     for actor_id in request.get('actors', []):
         digest.update(json.dumps(store.actor(actor_id), sort_keys=True).encode())
     for file in files:
-        digest.update(str(file).encode()); digest.update(file.read_bytes())
+        digest.update(str(file).encode())
+        with Path(file).open('rb') as stream:
+            hashlib.file_digest(stream, lambda: digest)
     return digest.hexdigest()
 
 

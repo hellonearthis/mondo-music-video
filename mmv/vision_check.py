@@ -18,7 +18,24 @@ _FRAMING = re.compile(r'border|letterbox|pillarbox|projected (?:film|image)|phot
                        r'picture.in.picture', re.I)
 
 
+_PNG_SIG = b'\x89PNG\r\n\x1a\n'
+
+
+def _split_pngs(data: bytes) -> list[bytes]:
+    if not data:
+        return []
+    parts = data.split(_PNG_SIG)
+    return [_PNG_SIG + part for part in parts[1:] if part]
+
+
 def _frame_count(video):
+    result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                             '-show_entries', 'stream=nb_frames,nb_read_frames', '-of', 'json', str(video)],
+                            capture_output=True, check=True, timeout=TIMEOUT)
+    stream = json.loads(result.stdout)['streams'][0]
+    raw = stream.get('nb_frames') or stream.get('nb_read_frames')
+    if raw and str(raw).isdigit() and int(raw) > 0:
+        return int(raw)
     result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_frames',
                              '-show_entries', 'stream=nb_read_frames', '-of', 'json', str(video)],
                             capture_output=True, check=True, timeout=TIMEOUT)
@@ -66,7 +83,7 @@ def _error(message):
 
 def judge_frame(base_url, model, png_bytes, timeout=TIMEOUT):
     """One request, one image, one fresh user message. Output failures never raise."""
-    payload = {'model': model, 'temperature': 0, 'messages': [{'role': 'user', 'content': [
+    payload = {'model': model, 'temperature': 0, 'max_tokens': 160, 'messages': [{'role': 'user', 'content': [
         {'type': 'text', 'text': PROMPT}, {'type': 'image_url', 'image_url': {
             'url': 'data:image/png;base64,' + base64.b64encode(png_bytes).decode('ascii')}}]}]}
     try:
@@ -86,6 +103,18 @@ def judge_frame(base_url, model, png_bytes, timeout=TIMEOUT):
         return _error(f'vision request or output failed: {exc}')
 
 
+def _extract_sampled_pngs(video, indexes, timeout=TIMEOUT):
+    if not indexes:
+        return []
+    expr = '+'.join(f'eq(n\\,{i})' for i in indexes)
+    out = subprocess.run(
+        ['ffmpeg', '-nostdin', '-v', 'error', '-i', str(video),
+         '-vf', f"select={expr},scale='min(512,iw)':-2", '-fps_mode', 'passthrough',
+         '-frames:v', str(len(indexes)), '-f', 'image2pipe', '-vcodec', 'png', '-'],
+        capture_output=True, check=True, timeout=timeout).stdout
+    return _split_pngs(out)
+
+
 def judge_clip(video, trim_frames, shot_starts, base_url, model, framing_allowed=False, timeout=TIMEOUT):
     """Only repeated unrequested framing can recommend a retry; never submit one."""
     problems, framing_votes, known = [], 0, 0
@@ -93,11 +122,20 @@ def judge_clip(video, trim_frames, shot_starts, base_url, model, framing_allowed
         indexes = sample_frames(video, trim_frames, shot_starts)
     except (OSError, ValueError, KeyError, IndexError, subprocess.SubprocessError) as exc:
         return {'status': 'error', 'problems': [f'could not sample clip: {exc}'[:240]], 'retry': False}
-    for index in indexes:
+    if not indexes:
+        return {'status': 'error', 'problems': ['no sampled frame could be judged'], 'retry': False}
+    try:
+        pngs = _extract_sampled_pngs(video, indexes, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        pngs = []
+    for pos, index in enumerate(indexes):
         try:
-            png = subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(video), '-vf',
-                                  f'select=eq(n\\,{index})', '-frames:v', '1', '-f', 'image2pipe',
-                                  '-vcodec', 'png', '-'], capture_output=True, check=True, timeout=timeout).stdout
+            if pos < len(pngs):
+                png = pngs[pos]
+            else:
+                png = subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(video), '-vf',
+                                      f"select=eq(n\\,{index}),scale='min(512,iw)':-2", '-frames:v', '1', '-f', 'image2pipe',
+                                      '-vcodec', 'png', '-'], capture_output=True, check=True, timeout=timeout).stdout
             result = judge_frame(base_url, model, png, timeout) if png else _error('empty decoded frame')
         except (OSError, subprocess.SubprocessError) as exc:
             result = _error(exc)

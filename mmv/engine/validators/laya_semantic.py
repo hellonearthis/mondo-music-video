@@ -444,6 +444,7 @@ class LayaSemanticValidator(ValidatorProfile):
         clip = self.build_clipboard_request(
             prompt, segment, tags, strict_words=strict_words,
             silent_mouths=silent_mouths, state=state)
+        self.last_clipboard_request = clip
         t0 = time.time()
         try:
             result = agent.system_one(clip["state"],

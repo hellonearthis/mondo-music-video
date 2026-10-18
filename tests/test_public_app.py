@@ -81,7 +81,8 @@ class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
                 title = user.splitlines()[0][6:]
                 content = 'The words "' + title + '" emerge in brushed metal with continuous motion, then hold motionless and legible. Silent scene, no musical score.'
             else:
-                job = json.loads(user)
+                user_json = user.split("\n\nCorrect these validation failures", 1)[0]
+                job = json.loads(user_json)
                 text = "The fully clothed performer moves through warm light as wind lifts the fabric of a blue jacket. Reflections trace shifting patterns across nearby glass while the camera follows with deliberate rhythmic motion and the scene remains grounded in a coherent physical space. The subject stays recognizable and each movement carries the energy of the music through precise visible changes in posture and light. "
                 content = json.dumps({"segment_id":job["segment_id"], "style_opening":"Cinematic daylight photography with expressive movement.",
                     "subject_definitions":[], "summary":"A fully clothed performer in sunlight.", "retention_analysis":[],
@@ -386,9 +387,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.2")
+        self.assertEqual(api_version()["version"], "1.6.3")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.2", (root / "README.md").read_text())
+        self.assertIn("1.6.3", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_uploaded_song_preview_endpoint(self):
@@ -1079,7 +1080,37 @@ class UtilityTests(unittest.TestCase):
             self.assertIn("--- Writer Service Output (llama.cpp) ---", log_text)
             self.assertIn("llama-server output log", log_text)
 
+    def test_token_reduction_helpers_and_ident_pruning(self):
+        from mmv.worker import _compact_writer_job, _compact_ident_prompt
+        from mmv.engine import style
+        job = {
+            "segment_id": "seg000",
+            "cast": [{"actor_id": "a1", "display_name": "Actor 1", "part": "", "lines": [], "direction": ""}],
+            "shots": [{"n": 1, "vocabulary": {"setting": "alley", "lighting": "neon"}}],
+        }
+        pretty = json.dumps(job, indent=2)
+        compact = _compact_writer_job(job)
+        self.assertLess(len(compact), len(pretty) * 0.75)
+        parsed = json.loads(compact)
+        self.assertEqual(parsed["segment_id"], "seg000")
+        self.assertNotIn("lines", parsed["cast"][0])
+        self.assertNotIn("direction", parsed["cast"][0])
+        self.assertNotIn("part", parsed["cast"][0])
+
+        full_ident = style.compose_ident_prompt()
+        std_ident = _compact_ident_prompt(full_ident, "standard")
+        harvest_ident = _compact_ident_prompt(full_ident, "harvest")
+        sceno_ident = _compact_ident_prompt(full_ident, "scenographic")
+        self.assertLess(len(std_ident), len(full_ident) * 0.6)
+        self.assertNotIn("Scenographic mode\n", std_ident)
+        self.assertNotIn("Reading a reference image\n", std_ident)
+        self.assertIn("Reading a reference image\n", harvest_ident)
+        self.assertNotIn("Scenographic mode\n", harvest_ident)
+        self.assertIn("Scenographic mode\n", sceno_ident)
+        self.assertNotIn("IMAGE-TO-VIDEO IDENT (SCENOGRAPHIC)", sceno_ident)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -1,5 +1,17 @@
 # Releases
 
+## 1.6.3 — LLM & Vision token reductions and single-pass frame extraction
+
+- **LLM & Vision Token Usage Reductions**:
+  - Compacted per-passage JSON user requests in `mmv/worker.py` (`_compact_writer_job`), omitting `indent=2` whitespace and empty dialogue stubs (`lines`, `direction`, `part`) for a ~25–30% token reduction per segment.
+  - Kept the `system` prompt byte-identical across retry attempts by appending corrective validation feedback to the `user` message instead of mutating `system`, preserving KV-cache prefix reuse in `llama.cpp` and hosted API prompt caches.
+  - Added mode-aware pruning for the 64.6 KB ident writer prompt (`_compact_ident_prompt`), omitting unused `IMAGE-TO-VIDEO` templates and mode-irrelevant essays (`Scenographic mode` / `Reading a reference image` when in `standard` mode), cutting standard ident system prompt tokens by ~50%.
+  - Downscaled sampled video frames in `mmv/vision_check.py` (`scale='min(512,iw)':-2`) and bounded `judge_frame` output with `max_tokens: 160`, reducing vision patch tokens and base64 payload size by 65–80%.
+- **Runtime & I/O Optimizations**:
+  - Replaced repeated per-frame `ffmpeg` invocations in `mmv/quality.py` (`border_verdict`) and `mmv/vision_check.py` (`judge_clip`) with single-pass multi-frame `select=... -fps_mode passthrough` extraction, and fast stream header frame counting in `_frame_count`.
+  - Eliminated duplicate `build_clipboard_request` execution in `mmv/worker.py` / `mmv/engine/validators/laya_semantic.py`.
+  - Switched `mmv/pipeline.py` song and fingerprint hashing to streaming `hashlib.file_digest` and parallelized ComfyUI `/object_info` model loader probes in `webapp/mondo_web.py`.
+
 ## 1.6.2 — Upstream 1.6.1 merge, test suite acceleration & Live Engine Status Dock
 
 - **Upstream 1.6.1, 1.6.0, 1.5.0, 1.4.0 & 1.3.0 Integration**:

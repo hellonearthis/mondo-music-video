@@ -34,7 +34,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.2"
+MGL_APP_VERSION = "1.6.3"
 WEB = Path(__file__).parent
 
 
@@ -77,6 +77,7 @@ def _h3_model_nodes(graph):
 
 def _get_h3_model_info(store, settings=None):
     import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
     settings = settings or store.settings()
     current = {}
     try:
@@ -90,16 +91,19 @@ def _get_h3_model_info(store, settings=None):
     comfy_url = settings.get('comfy_url', '').rstrip('/')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     discovered = {}
-    for loader, field, _ in H3_MODEL_ROLES.values():
-        if loader in discovered or not comfy_url:
-            continue
-        try:
-            with opener.open(f'{comfy_url}/object_info/{loader}', timeout=.25) as response:
-                data = json.load(response)
-            choices = data[loader]['input']['required'][field][0]
-            discovered[loader] = [name for name in choices if isinstance(name, str)] if isinstance(choices, list) else []
-        except (OSError, ValueError, KeyError, TypeError):
-            discovered[loader] = []
+    loaders = {loader: field for loader, field, _ in H3_MODEL_ROLES.values()}
+    if comfy_url and loaders:
+        def _probe_loader(item):
+            loader, field = item
+            try:
+                with opener.open(f'{comfy_url}/object_info/{loader}', timeout=.25) as response:
+                    data = json.load(response)
+                choices = data[loader]['input']['required'][field][0]
+                return loader, [name for name in choices if isinstance(name, str)] if isinstance(choices, list) else []
+            except (OSError, ValueError, KeyError, TypeError):
+                return loader, []
+        with ThreadPoolExecutor(max_workers=len(loaders)) as pool:
+            discovered = dict(pool.map(_probe_loader, loaders.items()))
     comfy_input = settings.get('comfy_input')
     for role, (loader, _, category) in H3_MODEL_ROLES.items():
         installed[role] = discovered.get(loader, [])

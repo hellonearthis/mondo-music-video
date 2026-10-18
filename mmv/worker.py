@@ -58,6 +58,49 @@ def save_cached_passage_prompt(cache_dir, system, job, prompt, seg_id):
         pass
 
 
+def _compact_writer_job(job: dict) -> str:
+    """Serialize writer job without indentation or empty dialogue stubs to minimize LLM tokens."""
+    payload = dict(job)
+    if isinstance(payload.get("cast"), list):
+        compact_cast = []
+        for entry in payload["cast"]:
+            if isinstance(entry, dict):
+                cleaned = {k: v for k, v in entry.items() if not (k in ("lines", "direction", "part") and not v)}
+                compact_cast.append(cleaned)
+            else:
+                compact_cast.append(entry)
+        payload["cast"] = compact_cast
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def _compact_ident_prompt(prompt: str, mode: str = "standard") -> str:
+    """Prune mode-irrelevant sections and future-only i2v specs from the 64 KB ident prompt."""
+    mode = str(mode or "standard").strip().lower()
+    # Always omit the unused future IMAGE-TO-VIDEO IDENT template block.
+    i2v_start = prompt.find("\nIMAGE-TO-VIDEO IDENT (SCENOGRAPHIC)")
+    i2v_end = prompt.find("\nFailure modes\n", i2v_start if i2v_start != -1 else 0)
+    if i2v_start != -1 and i2v_end != -1:
+        prompt = prompt[:i2v_start] + prompt[i2v_end:]
+    if mode != "scenographic":
+        # Omit the 155-line Scenographic mode essay and Scenographic boxes when not in scenographic mode.
+        sceno_start = prompt.find("\nScenographic mode\n")
+        sceno_end = prompt.find("\nThe law of fresh starts\n", sceno_start if sceno_start != -1 else 0)
+        if sceno_start != -1 and sceno_end != -1:
+            prompt = prompt[:sceno_start] + prompt[sceno_end:]
+        boxes_start = prompt.find("\nScenographic boxes\n")
+        boxes_end = prompt.find("\nFailure modes\n", boxes_start if boxes_start != -1 else 0)
+        if boxes_start != -1 and boxes_end != -1:
+            prompt = prompt[:boxes_start] + prompt[boxes_end:]
+    if mode == "standard":
+        # In standard mode, vision harvesting has not been requested; omit the forensic reference-reading essay.
+        ref_start = prompt.find("\nReading a reference image\n")
+        ref_end = prompt.find("\nFailure modes\n", ref_start if ref_start != -1 else 0)
+        if ref_start != -1 and ref_end != -1:
+            prompt = prompt[:ref_start] + prompt[ref_end:]
+    return prompt
+
+
+
 def run(home, directory, *, resume=False):
     os.environ['MMV_HOME'] = str(home)
     store = Storage(home)
@@ -147,7 +190,7 @@ def run(home, directory, *, resume=False):
                 raise ValueError(f"Laya semantic validator failed to load: {exc}") from exc
 
         if request['kind'] == 'ident':
-            system = style.compose_ident_prompt()
+            system = _compact_ident_prompt(style.compose_ident_prompt(), request['ident_mode'])
             message = style.build_ident_writer_message(request['title'], request['ident_seconds'], request['ident_mode'],
                        style_card=prepared['style'].get('style_card', prepared['style']['direction']), ident_notes=request['direction'])
             (directory / 'writer_system.md').write_text(system, encoding='utf-8')
@@ -211,9 +254,10 @@ def run(home, directory, *, resume=False):
 
                 progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
                 feedback = ''
+                user_job = _compact_writer_job(job)
                 attempts = 3 if settings['writer_mode'] == 'local' else 1
                 for attempt in range(attempts):
-                    raw = llm(system + feedback, json.dumps(job, indent=2))
+                    raw = llm(system, user_job + feedback)
                     (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
                     try:
                         response = WriterResponse.parse(raw, seg.segment_id)
@@ -233,8 +277,8 @@ def run(home, directory, *, resume=False):
                         state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
                                  'lyrics_flavor':request['lyrics'], 'director_direction':request['direction'],
                                  'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':cast_block}
-                        clip = validator.build_clipboard_request(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
                         response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
+                        clip = validator.last_clipboard_request if hasattr(validator, 'last_clipboard_request') else validator.build_clipboard_request(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
                         write_json(directory / f'{seg.segment_id}.laya-request-{attempt+1}.json', clip)
                         write_json(directory / f'{seg.segment_id}.laya-response-{attempt+1}.json', response)
                     if not problems:
