@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.6.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.6.1** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -16,6 +16,10 @@ review. **It asks before large downloads.** Already have API accounts?
 It can configure multiple [API profiles](docs/API_PROVIDER_SETUP.md) and select
 writing, vision and video services independently. A new video provider may need
 an adapter; the guide explains how an agent can build and verify one.
+
+Installing on a RunPod GPU Pod? The agent also follows the
+[RunPod setup guide](docs/RUNPOD.md), covering fresh or existing stacks,
+persistent storage, private browser access and first-video verification.
 
 Prefer to install it yourself? Jump to [manual installation](#install).
 
@@ -222,7 +226,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.6.0 MCP server has 28 tools, including API profile add/select/remove,
+The v1.6.1 MCP server has 28 tools, including API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements and musical score reading. Reconnect the MCP client after upgrading to refresh its tool list.
 

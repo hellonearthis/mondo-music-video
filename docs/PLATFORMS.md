@@ -3,6 +3,7 @@
 | Environment | Setup launcher | Verification status |
 | --- | --- | --- |
 | Linux | `install.sh` | Fresh Python 3.12 environment installed from public dependencies; 37 automated checks, Chromium, GPU Laya and a real local H3 music-video production; see VERIFICATION.md |
+| RunPod Linux GPU Pod | `install.sh` plus [RunPod setup](RUNPOD.md) | Procedure documented; clean Pod installation and end-to-end verification pending |
 | Windows / WSL2 | `install.sh` inside WSL | Launcher included; full clean-machine and GPU verification pending |
 | Native Windows | `install.ps1` | Launcher included; execution and GPU verification pending |
 | macOS | `install.sh` | Launcher included; execution pending; use hosted renderers unless a compatible local runtime is independently established |

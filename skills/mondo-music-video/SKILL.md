@@ -10,7 +10,14 @@ For a fresh installation request, follow
 [../../docs/INSTALL_WITH_AGENT.md](../../docs/INSTALL_WITH_AGENT.md) first.
 That guide covers hardware inspection, model recommendations, download approval,
 configuration and readiness checks. The operation instructions below assume an
-installed application.
+installed application. For local H3 setup, the agent must follow
+`docs/H3_WORKFLOW_SETUP.md` in the checkout/public repository: adapt and activate
+a private workflow/map for the chosen model stack, including required loader,
+precision and node changes; filename selection alone does not verify
+compatibility. For a RunPod Pod, also follow `docs/RUNPOD.md`
+from that checkout (or the public repository): discover fresh/existing stacks,
+use persistent private data and SSH browser forwarding, and account for Pod
+rental charges even when a local-render quote is $0.
 If this skill was installed from a wheel without repository documentation,
 read the guide from the user's checkout or the
 [public repository](https://github.com/hodgemann/mondo-music-video/blob/main/docs/INSTALL_WITH_AGENT.md).

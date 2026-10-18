@@ -1,5 +1,31 @@
-# Verification — 1.6.0
+# Verification — 1.6.1
 
+
+## 1.6.1 RunPod installation guidance (2026-10-18)
+
+The final tree passed `.venv/bin/python -m pytest -q` outside the sandbox:
+**240 tests and 53 subtests**, no skips (75.69 s). A fresh-process import of
+`api_version()` returned **1.6.1**; package metadata, README, agent discovery
+and version assertions were updated together. The existing user service was
+not restarted for this guidance release; no live 1.6.1 claim is made.
+
+Local Markdown links, RunPod shell example syntax (`bash -n`) and
+`git diff --check` passed. Earlier socket-free checks built the existing H3 graph
+with zero, one and two synthetic image references plus song audio, confirming
+resolved tags, preserved loader parameters and the effective 20-step injection.
+No graph was submitted for these checks.
+
+The documentation was checked against the implementation's loopback binding,
+Host/origin guards, private workflow/model selection, environment/data paths and
+both H3 render paths. Official RunPod SSH, storage and exposed-port documentation
+and ComfyUI H3 guidance were consulted on 2026-10-18. The fork HEAD remained
+`78f31ae33f50a9578043d2af33ce05158603ab86`, matching the prior reviewed revision.
+
+**No RunPod Pod was provisioned and no fresh RunPod installation or alternative
+H3 variant was tested.** The guides require agent-side discovery, private
+workflow adaptation/activation and deliberate operator-approved inference before
+claiming readiness. They do not implement automatic arbitrary-workflow
+conversion. No GPU/paid/Topaz work or model downloads were performed for 1.6.1.
 
 ## 1.6.0 final release verification (2026-10-18)
 

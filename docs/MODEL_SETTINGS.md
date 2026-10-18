@@ -19,6 +19,12 @@ weights that match your workflow and hardware. In particular, selecting a
 quantized file does not automatically change the workflow's precision options.
 No weights, model downloads or additional model defaults are bundled.
 
+During agent-assisted installation, the agent must also adapt loader/precision
+settings, nodes and injection-map bindings when the selected H3 requires them;
+follow [H3 workflow setup](H3_WORKFLOW_SETUP.md). Model dropdowns alone do not
+perform that adaptation. The procedure includes activating the private map and
+checking the built submission graph, with a real test only after authorization.
+
 Only explicit model changes are submitted by the settings form. Changing the
 workflow binding map and saving with untouched model controls uses the new map's
 own choices. The UI reloads its selections after saving.

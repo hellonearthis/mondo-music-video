@@ -1,5 +1,26 @@
 # Releases
 
+## 1.6.1 — Agent installation on RunPod and selected H3 workflows
+
+Agent installation now includes a RunPod handoff for fresh, partial and existing
+setups: discover/reuse components, persist private data and models, configure
+SSH browser access, record restart steps and explain cloud rental charges.
+
+For local H3, the installing agent must adapt and activate a private graph/map
+for the selected model stack, checking loaders, precision, nodes, reference/audio
+connections and runtime overrides. Filename-only model changes are not treated
+as compatibility verification. These are agent procedures using existing workflow
+support, not automatic conversion of arbitrary H3 variants by the shell installer.
+
+RunPod and variant-specific end-to-end verification remain pending; installation
+readiness must reflect the actual operator-approved test result. No Pod was
+rented and no GPU generation was run for this release. The included skill,
+installation entry points and platform notes link the procedures.
+
+Codex prepared the guidance and release. The collaborator fork check found HEAD
+unchanged at `78f31ae33f50a9578043d2af33ce05158603ab86`; existing substantive
+review findings remain in [COLLABORATOR_REVIEW](COLLABORATOR_REVIEW.md).
+
 ## 1.6.0 — Batched pixel and optional vision quality checks
 
 All passages render before pixel checks and one batch of free local retries.
