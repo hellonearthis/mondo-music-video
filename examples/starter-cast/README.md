@@ -46,7 +46,9 @@ Imports never overwrite an existing actor. If an ID already exists, keep your
 local actor or choose a different local ID. You can decline the starter cast;
 the app launcher alone does not import actors into your roster.
 
-These four actor assets are distributed under the repository's Apache-2.0
-license; their OAP riders remain available for production checks. No voice,
+The same four packages, byte for byte, are also published in the
+[OAP example actors collection](https://github.com/hodgemann/oap-actors) under
+CC BY 4.0. These four actor assets are distributed here under the repository's
+Apache-2.0 license; their OAP riders remain available for production checks. No voice,
 private signing keys, studio metadata backups or other roster members are
 included.
