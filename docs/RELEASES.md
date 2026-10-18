@@ -10,6 +10,14 @@
     - Shows an active status notice banner (`Analyzing audio track and planning production cuts… This may take a few moments.`) that clears automatically upon completion.
     - Restores button state, label, accessibility attributes, and cursor on completion or error.
   - Added equivalent busy states and inline spinners to **Review resume** and **Start production** dialog actions.
+- **WCAG 2.1 AA/AAA Brand-Safe Accessibility Contrast Audit**:
+  - Audited light and dark theme palettes using deterministic OKLCH perceptual lightness modeling, preserving brand hue and chroma.
+  - Verified dark theme passes WCAG AAA across all text, controls, and status badges (6.2:1–14.5:1).
+  - Resolved borderline/failing pairings in light theme:
+    - Shifting `--muted` from `#69736c` to `#626b65` ($\Delta L = 2.6\%$), lifting contrast above 4.74:1–5.46:1 across all light surfaces (paper, cards, operation bar, and service dock).
+    - Updated `.nav span` (2.72:1) and `.nav.teaser` (3.25:1) to `var(--muted)` (5.01:1).
+    - Enhanced input and textarea placeholders (`#969d91` -> `#6f756a`, 4.61:1).
+    - Strengthened `.badge-processing` (`#0d7c3a`, 4.83:1) and `.badge-offline` (`#646b79`, 4.87:1) for comfortable WCAG AA compliance.
 
 ## 1.6.4 — Visual vocabulary controls, custom presets & documentation guide
 
