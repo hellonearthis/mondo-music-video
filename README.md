@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.3.0** · MAXIMUM GOOSE LABORATORIES · Apache License 2.0
+**Version 1.3.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -239,4 +239,4 @@ Mondo Music Video is licensed under [Apache License 2.0](LICENSE). Third-party
 components retain their own licenses. [Open Actor Protocol](https://github.com/hodgemann/oap)
 is MIT-licensed. Laya inference code is attributed in [its vendor notice](mmv/engine/validators/laya/VENDOR.md).
 
-Copyright 2026 MAXIMUM GOOSE LABORATORIES.
+Copyright 2026 MAXIMUM GOOSE LABORATORY.
