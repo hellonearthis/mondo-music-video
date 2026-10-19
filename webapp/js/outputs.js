@@ -1,6 +1,7 @@
 // Finished Videos, Musical Score Canvas visualization, and Topaz upscale dialog.
 
 import { $, $$, api, handle, json, notice, option, state, text } from "./core.js";
+import { showQuote } from "./production.js";
 
 // One theme observer for all score views; loadOutputs disposes views before replacing cards.
 const scoreViews = new Set();
@@ -16,32 +17,136 @@ const GRAMMAR_CLASSES = {
   "Single-subject fragmentation": "fragmentation"
 };
 
-// Copies the finished production (clips, song, prompts, receipts, README) into an editing package; nothing is published.
+let pendingExportRun = null;
+let pendingDeleteRun = null;
+
+function showDeleteDialog(output) {
+  const dialog = $("#delete-video-dialog");
+  if (!dialog) return;
+  pendingDeleteRun = output.file.split("/")[0];
+  const title = $("#delete-dialog-title");
+  if (title) title.textContent = `Delete: ${output.title}`;
+  const msg = $("#delete-dialog-msg");
+  if (msg) msg.textContent = `Are you sure you want to delete "${output.title}"? This will permanently remove the MP4 and all rendered passage files from this machine.`;
+
+  const cancelBtn = $("#delete-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.onclick = () => dialog.close();
+  }
+
+  const confirmBtn = $("#delete-confirm-btn");
+  if (confirmBtn) {
+    confirmBtn.onclick = handle(async () => {
+      if (!pendingDeleteRun) return;
+      confirmBtn.disabled = true;
+      try {
+        await api(`/api/outputs/${encodeURIComponent(pendingDeleteRun)}`, { method: "DELETE" });
+        dialog.close();
+        notice(`Deleted production "${output.title}".`);
+        await loadOutputs();
+      } catch (err) {
+        notice(err.message);
+      } finally {
+        confirmBtn.disabled = false;
+        pendingDeleteRun = null;
+      }
+    });
+  }
+  dialog.showModal();
+}
+
+function showExportDialog(output, errorMsg = "") {
+  const dialog = $("#export-dialog");
+  if (!dialog) return;
+  pendingExportRun = output.file.split("/")[0];
+  const title = $("#export-dialog-title");
+  if (title) title.textContent = `Export: ${output.title}`;
+
+  const warningBox = $("#export-actors-warning");
+  const msgElem = $("#export-actors-msg");
+  const confirmCb = $("#export-owner-confirm");
+  const manageLink = $("#export-manage-actors-link");
+
+  if (errorMsg) {
+    if (warningBox) warningBox.hidden = false;
+    if (msgElem) msgElem.textContent = errorMsg.replace("PRIVATE_ACTORS: ", "");
+    if (confirmCb) confirmCb.checked = false;
+  } else {
+    if (warningBox) warningBox.hidden = true;
+    if (confirmCb) confirmCb.checked = true;
+  }
+
+  if (manageLink) {
+    manageLink.onclick = (e) => {
+      e.preventDefault();
+      dialog.close();
+      const navActors = $(".nav[data-panel='actors']");
+      if (navActors) navActors.click();
+    };
+  }
+
+  const cancelBtn = $("#export-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.onclick = () => dialog.close();
+  }
+
+  const confirmBtn = $("#export-confirm-btn");
+  if (confirmBtn) {
+    confirmBtn.onclick = handle(async () => {
+      const allow = !warningBox || warningBox.hidden || (confirmCb && confirmCb.checked);
+      if (warningBox && !warningBox.hidden && (!confirmCb || !confirmCb.checked)) {
+        throw new Error("Please check the box confirming actor ownership/authorization to export.");
+      }
+      dialog.close();
+      await executeExportPackage(pendingExportRun, allow);
+    });
+  }
+
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+  }
+}
+
+async function executeExportPackage(runId, allow) {
+  notice("Preparing editing package…");
+  try {
+    await json(`/api/outputs/${encodeURIComponent(runId)}/package`, { zip: true, allow_private_actors: allow });
+    for (let wait = 0; wait < 900; wait += 1) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const job = await (await api("/api/status")).json();
+      if (job.state === "running") continue;
+      if (job.state === "failed") throw new Error(job.message);
+      const result = job.result || {};
+      notice(`Package written: ${result.path} (${result.files} files)${result.zip ? " and " + result.zip : ""}`);
+      return;
+    }
+  } catch (error) {
+    if (String(error.message).startsWith("PRIVATE_ACTORS")) {
+      showExportDialog({ file: `${runId}/video.mp4`, title: "Production" }, error.message);
+      return;
+    }
+    throw error;
+  }
+}
+
+// Prominent dedicated export button for finished productions
 function exportButton(output) {
-  const button = text("button", "Export package", "quiet",
-    `Copy ${output.title} with its raw clips, song, prompts and receipts into an editing folder inside your Mondo data folder`);
+  const button = text("button", "Export package", "secondary",
+    `Export ${output.title} with raw clips, song stem, prompts, CMX 3600 timeline EDL and receipts`);
+
   button.onclick = handle(async () => {
     const runId = output.file.split("/")[0];
-    const attempt = async allow => json(`/api/outputs/${encodeURIComponent(runId)}/package`,
-      { zip: true, allow_private_actors: allow });
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     try {
       try {
-        await attempt(false);
+        await executeExportPackage(runId, false);
       } catch (error) {
-        if (!String(error.message).startsWith("PRIVATE_ACTORS")) throw error;
-        if (!window.confirm(error.message.replace("PRIVATE_ACTORS: ", "") + "\n\nExport it anyway?")) return;
-        await attempt(true);
-      }
-      for (let wait = 0; wait < 900; wait += 1) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        const job = await (await api("/api/status")).json();
-        if (job.state === "running") continue;
-        if (job.state === "failed") throw new Error(job.message);
-        const result = job.result || {};
-        notice(`Package written: ${result.path} (${result.files} files)${result.zip ? " and " + result.zip : ""}`);
-        return;
+        if (String(error.message).startsWith("PRIVATE_ACTORS")) {
+          showExportDialog(output, error.message);
+        } else {
+          throw error;
+        }
       }
     } finally {
       button.disabled = false;
@@ -50,6 +155,7 @@ function exportButton(output) {
   });
   return button;
 }
+
 
 export function scoreView(output, video) {
   const box = text("details", "", "score-view");
@@ -224,14 +330,19 @@ export async function loadOutputs() {
     video.dataset.tooltip = `Video player for ${output.title}`;
     video.title = video.dataset.tooltip;
 
-    const download = text("a", "Download", "download", `Download ${output.title} as MP4`);
+    const download = text("a", "Download MP4", "secondary", `Download ${output.title} as MP4`);
     download.href = "/api/media/" + output.file + "?download=true";
+    download.setAttribute("download", output.file.split("/").pop() || "video.mp4");
 
-    const upscale = text("button", "Topaz upscale ↗", "quiet", `Upscale ${output.title} using Topaz Video AI`);
+    const upscale = text("button", "Topaz upscale", "secondary", `Upscale ${output.title} using Topaz Video AI`);
     upscale.onclick = () => {
       state.upscaleSource = output.file;
       $("#upscale-dialog").showModal();
     };
+
+    const runId = output.file.split("/")[0];
+    const deleteBtn = text("button", "Delete", "delete-btn", `Delete ${output.title} from studio`);
+    deleteBtn.onclick = () => showDeleteDialog(output);
 
     card.append(video);
     if (output.kind === "video") card.append(scoreView(output, video));
@@ -242,10 +353,18 @@ export async function loadOutputs() {
       warning.append(text("strong", "Quality check: "), output.quality_warnings.join(" · "));
       card.append(warning);
     }
-    card.append(download, upscale);
-    if (output.kind === "video") card.append(exportButton(output));
+
+    const actions = document.createElement("div");
+    actions.className = "output-actions";
+    actions.append(download, upscale);
+    if (output.kind === "video") actions.append(exportButton(output));
+    actions.append(deleteBtn);
+    card.append(actions);
     return card;
   }));
+
+
+
   if (!outputs.length) {
     $("#output-list").append(text("div", "Your finished videos and idents will appear here.", "empty", "No completed productions yet"));
   }
@@ -259,6 +378,125 @@ export async function loadOutputs() {
     );
     if ([...select.options].some(item => item.value === old)) select.value = old;
   });
+
+  await loadUnfinishedRuns();
+}
+
+export async function loadUnfinishedRuns() {
+  const tbody = $("#unfinished-runs-list");
+  const countBadge = $("#unfinished-count");
+  if (!tbody) return;
+  try {
+    const list = await (await api("/api/runs/unfinished")).json();
+    if (countBadge) countBadge.textContent = String(list.length);
+    tbody.replaceChildren();
+
+    if (!list.length) {
+      const emptyRow = document.createElement("tr");
+      const emptyCell = document.createElement("td");
+      emptyCell.colSpan = 6;
+      emptyCell.className = "muted";
+      emptyCell.style.padding = "16px 8px";
+      emptyCell.style.textAlign = "center";
+      emptyCell.textContent = "No unfinished drafts or interrupted renders found.";
+      emptyRow.append(emptyCell);
+      tbody.append(emptyRow);
+      return;
+    }
+
+    list.forEach(run => {
+      const row = document.createElement("tr");
+      row.style.borderBottom = "1px solid var(--line)";
+
+      // Title
+      const titleTd = document.createElement("td");
+      titleTd.style.padding = "8px";
+      titleTd.style.fontWeight = "600";
+      titleTd.textContent = run.title;
+
+      // Date
+      const dateTd = document.createElement("td");
+      dateTd.style.padding = "8px";
+      dateTd.className = "muted";
+      dateTd.textContent = run.created_str;
+
+      // Passages
+      const passTd = document.createElement("td");
+      passTd.style.padding = "8px";
+      passTd.textContent = run.segments ? `${run.validated_prompts}/${run.segments}` : "—";
+
+      // Status
+      const statusTd = document.createElement("td");
+      statusTd.style.padding = "8px";
+      if (run.can_finish) {
+        statusTd.innerHTML = '<span style="color:#16a34a;font-weight:600;">Ready to finish</span>';
+      } else {
+        statusTd.innerHTML = '<span class="muted">Draft / Partial</span>';
+      }
+
+      // Size
+      const sizeTd = document.createElement("td");
+      sizeTd.style.padding = "8px";
+      sizeTd.className = "muted";
+      sizeTd.textContent = `${run.size_mb} MB`;
+
+      // Actions
+      const actionsTd = document.createElement("td");
+      actionsTd.style.padding = "8px";
+      actionsTd.style.textAlign = "right";
+
+      if (run.can_finish) {
+        const finishBtn = text("button", "Finish / Resume", "secondary", `Resume generation for ${run.title}`);
+        finishBtn.style.padding = "4px 8px";
+        finishBtn.style.fontSize = "11px";
+        finishBtn.style.marginRight = "8px";
+        finishBtn.onclick = handle(async () => {
+          notice("Loading resume preview...");
+          const quote = await json("/api/resume/quote", { run_id: run.id });
+          notice("");
+          showQuote({ kind: quote.kind }, quote);
+        });
+        actionsTd.append(finishBtn);
+      }
+
+      const delBtn = text("button", "Purge", "delete-btn", `Delete draft ${run.title}`);
+      delBtn.style.padding = "4px 8px";
+      delBtn.style.fontSize = "11px";
+      delBtn.onclick = handle(async () => {
+        if (!window.confirm(`Purge draft "${run.title}" (${run.size_mb} MB)? This cannot be undone.`)) return;
+        delBtn.disabled = true;
+        try {
+          await api(`/api/runs/unfinished/${encodeURIComponent(run.id)}`, { method: "DELETE" });
+          notice(`Purged draft "${run.title}".`);
+          await loadUnfinishedRuns();
+        } finally {
+          delBtn.disabled = false;
+        }
+      });
+      actionsTd.append(delBtn);
+
+      row.append(titleTd, dateTd, passTd, statusTd, sizeTd, actionsTd);
+      tbody.append(row);
+    });
+  } catch (err) {
+    console.error("Failed to load unfinished runs:", err);
+  }
+
+  const purgeAllBtn = $("#purge-all-unfinished-btn");
+  if (purgeAllBtn) {
+    purgeAllBtn.onclick = handle(async (e) => {
+      e.stopPropagation();
+      if (!window.confirm("Purge ALL unfinished drafts and interrupted runs? Completed music videos will NOT be touched.")) return;
+      purgeAllBtn.disabled = true;
+      try {
+        const res = await (await api("/api/runs/unfinished/purge", { method: "POST" })).json();
+        notice(`Purged ${res.purged_count} unfinished draft folders.`);
+        await loadUnfinishedRuns();
+      } finally {
+        purgeAllBtn.disabled = false;
+      }
+    });
+  }
 }
 
 export function initUpscaleForm() {

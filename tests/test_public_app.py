@@ -400,16 +400,16 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.1")
+        self.assertEqual(api_version()["version"], "1.8.2")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.1", (root / "README.md").read_text())
+        self.assertIn("1.8.2", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
         app_res = self.client.get("/app.js")
         self.assertEqual(app_res.status_code, 200)
         self.assertIn("text/javascript", app_res.headers["content-type"])
-        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocabulary.js"):
+        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocab-model.js", "vocabulary.js"):
             res = self.client.get(f"/js/{mod}")
             self.assertEqual(res.status_code, 200, mod)
             self.assertIn("text/javascript", res.headers["content-type"])
@@ -881,8 +881,8 @@ class PublicAppTests(unittest.TestCase):
         status = self.wait()
         self.assertEqual(status['state'], 'complete', status)
         run = self.home / 'runs' / started.json()['id']
-        self.assertIn('This passage contains singing', (run / 'writer_system_singing.md').read_text())
-        self.assertNotIn('This passage contains singing', (run / 'writer_system.md').read_text())
+        self.assertIn('This passage contains singing', (run / 'writer_system_singing.md').read_text(encoding="utf-8"))
+        self.assertNotIn('This passage contains singing', (run / 'writer_system.md').read_text(encoding="utf-8"))
         job = read_json(run / 'writer_jobs' / 'seg000.json')
         self.assertEqual(job['cast'][0]['lines'], ['Interdimensional lover'])
         self.assertEqual(job['singing']['actor_id'], 'blue')
@@ -918,7 +918,8 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(status['state'], 'complete', status)
         result = status['result']
         package = Path(result['path'])
-        self.assertEqual(package.parent, self.home / 'exports')
+        self.assertEqual(package.parent.resolve(), (self.home / 'exports').resolve())
+
         self.assertRegex(package.name, r'^[A-Za-z0-9_]+_\d{4}-\d\d-\d\d_\d{4}$')           # title and date-time, not a random id
         self.assertEqual(result['private_actors'], ['blue'])
         self.assertTrue(Path(result['zip']).is_file())

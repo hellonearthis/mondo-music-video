@@ -131,8 +131,9 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 .vocab-filter-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .vocab-filter-toolbar input{margin-top:0!important;flex:1;min-width:200px;padding:8px 10px}
 .vocab-filter-buttons{display:flex;gap:10px}
-.vocab-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 10px;max-height:200px;overflow-y:auto;padding:8px;background:#f9faf6;border:1px solid var(--line);border-radius:4px}
-.vocab-item-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:400;margin-bottom:0;user-select:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vocab-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 10px;max-height:260px;overflow-y:auto;padding:8px;background:#f9faf6;border:1px solid var(--line);border-radius:4px;contain:paint layout}
+.vocab-item-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:400;margin-bottom:0;user-select:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;contain:paint}
+
 .vocab-item-label input{margin-top:0;accent-color:var(--green);flex-shrink:0}
 .vocab-custom-section{margin-top:4px}
 .vocab-custom-section label{margin-bottom:0}
@@ -549,3 +550,66 @@ button[aria-busy="true"], button.processing {
 .vocab-panel-card {
   padding: 24px;
 }
+
+/* Output Card Actions Row */
+.output-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.output-actions .secondary {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 4px;
+  border: 1px solid #c8d4b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.output-actions .secondary:hover {
+  background: #d8e4c7;
+  border-color: #b2c29e;
+}
+[data-theme=dark] .output-actions .secondary {
+  border-color: #506b4b;
+}
+[data-theme=dark] .output-actions .secondary:hover {
+  background: #38533f;
+  border-color: #729568;
+}
+.output-actions .delete-btn {
+  margin-left: auto;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: #b91c1c;
+  border: 1px solid #f87171;
+  transition: all 0.15s ease;
+}
+.output-actions .delete-btn:hover {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #ef4444;
+}
+[data-theme=dark] .output-actions .delete-btn {
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+[data-theme=dark] .output-actions .delete-btn:hover {
+  background: #450a0a;
+  color: #fecaca;
+  border-color: #b91c1c;
+}
+
+

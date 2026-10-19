@@ -323,7 +323,32 @@
 
 <section id="panel-idents" class="panel" hidden><div class="eyebrow">06 / SIGN YOUR WORK</div><h1>Make an <em>entrance.</em></h1><p class="intro">Generate an animated production ident. Attach it to your next video as opening or closing credits.</p><form id="ident-form" class="production-form card narrow" data-kind="ident"><label data-tooltip="Studio name or brand text to display in the ident animation" title="Studio name or brand text to display in the ident animation">Title to display<input name="title" maxlength="160" required placeholder="Your production name" data-tooltip="The text to render in the animated title card" title="The text to render in the animated title card"></label><label data-tooltip="Description of how the lettering, materials, and lighting animate" title="Description of how the lettering, materials, and lighting animate">Direction<textarea name="direction" rows="4" maxlength="6000" placeholder="Brushed chrome letters emerge from soft light." required data-tooltip="Motion, texture, and atmosphere instructions for the ident" title="Motion, texture, and atmosphere instructions for the ident"></textarea></label><label data-tooltip="Aesthetic style card applied to the ident animation" title="Aesthetic style card applied to the ident animation">Style<select name="style_id" class="style-select" data-tooltip="Choose visual style vocabulary for the ident" title="Choose visual style vocabulary for the ident"></select></label><div class="two-col"><label data-tooltip="Rendering backend for generating the ident" title="Rendering backend for generating the ident">Renderer<select name="backend" class="backend-select" data-tooltip="Select local or hosted rendering backend" title="Select local or hosted rendering backend"></select></label><label data-tooltip="Video resolution for the ident clip" title="Video resolution for the ident clip">Resolution<select name="resolution" class="resolution-select" data-tooltip="Choose output resolution" title="Choose output resolution"></select></label></div><div class="two-col"><label data-tooltip="Clip length in seconds (4 to 12 seconds)" title="Clip length in seconds (4 to 12 seconds)">Duration, seconds<input name="ident_seconds" type="number" min="4" max="12" value="5" data-tooltip="Ident animation duration in seconds" title="Ident animation duration in seconds"></label><label data-tooltip="Aspect ratio framing for the ident" title="Aspect ratio framing for the ident">Shape<select name="aspect" data-tooltip="Aspect ratio for title animation" title="Aspect ratio for title animation"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>5:4</option><option>4:5</option><option>2:1</option><option>1:2</option><option>21:9</option><option>9:21</option><option>3:1</option><option>1:3</option></select></label></div><label data-tooltip="Optional visual references for lettering or logo style" title="Optional visual references for lettering or logo style">Reference images<input type="file" class="refs-input" accept="image/*" multiple data-tooltip="Select optional reference images for the ident" title="Select optional reference images for the ident"></label><div class="refs-receipt file-receipt" data-tooltip="Attached reference files" title="Attached reference files">No reference images</div><button type="button" class="quiet clear-refs" data-tooltip="Remove reference images" title="Remove reference images">Clear reference images</button><label class="check" data-tooltip="Use shorter writer instructions and compact job data to save memory and context on small GPUs or CPU-only machines. Off keeps the full prompts. Ident writer sections that do not apply to the chosen mode are left out." title="Use shorter writer instructions and compact job data to save memory and context on small GPUs or CPU-only machines. Off keeps the full prompts. Ident writer sections that do not apply to the chosen mode are left out."><input name="compact_prompts" type="checkbox"> Compact prompts <small>(low VRAM/RAM)</small></label><p class="muted">Generated lettering may need a few attempts to spell a title correctly.</p><button class="primary operation-action" data-tooltip="Generate ident prompt and preview cost estimate" title="Generate ident prompt and preview cost estimate">Preview ident</button></form></section>
 
-<section id="panel-outputs" class="panel" hidden><div class="eyebrow">07 / THAT'S A WRAP</div><h1>Ready for <em>the world.</em></h1><p class="intro">Your finished work, ready to play or download. Optional Topaz exports preserve the original.</p><div id="output-list" class="output-grid" data-tooltip="Gallery of completed music videos and idents" title="Gallery of completed music videos and idents"></div></section>
+<section id="panel-outputs" class="panel" hidden><div class="eyebrow">07 / THAT'S A WRAP</div><h1>Ready for <em>the world.</em></h1><p class="intro">Your finished work, ready to play or download. Optional Topaz exports preserve the original.</p>
+<div id="output-list" class="output-grid" data-tooltip="Gallery of completed music videos and idents" title="Gallery of completed music videos and idents"></div>
+
+<details id="unfinished-runs-fold" class="card" style="margin-top:24px;">
+  <summary style="cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+    <span>Incomplete &amp; Draft Generations (<span id="unfinished-count">0</span>)</span>
+    <button type="button" id="purge-all-unfinished-btn" class="delete-btn" style="padding:4px 10px;font-size:11px;" data-tooltip="Purge all incomplete runs from disk">Purge all drafts</button>
+  </summary>
+  <p class="muted" style="font-size:12px;margin:8px 0 12px;">These folders are unfinished previews or interrupted renders. Generations with complete prompts can be resumed directly into rendering without rerunning LLM writing.</p>
+  <div id="unfinished-runs-table-wrap" style="overflow-x:auto;">
+    <table id="unfinished-runs-table" style="width:100%;font-size:12px;border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;border-bottom:1px solid var(--line);">
+          <th style="padding:6px 8px;">Title</th>
+          <th style="padding:6px 8px;">Date</th>
+          <th style="padding:6px 8px;">Passages</th>
+          <th style="padding:6px 8px;">Status</th>
+          <th style="padding:6px 8px;">Size</th>
+          <th style="padding:6px 8px;text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="unfinished-runs-list"></tbody>
+    </table>
+  </div>
+</details>
+</section>
 
 <section id="panel-settings" class="panel" hidden><div class="eyebrow">08 / YOUR MACHINE, YOUR STUDIO</div><div class="panel-header-row"><h1>Set the <em>stage.</em></h1><button type="button" class="secondary llama-help-btn" data-tooltip="Open guide for configuring local llama.cpp writer, vision models, and token buffers">Local writer setup guide</button></div><p class="intro">Connect your own services and installed models. Save multiple API profiles and select writing, vision and video accounts independently. Save Settings and a key before capturing a profile. Your keys stay on this machine and are never returned by the settings API.</p><form id="settings-form" class="card"><div id="settings-fields" class="form-grid" data-tooltip="Studio engine and model configuration parameters" title="Studio engine and model configuration parameters"></div><button class="primary operation-action" data-tooltip="Save all settings to local settings.json" title="Save all settings to local settings.json">Save settings</button></form><form id="key-form" class="card narrow"><h2>Provider keys</h2><label data-tooltip="Select provider credential to store locally" title="Select provider credential to store locally">Credential<select name="name" data-tooltip="Choose which API key to configure" title="Choose which API key to configure"><option>WAVESPEED_API_KEY</option><option>MMV_COMFY_API_KEY</option><option>MMV_VISION_API_KEY</option><option>MMV_WRITER_API_KEY</option></select></label><label data-tooltip="Enter provider secret key (stored in a local file with filesystem permissions)" title="Enter provider secret key (stored in a local file with filesystem permissions)">API key<input name="value" type="password" autocomplete="new-password" required data-tooltip="Paste your API key here" title="Paste your API key here"></label><p id="key-status" class="muted" data-tooltip="Credential configuration status" title="Credential configuration status"></p><button class="secondary operation-action" data-tooltip="Save this secret key securely to your local machine" title="Save this secret key securely to your local machine">Save key locally</button></form><p class="muted">Keep the server on localhost. See the included installation and platform guides for setup details.</p></section>
 
@@ -347,6 +372,38 @@
 <h3>Vision and service URLs</h3><p>Style Harvest needs a vision-capable service. If your model needs a projector, load its matching <code>--mmproj</code> file. Image-token options vary by model and llama.cpp version. Use the OpenAI-compatible base URL, usually ending in <code>/v1</code>; MMV appends <code>/chat/completions</code> for generation and <code>/models</code> for health checks.</p>
 <p>The Windows launcher accepts <code>-ContextSize</code> to choose a context size. This does not replace the current model. Check the service log for startup errors before increasing memory settings.</p>
 <button type="button" class="secondary close-llama-dialog">Close guide</button>
+</dialog>
+<dialog id="export-dialog" data-tooltip="Production package export options" title="Production package export options">
+<form method="dialog"><button class="dialog-close" aria-label="Close export dialog" data-tooltip="Dismiss export dialog" title="Dismiss export dialog">×</button></form>
+<div class="eyebrow">PRODUCTION PACKAGE EXPORT</div>
+<h2 id="export-dialog-title">Export Editing Package</h2>
+<p class="intro" style="font-size:12px;margin-bottom:16px;">Create a complete NLE editing bundle with raw passage clips, song stem, prompts, CMX 3600 timeline EDL, and receipts.</p>
+<div id="export-actors-warning" class="oap-trust-note" hidden>
+  <span class="oap-info-icon">⚠️</span>
+  <strong>Actor Likeness Notice:</strong>
+  <p id="export-actors-msg" style="margin:4px 0 8px;font-size:11px;"></p>
+  <label class="check">
+    <input type="checkbox" id="export-owner-confirm">
+    <span><strong>I am the owner / creator</strong> of these custom actors (or have authorization to export this private production).</span>
+  </label>
+  <div style="margin-top:8px;">
+    <a href="#" id="export-manage-actors-link" class="quiet" style="font-size:11px;">Manage cast &amp; OAP actors ↗</a>
+  </div>
+</div>
+<div class="picker-actions" style="margin-top:20px;">
+  <button type="button" id="export-cancel-btn" class="quiet">Cancel</button>
+  <button type="button" id="export-confirm-btn" class="primary">Export package</button>
+</div>
+</dialog>
+<dialog id="delete-video-dialog" data-tooltip="Confirm video deletion" title="Confirm video deletion">
+<form method="dialog"><button class="dialog-close" aria-label="Close delete dialog" data-tooltip="Dismiss delete dialog" title="Dismiss delete dialog">×</button></form>
+<div class="eyebrow" style="color:var(--danger, #e05252);">DELETE FINISHED PRODUCTION</div>
+<h2 id="delete-dialog-title">Delete Video</h2>
+<p id="delete-dialog-msg" style="font-size:13px;line-height:1.5;margin:12px 0 18px;color:var(--ink);">Are you sure you want to delete this finished video? This will permanently remove the MP4 and all rendered passage files from this machine.</p>
+<div class="picker-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+  <button type="button" id="delete-cancel-btn" class="quiet">Cancel</button>
+  <button type="button" id="delete-confirm-btn" class="primary" style="background:#b91c1c;border-color:#991b1b;color:#fff;">Delete permanently</button>
+</div>
 </dialog>
 <div id="studio-tooltip" class="studio-tooltip" role="tooltip" hidden></div>
 </body></html>

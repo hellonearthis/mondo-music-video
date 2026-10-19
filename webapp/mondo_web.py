@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.1"
+MGL_APP_VERSION = "1.8.2"
 WEB = Path(__file__).parent
 
 
@@ -1101,8 +1101,8 @@ def create_app(home=None, *, test_hosts=False):
             directory = store.home / 'runs' / run_id
             request = read_json(directory / 'request.json', {})
             consent = read_json(directory / 'consent.json', {})
-            if request.get('backend') != 'comfy_sdk_h3' or not consent.get('accepted'):
-                raise ValueError('Choose a previously authorized Comfy SDK production')
+            if request.get('backend') not in ('comfy_sdk_h3', 'local_h3') or not consent.get('accepted'):
+                raise ValueError('Choose a previously authorized local Comfy production')
             if (directory / 'output.json').exists():
                 raise ValueError('This production is already complete')
             # Recheck OAP, files, workflow and settings before offering recovery.
@@ -1187,9 +1187,91 @@ def create_app(home=None, *, test_hosts=False):
         changed = protected_scheme.check()
         return {"intact": not changed, "changed": protected_scheme.describe(changed), "notice": protected_scheme.notice() if changed else None}
 
+    @app.delete("/api/outputs/{run_id}")
+    def delete_output(run_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            run_id = identifier(run_id)
+            target = inside(store.home / "runs", run_id)
+            if not target.is_dir() or not (target / "output.json").is_file():
+                raise ValueError("Output not found")
+            shutil.rmtree(target, ignore_errors=True)
+            quotes.clear()
+        return {"deleted": run_id}
+
+    @app.get("/api/runs/unfinished")
+    def list_unfinished_runs():
+        results = []
+        runs_dir = store.home / "runs"
+        if not runs_dir.is_dir():
+            return []
+        for path in sorted(runs_dir.iterdir(), key=lambda p: p.stat().st_mtime if p.is_dir() else 0, reverse=True):
+            if not path.is_dir() or (path / "output.json").is_file():
+                continue
+            request = read_json(path / "request.json", {}) or {}
+            title = request.get("title") or "Untitled Draft"
+            backend = request.get("backend") or ""
+            kind = request.get("kind") or "video"
+            prompts = read_json(path / "prompts.json", {}) or {}
+            plan = read_json(path / "plan.json", {}) or (read_json(path / "prepared.json", {}) or {}).get("plan") or {}
+            segments = plan.get("segments", [])
+            total_segments = len(segments)
+            validated_prompts = sum(1 for seg in segments if bool(prompts.get(f"seg{seg['index']:03d}")))
+            can_finish = (total_segments > 0 and validated_prompts == total_segments and (backend in ("comfy_sdk_h3", "local_h3")))
+            
+            # calculate folder size
+            try:
+                folder_size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+            except Exception:
+                folder_size = 0
+
+            results.append({
+                "id": path.name,
+                "title": title.strip().strip('"'),
+                "backend": backend,
+                "kind": kind,
+                "mtime": path.stat().st_mtime,
+                "created_str": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                "segments": total_segments,
+                "validated_prompts": validated_prompts,
+                "can_finish": can_finish,
+                "size_mb": round(folder_size / (1024 * 1024), 2)
+            })
+        return results
+
+    @app.delete("/api/runs/unfinished/{run_id}")
+    def delete_unfinished_run(run_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            run_id = identifier(run_id)
+            target = inside(store.home / "runs", run_id)
+            if not target.is_dir():
+                raise ValueError("Run directory not found")
+            if (target / "output.json").is_file():
+                raise ValueError("Cannot purge a finished production with this endpoint")
+            shutil.rmtree(target, ignore_errors=True)
+            quotes.clear()
+        return {"deleted": run_id}
+
+    @app.post("/api/runs/unfinished/purge")
+    def purge_all_unfinished():
+        with jobs.lock:
+            jobs.require_idle()
+            runs_dir = store.home / "runs"
+            if not runs_dir.is_dir():
+                return {"purged_count": 0}
+            purged = 0
+            for path in list(runs_dir.iterdir()):
+                if path.is_dir() and not (path / "output.json").is_file():
+                    shutil.rmtree(path, ignore_errors=True)
+                    purged += 1
+            quotes.clear()
+        return {"purged_count": purged}
+
     @app.get("/api/outputs/{run_id}/score")
     def output_score(run_id: str):
         return score_view.music_score(store, run_id)
+
 
     @app.get("/api/media/{run_id}/{filename}")
     def media_file(run_id: str, filename: str, download: bool = False):
