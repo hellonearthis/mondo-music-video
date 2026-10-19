@@ -408,6 +408,26 @@ button[aria-busy="true"], button.processing {
 .vocab-chip-remove:hover {
   color: #9b1c1c;
 }
+.vocab-chip-more {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.vocab-chip-more:hover {
+  background: var(--lime);
+  color: var(--green);
+}
+[data-theme=dark] .vocab-chip-more {
+  background: rgba(255, 255, 255, 0.05);
+}
 [data-theme=dark] .vocab-random-quick-bar {
   background: #1f2e25;
   border-color: #354e3e;
@@ -468,3 +488,66 @@ button[aria-busy="true"], button.processing {
 .scheme-notice{margin:0 0 14px;padding:12px 16px;border:2px solid #b45309;border-radius:8px;background:#fff3e0;color:#5b2c00;font-size:14px;line-height:1.5}[data-theme=dark] .scheme-notice{background:#3a2200;color:#ffd8a8;border-color:#f0a24e}
 .subliminal-row{grid-column:1/-1}.subliminal-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px;margin:8px 0}.subliminal-fields [hidden]{display:none}.subliminal-fields small{grid-column:1/-1}
 .dance-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
+
+/* Director's Control Room & Modular Folds */
+.director-control-card {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+}
+.director-folds {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+.director-fold {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 0;
+  transition: border-color .15s ease;
+}
+.director-fold summary {
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 5px;
+}
+.director-fold[open] summary {
+  border-bottom: 1px solid var(--line);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.director-fold .fold-content {
+  padding: 16px;
+}
+.director-fold .two-col {
+  margin-bottom: 0;
+}
+[data-theme=dark] .director-fold summary {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Action Bar Wrap below cards */
+.action-bar-wrap {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.action-bar-wrap .action-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Vocabulary Panel Workspace */
+.vocab-panel-card {
+  padding: 24px;
+}
+
+[data-theme=dark] .vocab-chip-more:hover { background: #354e3e; color: var(--lime); }

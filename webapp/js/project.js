@@ -1,7 +1,5 @@
-// Navigation, project state persistence, song audio preview, and resolution selector.
-
-import { $, $$, api, json, option, state, updateLogDisplay } from "./core.js";
-import { updateVocabCustomBadge } from "./vocabulary.js";
+import { $, $$, api, json, notice, option, state, updateLogDisplay } from "./core.js";
+import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 
 let saveDebounceTimer = null;
 
@@ -12,6 +10,9 @@ export function panel(name) {
     node.classList.toggle("active", active);
     node.setAttribute("aria-current", active ? "page" : "false");
   });
+  if (name === "vocab") {
+    openVocabularyPanel().catch(error => notice(error.message));
+  }
   scheduleSave();
 }
 
@@ -81,7 +82,8 @@ export function getProjectState() {
     files,
     custom_vocabulary: state.currentCustomVocab,
     vocab_random_key: state.currentVocabRandomKey || "",
-    details_open: Boolean($("#video-form details")?.open),
+    details_open: Boolean($("#video-form details[open]")),
+    details_sections: Object.fromEntries($$("#video-form details[id]").map(el => [el.id, el.open])),
     log_open: Boolean($("#operation-log") && !$("#operation-log").hidden)
   };
 }
@@ -112,10 +114,13 @@ export async function restoreProject() {
   }
   if (!saved) return;
 
-  if (saved.panel) panel(saved.panel);
-  if (saved.details_open !== undefined) {
-    const det = $("#video-form details");
-    if (det) det.open = Boolean(saved.details_open);
+  // Restore vocabulary state and profile before opening its workspace.
+  if (saved.details_sections && Object.keys(saved.details_sections).length) {
+    $$("#video-form details[id]").forEach(el => {
+      el.open = Boolean(saved.details_sections[el.id]);
+    });
+  } else if (saved.details_open !== undefined) {
+    $$("#video-form details").forEach(el => el.open = Boolean(saved.details_open));
   }
   if (saved.log_open && $("#operation-log")) {
     $("#operation-log").hidden = false;
@@ -183,6 +188,7 @@ export async function restoreProject() {
     }
     state.formFiles.set(form, fState);
   });
+  if (saved.panel) panel(saved.panel);
 }
 
 export function initNavigation() {
@@ -214,7 +220,8 @@ export function initNavigation() {
     form.addEventListener("change", scheduleSave);
   });
 
-  const videoDetails = $("#video-form details");
-  if (videoDetails) videoDetails.addEventListener("toggle", scheduleSave);
+  $$("#video-form details").forEach(details => {
+    details.addEventListener("toggle", scheduleSave);
+  });
 }
 

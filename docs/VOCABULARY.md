@@ -1,5 +1,7 @@
 # Visual vocabulary — 1.0.13
 
+Open **Visual vocabulary** in the sidebar or **Explore vocabulary** in the music-video form. Edit built-in pools or custom entries, then choose **Apply to Current Video** to use the draft. Leaving the workspace without applying discards that draft when you reopen it. Summary cards show up to 20 entries; **more (open tab)** opens the complete category.
+
 Mondo Music Video uses the expanded SFW subset of the vocabulary data explicitly
 supplied by the owner. The public extraction originally kept the sampler but
 shipped a small selection of entries. This release expands the default data file

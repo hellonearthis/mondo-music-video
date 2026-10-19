@@ -329,4 +329,4 @@ if (-not $NoBrowser) {
     } -ArgumentList $Port | Out-Null
 }
 
-& $MmvPython -m mmv.setup serve --port $Port
+& $MmvPython -X utf8 -m mmv.setup serve --port $Port

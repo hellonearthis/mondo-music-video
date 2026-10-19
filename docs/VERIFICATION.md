@@ -1,5 +1,44 @@
 # Verification — 1.6.1
 
+## 1.8.2 Antigravity review follow-up (2026-10-19)
+
+Final full `.venv/bin/python -m pytest -q`: **423 tests and 119 subtests passed**,
+no skips, 94.71 s, outside the socket-restricted sandbox. Focused Chromium suite:
+**17 passed** (26.49 s). Temporary services/media only. New browser coverage opens
+the guide from the form and workspace, follows its workspace link, verifies the
+category-specific overflow accessible name and computes dark hover contrast from
+rendered CSS colors (at least 4.5:1).
+
+Fresh-process version handler reports **1.8.2**; pyproject and README agree.
+Protected-scheme check returns `[]`; `git diff --check` passes. Antigravity's
+read-only review is received and all findings have recorded dispositions in
+[COLLABORATOR_REVIEW.md](COLLABORATOR_REVIEW.md). No new helper calls, real
+renders, GPU/paid work, live process version claim, restart, commit or push.
+
+
+## 1.8.1 collaborator integration (2026-10-19)
+
+Final `.venv/bin/python -m pytest -q` outside the socket-restricted sandbox:
+**422 tests and 119 subtests passed**, no skips, 90.38 s. Tests use temporary
+media and mock services, including Chromium workspace navigation/restoration,
+category-card updates, independent fold persistence, and agent/MCP version discovery.
+The previous complete run also passed (90.65 s), before the final navigation error notice.
+
+A fresh-process import of `api_version()` returned **1.8.1**; pyproject and README
+agree. `mmv.protected_scheme.check()` returned `[]`; no protected prompts, pins or
+protection tests changed. `git diff --check` passed. A parsed comparison of all form
+controls against 1.8.0 found only lyrics textarea height changing from five to four
+rows; field defaults/options are preserved. Windows UTF-8 launcher execution was
+reviewed but not run on this Linux host.
+
+Reviewed fork head: `1704454c4d3f538866b1cb3eed72af5dfb74f0e5` in an isolated
+checkout. Claude Code completed a read-only review; findings and dispositions are
+in [the review record](COLLABORATOR_REVIEW.md). Antigravity's requested UI review
+was pending at that delivery; its completed follow-up is recorded above.
+No real generation, GPU/paid work, service restart, commit, push or publication.
+No claim that an existing running process serves 1.8.1.
+
+
 
 ## 1.6.1 RunPod installation guidance (2026-10-18)
 
