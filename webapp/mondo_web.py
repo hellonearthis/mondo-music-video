@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.3"
+MGL_APP_VERSION = "1.8.4"
 WEB = Path(__file__).parent
 
 
@@ -1025,11 +1025,14 @@ def create_app(home=None, *, test_hosts=False):
             quote_id = secrets.token_urlsafe(24)
             quotes[quote_id] = {"request": request, "fingerprint": production.fingerprint(store, request, prepared),
                                 "expires": time.time() + 600}
+            from mmv.services import check_required_services
+            offline_engines = check_required_services(store, request, resume=bool(resume_directory))
             return {"id": quote_id, "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
                     "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "dance": prepared.get("dance"),
+                    "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
@@ -1139,6 +1142,12 @@ def create_app(home=None, *, test_hosts=False):
                 log_studio(store, f"Start failed: {msg}", level="ERROR")
                 raise ValueError(msg)
             request = quoted["request"]
+            from mmv.services import check_required_services
+            missing_errors = check_required_services(store, request, resume=bool(quoted.get("resume_run")))
+            if missing_errors:
+                msg = f"Cannot start: {missing_errors[0]}"
+                log_studio(store, f"Start rejected (engine offline): {msg}", level="ERROR")
+                raise ValueError(msg)
             kind = request.get("kind", "video")
             try:
                 prepared = (production.prepare_resume(store, request, store.home / 'runs' / quoted['resume_run'])

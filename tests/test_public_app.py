@@ -400,9 +400,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.3")
+        self.assertEqual(api_version()["version"], "1.8.4")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.3", (root / "README.md").read_text())
+        self.assertIn("1.8.4", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -482,6 +482,48 @@ class PublicAppTests(unittest.TestCase):
         laya_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Laya reviewing passage 2"})
         self.assertEqual(laya_eval["laya"]["activity"], "processing")
         self.assertEqual(laya_eval["comfy"]["activity"], "sleeping")
+
+    def test_offline_engines_guard_and_quote_reporting(self):
+        original_settings = self.store.settings()
+        # 1. Video request with offline writer
+        bad_settings = {**original_settings, "writer_url": "http://127.0.0.1:9999", "writer_launch": ""}
+        save_settings(self.store, bad_settings)
+        req = {"kind": "video", "backend": "local_h3", "song": self.song_upload()}
+        quote_res = self.client.post("/api/quote", json=req)
+        self.assertEqual(quote_res.status_code, 200)
+        quote_data = quote_res.json()
+        self.assertIn("offline_engines", quote_data)
+        self.assertTrue(any("Prompt Writer" in err for err in quote_data["offline_engines"]))
+
+        # Attempting to start with offline writer must be blocked with HTTP 400
+        start_res = self.client.post("/api/start", json={"quote_id": quote_data["id"], "consent": True})
+        self.assertEqual(start_res.status_code, 400)
+        self.assertIn("Prompt Writer", start_res.json()["detail"])
+
+        # 2. Offline ComfyUI
+        bad_comfy = {**original_settings, "comfy_url": "http://127.0.0.1:9998", "comfy_launch": ""}
+        save_settings(self.store, bad_comfy)
+        quote_res2 = self.client.post("/api/quote", json=req)
+        quote_data2 = quote_res2.json()
+        self.assertTrue(any("ComfyUI" in err for err in quote_data2["offline_engines"]))
+        start_res2 = self.client.post("/api/start", json={"quote_id": quote_data2["id"], "consent": True})
+        self.assertEqual(start_res2.status_code, 400)
+        self.assertIn("ComfyUI", start_res2.json()["detail"])
+
+        # 3. Harvest with offline Vision
+        bad_vision = {**original_settings, "vision_url": "http://127.0.0.1:9997"}
+        save_settings(self.store, bad_vision)
+        ref_res = self.client.post("/api/upload/reference", files={"file": ("test.png", picture(), "image/png")})
+        harvest_req = {"kind": "harvest", "style_id": "test_style", "references": [ref_res.json()["file"]]}
+        quote_h = self.client.post("/api/quote", json=harvest_req)
+        quote_h_data = quote_h.json()
+        self.assertTrue(any("Vision" in err for err in quote_h_data["offline_engines"]))
+        start_h = self.client.post("/api/start", json={"quote_id": quote_h_data["id"], "consent": True})
+        self.assertEqual(start_h.status_code, 400)
+        self.assertIn("Vision", start_h.json()["detail"])
+
+        # Restore original settings
+        save_settings(self.store, original_settings)
 
     def test_project_persistence_api(self):
         project = {

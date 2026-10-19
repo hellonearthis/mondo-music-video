@@ -13,6 +13,13 @@ export const getSseSource = () => sseSource;
 let statusTimer = null;
 let lastStreamEvent = 0;
 
+const escapeHtml = (s = "") =>
+  String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+
 // The form has flat subliminal_* fields; the request carries them as one nested object.
 export function subliminalFromForm(request) {
   const mode = request.subliminal_mode || "off";
@@ -176,6 +183,38 @@ export function showQuote(request, quote) {
       summary.append(text("p", `${(passage.song_start_frame / 24).toFixed(2)}s · ${passage.section_label} · ${passage.montage_type.replaceAll("_", " ")} · ${passage.shots.length} shots`));
     }
   }
+  const offlineList = quote.offline_engines || [];
+  if (offlineList.length > 0) {
+    const banner = document.createElement("div");
+    banner.className = "service-alert-banner";
+    banner.setAttribute("role", "alert");
+    banner.innerHTML = `
+      <div class="service-alert-header">
+        <span class="service-alert-icon" aria-hidden="true">⚠️</span>
+        <strong>Required Engine Offline</strong>
+      </div>
+      <ul class="service-alert-list">
+        ${offlineList.map(err => `<li>${escapeHtml(err)}</li>`).join("")}
+      </ul>
+      <p class="service-alert-foot">Production cannot start until required engines are online. Please start the service or update your settings, then request a new preview.</p>
+    `;
+    summary.prepend(banner);
+
+    $("#consent").checked = false;
+    $("#consent").disabled = true;
+    const startBtn = $("#start-production");
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.title = "A required engine is offline. Start the service or fix settings to proceed.";
+    }
+  } else {
+    $("#consent").disabled = false;
+    const startBtn = $("#start-production");
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.title = "";
+    }
+  }
   $("#consent").checked = false;
   const dialog = $("#preview-dialog");
   if (!dialog.dataset.scoreEditorBound) {
@@ -276,6 +315,24 @@ export async function applyStatus(status) {
   $$(".operation-action").forEach(button => button.disabled = busy);
   if (status.services) {
     renderServices(status.services);
+  }
+  $$(".service-card").forEach(c => c.classList.remove("card-offline-needed"));
+  if (status.state === "failed") {
+    const msg = (status.message || "").toLowerCase();
+    if (msg.includes("offline") || msg.includes("unreachable") || msg.includes("connection refused") || msg.includes("cannot start")) {
+      if (msg.includes("writer") || msg.includes("llama")) {
+        $("#service-card-writer")?.classList.add("card-offline-needed");
+      }
+      if (msg.includes("comfy")) {
+        $("#service-card-comfy")?.classList.add("card-offline-needed");
+      }
+      if (msg.includes("vision")) {
+        $("#service-card-vision")?.classList.add("card-offline-needed");
+      }
+      if (msg.includes("laya")) {
+        $("#service-card-laya")?.classList.add("card-offline-needed");
+      }
+    }
   }
   if (state.lastState && state.lastState !== status.state && !busy) {
     await Promise.all([loadActors(), loadStyles(), loadOutputs()]);
@@ -479,6 +536,9 @@ export function initOperationControls() {
   });
 
   $("#start-production").onclick = handle(async () => {
+    if (state.currentQuote?.offline_engines?.length) {
+      throw new Error(`Cannot start production: ${state.currentQuote.offline_engines[0]}`);
+    }
     if (!$("#consent").checked) throw new Error("Accept the preview before starting");
     const btn = $("#start-production");
     const orig = btn ? btn.innerHTML : null;

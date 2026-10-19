@@ -40,6 +40,7 @@ def _probe_raw_services(store) -> dict:
         "queue_running": 0,
         "queue_pending": 0,
         "backend": settings.get("backend", "local_h3"),
+        "has_launch": bool(settings.get("comfy_launch")),
         "error": None,
     }
     if comfy_url:
@@ -79,6 +80,7 @@ def _probe_raw_services(store) -> dict:
         "model": writer_model,
         "available": False,
         "slots_processing": 0,
+        "has_launch": bool(settings.get("writer_launch")),
         "error": None,
     }
     if writer_mode == "api":
@@ -174,6 +176,7 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "role": "Video Renderer",
         "url": comfy_raw.get("url", ""),
         "available": comfy_avail,
+        "has_launch": bool(comfy_raw.get("has_launch")),
         "activity": comfy_activity,
         "detail": comfy_detail,
         "device": comfy_raw.get("device", ""),
@@ -211,6 +214,7 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "role": "Prompt Writer",
         "url": writer_raw.get("url", ""),
         "available": writer_avail,
+        "has_launch": bool(writer_raw.get("has_launch")),
         "activity": writer_activity,
         "detail": writer_detail,
         "model": writer_model,
@@ -276,3 +280,79 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "laya": laya_status,
         "vision": vision_status,
     }
+
+
+def check_required_services(store, request: dict, resume: bool = False) -> list[str]:
+    """Verify that all engines required for the requested production are available.
+
+    Returns a list of human-readable error messages explaining which engine is offline
+    and how to start or configure it. Returns empty list if all required engines are ready.
+    """
+    services = check_services(store, force=True)
+    kind = request.get("kind", "video")
+    backend = request.get("backend", "local_h3")
+    errors = []
+
+    if kind == "harvest":
+        vision = services.get("vision", {})
+        if not vision.get("available"):
+            endpoint = vision.get("url") or "unconfigured"
+            errors.append(
+                f"Vision engine is offline or unreachable ({endpoint}). "
+                "Multimodal style harvesting requires a running vision model or API configuration in Settings."
+            )
+        return errors
+
+    # Video and ident need Prompt Writer (unless resuming)
+    if not resume:
+        writer = services.get("writer", {})
+        if not writer.get("available") and not writer.get("has_launch"):
+            mode = writer.get("mode", "local")
+            endpoint = writer.get("url") or "unconfigured"
+            if mode == "local":
+                errors.append(
+                    f"Prompt Writer (llama.cpp) is offline at {endpoint}. "
+                    "Production cannot generate passage prompts without it. "
+                    "Please start llama-server or configure writer_launch in Settings."
+                )
+            else:
+                errors.append(
+                    f"Prompt Writer API is offline or unconfigured at {endpoint}. "
+                    "Production cannot generate passage prompts without it. "
+                    "Please configure a valid API key and model in Settings."
+                )
+
+    # Video needs Laya prompt reviewer (unless resuming)
+    if kind == "video" and not resume:
+        laya = services.get("laya", {})
+        if not laya.get("available"):
+            errors.append(
+                "Laya prompt reviewer models are missing or incomplete. "
+                "Stage the required model files (model.safetensors, rl_agent_config.json, tokenizer, encoder/config.json) "
+                "or configure laya_model_dir in Settings before starting production."
+            )
+
+    # ComfyUI is needed for local_h3 backend
+    if backend == "local_h3":
+        comfy = services.get("comfy", {})
+        if not comfy.get("available") and not comfy.get("has_launch"):
+            endpoint = comfy.get("url") or "unconfigured"
+            errors.append(
+                f"ComfyUI video renderer is offline at {endpoint}. "
+                "Production cannot render clips without it. "
+                "Please start ComfyUI or configure comfy_launch in Settings."
+            )
+
+    # Multimodal Vision quality check if requested
+    if request.get("vision_quality_check"):
+        vision = services.get("vision", {})
+        if not vision.get("available"):
+            endpoint = vision.get("url") or "unconfigured"
+            errors.append(
+                f"Vision engine is offline at {endpoint}. "
+                "Vision quality checking is enabled but the multimodal vision model is offline. "
+                "Please start your vision model or disable Vision quality check."
+            )
+
+    return errors
+

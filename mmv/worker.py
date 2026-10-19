@@ -145,6 +145,9 @@ def run(home, directory, *, resume=False):
         if not ok:
             mode = "local llama.cpp" if settings.get('writer_mode') == 'local' else "API writer"
             endpoint = runtime.safe_endpoint(settings.get('writer_url', ''))
+            err_str = str(error or '')
+            if any(term in err_str.lower() for term in ("connection refused", "winerror 10061", "offline", "unreachable", "failed to establish", "connection error", "target machine actively refused")):
+                raise ValueError(f"Prompt Writer is offline or unreachable ({mode} at {endpoint}): {error}. Please ensure the writer service is running.")
             raise ValueError(f"Writer ({mode} at {endpoint}) failed: {error or 'Writer returned no output'}")
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"Writer ({settings.get('writer_model') or 'llama.cpp'}) returned empty text")
@@ -156,7 +159,11 @@ def run(home, directory, *, resume=False):
                  {'model': settings['vision_model'], 'messages': [{'role':'user', 'content': style.build_harvest_payload([Path(p) for p in prepared['references']])}],
                   'max_tokens':4096, 'temperature':.4}, key=store.key('MMV_VISION_API_KEY'), timeout=900)
         except Exception as exc:
-            raise ValueError(f"Vision service ({runtime.safe_endpoint(settings['vision_url'])}) failed during style harvest: {exc}") from exc
+            err_str = str(exc).lower()
+            endpoint = runtime.safe_endpoint(settings.get('vision_url', ''))
+            if any(term in err_str for term in ("connection refused", "winerror 10061", "offline", "unreachable", "failed to establish", "target machine actively refused")):
+                raise ValueError(f"Vision engine is offline or unreachable at {endpoint}: {exc}. Please ensure your vision model service is running.") from exc
+            raise ValueError(f"Vision service ({endpoint}) failed during style harvest: {exc}") from exc
         card, aesthetic = style.parse_harvest_response(response['choices'][0]['message']['content'])
         if not card.strip() or not aesthetic.strip(): raise ValueError('Harvest did not return a style card and aesthetic directives')
         record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic, 'style_card':card}
@@ -431,10 +438,17 @@ def run(home, directory, *, resume=False):
         def render_passage(seg, segment_id, seed):
             images = [(member['actor_id'],sheets[member['actor_id']]) for member in casting.cast_for(prepared['casting'],seg.segment_id)]
             if len(images) != seg.ref_image_slots: raise ValueError('Original cast/reference-slot contract disagrees; refusing render')
-            result = backend.render_segment(segment_id=segment_id,index=seg.index,slug=plan.slug,
-                prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
-                width=plan.width,height=plan.height,seed=seed,images=images,song=str(song),
-                audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
+            try:
+                result = backend.render_segment(segment_id=segment_id,index=seg.index,slug=plan.slug,
+                    prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
+                    width=plan.width,height=plan.height,seed=seed,images=images,song=str(song),
+                    audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s)
+            except Exception as exc:
+                err_str = str(exc).lower()
+                if any(term in err_str for term in ("connection refused", "winerror 10061", "offline", "unreachable", "failed to establish", "target machine actively refused")):
+                    endpoint = runtime.safe_endpoint(settings.get('comfy_url', 'http://127.0.0.1:8188'))
+                    raise ValueError(f"ComfyUI video renderer is offline or unreachable at {endpoint}: {exc}. Please check that ComfyUI is running.") from exc
+                raise
             video = result.get('video')
             if not video or not Path(video).is_file() or assemble.probe_frames(video) < seg.trim_frames:
                 raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')

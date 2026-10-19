@@ -86,6 +86,15 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 /* Card Activity States */
 .service-card.card-processing{border-color:#86efac;background:#fcfffa}
 .service-card.card-missing{border-color:#fcd34d}
+.service-card.card-offline-needed{border-color:#f43f5e!important;background:#fff1f2!important;animation:pulse-offline 2s infinite ease-in-out}
+
+/* Service Alert Banner in Dialogs */
+.service-alert-banner{background:#fff1f2;border:1px solid #fecdd3;border-left:4px solid #e11d48;border-radius:4px;padding:12px 14px;margin-bottom:14px;color:#9f1239}
+.service-alert-header{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;margin-bottom:6px;color:#be123c}
+.service-alert-icon{font-size:15px;line-height:1}
+.service-alert-list{margin:4px 0 8px 18px;padding:0;font-size:11.5px;line-height:1.6}
+.service-alert-list li{margin-bottom:4px}
+.service-alert-foot{font-size:11px;line-height:1.5;margin:4px 0 0;color:#881337}
 
 /* Dark Mode Overrides for Service Dock */
 [data-theme=dark] .service-dock{background:#17221c;border-color:var(--line)}
@@ -94,6 +103,11 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 [data-theme=dark] .service-card{background:#1b2620;border-color:var(--line)}
 [data-theme=dark] .service-card.card-processing{border-color:#3d7052;background:#18281f}
 [data-theme=dark] .service-card.card-missing{border-color:#70592b}
+[data-theme=dark] .service-card.card-offline-needed{border-color:#e11d48!important;background:#2a1215!important}
+[data-theme=dark] .service-alert-banner{background:#2a1215;border-color:#4c1d24;border-left-color:#f43f5e;color:#fecdd3}
+[data-theme=dark] .service-alert-header{color:#fda4af}
+[data-theme=dark] .service-alert-foot{color:#fca5a5}
+@keyframes pulse-offline{0%,100%{box-shadow:0 0 0 0 rgba(225,29,72,.4)}50%{box-shadow:0 0 0 6px rgba(225,29,72,0)}}
 [data-theme=dark] .badge-processing{background:#1b3823;color:#86efac;border-color:#2a5736}
 [data-theme=dark] .badge-sleeping{background:#223328;color:#b2cdbb;border-color:#354d3e}
 [data-theme=dark] .badge-missing{background:#3d2f14;color:#fcd34d;border-color:#6c5424}
