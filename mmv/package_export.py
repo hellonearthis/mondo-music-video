@@ -420,6 +420,8 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
               '- Actors: ' + (', '.join(f'{n} (`{i}`)' for i, n in cast) or 'none'),
               '- Mode: ' + ('; '.join(modes) or 'standard'),
               f'- Production time: {clock(run_seconds(run))} (from operation.json / operation.log)',
+              *(['- Subliminal flashes: %d frame(s) each at %s s (the untouched video is `music-video-clean.mp4` in 01_final)' % (
+                  output['subliminal']['frames'], ', '.join(str(t) for t in output['subliminal']['times']))] if output.get('subliminal') else []),
               '- Prompting scheme: ' + (protected_scheme.notice() or 'unmodified (the protected prompts, sealed-lips scheme and checks match the released Mondo scheme)'), '',
               '## Passages (times are on the song clock)', '',
               '| # | Start-end (s) | Shots | Montage grammar | Cast | Sings | Clip | Prompt |', '|---|---|---|---|---|---|---|---|']

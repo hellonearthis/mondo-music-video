@@ -1,5 +1,19 @@
 # Releases
 
+## 1.7.2 — Subliminal message mode and sturdier Suno lyric parsing
+
+- **Subliminal message mode** (opt-in, off by default; music videos): flash a chosen picture, or a few words rendered full-frame, for 1 to 12
+  frames at times you give or spread over the song's downbeats. Applied after assembly with FFmpeg, outside the engine: frame count,
+  duration and audio (copied, never re-encoded) are unchanged, and the untouched video is kept as `music-video-clean.mp4`. Photosensitivity
+  guards: flashes are at least a second apart and stay clear of the first and last second. The quote shows the planned times; a failed flash
+  leaves the finished video exactly as it was and records a warning. The export package notes it. Available in the app, API, agent client and
+  MCP tools.
+- **Suno lyric parsing and timing hardened** after an adversarial review: stray words heard far away no longer stretch a line across the song,
+  lines never heard are placed in the gap beside the singing instead of at zero, curly apostrophes, accents and other scripts match, stage
+  directions such as `[laughs]` are ignored, several markers on one line combine, `(x2)` and `(Chorus)` are ignored, real short shouts are
+  kept while recognizer blips are dropped, and input sizes are capped. Regression tests cover each case.
+- The prompting scheme, writer, ident and singing wording are unchanged.
+
 ## 1.7.1 — Studio-quality clips, prompting-scheme protection, rented-GPU guide
 
 - **Studio-quality raw clips** (opt-in `clip_quality`: `standard` default, `prores`, `lossless`; Comfy SDK renderer, music videos only). The

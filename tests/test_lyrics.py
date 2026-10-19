@@ -61,7 +61,7 @@ class LyricsTests(unittest.TestCase):
         self.assertEqual([line['backing'] for line in timed], [False, True])
         self.assertEqual([line['section'] for line in timed], ['verse 1', 'verse 1'])
         self.assertIsNone(lyrics.parse_lyrics('hello')[0]['section'])
-        self.assertEqual(len(lyrics.parse_lyrics('[' + 'a' * 50 + '] hello')[0]['section']), 40)
+        self.assertEqual(len(lyrics.parse_lyrics('[verse ' + 'a' * 50 + '] hello')[0]['section']), 40)
 
     def test_instrumental_blocks_are_parsed_but_not_timed(self):
         for marker in ('Instrumental', 'Guitar Solo', 'Interlude', 'Break', 'Drop', 'Beat'):
@@ -74,6 +74,86 @@ class LyricsTests(unittest.TestCase):
                 self.assertTrue(all(line['matched'] == 1.0 for line in timed))
         with self.assertRaises(ValueError):
             lyrics.align_lines('[Instrumental]\nonly music', words('only music'))
+
+    def test_review_a_short_line_is_not_matched_from_a_stray_word_heard_far_away(self):
+        heard = words('hello there my friend', start=1.0) + [{'word': 'the', 'start': 200.0, 'end': 200.3}] + words('goodbye my friend', start=300.0)
+        timed = lyrics.align_lines('hello there my friend\nthe end\ngoodbye my friend', heard)
+        self.assertNotEqual(timed[1]['timing'], 'matched')                   # one filler word is not a match
+        self.assertEqual([timed[0]['timing'], timed[2]['timing']], ['matched', 'matched'])
+        heard = words('we are the champions', start=1.0) + words('and the', start=100.0) + words('my friends', start=300.0)
+        timed = lyrics.align_lines('we are the champions\nand the winners of all my friends', heard)
+        self.assertLess(timed[1]['end'] - timed[1]['start'], 12)             # never one line across 200 s of silence
+        self.assertNotEqual(timed[1]['timing'], 'matched')
+        two = lyrics.align_lines('hello you', words('hello', start=1.0) + words('xxx', start=2.0))
+        self.assertEqual(two[0]['timing'], 'uncertain')                      # half the words is not enough for two words
+
+    def test_review_guessed_lines_sit_in_the_gap_next_to_the_singing_not_at_zero_or_hugging_the_wrong_line(self):
+        leading = lyrics.align_lines('never sung at all\nhello world', words('hello world', start=60.0))
+        self.assertEqual(leading[0]['timing'], 'interpolated')
+        self.assertGreaterEqual(leading[0]['start'], 56.0)
+        self.assertLessEqual(leading[0]['end'], leading[1]['start'] + 0.01)
+        middle = lyrics.align_lines('hello world\nnever heard it\nlast line here', words('hello world', start=1.0) + words('last line here', start=60.0))
+        self.assertTrue(25 < middle[1]['start'] < 35 and middle[1]['end'] - middle[1]['start'] <= lyrics.GUESS_SECONDS + 0.01)
+        trailing = lyrics.align_lines('yeah\nyeah\nyeah\nyeah', words('yeah yeah', start=1.0, step=1.0))
+        self.assertGreaterEqual(trailing[2]['start'], trailing[1]['end'])
+        self.assertTrue(all(line['end'] > line['start'] for line in trailing))
+
+    def test_review_curly_apostrophes_leading_quotes_and_other_scripts_match(self):
+        timed = lyrics.align_lines('it\u2019s gonna be fine', words("it's gonna be fine", start=1.0))
+        self.assertEqual((timed[0]['timing'], timed[0]['matched']), ('matched', 1.0))
+        self.assertEqual(lyrics.align_lines("'Cause I love you", words('Cause I love you', start=1.0))[0]['matched'], 1.0)
+        self.assertEqual(lyrics.align_lines("rock 'n' roll tonight", words("rock n roll tonight", start=1.0))[0]['matched'], 1.0)
+        mixed = lyrics.align_lines('\u041f\u0440\u0438\u0432\u0435\u0442 \u043c\u0438\u0440\nhello there', words('\u041f\u0440\u0438\u0432\u0435\u0442 \u043c\u0438\u0440 hello there', start=1.0))
+        self.assertEqual([line['timing'] for line in mixed], ['matched', 'matched'])
+        self.assertEqual(lyrics.align_lines('Se\u00f1or caf\u00e9', words('Se\u00f1or caf\u00e9', start=1.0))[0]['matched'], 1.0)
+        self.assertEqual(lyrics.align_lines('Twenty-one pilots', words('Twenty-one pilots', start=1.0))[0]['matched'], 1.0)
+        with self.assertRaisesRegex(ValueError, 'do not match'):
+            lyrics.align_lines('\u041f\u0440\u0438\u0432\u0435\u0442 \u043c\u0438\u0440', words('hello there friend', start=1.0))
+
+    def test_review_matched_times_are_the_real_times_of_the_words_and_bad_asr_words_are_tolerated(self):
+        point = lyrics.align_lines('a\nb', [{'word': 'a', 'start': 1.0, 'end': 1.0}, {'word': 'b', 'start': 1.1, 'end': 1.2}])
+        self.assertEqual((point[0]['start'], point[1]['start']), (1.0, 1.1))            # b is not pushed to 1.5
+        inverted = lyrics.align_lines('one', [{'word': 'one', 'start': 5.0, 'end': 4.0}])
+        self.assertEqual(inverted[0]['start'], 5.0)
+        self.assertGreater(inverted[0]['end'], 5.0)
+        long_word = lyrics.align_lines('a\nb', [{'word': 'a', 'start': 1.0, 'end': 4.0}, {'word': 'b', 'start': 2.0, 'end': 2.5}])
+        self.assertEqual(long_word[1]['start'], 2.0)                                     # overlapping speech keeps its own time
+        with self.assertRaisesRegex(ValueError, 'word, start and end'):
+            lyrics.align_lines('hello', [{'word': 'hello'}])
+        self.assertEqual(lyrics.align_lines('hello', [{'word': 'hello', 'start': float('nan'), 'end': 1}, {'word': 'hello', 'start': 2.0, 'end': 2.4}])[0]['start'], 2.0)
+
+    def test_review_short_real_words_survive_grouping_and_symbols_do_not(self):
+        keep = lambda *ws: lyrics.group_lines([{'word': w, 'start': s, 'end': e} for w, s, e in ws])
+        self.assertEqual(len(keep(('x', 0.1, 0.35))), 1)                    # 0.25 s that float rounding used to drop
+        self.assertEqual(len(keep(('Hey!', 5.0, 5.2))), 1)                  # a short real shout
+        self.assertEqual(keep(('.', 1.0, 1.5)), [])
+        self.assertEqual(keep(('\u266a', 1.0, 3.0)), [])
+        self.assertEqual(keep(("We'll", 56.5, 56.55), ('be', 56.55, 56.6), ('right', 56.6, 56.62), ('back.', 56.62, 56.65)), [])
+
+    def test_review_markers_stage_directions_combinations_and_oddities(self):
+        direction = lyrics.parse_lyrics('He said [laughs] hi\nnext line')
+        self.assertEqual([(e['text'], e['section']) for e in direction], [('He said hi', None), ('next line', None)])
+        after = lyrics.parse_lyrics('hello [Guitar Solo] more words\nafter')
+        self.assertEqual((after[0]['kind'], after[0]['text']), ('sung', 'hello more words'))       # applies from the next line
+        self.assertEqual(after[1]['kind'], 'instrumental')
+        self.assertEqual(lyrics.parse_lyrics('[Instrumental][Whispered]\nla la')[0]['kind'], 'instrumental')
+        for marker in ('Piano Intro', 'Instrumentals', 'Silence', 'Guitar Intro'):
+            self.assertEqual(lyrics.parse_lyrics(f'[{marker}]\nla')[0]['kind'], 'instrumental', marker)
+        self.assertEqual(lyrics.parse_lyrics('[Bridge - break down]\nhey')[0]['kind'], 'sung')
+        for text in ('\u3010Verse 1\u3011\nhello', '**[Verse 1]**\nhello', '[Verse 1]\nhello'):
+            entry = lyrics.parse_lyrics(text)
+            self.assertEqual((len(entry), entry[0]['text'], entry[0]['section']), (1, 'hello', 'verse 1'))
+        self.assertIsNone(lyrics.parse_lyrics('[]\nhi')[0]['section'])
+        self.assertEqual([e['text'] for e in lyrics.parse_lyrics('(Chorus)\n[Chorus] (x2)\nHello (x2)\nreal line')], ['Hello', 'real line'])
+        for text in ('(ooh) (aah)', '((ooh))'):
+            self.assertTrue(lyrics.parse_lyrics(text)[0]['backing'], text)
+        self.assertNotIn('[', lyrics.parse_lyrics('[Verse [1]]\nhello')[0]['text'])
+
+    def test_review_size_limits_and_a_repeated_line_heard_fewer_times(self):
+        with self.assertRaisesRegex(ValueError, 'at most 16000'):
+            lyrics.align_lines(' '.join(['la'] * 8001), words('la la', start=1.0))
+        with self.assertRaisesRegex(ValueError, 'Too much text'):
+            lyrics.align_lines('la la', [{'word': 'la', 'start': i * 0.1, 'end': i * 0.1 + 0.05} for i in range(8001)])
 
     def test_instrumental_detection_uses_whole_words_and_voice_words_win(self):
         sung = ('Vocal Solo', 'Breakdown', 'Dropout Chorus', 'Beatbox Verse', 'Rap Break', 'Spoken Break', 'Choir Interlude')

@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.7.1')
+                expect(page.locator('#version')).to_have_text('1.7.2')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -518,6 +518,103 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_subliminal_controls_show_the_right_fields_and_build_one_nested_request_object(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate('() => { document.querySelector("#video-form details").open = true; }')
+                fields = page.locator('#video-form .subliminal-fields')
+                expect(fields).to_be_hidden()
+                page.locator('#video-form select[name=subliminal_mode]').select_option('text')
+                expect(fields).to_be_visible()
+                expect(page.locator('#video-form input[name=subliminal_text]')).to_be_visible()
+                expect(page.locator('#video-form input[name=subliminal_file]')).to_be_hidden()
+                expect(page.locator('#video-form input[name=subliminal_times]')).to_be_visible()
+                page.locator('#video-form select[name=subliminal_mode]').select_option('image')
+                expect(page.locator('#video-form input[name=subliminal_file]')).to_be_visible()
+                expect(page.locator('#video-form input[name=subliminal_text]')).to_be_hidden()
+                page.locator('#video-form select[name=subliminal_placement]').select_option('downbeats')
+                expect(page.locator('#video-form input[name=subliminal_count]')).to_be_visible()
+                expect(page.locator('#video-form input[name=subliminal_times]')).to_be_hidden()
+                nested = page.evaluate("""() => import('/js/production.js').then(m => {
+                    const request = {title: 'x', subliminal_mode: 'text', subliminal_text: 'HONK', subliminal_frames: '3', subliminal_placement: 'manual',
+                                     subliminal_times: '12.5, 40 55.2', subliminal_count: '4', subliminal_file: {}, subliminal_image: ''};
+                    m.subliminalFromForm(request);
+                    let message = '';
+                    try { m.subliminalFromForm({subliminal_mode: 'text', subliminal_times: 'soon'}); } catch (error) { message = error.message; }
+                    return {request, message};
+                })""")
+                self.assertEqual(nested['request'], {'title': 'x', 'subliminal': {'mode': 'text', 'image': '', 'text': 'HONK', 'frames': 3,
+                                 'placement': 'manual', 'times': [12.5, 40, 55.2], 'count': 4}})
+                self.assertIn('seconds', nested['message'])
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_the_flash_picture_upload_cannot_race_fail_silently_or_go_stale(self):
+        from playwright.sync_api import sync_playwright, expect
+        png = self.home / 'flash.png'
+        png.write_bytes(b'\x89PNG\r\n\x1a\n')
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate('() => { document.querySelector("#video-form details").open = true; }')
+                page.locator('#video-form select[name=subliminal_mode]').select_option('image')
+                counter = {'n': 0}
+
+                def upload(route):
+                    counter['n'] += 1
+                    route.fulfill(json={'file': f'picture-{counter["n"]}.png'})
+                page.route('**/api/upload/reference', upload)
+                picture = page.locator('#video-form input[name=subliminal_file]')
+                image = lambda: page.evaluate('document.querySelector("#video-form input[name=subliminal_image]").value')
+                picture.set_input_files(str(png))
+                page.wait_for_function('() => document.querySelector("#video-form input[name=subliminal_image]").value === "picture-1.png"')
+                picture.set_input_files([])                                    # clearing the choice clears the stored picture
+                page.wait_for_function('() => document.querySelector("#video-form input[name=subliminal_image]").value === ""')
+                self.assertIsNone(page.evaluate('document.querySelector("#video-form").dataset.subliminalPending || null'))
+                # a failed upload leaves nothing selected and nothing pending
+                page.unroute('**/api/upload/reference')
+                page.route('**/api/upload/reference', lambda route: route.abort())
+                picture.set_input_files(str(png))
+                page.wait_for_function('() => !document.querySelector("#video-form").dataset.subliminalPending')
+                self.assertEqual(image(), '')
+                # the helper makes older selections lose to the newest, whatever order they finish in
+                result = page.evaluate("""() => import('/js/production.js').then(m => {
+                    const selection = m.latestSelection();
+                    const first = selection.begin(), second = selection.begin();
+                    return [selection.isCurrent(first), selection.isCurrent(second)];
+                })""")
+                self.assertEqual(result, [False, True])
+                # previewing while a picture is still uploading, or in picture mode with none chosen, is refused
+                message = page.evaluate("""() => import('/js/production.js').then(m => {
+                    const form = document.querySelector('#video-form');
+                    form.dataset.subliminalPending = '1';
+                    return m.preview(form).then(() => 'no error', error => error.message);
+                })""")
+                self.assertIn('Wait for the flash picture', message)
+                page.evaluate('() => { delete document.querySelector("#video-form").dataset.subliminalPending; }')
+                message = page.evaluate("""() => import('/js/production.js').then(m => {
+                    try { m.subliminalFromForm({subliminal_mode: 'image', subliminal_image: '', subliminal_times: '5'}); return 'no error'; } catch (error) { return error.message; }
+                })""")
+                self.assertIn('Choose the picture', message)
+                self.assertEqual([e for e in errors if 'Failed to' not in e], [])
+            finally:
+                browser.close()
+
     def test_saved_custom_vocabulary_preset_survives_reload(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.client.post('/api/vocabularies', json={
@@ -584,7 +681,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.7.1')
+                expect(page.locator('#version')).to_have_text('1.7.2')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -435,11 +435,21 @@ def run(home, directory, *, resume=False):
             else:
                 result=assemble.assemble_run(plan,rendered,song,directory/'assembly')
             output=directory/'music-video.mp4';shutil.copy2(result['video'],output)
+    sub_result = sub_error = None
+    if request['kind'] == 'video' and prepared.get('subliminal'):
+        progress('Adding the subliminal flashes', 96)
+        from . import subliminal
+        try:
+            sub_result = subliminal.apply_to_run(store, directory, prepared['subliminal'])
+        except Exception as exc:                  # a bonus effect never fails the production: the clean video stays
+            sub_error = str(exc)
     from .media import duration
     warnings = [entry['warning'] for entry in read_json(directory / 'quality.json', {}).values() if entry.get('warning')]
     vision_note = read_json(directory / 'vision.json', {}).get('note')
     if vision_note:
         warnings.insert(0, vision_note)
+    if sub_error:
+        warnings.insert(0, 'The subliminal flashes could not be added, so the finished video is the clean one: ' + sub_error[:200])
     # Studio-quality clips: say plainly when the requested master was not delivered (never resubmitted automatically).
     lost = sorted(sid for sid, got in rendered.items() if isinstance(got, dict) and got.get('clip_quality_note'))
     if lost:
@@ -451,6 +461,7 @@ def run(home, directory, *, resume=False):
                                        'title':request['title'] or 'Music video',
                                        **({'clip_quality': delivered, 'clip_quality_requested': request.get('clip_quality')}
                                           if (request.get('clip_quality') or 'standard') != 'standard' else {}),
+                                       **({'subliminal': sub_result} if sub_result else {}),
                                        **({'quality_warnings': warnings} if warnings else {})})
     progress('Complete',100)
 

@@ -291,11 +291,22 @@ def prepare(store, request):
         from . import lipsync
         lip_sync = lipsync.plan_passages(p.segments, casting, lipsync.clean_lines(request.get('lyric_lines')),
                                          request.get('singers') or [], request['seed'])
+    sub_plan = None
+    if kind == 'video' and (request.get('subliminal') or {}).get('mode', 'off') != 'off':
+        from . import subliminal
+        from .score_view import _opening_offset
+        fps = p.fps or 24
+        opening = _opening_offset(store, request)
+        closing = 0.0
+        if request.get('end_ident'):
+            closing = float((read_json(inside(store.home / 'runs', request['end_ident']).parent / 'output.json', {}) or {}).get('duration') or 0.0)
+        sub_plan = subliminal.plan_run(request['subliminal'], fps, p.total_frames + round((opening + closing) * fps),
+                                       score.downbeat_frames, round(opening * fps), store.home / 'uploads')
     render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None,
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0
     return {'settings': settings, 'segments': [asdict(s) for s in p.segments], 'plan': asdict(p), 'score': asdict(score),
-            'detected': detected, 'lipsync': lip_sync, 'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
+            'detected': detected, 'lipsync': lip_sync, 'subliminal': sub_plan, 'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
             'seconds': score.duration_seconds, 'estimate': round(render_cost + writer_cost, 4),
             'render_estimate': render_cost, 'writer_estimate': writer_cost,
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),

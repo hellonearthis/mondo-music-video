@@ -80,6 +80,10 @@ needs the user's authorization (`confirm`).
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
 
+Subliminal flash: `subliminal` (mode off/image/text, `text` or an uploaded `image`, `frames` 1-12, `placement` manual with `times` in
+seconds on the finished video's clock, or `downbeats` with `count`) flashes a few frames; flashes stay 1 s apart, the clean video is kept as
+`music-video-clean.mp4`, and the user should be warned that flashing can affect photosensitive viewers.
+
 Lip sync: `mouth_mode` `lip_sync` with `lyric_lines` ([{start, end, text}] seconds) and optional `singers`
 makes only the passages with sung lines sing; the others stay sealed. Use `detect_lyrics` / `align_lyrics`
 (optional Whisper add-on; `inspect_studio` kind `lyrics` shows availability, hardware and advice; the user

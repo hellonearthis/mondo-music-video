@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.7.1"
+MGL_APP_VERSION = "1.7.2"
 WEB = Path(__file__).parent
 
 
@@ -234,6 +234,16 @@ class StemsPrepareRequest(StrictModel):
     consent: bool = False
 
 
+class SubliminalSettings(StrictModel):
+    mode: Literal["off", "image", "text"] = "off"
+    image: str = Field(default="", max_length=128)
+    text: str = Field(default="", max_length=60)
+    frames: int = Field(default=2, ge=1, le=12)
+    placement: Literal["manual", "downbeats"] = "manual"
+    times: list[float] = Field(default_factory=list, max_length=20)
+    count: int = Field(default=3, ge=1, le=20)
+
+
 class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
@@ -267,6 +277,7 @@ class ProductionRequest(StrictModel):
     reuse_prompts: bool = True
     vision_quality_check: bool = False
     clip_quality: Literal["standard", "prores", "lossless"] = "standard"
+    subliminal: SubliminalSettings = Field(default_factory=SubliminalSettings)
     compact_prompts: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
@@ -1002,7 +1013,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"),
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "

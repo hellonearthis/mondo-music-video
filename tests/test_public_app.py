@@ -400,9 +400,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.7.1")
+        self.assertEqual(api_version()["version"], "1.7.2")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.7.1", (root / "README.md").read_text())
+        self.assertIn("1.7.2", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -998,6 +998,49 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(comfy_sdk.media_suffix(make('audio/flac', 'x'), '.wav'), '.flac')
         self.assertEqual(comfy_sdk.media_suffix(make('application/octet-stream', 'clip.webm'), '.mp4'), '.webm')
         self.assertEqual(comfy_sdk.media_suffix(make('', ''), '.mp4'), '.mp4')
+
+    def test_subliminal_flashes_are_planned_in_the_preview_and_applied_to_the_finished_video_keeping_a_clean_copy(self):
+        song = self.song_upload()
+        plan = self.client.post('/api/quote', json={'song': song, 'subliminal': {'mode': 'text', 'text': 'GOOSE', 'times': [0.5], 'frames': 2}})
+        plan.raise_for_status()
+        flash = plan.json()['subliminal']
+        self.assertEqual((flash['starts'], flash['times'], flash['mode']), ([12], [0.5], 'text'))
+        self.assertIn('flashing', flash['notice'])
+        self.assertIsNone(self.client.post('/api/quote', json={'song': song}).json()['subliminal'])
+        self.assertIsNone(self.client.post('/api/quote', json={'song': song, 'subliminal': {'mode': 'off', 'frames': 5}}).json()['subliminal'])
+        for bad, code in (({'mode': 'text', 'text': 'x', 'times': [0.2, 0.4]}, 400),                  # flashes too close together
+                          ({'mode': 'text', 'text': 'x', 'times': [60]}, 400),                           # outside the video
+                          ({'mode': 'image', 'image': 'missing.png', 'times': [0.5]}, 400),
+                          ({'mode': 'text', 'text': '', 'times': [0.5]}, 400),
+                          ({'mode': 'text', 'text': 'x', 'times': [0.5], 'frames': 99}, 422),
+                          ({'mode': 'text', 'text': 'x', 'times': [0.5], 'mystery': 1}, 422)):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post('/api/quote', json={'song': song, 'subliminal': bad}).status_code, code)
+        quote, started = self.start({'song': song, 'subliminal': {'mode': 'text', 'text': 'GOOSE', 'times': [0.5], 'frames': 2}})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        run = self.home / 'runs' / started.json()['id']
+        self.assertTrue((run / 'music-video-clean.mp4').is_file())
+        output = read_json(run / 'output.json')
+        self.assertEqual(output['subliminal'], {'mode': 'text', 'frames': 2, 'times': [0.5], 'clean_copy': 'music-video-clean.mp4'})
+        self.assertNotIn('quality_warnings', output)                                       # nothing went wrong
+        from mmv import subliminal as flash_module
+        self.assertEqual(flash_module._count_frames(run / 'music-video.mp4')[0], flash_module._count_frames(run / 'music-video-clean.mp4')[0])
+        self.assertAlmostEqual(media.duration(run / 'music-video.mp4'), media.duration(run / 'music-video-clean.mp4'), delta=.05)
+        from PIL import Image, ImageChops
+        def frame(path, index):
+            png = run / f'{path.stem}-{index}.png'
+            subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', str(path), '-vf', f'select=eq(n\\,{index})', '-frames:v', '1', str(png)], check=True)
+            return Image.open(png).convert('L')
+        def difference(index):
+            histogram = ImageChops.difference(frame(run / 'music-video.mp4', index), frame(run / 'music-video-clean.mp4', index)).histogram()
+            return sum(value * count for value, count in enumerate(histogram))
+        self.assertGreater(difference(12), 20 * difference(5) + 1000)                    # the flash frame differs, the others barely do
+        self.assertGreater(difference(13), 20 * difference(5) + 1000)
+        exported = self.client.post(f'/api/outputs/{run.name}/package', json={'allow_private_actors': True})
+        self.assertEqual(exported.status_code, 200)
+        self.wait()
 
     def test_failed_writer_never_renders(self):
         MockService.invalid_writer=True

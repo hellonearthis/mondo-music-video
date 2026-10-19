@@ -13,7 +13,62 @@ export const getSseSource = () => sseSource;
 let statusTimer = null;
 let lastStreamEvent = 0;
 
+// The form has flat subliminal_* fields; the request carries them as one nested object.
+export function subliminalFromForm(request) {
+  const mode = request.subliminal_mode || "off";
+  const times = String(request.subliminal_times || "").split(/[\s,;]+/).filter(Boolean).map(Number);
+  if (times.some(value => !Number.isFinite(value) || value < 0)) throw new Error("Flash times are seconds, like 12.5, 40, 55.2");
+  if (mode === "image" && !request.subliminal_image) throw new Error("Choose the picture to flash");
+  request.subliminal = {
+    mode, image: request.subliminal_image || "", text: request.subliminal_text || "",
+    frames: Number(request.subliminal_frames) || 2, placement: request.subliminal_placement || "manual", times,
+    count: Number(request.subliminal_count) || 3
+  };
+  for (const key of Object.keys(request)) if (key.startsWith("subliminal_")) delete request[key];
+  return request.subliminal;
+}
+
+// Only the most recently chosen file may set the flash picture: slower, older uploads must never overwrite it.
+export function latestSelection() {
+  let current = 0;
+  return { begin: () => ++current, isCurrent: token => token === current };
+}
+
+export function initSubliminalControls() {
+  const form = $("#video-form");
+  const mode = form?.elements.subliminal_mode;
+  if (!mode) return;
+  const fields = form.querySelector(".subliminal-fields");
+  const sync = () => {
+    fields.hidden = mode.value === "off";
+    form.querySelectorAll('[data-sub="text"]').forEach(node => { node.hidden = mode.value !== "text"; });
+    form.querySelectorAll('[data-sub="image"]').forEach(node => { node.hidden = mode.value !== "image"; });
+    const downbeats = form.elements.subliminal_placement.value === "downbeats";
+    form.querySelectorAll('[data-sub="manual"]').forEach(node => { node.hidden = downbeats; });
+    form.querySelectorAll('[data-sub="downbeats"]').forEach(node => { node.hidden = !downbeats; });
+  };
+  mode.addEventListener("change", sync);
+  form.elements.subliminal_placement.addEventListener("change", sync);
+  const selection = latestSelection();
+  form.elements.subliminal_file.addEventListener("change", handle(async () => {
+    const file = form.elements.subliminal_file.files[0];
+    const mine = selection.begin();
+    form.elements.subliminal_image.value = "";                    // the previous picture is no longer selected
+    if (!file) { delete form.dataset.subliminalPending; scheduleSave(); return; }
+    form.dataset.subliminalPending = "1";
+    try {
+      const id = await upload(file, "reference");
+      if (selection.isCurrent(mine)) form.elements.subliminal_image.value = id;
+    } finally {
+      if (selection.isCurrent(mine)) delete form.dataset.subliminalPending;
+    }
+    scheduleSave();
+  }));
+  sync();
+}
+
 export async function preview(form) {
+  if (form.dataset.subliminalPending) throw new Error("Wait for the flash picture to finish uploading");
   const data = Object.fromEntries(new FormData(form));
   const files = state.formFiles.get(form) || { references: [] };
   if (files.pending) throw new Error("Wait for the selected files to finish uploading");
@@ -26,6 +81,7 @@ export async function preview(form) {
     for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) {
       request[name] = Number(request[name]);
     }
+    subliminalFromForm(request);
     request.mouth_mode = request.mouth_mode || "sealed";
     request.silent_mouths = request.mouth_mode !== "natural";   // older agents read this flag
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;
@@ -96,6 +152,9 @@ export function showQuote(request, quote) {
     text("h2", `Estimated provider cost: $${Number(quote.estimate_usd).toFixed(2)}`),
     text("p", quote.note, "muted")
   );
+  if (quote.subliminal) {
+    summary.append(text("p", `Subliminal flashes: ${quote.subliminal.times.length} × ${quote.subliminal.frames} frame(s) at ${quote.subliminal.times.join(", ")} s. ${quote.subliminal.notice}`, "muted"));
+  }
   if (request.clip_quality && request.clip_quality !== "standard") {
     summary.append(text("p", `Studio-quality raw clips (${request.clip_quality === "prores" ? "ProRes 4444" : "FFV1 lossless"}): each passage clip is saved near-lossless for editing. `
       + "Expect much larger files and a little more time; the final video is still encoded from them.", "muted"));

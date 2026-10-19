@@ -61,6 +61,12 @@ def create_server(base_url=None):
         one-time model download that only the user approves in the app (see
         inspect_studio kind "stems"). The first separation of a song takes minutes.
 
+        Subliminal flash: `subliminal` {mode: off|image|text, text, image (an uploaded PNG/JPEG id), frames 1-12,
+        placement manual|downbeats, times [seconds on the finished video's clock], count} flashes a picture or words
+        for a few frames (flashes are kept 1 s apart); the preview returns the resolved times, the audio and length are
+        untouched and the untouched video is kept as music-video-clean.mp4. Warn the user that flashing can affect
+        photosensitive viewers.
+
         Lip sync: `mouth_mode` "lip_sync" keeps every passage sealed except those covered by `lyric_lines`
         [{start, end, text}] (seconds on the song clock; use detect_lyrics or align_lyrics); `singers` lists actor
         ids (the first is the main singer; empty means a seeded pick). The preview's `lipsync` shows which passages

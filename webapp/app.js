@@ -9,6 +9,7 @@ import {
   initProductionForms,
   loadUpdateStatus,
   loadSchemeNotice,
+  initSubliminalControls,
   refreshServices,
   setupEventStream
 } from "./js/production.js";
@@ -81,6 +82,7 @@ async function initialize() {
 
   initNavigation();
   initProductionForms();
+  initSubliminalControls();
   initOperationControls();
   initLibraryForms();
   initSettingsAndPicker();

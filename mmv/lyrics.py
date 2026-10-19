@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import difflib
 import json
+import math
 import os
 import re
 import subprocess
 import sys
 import time
+import unicodedata
 from pathlib import Path
 
 from .storage import read_json, write_json
@@ -32,6 +34,8 @@ VRAM_HEADROOM_GB = 1.0
 GAP_SECONDS = 0.9
 MIN_MATCH = 0.5               # below this share of recognised words a line's timing is only a guess
 GUESS_SECONDS = 3.0           # a line with no recognised words is given at most this window, never the whole gap
+CLUSTER_GAP = 3.0             # recognised words of one line must sit within this many seconds of each other
+MAX_SPAN = 12.0               # ... and within this span in total
 MAX_LINE_WORDS = 10
 MAX_LINE_SECONDS = 8.0
 _PROBE = {'python': None, 'at': 0.0, 'ok': False}
@@ -141,13 +145,13 @@ def transcribe(store, song, digest, model, context=None, use_vocals=True):
 
 
 def group_lines(words):
-    """Group timed words into lyric lines at pauses, sentence ends and length limits."""
+    """Group timed words into lyric lines at pauses, sentence ends and length limits; drop hallucinated blips."""
     lines, current = [], []
 
     def close():
         if current:
             lines.append({'start': round(current[0]['start'], 2), 'end': round(current[-1]['end'], 2),
-                          'text': ' '.join(w['word'] for w in current)})
+                          'text': ' '.join(w['word'] for w in current), 'words': len(current)})
             current.clear()
 
     for word in words:
@@ -158,67 +162,152 @@ def group_lines(words):
         if re.search(r'[.!?]$', word['word']) and len(current) >= 3:
             close()
     close()
-    return [line for line in lines if line['end'] - line['start'] >= 0.25]
+    kept = []
+    for line in lines:
+        span = round(line['end'] - line['start'], 3)
+        # A blip is too short to be speech: under 0.15 s, or faster than 0.1 s per word. A short real shout ("Hey!") stays.
+        if span < 0.15 or span / line['words'] < 0.1 or not _norm(line['text']):
+            continue
+        kept.append({k: v for k, v in line.items() if k != 'words'})
+    return kept
 
 
 def _norm(text):
-    return re.findall(r"[a-z0-9']+", text.lower())
+    """Lower-cased word tokens in any script: apostrophes inside words stay, curly quotes count as apostrophes, hyphens split."""
+    text = unicodedata.normalize('NFKC', text).casefold().replace('\u2019', "'").replace('\u2018', "'")
+    return re.findall(r"[^\W_]+(?:'[^\W_]+)*", text)
+
+
+STOPWORDS = frozenset('the a an and or of to i you it in on my me we is so but at be am are was for with oh la na yeah'.split())
+SECTION = re.compile(r"\b(verse|chorus|bridge|intro|outro|hook|refrain|pre-?chorus|post-?chorus|interlude|solo|instrumental\w*|break|drop|"
+                     r"spoken|rap|vocals?|tag|coda|ad-?lib|beat|silence|pause|fade|piano|guitar|drums?|bass|synth|strings|sax\w*|trumpet|violin|keys|organ|flute)\b")
+INSTRUMENTAL = re.compile(r"\b(instrumental\w*|solo|interlude|break(?!\s*down)|drop|beat|silence|pause|fade|piano|guitar|drums?|bass|synth|strings|"
+                          r"sax\w*|trumpet|violin|keys|organ|flute)\b")
+VOICE = re.compile(r"\b(vocals?|voice|sing\w*|choir|spoken|rap|whisper\w*|chant\w*)\b")
+REPEAT = re.compile(r"\(?\s*(?:x|\u00d7)\s*\d+\s*\)?\s*$", re.I)
+MAX_TOKENS = 8000
+
+
+def _is_instrumental(label):
+    return bool(INSTRUMENTAL.search(label)) and not VOICE.search(label)
 
 
 def parse_lyrics(text):
-    """Read Suno sections and backing vocals, retaining instrumental entries without timing them."""
+    """Read Suno sections and backing vocals; instrumental entries are kept but never timed.
+
+    A section marker on its own line, or at the start of a line, applies from there on; one after words on a line applies from the next
+    line; brackets that are not section words ("[laughs]") are stage directions and are dropped. Several markers on a line combine:
+    the block is instrumental if any marker is. "(x2)" repeats and "(Chorus)" directions are ignored."""
     if len(text) > 16000:
         raise ValueError('Lyrics must be at most 16000 characters')
+    text = (text.replace('\u3010', '[').replace('\u3011', ']').replace('\uff3b', '[').replace('\uff3d', ']')
+            .replace('\u2019', "'").replace('\u2018', "'").replace('*', ''))
     entries, section, kind = [], None, 'sung'
-    for line in text.splitlines():
-        markers = re.findall(r'\[([^\[\]]*)\]', line)
-        for label in markers:
-            label = ' '.join(label.strip().lower().split())
-            section = label[:40]
-            # Whole words only, and a voice word wins: "[Vocal Solo]" is sung, "[Guitar Solo]" is not.
-            kind = 'instrumental' if (re.search(r'\b(instrumental|solo|interlude|break|drop|beat)\b', label)
-                                      and not re.search(r'\b(vocals?|voice|sing|singing|choir|spoken|rap)\b', label)) else 'sung'
-        line = re.sub(r'\[[^\[\]]*\]', '', line).strip()
-        if not line:
-            continue
-        backing = bool(re.fullmatch(r'\([^()]*\)', line))
-        line = line.replace('(', '').replace(')', '').strip()
-        if line:
-            entries.append({'text': line, 'section': section, 'kind': kind, 'backing': backing})
+    for raw in text.splitlines():
+        labels = [' '.join(label.strip().lower().split()) for label in re.findall(r'\[([^\[\]]*)\]', raw)]
+        rest = re.sub(r'\[[^\[\]]*\]', ' ', raw).replace('[', ' ').replace(']', ' ')
+        rest = ' '.join(rest.split())
+        accepted = [label for label in labels if label and (not rest or SECTION.search(label))]
+        lead = raw.lstrip().startswith('[') or not rest
+        next_section, next_kind = section, kind
+        if accepted:
+            next_section = accepted[-1][:40]
+            next_kind = 'instrumental' if any(_is_instrumental(label) for label in accepted) else 'sung'
+        if lead:
+            section, kind = next_section, next_kind
+        rest = REPEAT.sub('', rest).strip()
+        if rest and re.fullmatch(r'\(\s*' + SECTION.pattern + r'[^()]*\)', rest, re.I):
+            rest = ''                                       # "(Chorus)" is a direction, not words
+        if rest:
+            flat = rest
+            while '((' in flat or '))' in flat:
+                flat = flat.replace('((', '(').replace('))', ')')
+            backing = bool(re.fullmatch(r'(\s*\([^()]*\)\s*)+', flat))
+            inner = ' '.join(re.sub(r'[()]', ' ', rest).split())
+            if inner:
+                entries.append({'text': inner, 'section': section, 'kind': kind, 'backing': backing})
+        if not lead:
+            section, kind = next_section, next_kind
     if not entries:
         raise ValueError('Paste at least one line of lyrics')
     return entries
 
 
+def _clean_words(words):
+    """Heard words with finite times; an end before its start is treated as a point."""
+    clean = []
+    for word in words or []:
+        try:
+            start, end = float(word['start']), float(word['end'])
+            text = str(word['word'])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError('Each recognised word needs word, start and end') from None
+        if not (math.isfinite(start) and math.isfinite(end)):
+            continue
+        clean.append({'word': text, 'start': start, 'end': max(end, start)})
+    return clean
+
+
+def _best_cluster(heard_words):
+    """The densest run of heard words that sit together in time (a gap over CLUSTER_GAP or a span over MAX_SPAN starts a new run)."""
+    runs, current = [], []
+    for word in sorted(heard_words, key=lambda w: (w['start'], w['end'])):
+        if current and (word['start'] - current[-1]['end'] > CLUSTER_GAP or word['end'] - current[0]['start'] > MAX_SPAN):
+            runs.append(current)
+            current = []
+        current.append(word)
+    if current:
+        runs.append(current)
+    return max(runs, key=len) if runs else []
+
+
 def align_lines(text, words):
-    """Time pasted lyric lines against recognised words; lines that cannot be matched are interpolated and flagged."""
+    """Time pasted lyric lines against recognised words.
+
+    A line is 'matched' only when at least half its words were heard close together in time (including at least two when it has
+    two or more, and one that is not a filler word); a weaker match is 'uncertain' and a line never heard is 'interpolated' with a
+    short guessed window. Matched and uncertain lines keep the real times of the words heard."""
     entries = [entry for entry in parse_lyrics(text) if entry['kind'] == 'sung']
     rows = [entry['text'] for entry in entries]
     if not rows:
         raise ValueError('Paste at least one line of lyrics')
-    heard = [(_norm(w['word']), w) for w in words]
-    heard = [(tokens[0], w) for tokens, w in heard if tokens]
+    words = _clean_words(words)
+    heard = [(token, word) for word in words for token in _norm(word['word'])]
     wanted = [(i, token) for i, row in enumerate(rows) for token in _norm(row)]
     if not heard or not wanted:
         raise ValueError('No words were recognised in the song, so the lyrics cannot be timed')
+    if len(heard) > MAX_TOKENS or len(wanted) > MAX_TOKENS:
+        raise ValueError(f'Too much text to time at once: at most {MAX_TOKENS} words')
     matcher = difflib.SequenceMatcher(None, [t for _, t in wanted], [t for t, _ in heard], autojunk=False)
     hits = {}
     for a, b, size in matcher.get_matching_blocks():
         for k in range(size):
-            hits.setdefault(wanted[a + k][0], []).append(heard[b + k][1])
+            hits.setdefault(wanted[a + k][0], []).append((wanted[a + k][1], heard[b + k][1]))
     if sum(len(v) for v in hits.values()) / len(wanted) < 0.3:
         raise ValueError('The pasted lyrics do not match what was heard in the song; check the text or the song.')
     result = []
     for i, row in enumerate(rows):
-        matched = hits.get(i, [])
         total = len(_norm(row))
-        if matched:
-            ratio = len(matched) / total
-            result.append({'start': matched[0]['start'], 'end': matched[-1]['end'], 'text': row,
-                           'timing': 'matched' if ratio >= MIN_MATCH else 'uncertain', 'matched': round(ratio, 2)})
+        cluster = _best_cluster({id(word): word for _, word in hits.get(i, [])}.values())
+        members = {id(word) for word in cluster}
+        tokens = [token for token, word in hits.get(i, []) if id(word) in members]
+        if cluster:
+            ratio = len(tokens) / total
+            solid = (ratio >= MIN_MATCH and len(tokens) >= min(2, total) and any(t not in STOPWORDS for t in tokens))
+            start, end = min(w['start'] for w in cluster), max(w['end'] for w in cluster)
+            result.append({'start': round(start, 3), 'end': round(max(end, start + 0.2), 3), 'text': row,
+                           'timing': 'matched' if solid else 'uncertain', 'matched': round(ratio, 2)})
         else:
             result.append({'start': None, 'end': None, 'text': row, 'timing': 'interpolated', 'matched': 0.0})
-    # Interpolate unmatched lines between their timed neighbours, keeping order monotonic.
+    _place_guesses(result)
+    for item, entry in zip(result, entries):
+        item.update(section=entry['section'], backing=entry['backing'])
+    return result
+
+
+def _place_guesses(result):
+    """Give never-heard lines a short window in the gap where they probably sit: before the next heard line when leading, in the
+    middle of the gap between two heard lines, or after the last heard line when trailing."""
     i = 0
     while i < len(result):
         if result[i]['start'] is not None:
@@ -227,20 +316,23 @@ def align_lines(text, words):
         j = i
         while j < len(result) and result[j]['start'] is None:
             j += 1
-        low = result[i - 1]['end'] if i > 0 else 0.0
-        high = result[j]['start'] if j < len(result) else low + 3.0 * (j - i)
-        step = min(GUESS_SECONDS, max(high - low, 0.1 * (j - i)) / (j - i))
-        for k in range(i, j):
-            result[k]['start'], result[k]['end'] = round(low + step * (k - i), 2), round(low + step * (k - i + 1), 2)
+        count = j - i
+        low = result[i - 1]['end'] if i > 0 else None
+        high = result[j]['start'] if j < len(result) else None
+        if low is None and high is None:
+            low, high = 0.0, GUESS_SECONDS * count
+        if low is None:                                           # leading: end at the first heard line
+            width = min(GUESS_SECONDS, high / count)
+            slots = [(max(high - width * (count - n), 0.0), max(high - width * (count - n - 1), 0.0)) for n in range(count)]
+        elif high is None:                                        # trailing: start after the last heard line
+            slots = [(low + GUESS_SECONDS * n, low + GUESS_SECONDS * (n + 1)) for n in range(count)]
+        else:                                                     # middle: centred in each slot of the gap
+            slot = max(high - low, 0.1 * count) / count
+            width = min(GUESS_SECONDS, slot)
+            slots = [(low + slot * n + (slot - width) / 2, low + slot * n + (slot + width) / 2) for n in range(count)]
+        for n, (start, end) in enumerate(slots):
+            result[i + n]['start'], result[i + n]['end'] = round(start, 2), round(max(end, start + 0.1), 2)
         i = j
-    for k, item in enumerate(result):
-        item.update(section=entries[k]['section'], backing=entries[k]['backing'])
-        if item['end'] <= item['start']:
-            item['end'] = round(item['start'] + 0.5, 2)
-        if k and item['start'] < result[k - 1]['end']:
-            item['start'] = result[k - 1]['end']
-            item['end'] = max(item['end'], round(item['start'] + 0.5, 2))
-    return result
 
 
 def song_digest(path, beats_per_bar=4):
