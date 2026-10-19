@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "agreements"):
+        if kind not in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "outputs", "settings", "update", "agreements"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -134,6 +134,12 @@ class AgentClient:
     def create_style(self, style_id, name, direction):
         return self._json("POST", "/api/styles", {"id": style_id, "name": name, "direction": direction})
 
+    def save_vocabulary(self, vocab_id, name, tables, description="", base_profile="full"):
+        return self._json("POST", "/api/vocabularies", {
+            "id": vocab_id, "name": name, "description": description,
+            "base_profile": base_profile, "tables": tables,
+        })
+
     def delete_actor(self, actor_id, confirm=False):
         if confirm is not True:
             raise ValueError("Deleting an actor requires explicit user authorization; set confirm only after that authorization")
@@ -143,6 +149,11 @@ class AgentClient:
         if confirm is not True:
             raise ValueError("Deleting a style requires explicit user authorization; set confirm only after that authorization")
         return self._json("DELETE", "/api/styles/" + urllib.parse.quote(style_id, safe=""))
+
+    def delete_vocabulary(self, vocab_id, confirm=False):
+        if confirm is not True:
+            raise ValueError("Deleting a vocabulary preset requires explicit user authorization; set confirm only after that authorization")
+        return self._json("DELETE", "/api/vocabularies/" + urllib.parse.quote(vocab_id, safe=""))
 
     def select_api_profile(self, name):
         return self._json("POST", "/api/api-profiles/" + urllib.parse.quote(name, safe="") + "/activate")
@@ -242,7 +253,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "agreements", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "agreement"))
@@ -256,7 +267,7 @@ def main(argv=None):
     start.add_argument("--consent", action="store_true")
     log = sub.add_parser("log")
     log.add_argument("run_id")
-    for name in ("delete-actor", "delete-style"):
+    for name in ("delete-actor", "delete-style", "delete-vocabulary"):
         delete = sub.add_parser(name)
         delete.add_argument("id")
         delete.add_argument("--confirm", action="store_true")
@@ -286,6 +297,8 @@ def main(argv=None):
             result = client.delete_actor(args.id, args.confirm)
         elif args.command == "delete-style":
             result = client.delete_style(args.id, args.confirm)
+        elif args.command == "delete-vocabulary":
+            result = client.delete_vocabulary(args.id, args.confirm)
         elif args.command == "select-api-profile":
             result = client.select_api_profile(args.name)
         else:

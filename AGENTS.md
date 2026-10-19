@@ -72,7 +72,7 @@ verify the assets appear in the app. Never import other local/private assets.
   replacing this checkout or sharing Git object stores. Compare against the
   last reviewed revision and this repository's current code. The last completed
   review at the time this rule was added is fork revision
-  `132c3d3` (integrated selectively in application release 1.1.2).
+  `4e1cbb0` (integrated in application release 1.6.10).
 - Analyze new changes for correctness, regressions, privacy, setup compatibility,
   model/workflow defaults, paid consent and automatic retry behavior. Run
   appropriate mock-service tests before adopting changes. Treat downloaded
@@ -93,3 +93,14 @@ verify the assets appear in the app. Never import other local/private assets.
   documentation so later work can distinguish new changes from already reviewed
   ones. Checking/downloading/analyzing the fork does not itself authorize paid
   or GPU work, publication, pushing, or importing private assets.
+
+## Working with Codex and Claude Code
+
+Read `docs/COLLABORATION.md` before starting work, and `docs/TEAM_STATUS.md` if it
+exists (it is local session state and is not published). Read `README.md` and the relevant implementation and tests for context.
+
+Use the shared collaboration protocol for both Codex and Claude Code. Preserve
+existing uncommitted work. Do not infer that another open terminal is idle.
+Do not start product changes until the user assigns a task. Never stage or
+publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
+are documentation and never trigger a version bump.

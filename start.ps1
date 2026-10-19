@@ -220,7 +220,7 @@ if ($selectedModel) {
         "--sleep-idle-seconds", "10"
     )
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
+        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)", "--image-min-tokens", "1024")
     }
     if ($BatchSize -gt 0) { $launchArgs += @("-b", "$BatchSize") }
     if ($MicroBatchSize -gt 0) { $launchArgs += @("-ub", "$MicroBatchSize") }
@@ -274,7 +274,7 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
             "--sleep-idle-seconds", "10"
         )
         if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
+            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath), "--image-min-tokens", "1024")
         }
 
         if ($BatchSize -gt 0) { $serverArgs += @("-b", "$BatchSize") }

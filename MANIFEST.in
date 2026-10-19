@@ -29,3 +29,7 @@ include examples/style-presets/crt_1990s.json
 global-exclude update-status.json update-install.log
 global-exclude api-profiles.json
 global-exclude removed-assets.json
+
+# Shared agent protocol is published; per-session state is not.
+include CLAUDE.md tools/ask_peer.py
+exclude docs/TEAM_STATUS.md

@@ -1,13 +1,34 @@
 """Browser smoke against temporary services when Chromium is already installed."""
 import importlib.util
+import os
 import unittest
 from pathlib import Path
 
 from test_agent import LiveAppFixture
 
 
+def _cached_chromium():
+    roots = [Path.home() / '.cache/ms-playwright']
+    if os.environ.get('PLAYWRIGHT_BROWSERS_PATH'):
+        roots.insert(0, Path(os.environ['PLAYWRIGHT_BROWSERS_PATH']))
+    if os.environ.get('LOCALAPPDATA'):
+        roots.append(Path(os.environ['LOCALAPPDATA']) / 'ms-playwright')
+    roots.append(Path.home() / 'Library/Caches/ms-playwright')
+    patterns = (
+        'chromium-*/chrome-linux*/chrome',
+        'chromium-*/chrome-win*/chrome.exe',
+        'chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium',
+    )
+    found = []
+    for root in roots:
+        if root.exists():
+            for pattern in patterns:
+                found.extend(root.glob(pattern))
+    return found
+
+
 @unittest.skipUnless(importlib.util.find_spec('playwright') and importlib.util.find_spec('comfy_sdk')
-                     and list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome')),
+                     and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
     def test_delete_local_actor_and_style_with_confirmation(self):
@@ -17,7 +38,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         actors.create_actor(self.fixture.store, 'disposable', 'Disposable Actor', 'Overview', picture())
         self.fixture.client.post('/api/styles', json={'id': 'disposable', 'name': 'Disposable Style', 'direction': 'Daylight'}).raise_for_status()
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             errors = []
@@ -59,7 +80,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         save_profile(store, 'vision-account', 'vision', {'vision_url': 'https://vision.example/v1',
             'vision_model': 'vision-model'}, 'private-vision')
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             errors = []
@@ -108,7 +129,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         manifest, _ = actors.package_info(package)
         source_bytes = Path(mapping['workflow']).read_bytes()
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             errors = []
@@ -195,20 +216,20 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         settings['writer_launch'] = command
         write_json(self.home / 'settings.json', settings)
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.1')
+                expect(page.locator('#version')).to_have_text('1.6.10')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
                 expect(page.locator('.song-preview')).to_have_attribute('src', __import__('re').compile(r'^blob:'))
                 expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded:')
                 page.wait_for_function('() => document.querySelector(".song-preview").readyState >= 1')
-                page.evaluate('() => saveProject()')
+                page.evaluate("() => import('/js/project.js').then(m => m.saveProject())")
                 saved = self.fixture.client.get('/api/project').json()
                 assert saved.get('files', {}).get('video-form', {}).get('song'), saved
                 page.reload()
@@ -228,7 +249,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#apply-writer-tuning').click()
                 self.assertEqual(json.loads(page.locator('input[name=writer_launch]').input_value()), preview)
                 self.assertEqual(self.fixture.store.settings()['writer_launch'], command)
-                page.wait_for_function('() => sseConnected')
+                page.wait_for_function("() => import('/js/production.js').then(m => m.isSseConnected())")
                 jobs = self.fixture.app.state.jobs
                 def operation(context):
                     context.update('Live stream progress', 30)
@@ -237,7 +258,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 jobs.start('test', operation)
                 expect(page.locator('#status-message')).to_have_text('Live stream progress')
                 # Simulate a failed stream after it was connected; watchdog polling must survive.
-                page.evaluate('() => { sseSource.close(); sseSource.dispatchEvent(new Event("error")); }')
+                page.evaluate("() => import('/js/production.js').then(m => { const s = m.getSseSource(); s.close(); s.dispatchEvent(new Event('error')); })")
                 jobs.active.update('Polling fallback progress', 60)
                 expect(page.locator('#status-message')).to_have_text('Polling fallback progress', timeout=12000)
                 done.set()
@@ -248,6 +269,52 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 done.set()
                 browser.close()
 
+    def test_vocabulary_editor_does_not_restore_stale_text_after_reset_or_reopen(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            page.on('dialog', lambda dialog: dialog.accept())
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate('() => document.querySelector("#open-vocab-dialog").click()')
+                expect(page.locator('#vocabulary-dialog')).to_be_visible()
+                textarea = page.locator('#vocab-custom-textarea')
+                textarea.fill('stale entry that was never applied')
+                page.locator('#vocab-reset-all-btn').click()
+                expect(textarea).to_have_value('')
+                textarea.fill('dismissed edit')
+                page.keyboard.press('Escape')
+                page.evaluate('() => document.querySelector("#open-vocab-dialog").click()')
+                expect(textarea).to_have_value('')
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_saved_custom_vocabulary_preset_survives_reload(self):
+        from playwright.sync_api import sync_playwright, expect
+        self.fixture.client.post('/api/vocabularies', json={
+            'id': 'mine', 'name': 'Mine', 'base_profile': 'full', 'tables': {}}).raise_for_status()
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#vocab-profile-select option[value=mine]") !== null')
+                page.evaluate('() => { document.querySelector("#video-form details").open = true; }')
+                page.locator('#vocab-profile-select').select_option('mine')
+                page.evaluate("() => import('/js/project.js').then(m => m.saveProject())")
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                expect(page.locator('#vocab-profile-select')).to_have_value('mine')
+            finally:
+                browser.close()
+
     def test_update_notice_link_and_opt_in_setting(self):
         from mmv.storage import write_json
         from playwright.sync_api import sync_playwright, expect
@@ -256,7 +323,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             'message': 'An update is available. Automatic installation is turned off.',
             'available_version': '9.0.0', 'repository_url': 'https://github.com/example/mmv'})
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             try:
@@ -286,7 +353,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
         self.fixture.configure_sdk()
         self.fixture.server.v2_download_fail = True
         with sync_playwright() as p:
-            cached = list((Path.home() / '.cache/ms-playwright').glob('chromium-*/chrome-linux*/chrome'))
+            cached = _cached_chromium()
             kwargs = {'executable_path': str(cached[-1])} if cached else {}
             browser = p.chromium.launch(headless=True, **kwargs)
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
@@ -294,11 +361,12 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.1')
+                expect(page.locator('#version')).to_have_text('1.6.10')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded:')
+                expect(page.locator('#video-form .song-preview')).to_be_visible()
                 page.locator('#video-form textarea[name=direction]').fill('A sunlit coast with rhythmic waves.')
                 page.locator('#video-form button[type=submit]').click()
                 expect(page.locator('#preview-dialog')).to_be_visible()

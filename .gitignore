@@ -8,6 +8,7 @@ venv/
 *.egg-info/
 build/
 dist/
+.antigravity/
 
 # Local configuration, credentials and keys
 .env
@@ -46,6 +47,7 @@ oap_outbox/
 .vscode/
 .DS_Store
 Thumbs.db
+desktop.ini
 *.bak
 
 # Local contest planning notes
@@ -59,3 +61,7 @@ Thumbs.db
 
 # Private demo-video planning handoff
 /docs/how_to_video.md
+
+# Per-session collaboration state and helper reports (the shared protocol is published)
+/docs/TEAM_STATUS.md
+/.collaboration/

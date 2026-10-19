@@ -56,6 +56,14 @@ judging and cleanup. A vision-triggered renderer restart/retry was not exercised
 on real hardware because neither clip failed; that path is covered by mock tests.
 Windows/macOS model swaps remain unverified.
 
+Claude Code independently repeated the run as `f1abfe7deb1b444184667a2ea588dce9`
+with ComfyUI initially closed and the proxy left running: Mondo launched and
+later stopped only its own ComfyUI, Qwen loaded in about 10 s, and the vision
+server log shows 16 slot launches for the 16 sampled frames, confirming one
+image per request on the real llama-server. Both passages again passed pixel and
+vision checks; afterwards ports 8188 and 8083 were closed, the external proxy
+process was untouched and GPU memory was about 1.2 GiB.
+
 The task-start fork check returned unchanged HEAD
 `78f31ae33f50a9578043d2af33ce05158603ab86`; prior substantive findings and deferred
 integration work remain in [COLLABORATOR_REVIEW](COLLABORATOR_REVIEW.md).
@@ -540,3 +548,54 @@ they do not establish compatibility with every Topaz installation.
 
 See PLATFORMS.md for the OS coverage. No test on one machine establishes that
 all GPU drivers, custom-node versions, model files or operating systems work.
+
+## Fork integration 1.6.4 (2026-10-18)
+
+Full suite with mock services only: 253 passed, 53 subtests, no skips (52 s), run in
+an isolated worktree and again in the main checkout. New browser regression test
+for the vocabulary editor fails on the fork's original code and passes after the fix.
+Not verified: a real GPU vision run with the downscaled frames, and the live app
+version (no running process was checked or restarted).
+
+## Compact vs full settings, real GPU comparison (2026-10-18)
+
+Local $0 runs through the SDK renderer (quote $0.00), app 1.6.4 from the working
+tree, 0.3 MP (736x416), 11.52 s song, actors `animal_pig` (Hambo) and `henchman_1`,
+seed 23, vision check on, prompt reuse off. Run A `bee81610` full prompts, 610 s,
+no warnings. Run B `8e65be28` `compact_prompts`, 638 s, one warning (passage 2:
+unrequested framing device, letterboxing). One run each; the writer samples at
+temperature 0.7, so writing differences (B's passage 2 prompt was 7,786 chars
+against A's 5,219) are not attributable to compact mode.
+
+For video, the writer system prompt was identical (14,983 chars) and the saved
+jobs identical; compact changes only the job message format. Ident trimming was
+not part of this run.
+
+Isolated vision test on the same four clips, full size against 512 px, same model,
+temperature 0: seven of eight clip verdicts matched. B passage 2 passed at full
+size and warned at 512 px because one frame of eight (186, a dark-edged studio set)
+was judged bordered; two such frames are needed for a retry. Judging took about
+15 s per clip either way (about 1.5 s faster at 512 px). Frames were 40% smaller
+in bytes. A single frame decides nothing about overall accuracy; seeded runs on
+more clips, including ones with real letterboxing, are still needed.
+Not tested: ident runs, other renderers, the Windows launcher flag.
+
+### Correction and rerun with silent mouths active (2026-10-18)
+
+The first A/B pair above (`bee81610`, `8e65be28`) used `lyrics: ""`. The lyrics-gated
+rule in `worker.py` therefore turned silent mouths off in both: the writer was told
+to describe lip, teeth and tongue articulation and no rigging tail was required, and
+run B's prompts contained mouth-talking phrases. That pair does not test the
+sealed-lips scheme. The rule now follows the `silent_mouths` setting (default on)
+whatever the lyrics; the scheme's wording, tail and validators are unchanged.
+
+Rerun, same song, actors, seed, 0.3 MP, vision check on, prompt reuse off, $0 local:
+A `a85ac154` full prompts (632 s) and B `060525c1` compact prompts (652 s). Both:
+silent-mouths rule in the writer system prompt, natural rule absent, the rigging tail
+present in every shot (1 of 1 and 8 of 8), no mouth-articulation phrases in any
+prompt, pixel and vision checks passing with no retries, no warnings. Contact sheets
+show closed mouths in sampled frames. Stills cannot show lip motion; motion was not
+reviewed frame by frame. A first attempt (`78d85b3e`) failed with a ReadTimeout while
+ComfyUI staged a model for passage 2 (cause unknown, RAM fine); one fresh retry
+succeeded. One run per setting, so compact versus full is still not statistically
+compared, and the vision comparison at 512 px above stands as the only direct test.

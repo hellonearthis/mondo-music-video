@@ -119,3 +119,4 @@ def start_service(command_json, cwd, health_url, log, name=None, launch_setting=
         time.sleep(2)
     stop_process(process)
     raise ValueError(f"{service_name} startup timed out; see " + str(log))
+

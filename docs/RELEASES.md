@@ -1,5 +1,80 @@
 # Releases
 
+## 1.6.10 — Collaborator integration, part 2: module split, guide dialog, preview feedback
+
+Integrates hellonearthis's fork changes after `3365943` up to reviewed head
+`4e1cbb0` (fork releases 1.6.5 to 1.6.10). This delivery is the single version
+bump covering both integration passes (the 1.6.4 notes below are part of it).
+Credit: hellonearthis authored the changes below; the integration review fixed
+the defects listed.
+
+- **`app.js` split into ES modules** under `webapp/js/` (core, guides, library,
+  outputs, production, project, settings, tooltips, vocabulary); the page loads
+  `app.js` as a module and the server serves `/js/<module>`. Package data now
+  includes `js/*.js`. This repository's two front-end changes (the
+  `compact_prompts` request flag and the vocabulary-editor stale-text fix) were
+  carried into the modules.
+- **Preview/Start feedback**: spinners, busy state and status banners while the
+  audio is analysed and the plan is built.
+- **Accessibility**: light and dark theme contrast adjustments; sticky sidebar.
+- **Vocabulary guide dialog** and `/api/vocabulary/guide`.
+- **Local writer hint** when prompt validation fails with a local writer (context
+  size `-c` or token limit may be too small).
+- **Operation log** is cleared when a production starts; the log view keeps the
+  active run.
+- Configurable video encoders were added and reverted by the fork; nothing to adopt.
+- **Silent mouths (owner decision):** the sealed-lips rule no longer depends on
+  lyrics text being empty; it applies to every production unless Natural
+  expressions is selected. The planned lyrics and lip-sync mode must switch it off
+  itself. The rule text, rigging tail and validators are unchanged.
+
+Integration fixes: the fork's module split broke its own browser tests (they read
+module-private state as page globals), so tests now import the modules
+(`isSseConnected` and `getSseSource` are exported read-only accessors). Codex found
+that reopening a project dropped a saved custom vocabulary preset (the project was
+restored before the preset list loaded); the catalog now loads first, with a browser
+regression test that fails on the original order.
+
+## 1.6.4 — Collaborator integration: vocabulary presets, service dock, token savings
+
+Integrates hellonearthis's fork (reviewed head `3365943`, fork releases 1.6.2 to
+1.6.4, including the previously deferred hardware dock `180b237`). Credit:
+hellonearthis authored all of the changes below; the integration review fixed two
+defects and adjusted one behaviour.
+
+- **Visual vocabulary customizer**: `custom_vocabulary` per-video overrides,
+  reusable presets in `MMV_HOME/vocabularies` (`/api/vocabularies`), a
+  Customize vocabulary dialog, `docs/VOCABULARY_GUIDE.md`, agent client and two new
+  MCP tools (30 total).
+- **Live engine status dock**: `mmv/services.py`, `/api/services/status`, and
+  `/api/events?once=true`. Probes only URLs from the user's own settings, with no
+  proxy and short timeouts; results are cached per store.
+- **Compact prompts (opt-in, off by default)**: a "Compact prompts (low VRAM/RAM)"
+  checkbox and `compact_prompts` request field. Off, the writer and ident prompts and
+  job messages are exactly the original full ones. On, it uses compact job JSON, keeps
+  the system prompt stable across retries (feedback goes in the user message), and
+  leaves out ident sections that do not apply to the chosen mode (about 62% of the
+  ident prompt in standard mode, 44% in harvest, 8% in scenographic), and the vision
+  check sees frames scaled to 512 px wide with replies capped at 160 tokens. Prompt
+  files on disk are never modified.
+- **Runtime savings (always on)**: single-pass multi-frame
+  ffmpeg extraction, streaming hashes, parallel `/object_info` probes, and
+  `--image-min-tokens 1024` in the Windows launcher `start.ps1` (not yet gated; it
+  forces at least 1024 tokens per image for vision models).
+- **Silent mouths no longer depends on lyrics (behaviour change)**: before, a request
+  without lyrics text silently turned the sealed-lips protection off and the writer was
+  told to describe lip and tongue articulation; found when a no-lyrics test run produced
+  talking mouths. Silent mouths now follows the setting (default on) for every
+  production; "Natural expressions" stays the explicit opt-out, for the planned lyrics
+  and lip-sync mode to use.
+- **Fixes made during integration**: stale text in the vocabulary editor could
+  overwrite a loaded or reset preset (found by Codex review; browser regression test
+  added); the initial SSE status probe ran on the event loop and now runs in a thread.
+  The fork's own browser test expected a stale version string.
+- The fork's rewritten release and verification history was not taken; this
+  repository's records are kept. A real GPU comparison of full and compact settings
+  is recorded in `docs/VERIFICATION.md`.
+
 ## 1.6.1 — Agent installation on RunPod and selected H3 workflows
 
 Agent installation now includes a RunPod handoff for fresh, partial and existing

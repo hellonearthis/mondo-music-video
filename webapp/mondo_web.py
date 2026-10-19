@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import secrets
@@ -16,6 +17,12 @@ from urllib.parse import urlparse
 
 import oap
 
+class _PollingAccessFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p in msg for p in ("/api/status", "/api/events", "/api/log/", "/api/services"))
+
+logging.getLogger("uvicorn.access").addFilter(_PollingAccessFilter())
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -23,10 +30,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mmv import actors, agreements, production, score_view
 from mmv.jobs import BusyError, Jobs
+from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
+from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.1"
+MGL_APP_VERSION = "1.6.10"
 WEB = Path(__file__).parent
 
 
@@ -69,6 +78,7 @@ def _h3_model_nodes(graph):
 
 def _get_h3_model_info(store, settings=None):
     import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
     settings = settings or store.settings()
     current = {}
     try:
@@ -82,16 +92,19 @@ def _get_h3_model_info(store, settings=None):
     comfy_url = settings.get('comfy_url', '').rstrip('/')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     discovered = {}
-    for loader, field, _ in H3_MODEL_ROLES.values():
-        if loader in discovered or not comfy_url:
-            continue
-        try:
-            with opener.open(f'{comfy_url}/object_info/{loader}', timeout=.25) as response:
-                data = json.load(response)
-            choices = data[loader]['input']['required'][field][0]
-            discovered[loader] = [name for name in choices if isinstance(name, str)] if isinstance(choices, list) else []
-        except (OSError, ValueError, KeyError, TypeError):
-            discovered[loader] = []
+    loaders = {loader: field for loader, field, _ in H3_MODEL_ROLES.values()}
+    if comfy_url and loaders:
+        def _probe_loader(item):
+            loader, field = item
+            try:
+                with opener.open(f'{comfy_url}/object_info/{loader}', timeout=.25) as response:
+                    data = json.load(response)
+                choices = data[loader]['input']['required'][field][0]
+                return loader, [name for name in choices if isinstance(name, str)] if isinstance(choices, list) else []
+            except (OSError, ValueError, KeyError, TypeError):
+                return loader, []
+        with ThreadPoolExecutor(max_workers=len(loaders)) as pool:
+            discovered = dict(pool.map(_probe_loader, loaders.items()))
     comfy_input = settings.get('comfy_input')
     for role, (loader, _, category) in H3_MODEL_ROLES.items():
         installed[role] = discovered.get(loader, [])
@@ -149,6 +162,35 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class VocabularyTableOverride(StrictModel):
+    mode: Literal["append", "replace"] = "append"
+    add: list[str] = Field(default_factory=list, max_length=500)
+    exclude: list[str] = Field(default_factory=list, max_length=500)
+
+
+class VocabularyRequest(StrictModel):
+    id: str = Field(max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=1000)
+    base_profile: Literal["full", "reduced_flashing"] = "full"
+    tables: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+
+    @field_validator("id")
+    @classmethod
+    def valid_id(cls, value):
+        value = identifier(value)
+        if value in ("full", "reduced_flashing"):
+            raise ValueError("Cannot overwrite a built-in visual vocabulary profile")
+        return value
+
+    @field_validator("tables")
+    @classmethod
+    def valid_tables(cls, value):
+        if any(k not in VOCAB_TABLES for k in value):
+            raise ValueError("Unknown vocabulary category")
+        return value
+
+
 class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
@@ -178,7 +220,21 @@ class ProductionRequest(StrictModel):
     end_ident: str = Field(default="", max_length=128)
     reuse_prompts: bool = True
     vision_quality_check: bool = False
-    vocabulary_profile: Literal["full", "reduced_flashing"] = "full"
+    compact_prompts: bool = False
+    vocabulary_profile: str = Field(default="full", max_length=64)
+    custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+
+    @field_validator("vocabulary_profile")
+    @classmethod
+    def valid_vocabulary_profile(cls, value):
+        return identifier(value) if value else "full"
+
+    @field_validator("custom_vocabulary")
+    @classmethod
+    def valid_custom_vocabulary(cls, value):
+        if any(k not in VOCAB_TABLES for k in value):
+            raise ValueError("Unknown vocabulary category")
+        return value
 
     @field_validator("content")
     @classmethod
@@ -320,6 +376,7 @@ class ProjectState(StrictModel):
     panel: Literal["video", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
     forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
+    custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     details_open: bool = False
     log_open: bool = False
 
@@ -370,6 +427,13 @@ def create_app(home=None, *, test_hosts=False):
     def javascript():
         return FileResponse(WEB / "app.js", media_type="text/javascript")
 
+    @app.get("/js/{module_name}")
+    def js_module(module_name: str):
+        path = inside(WEB / "js", module_name)
+        if not path.is_file() or path.suffix != ".js":
+            raise ValueError("Module not found")
+        return FileResponse(path, media_type="text/javascript")
+
     @app.get("/style.css")
     def css():
         return FileResponse(WEB / "style.css", media_type="text/css")
@@ -381,20 +445,24 @@ def create_app(home=None, *, test_hosts=False):
         from mmv.updates import public_status
         return public_status(store)
 
-
     def get_full_status(snapshot=None):
         result = dict(snapshot) if snapshot is not None else jobs.status()
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
                                 and previous.get('backend') == 'comfy_sdk_h3')
+        result['services'] = check_services(store, result)
         return result
 
     @app.get("/api/status")
     def status():
         return get_full_status()
 
+    @app.get("/api/services/status")
+    def services_status(force: bool = False):
+        return check_services(store, jobs.status(), force=force)
+
     @app.get("/api/events")
-    async def events(request: Request):
+    async def events(request: Request, once: bool = False):
         queue = asyncio.Queue(maxsize=32)
         loop = asyncio.get_running_loop()
         closed = False
@@ -415,8 +483,16 @@ def create_app(home=None, *, test_hosts=False):
         async def event_generator():
             nonlocal closed
             try:
-                initial = get_full_status()
+                initial = await asyncio.to_thread(get_full_status)
                 yield f"event: status\ndata: {json.dumps(initial)}\n\n"
+                if once:
+                    while not queue.empty():
+                        data = queue.get_nowait()
+                        if "status" in data:
+                            yield f"event: status\ndata: {json.dumps(data['status'])}\n\n"
+                        if data.get("log"):
+                            yield f"event: log\ndata: {json.dumps({'message': data['log']})}\n\n"
+                    return
                 while True:
                     if await request.is_disconnected():
                         break
@@ -791,6 +867,60 @@ def create_app(home=None, *, test_hosts=False):
             quotes.clear()
         return {"deleted": style_id}
 
+    @app.get("/api/vocabulary")
+    def get_vocabulary():
+        engine_cfg = Path(__file__).parent.parent / "mmv/engine/config"
+        base = read_json(engine_cfg / "vocab.json", {})
+        profiles = read_json(engine_cfg / "vocabulary_profiles.json", {})
+        presets = [read_json(path) for path in sorted((store.home / "vocabularies").glob("*.json"))]
+        return {
+            "categories": list(VOCAB_TABLES),
+            "base": {k: base.get(k, []) for k in VOCAB_TABLES},
+            "profiles": profiles,
+            "vocabularies": presets,
+        }
+
+    @app.get("/api/vocabulary/guide")
+    def get_vocabulary_guide():
+        guide_path = Path(__file__).parent.parent / "docs" / "VOCABULARY_GUIDE.md"
+        if not guide_path.exists():
+            return {"title": "Vocabulary Architecture Guide", "markdown": "Guide not found on disk."}
+        return {"title": "Visual Vocabulary Architecture & Customization Guide", "markdown": guide_path.read_text(encoding="utf-8")}
+
+    @app.get("/api/vocabularies")
+    def list_vocabularies():
+        return [read_json(path) for path in sorted((store.home / "vocabularies").glob("*.json"))]
+
+    @app.post("/api/vocabularies")
+    def save_vocabulary(value: VocabularyRequest):
+        vocab_id = identifier(value.id)
+        path = store.home / "vocabularies" / (vocab_id + ".json")
+        payload = value.model_dump()
+        with jobs.lock:
+            jobs.require_idle()
+            if path.is_symlink():
+                raise ValueError("Cannot overwrite a linked vocabulary file")
+            load_vocabulary(value.base_profile, store=store, custom=payload["tables"])
+            write_json(path, payload)
+            quotes.clear()
+        return payload
+
+    @app.delete("/api/vocabularies/{vocab_id}")
+    def delete_vocabulary(vocab_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            vocab_id = identifier(vocab_id)
+            if vocab_id in ("full", "reduced_flashing"):
+                raise ValueError("Cannot delete a built-in visual vocabulary profile")
+            if (store.home / "vocabularies" / (vocab_id + ".json")).is_symlink():
+                raise ValueError("Cannot delete a linked vocabulary file")
+            target = inside(store.home / "vocabularies", vocab_id + ".json")
+            if not target.is_file():
+                raise ValueError("Vocabulary preset not found")
+            target.unlink()
+            quotes.clear()
+        return {"deleted": vocab_id}
+
     @app.post("/api/quote")
     def quote(value: ProductionRequest):
         with jobs.lock:
@@ -878,6 +1008,13 @@ def create_app(home=None, *, test_hosts=False):
                                    "estimate_usd": 0 if quoted.get("resume_run") else prepared["estimate"], "quote_id": value.quote_id,
                                    "fingerprint": quoted["fingerprint"]}
             quotes.pop(value.quote_id)
+            write_json(store.home / "log_cleared.json", {"cleared_at": time.time()})
+            studio_log = store.home / "studio.log"
+            if studio_log.exists():
+                try:
+                    studio_log.write_text("", encoding="utf-8")
+                except Exception:
+                    pass
             log_studio(store, f"Starting production for kind='{request.get('kind', 'video')}'")
             return jobs.start(request["kind"], lambda context: production.produce(
                 store, request, prepared, context, resume=bool(quoted.get("resume_run"))),
@@ -934,19 +1071,25 @@ def create_app(home=None, *, test_hosts=False):
         cleared_info = read_json(store.home / "log_cleared.json", {})
         cleared_at = float(cleared_info.get("cleared_at", 0))
 
+        active_id = None
+        try:
+            active_id = jobs.status().get("id")
+        except Exception:
+            pass
+
         sections = []
         if run_id == "latest" or not run_id:
             runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                    if p.stat().st_mtime >= cleared_at]
+                    if p.name == active_id or p.stat().st_mtime >= cleared_at]
             directory = runs[0] if runs else None
         else:
             directory = store.home / "runs" / identifier(run_id)
-            if not directory.exists() or directory.stat().st_mtime < cleared_at:
+            if not directory.exists() or (directory.name != active_id and directory.stat().st_mtime < cleared_at):
                 runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                        if p.stat().st_mtime >= cleared_at]
+                        if p.name == active_id or p.stat().st_mtime >= cleared_at]
                 directory = runs[0] if runs else None
 
-        if directory and directory.is_dir() and directory.stat().st_mtime >= cleared_at:
+        if directory and directory.is_dir() and (directory.name == active_id or directory.stat().st_mtime >= cleared_at):
             path = directory / "operation.log"
             if path.exists():
                 with path.open("rb") as stream:

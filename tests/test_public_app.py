@@ -5,6 +5,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from mmv import actors, media, render
+from mmv.api_profiles import save_settings
 from mmv.jobs import Jobs, BusyError
 from mmv.setup import SessionLock, doctor, download_models
 from mmv.storage import Storage, inside, read_json, write_json
@@ -79,7 +81,8 @@ class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
                 title = user.splitlines()[0][6:]
                 content = 'The words "' + title + '" emerge in brushed metal with continuous motion, then hold motionless and legible. Silent scene, no musical score.'
             else:
-                job = json.loads(user)
+                user_json = user.split("\n\nCorrect these validation failures", 1)[0]
+                job = json.loads(user_json)
                 text = "The fully clothed performer moves through warm light as wind lifts the fabric of a blue jacket. Reflections trace shifting patterns across nearby glass while the camera follows with deliberate rhythmic motion and the scene remains grounded in a coherent physical space. The subject stays recognizable and each movement carries the energy of the music through precise visible changes in posture and light. "
                 content = json.dumps({"segment_id":job["segment_id"], "style_opening":"Cinematic daylight photography with expressive movement.",
                     "subject_definitions":[], "summary":"A fully clothed performer in sunlight.", "retention_analysis":[],
@@ -116,7 +119,7 @@ class PublicAppTests(unittest.TestCase):
     def setUpClass(cls):
         cls.media_temp = tempfile.TemporaryDirectory()
         directory = Path(cls.media_temp.name)
-        video, song = directory / "test.mp4", directory / "test.wav"
+        video, song, score_path = directory / "test.mp4", directory / "test.wav", directory / "score.json"
         # Moving, detailed footage passes the motion/framing gate like a real render.
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
                         "testsrc2=s=128x72:r=24:d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True)
@@ -128,7 +131,10 @@ class PublicAppTests(unittest.TestCase):
         cls.frozen_video = frozen.read_bytes()
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i",
                         "sine=frequency=440:duration=1.1", str(song)], check=True)
+        subprocess.run([sys.executable, "-m", "mmv.worker", "analyze", str(song), str(score_path), "4"], check=True)
         cls.song = song.read_bytes()
+        cls.song_analysis_digest = hashlib.sha256(cls.song + b"4").hexdigest()
+        cls.song_analysis_bytes = score_path.read_bytes()
         MockService.video = video.read_bytes()
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), MockService)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
@@ -150,7 +156,15 @@ class PublicAppTests(unittest.TestCase):
         self.store = self.app.state.store
         (self.home / "comfy-input").mkdir()
         (self.home / "comfy-output").mkdir()
+        analysis_dir = self.home / "analysis"
+        analysis_dir.mkdir(exist_ok=True)
+        (analysis_dir / f"{self.song_analysis_digest}.json").write_bytes(self.song_analysis_bytes)
         self.server.output = self.home / "comfy-output"
+        reset_v2(self.server)
+        self.server.object_info = {}
+        MockService.requests = []
+        MockService.hold = False
+        MockService.invalid_writer = False
         settings = self.store.settings()
         settings.update(comfy_url=self.url, comfy_input=str(self.home / "comfy-input"), comfy_output=str(self.home / "comfy-output"),
                         laya_model_dir=os.environ.get("MMV_TEST_LAYA_MODEL_DIR", str(self.home / "models/laya")), laya_device="cuda",
@@ -172,12 +186,7 @@ class PublicAppTests(unittest.TestCase):
                 return original_command(context, argv, **kwargs)
             self.worker_patch = patch("mmv.jobs.JobContext.command",test_command)
             self.worker_patch.start()
-        self.client.put("/api/settings", json=settings).raise_for_status()
-        reset_v2(self.server)
-        self.server.object_info = {}
-        MockService.requests = []
-        MockService.hold = False
-        MockService.invalid_writer = False
+        save_settings(self.store, settings)
 
     def tearDown(self):
         if hasattr(self,"worker_patch"): self.worker_patch.stop()
@@ -378,10 +387,88 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.1")
+        self.assertEqual(api_version()["version"], "1.6.10")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.1", (root / "README.md").read_text())
+        self.assertIn("1.6.10", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
+
+    def test_frontend_es_modules_served_and_protected(self):
+        app_res = self.client.get("/app.js")
+        self.assertEqual(app_res.status_code, 200)
+        self.assertIn("text/javascript", app_res.headers["content-type"])
+        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocabulary.js"):
+            res = self.client.get(f"/js/{mod}")
+            self.assertEqual(res.status_code, 200, mod)
+            self.assertIn("text/javascript", res.headers["content-type"])
+        self.assertEqual(self.client.get("/js/nonexistent.js").status_code, 400)
+        self.assertEqual(self.client.get("/js/index.html").status_code, 400)
+
+    def test_uploaded_song_preview_endpoint(self):
+        up = self.client.post("/api/upload/song", files={"file": ("track.wav", self.song, "audio/wav")})
+        self.assertEqual(up.status_code, 200)
+        uploaded_name = up.json()["file"]
+        res = self.client.get(f"/api/uploads/song/{uploaded_name}")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("audio/wav", res.headers["content-type"])
+        self.assertEqual(res.content, self.song)
+        missing = self.client.get("/api/uploads/song/nonexistent.wav")
+        self.assertEqual(missing.status_code, 400)
+
+    def test_services_status_endpoint(self):
+        res = self.client.get("/api/services/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("laya", data)
+        self.assertIn("writer", data)
+        self.assertIn("comfy", data)
+        self.assertIn("vision", data)
+        for key in ("laya", "writer", "comfy", "vision"):
+            svc = data[key]
+            self.assertIn("name", svc)
+            self.assertIn("role", svc)
+            self.assertIn("available", svc)
+            self.assertIn("activity", svc)
+            self.assertIn("detail", svc)
+            self.assertIn(svc["activity"], ("processing", "sleeping", "offline", "missing"))
+
+    def test_status_endpoint_includes_services(self):
+        res = self.client.get("/api/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("services", data)
+        self.assertIn("laya", data["services"])
+        self.assertIn("writer", data["services"])
+        self.assertIn("comfy", data["services"])
+
+    def test_services_activity_evaluation(self):
+        from mmv.services import _evaluate_service_activity
+        probed = {
+            "comfy": {"url": "http://127.0.0.1:8188", "available": True, "device": "RTX 4090", "queue_running": 0},
+            "writer": {"mode": "local", "url": "http://127.0.0.1:8081", "model": "qwen3", "available": True, "slots_processing": 0},
+            "laya": {"model_dir": "/mock/laya", "device": "cuda", "available": True},
+            "vision": {"url": "http://127.0.0.1:8081", "model": "vision", "available": True},
+        }
+        # When idle: all available services should be sleeping
+        idle_eval = _evaluate_service_activity(self.store, probed, {"state": "idle", "message": ""})
+        self.assertEqual(idle_eval["comfy"]["activity"], "sleeping")
+        self.assertEqual(idle_eval["writer"]["activity"], "sleeping")
+        self.assertEqual(idle_eval["laya"]["activity"], "sleeping")
+        self.assertEqual(idle_eval["vision"]["activity"], "sleeping")
+
+        # When actively rendering in comfy:
+        render_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Rendering passage 1"})
+        self.assertEqual(render_eval["comfy"]["activity"], "processing")
+        self.assertEqual(render_eval["writer"]["activity"], "sleeping")
+
+        # When actively writing prompts:
+        writer_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Writer developing passage direction"})
+        self.assertEqual(writer_eval["writer"]["activity"], "processing")
+        self.assertEqual(writer_eval["comfy"]["activity"], "sleeping")
+
+        # When Laya is reviewing:
+        laya_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Laya reviewing passage 2"})
+        self.assertEqual(laya_eval["laya"]["activity"], "processing")
+        self.assertEqual(laya_eval["comfy"]["activity"], "sleeping")
 
     def test_project_persistence_api(self):
         project = {
@@ -408,6 +495,22 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(res.json(), {"status": "cleared"})
         self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
         self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
+
+    def test_sse_events_and_jobs_subscription(self):
+        notifications = []
+        unsub = self.app.state.jobs.subscribe(lambda st, log: notifications.append((st, log)))
+        self.app.state.jobs.notify({"state": "test_state"}, log_line="test_line")
+        unsub()
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0][0]["state"], "test_state")
+        self.assertEqual(notifications[0][1], "test_line")
+
+        with self.client.stream("GET", "/api/events?once=true") as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("text/event-stream", response.headers["content-type"])
+            lines = [line for line in response.iter_lines() if line]
+            self.assertEqual(lines[0], "event: status")
+            self.assertIn('"state":', lines[1])
 
     def test_clear_cache_endpoint(self):
         cache_dir = self.home / "cache" / "prompts"
@@ -447,6 +550,44 @@ class PublicAppTests(unittest.TestCase):
         # Matching saved prompts remain reusable after the fallback populated the cache.
         self.assertEqual(find_cached_passage_prompt(cache, None, "old direction", job, seg, None),
                          "validated old prompt")
+
+    def test_compact_prompts_are_opt_in_and_default_keeps_full_ident_prompt(self):
+        from mmv.engine import style
+        self.assertFalse(self.client.post("/api/quote", json={"kind": "ident", "title": "Studio", "ident_seconds": 4}).json().get("request", {}).get("compact_prompts", False))
+        full = style.compose_ident_prompt()
+        sizes = {}
+        for compact in (False, True):
+            _, started = self.start({"kind": "ident", "title": "Studio", "ident_seconds": 4, "compact_prompts": compact})
+            started.raise_for_status()
+            self.assertEqual(self.wait()["state"], "complete")
+            sizes[compact] = (self.home / "runs" / started.json()["id"] / "writer_system.md").read_text(encoding="utf-8")
+        self.assertEqual(sizes[False], full)
+        self.assertLess(len(sizes[True]), len(full))
+        self.assertIn("Failure modes", sizes[True])
+
+    def test_compact_prompts_default_sends_original_writer_message(self):
+        import json as _json
+        before = len([1 for path, _ in MockService.requests if path == "/chat/completions"])
+        _, started = self.start({"song": self.song_upload(), "direction": "Coast", "title": "Coast", "reuse_prompts": False})
+        started.raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        bodies = [b for path, b in MockService.requests if path == "/chat/completions"][before:]
+        user = [m for m in bodies[0]["messages"] if m["role"] == "user"][0]["content"]
+        self.assertIn('\n  "', user)  # original indent=2 serialization, not compact separators
+
+    def test_silent_mouths_default_applies_without_lyrics_and_natural_is_explicit(self):
+        from mmv.engine.style import NATURAL_MOUTHS_RULE, SILENT_MOUTHS_RULE_V013
+        rules = {}
+        for natural in (False, True):
+            _, started = self.start({"song": self.song_upload(), "direction": "Coast", "title": "Coast",
+                                     "reuse_prompts": False, "silent_mouths": not natural})
+            started.raise_for_status()
+            self.assertEqual(self.wait()["state"], "complete")
+            rules[natural] = (self.home / "runs" / started.json()["id"] / "writer_system.md").read_text(encoding="utf-8")
+        self.assertEqual(self.client.get("/api/status").json().get("kind"), "video")
+        self.assertIn(SILENT_MOUTHS_RULE_V013.strip(), rules[False])
+        self.assertNotIn(NATURAL_MOUTHS_RULE.strip(), rules[False])
+        self.assertIn(NATURAL_MOUTHS_RULE.strip(), rules[True])
 
     def test_production_supplies_public_actor_metadata(self):
         actors.create_actor(self.store, "blue", "Blue", "Distinctive blue jacket", picture())
@@ -518,7 +659,7 @@ class PublicAppTests(unittest.TestCase):
         )
         prompt_without_rigging = assemble_prompt(seg, resp, tags)
 
-        # When silent_mouths is False (e.g. instrumental / no lyrics), missing rigging tail is permitted
+        # When silent_mouths is explicitly False (natural expressions), a missing rigging tail is permitted
         problems_instrumental = validate_prompt(prompt_without_rigging, seg, tags, strict_words=False, silent_mouths=False)
         self.assertEqual(problems_instrumental, [])
 
@@ -943,6 +1084,159 @@ class UtilityTests(unittest.TestCase):
                     download_models(store, manifest)
                 network.assert_not_called()
 
+    def test_service_error_reporting_identifies_comfyui_and_launch_key(self):
+        from mmv import runtime
+        with patch.object(runtime, "http_ok", return_value=False):
+            with self.assertRaises(ValueError) as ctx:
+                runtime.start_service("", "", "http://127.0.0.1:8188/system_stats", Path("/tmp/comfy-service.log"))
+            msg = str(ctx.exception)
+            self.assertIn("ComfyUI service is not running", msg)
+            self.assertIn("http://127.0.0.1:8188/system_stats", msg)
+            self.assertIn("comfy_launch", msg)
+
+    def test_service_error_reporting_identifies_llama_and_launch_key(self):
+        from mmv import runtime
+        with patch.object(runtime, "http_ok", return_value=False):
+            with self.assertRaises(ValueError) as ctx:
+                runtime.start_service("", "", "http://127.0.0.1:8080/v1/models", Path("/tmp/writer-service.log"))
+            msg = str(ctx.exception)
+            self.assertIn("llama.cpp", msg)
+            self.assertIn("http://127.0.0.1:8080/v1/models", msg)
+            self.assertIn("writer_launch", msg)
+
+    def test_service_identification_vision_and_laya(self):
+        from mmv import runtime
+        name, key = runtime.identify_service(health_url="http://127.0.0.1:8080/v1/chat/completions", log="/tmp/vision.log")
+        self.assertIn("Vision", name)
+        name, key = runtime.identify_service(health_url=None, log="/tmp/laya.log")
+        self.assertIn("Laya", name)
+
+    def test_operation_log_endpoint_includes_comfy_log(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            run_dir = store.home / "runs" / "test_run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "operation.log").write_text("Starting pipeline\n", encoding="utf-8")
+            (run_dir / "comfy-service.log").write_text("ComfyUI startup output log", encoding="utf-8")
+            (run_dir / "writer-service.log").write_text("llama-server output log", encoding="utf-8")
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+            res = client.get("/api/log/test_run")
+            self.assertEqual(res.status_code, 200)
+            log_text = res.json()["log"]
+            self.assertIn("--- ComfyUI Service Output ---", log_text)
+            self.assertIn("ComfyUI startup output log", log_text)
+            self.assertIn("--- Writer Service Output (llama.cpp) ---", log_text)
+            self.assertIn("llama-server output log", log_text)
+
+    def test_token_reduction_helpers_and_ident_pruning(self):
+        from mmv.worker import _compact_writer_job, _compact_ident_prompt
+        from mmv.engine import style
+        job = {
+            "segment_id": "seg000",
+            "cast": [{"actor_id": "a1", "display_name": "Actor 1", "part": "", "lines": [], "direction": ""}],
+            "shots": [{"n": 1, "vocabulary": {"setting": "alley", "lighting": "neon"}}],
+        }
+        pretty = json.dumps(job, indent=2)
+        compact = _compact_writer_job(job)
+        self.assertLess(len(compact), len(pretty) * 0.75)
+        parsed = json.loads(compact)
+        self.assertEqual(parsed["segment_id"], "seg000")
+        self.assertNotIn("lines", parsed["cast"][0])
+        self.assertNotIn("direction", parsed["cast"][0])
+        self.assertNotIn("part", parsed["cast"][0])
+
+        full_ident = style.compose_ident_prompt()
+        std_ident = _compact_ident_prompt(full_ident, "standard")
+        harvest_ident = _compact_ident_prompt(full_ident, "harvest")
+        sceno_ident = _compact_ident_prompt(full_ident, "scenographic")
+        self.assertLess(len(std_ident), len(full_ident) * 0.6)
+        self.assertNotIn("Scenographic mode\n", std_ident)
+        self.assertNotIn("Reading a reference image\n", std_ident)
+        self.assertIn("Reading a reference image\n", harvest_ident)
+        self.assertNotIn("Scenographic mode\n", harvest_ident)
+        self.assertIn("Scenographic mode\n", sceno_ident)
+        self.assertNotIn("IMAGE-TO-VIDEO IDENT (SCENOGRAPHIC)", sceno_ident)
+
+    def test_vocabulary_customization_and_api_endpoints(self):
+        from mmv.pipeline import load_vocabulary
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            # Test 1: load_vocabulary defaults
+            full_vocab = load_vocabulary("full")
+            self.assertIn("settings", full_vocab)
+            self.assertGreater(len(full_vocab["settings"]), 200)
+
+            # Test 2: custom_vocabulary overrides (append & replace)
+            custom_overrides = {
+                "settings": {"mode": "append", "add": ["custom_cyberpunk_neon_alley"], "exclude": [full_vocab["settings"][0]]},
+                "lighting": {"mode": "replace", "add": ["monochrome laser beam", "candlelight"], "exclude": []},
+            }
+            custom_vocab = load_vocabulary("full", store=store, custom=custom_overrides)
+            self.assertIn("custom_cyberpunk_neon_alley", custom_vocab["settings"])
+            self.assertNotIn(full_vocab["settings"][0], custom_vocab["settings"])
+            self.assertEqual(custom_vocab["lighting"], ["monochrome laser beam", "candlelight"])
+
+            # Test 3: empty category error guard
+            with self.assertRaises(ValueError) as ctx:
+                load_vocabulary("full", store=store, custom={"lighting": {"mode": "replace", "add": []}})
+            self.assertIn("lighting' cannot be empty", str(ctx.exception))
+
+            # Test 4: API endpoints for vocabulary
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+
+            # GET /api/vocabulary
+            res = client.get("/api/vocabulary")
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertIn("categories", data)
+            self.assertIn("settings", data["categories"])
+            self.assertIn("base", data)
+            self.assertIn("profiles", data)
+
+            # POST /api/vocabularies (save preset)
+            preset_payload = {
+                "id": "my_synthwave_preset",
+                "name": "My Synthwave Preset",
+                "description": "80s retro neon aesthetic",
+                "base_profile": "full",
+                "tables": {
+                    "lighting": {"mode": "replace", "add": ["magenta neon grid", "cyan laser glow"], "exclude": []}
+                }
+            }
+            res = client.post("/api/vocabularies", json=preset_payload)
+            self.assertEqual(res.status_code, 200)
+
+            # Verify preset loaded via store
+            saved_preset_vocab = load_vocabulary("my_synthwave_preset", store=store)
+            self.assertEqual(saved_preset_vocab["lighting"], ["magenta neon grid", "cyan laser glow"])
+
+            # GET /api/vocabularies
+            res = client.get("/api/vocabularies")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(len(res.json()), 1)
+            self.assertEqual(res.json()[0]["id"], "my_synthwave_preset")
+
+            # DELETE /api/vocabularies/my_synthwave_preset
+            res = client.delete("/api/vocabularies/my_synthwave_preset")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json(), {"deleted": "my_synthwave_preset"})
+
+            # Cannot delete built-in profile
+            res = client.delete("/api/vocabularies/full")
+            self.assertEqual(res.status_code, 400)
+
+            # GET /api/vocabulary/guide
+            res = client.get("/api/vocabulary/guide")
+            self.assertEqual(res.status_code, 200)
+            guide_data = res.json()
+            self.assertIn("markdown", guide_data)
+            self.assertIn("Visual Vocabulary", guide_data["markdown"])
+            self.assertIn("title", guide_data)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+

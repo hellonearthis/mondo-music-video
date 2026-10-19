@@ -78,7 +78,12 @@ class StarterAssetsTests(unittest.TestCase):
 
     def test_corrupt_bundle_refused_before_any_import(self):
         source = Path(self.temp.name) / 'examples'
-        shutil.copytree(self.source / 'starter-cast', source / 'starter-cast')
+        def _link_or_copy(src, dst):
+            try:
+                os.link(src, dst)
+            except OSError:
+                shutil.copy2(src, dst)
+        shutil.copytree(self.source / 'starter-cast', source / 'starter-cast', copy_function=_link_or_copy)
         shutil.copytree(self.source / 'style-presets', source / 'style-presets')
         (source / 'style-presets/noir_bw.json').write_text('{}')
         with self.assertRaisesRegex(ValueError, 'checksum'):

@@ -240,10 +240,10 @@ class LayaSemanticValidator(ValidatorProfile):
                 f"LAYA DEPENDENCIES MISSING: the vendored inference modules "
                 f"failed to import ({e}) — torch and numpy must be "
                 "importable. Nothing was judged.") from e
+        import torch
         from ...storage import Storage
         device = Storage().settings()["laya_device"]
         if device == "auto":
-            import torch
             if torch.cuda.is_available():
                 device = "cuda"
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -251,7 +251,6 @@ class LayaSemanticValidator(ValidatorProfile):
             else:
                 device = "cpu"
         elif device in ("cuda_or_cpu", "mps_or_cpu"):
-            import torch
             if device == "cuda_or_cpu":
                 device = "cuda" if torch.cuda.is_available() else "cpu"
             else:
@@ -445,6 +444,7 @@ class LayaSemanticValidator(ValidatorProfile):
         clip = self.build_clipboard_request(
             prompt, segment, tags, strict_words=strict_words,
             silent_mouths=silent_mouths, state=state)
+        self.last_clipboard_request = clip
         t0 = time.time()
         try:
             result = agent.system_one(clip["state"],

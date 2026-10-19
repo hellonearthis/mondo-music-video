@@ -127,7 +127,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.6.1")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.6.10")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -135,7 +135,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.6.1")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.6.10")
 
     def test_create_style_and_upload_reference(self):
         style = self.agent.create_style("cool", "Cool", "Cool blue light")
@@ -183,18 +183,19 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 28)
+                self.assertEqual(len(names), 30)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score'} <= names)
                 self.assertIn("preview_resume", names)
                 self.assertIn("preview_production", names)
-                self.assertTrue({'delete_actor', 'delete_style', 'add_api_profile', 'remove_api_profile',
-                    'select_api_profile', 'update_studio_settings', 'install_starter_assets', 'inspect_api_models'} <= names)
+                self.assertTrue({'delete_actor', 'delete_style', 'save_vocabulary_preset', 'delete_vocabulary_preset',
+                    'add_api_profile', 'remove_api_profile', 'select_api_profile', 'update_studio_settings',
+                    'install_starter_assets', 'inspect_api_models'} <= names)
                 self.assertNotIn("run_shell", names)
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.6.1")
+                self.assertEqual(result.structured_content["data"]["version"], "1.6.10")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)
@@ -242,6 +243,18 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 result = await client.call_tool('delete_style', {'style_id': 'remove-me'})
                 self.assertTrue(result.is_error)
                 result = await client.call_tool('delete_style', {'style_id': 'remove-me', 'confirm': True})
+                self.assertFalse(result.is_error, result)
+                result = await client.call_tool('save_vocabulary_preset', {
+                    'vocab_id': 'test_mcp_preset', 'name': 'MCP Preset',
+                    'tables': {'lighting': {'mode': 'replace', 'add': ['mcp_neon']}}
+                })
+                self.assertFalse(result.is_error, result)
+                result = await client.call_tool('inspect_studio', {'kind': 'vocabularies'})
+                self.assertFalse(result.is_error, result)
+                self.assertTrue(any(p['id'] == 'test_mcp_preset' for p in result.structured_content['data']))
+                result = await client.call_tool('delete_vocabulary_preset', {'vocab_id': 'test_mcp_preset'})
+                self.assertTrue(result.is_error)
+                result = await client.call_tool('delete_vocabulary_preset', {'vocab_id': 'test_mcp_preset', 'confirm': True})
                 self.assertFalse(result.is_error, result)
                 result = await client.call_tool('install_starter_assets', {})
                 self.assertFalse(result.is_error, result)

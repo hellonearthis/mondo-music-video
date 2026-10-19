@@ -20,25 +20,64 @@ def git(root, *args):
     return result.stdout.strip()
 
 
+import shutil
+
+
 class UpdateTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._template_dir = tempfile.TemporaryDirectory()
+        tbase = Path(cls._template_dir.name)
+        init = tbase / 'initial'
+        init.mkdir()
+        tremote = init / 'remote.git'
+        subprocess.run(['git', 'init', '--bare', '--initial-branch=main', str(tremote)], check=True, capture_output=True)
+        twriter = init / 'writer'
+        subprocess.run(['git', 'clone', str(tremote), str(twriter)], check=True, capture_output=True)
+        git(twriter, 'remote', 'set-url', 'origin', '../remote.git')
+        git(twriter, 'config', 'user.email', 'test@example.invalid')
+        git(twriter, 'config', 'user.name', 'Update fixture')
+        (twriter / 'pyproject.toml').write_text('[project]\nname="mondo-music-video"\nversion="1.0.0"\n')
+        (twriter / 'app.txt').write_text('old')
+        (twriter / '.gitignore').write_text('data/\n')
+        git(twriter, 'add', '.')
+        git(twriter, 'commit', '-m', 'initial')
+        git(twriter, 'push', 'origin', 'main')
+        tlocal = init / 'local'
+        subprocess.run(['git', 'clone', str(tremote), str(tlocal)], check=True, capture_output=True)
+        git(tlocal, 'remote', 'set-url', 'origin', '../remote.git')
+        cls._template_head = git(tlocal, 'rev-parse', 'HEAD')
+        adv = tbase / 'advanced'
+        shutil.copytree(init, adv)
+        awriter = adv / 'writer'
+        (awriter / 'app.txt').write_text('new')
+        (awriter / 'pyproject.toml').write_text('[project]\nname="mondo-music-video"\nversion="1.0.1"\n')
+        git(awriter, 'add', '.')
+        git(awriter, 'commit', '-m', 'update')
+        git(awriter, 'push', 'origin', 'main')
+        cls._advanced_head = git(awriter, 'rev-parse', 'HEAD')
+        for p in tbase.rglob('*'):
+            if p.is_file():
+                try:
+                    p.chmod(0o666)
+                except OSError:
+                    pass
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._template_dir.cleanup()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.base = Path(self.temp.name)
+        init = Path(self._template_dir.name) / 'initial'
         self.remote = self.base / 'remote.git'
-        subprocess.run(['git', 'init', '--bare', '--initial-branch=main', str(self.remote)], check=True, capture_output=True)
         self.writer = self.base / 'writer'
-        subprocess.run(['git', 'clone', str(self.remote), str(self.writer)], check=True, capture_output=True)
-        git(self.writer, 'config', 'user.email', 'test@example.invalid')
-        git(self.writer, 'config', 'user.name', 'Update fixture')
-        (self.writer / 'pyproject.toml').write_text('[project]\nname="mondo-music-video"\nversion="1.0.0"\n')
-        (self.writer / 'app.txt').write_text('old')
-        (self.writer / '.gitignore').write_text('data/\n')
-        git(self.writer, 'add', '.')
-        git(self.writer, 'commit', '-m', 'initial')
-        git(self.writer, 'push', 'origin', 'main')
         self.local = self.base / 'local'
-        subprocess.run(['git', 'clone', str(self.remote), str(self.local)], check=True, capture_output=True)
-        self.head = git(self.local, 'rev-parse', 'HEAD')
+        shutil.copytree(init / 'remote.git', self.remote)
+        shutil.copytree(init / 'writer', self.writer)
+        shutil.copytree(init / 'local', self.local)
+        self.head = self._template_head
         self.store = Storage(self.base / 'private')
         settings = self.store.settings()
         settings['auto_updates'] = True
@@ -53,12 +92,10 @@ class UpdateTests(unittest.TestCase):
         self.temp.cleanup()
 
     def advance(self):
-        (self.writer / 'app.txt').write_text('new')
-        (self.writer / 'pyproject.toml').write_text('[project]\nname="mondo-music-video"\nversion="1.0.1"\n')
-        git(self.writer, 'add', '.')
-        git(self.writer, 'commit', '-m', 'update')
-        git(self.writer, 'push', 'origin', 'main')
-        return git(self.writer, 'rev-parse', 'HEAD')
+        adv = Path(self._template_dir.name) / 'advanced'
+        shutil.copytree(adv / 'remote.git', self.remote, dirs_exist_ok=True)
+        shutil.copytree(adv / 'writer', self.writer, dirs_exist_ok=True)
+        return self._advanced_head
 
     def check(self, **kwargs):
         return updates.startup_update(self.store, root=self.local, **kwargs)
@@ -185,7 +222,7 @@ class UpdateTests(unittest.TestCase):
         with patch.object(updates, '__file__', str(self.base / 'site-packages/mmv/updates.py')), \
              patch.object(updates.importlib.metadata, 'distribution', side_effect=updates.importlib.metadata.PackageNotFoundError):
             write_json(self.store.home / updates.STATUS_FILE, {'source_root': str(self.local)})
-            self.assertEqual(updates.source_root(self.store), self.local)
+            self.assertEqual(updates.source_root(self.store).resolve(), self.local.resolve())
 
     def test_offline_check_continues_and_detached_checkout_is_supported_manually(self):
         original = updates._git

@@ -15,7 +15,8 @@ VISION_PORT = 8083
 
 
 class VisionStage:
-    def __init__(self, settings, directory, plan, framing_allowed, comfy_process, restart_comfy, progress):
+    def __init__(self, settings, directory, plan, framing_allowed, comfy_process, restart_comfy, progress, compact=False):
+        self.compact = compact
         self.settings, self.directory, self.progress = settings, directory, progress
         self.by_id = {seg.segment_id: seg for seg in plan.segments}
         self.framing_allowed = framing_allowed
@@ -59,7 +60,7 @@ class VisionStage:
             self.progress(f'Vision check of passage {seg.index+1} ({number+1} of {len(items)})', 82)
             verdicts[attempt['segment_id']] = judge_clip(
                 result['video'], seg.trim_frames, [shot.start_frame for shot in seg.shots],
-                f'http://127.0.0.1:{VISION_PORT}/v1', self.model, framing_allowed=self.framing_allowed)
+                f'http://127.0.0.1:{VISION_PORT}/v1', self.model, framing_allowed=self.framing_allowed, compact=self.compact)
         return verdicts
 
     def prepare_render(self):

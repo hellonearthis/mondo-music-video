@@ -140,13 +140,26 @@ def shot_motion(differences, shot_starts, frames):
     return result
 
 
-def _frame(video, index):
+_PNG_SIG = b"\x89PNG\r\n\x1a\n"
+
+
+def _frames(video, indexes):
+    if not indexes:
+        return []
+    expr = "+".join(f"eq(n\\,{i})" for i in indexes)
     data = subprocess.run(
-        ["ffmpeg", "-nostdin", "-v", "error", "-i", str(video), "-vf", f"select=eq(n\\,{index})",
-         "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"],
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", str(video), "-vf", f"select={expr}",
+         "-fps_mode", "passthrough", "-frames:v", str(len(indexes)), "-f", "image2pipe", "-vcodec", "png", "-"],
         capture_output=True, check=True, timeout=TIMEOUT).stdout
+    if not data:
+        return []
     from PIL import Image
-    return Image.open(io.BytesIO(data)).convert("L") if data else None
+    return [Image.open(io.BytesIO(_PNG_SIG + part)).convert("L") for part in data.split(_PNG_SIG)[1:] if part]
+
+
+def _frame(video, index):
+    frames = _frames(video, [index])
+    return frames[0] if frames else None
 
 
 def border_verdict(video, frames):
@@ -155,8 +168,7 @@ def border_verdict(video, frames):
     indexes = sorted({round(k * (max(frames, 1) - 1) / (SAMPLES - 1)) for k in range(SAMPLES)})
     votes = {"left/right": [0, 0], "top/bottom": [0, 0]}
     sampled = 0
-    for index in indexes:
-        image = _frame(video, index)
+    for image in _frames(video, indexes):
         if image is None:
             continue
         sampled += 1

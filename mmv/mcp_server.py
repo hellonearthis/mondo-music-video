@@ -26,8 +26,8 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
-        """Read local app status, capabilities, actors, styles, outputs, role agreements, or settings (no secret values)."""
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
+        """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
     @server.tool()
@@ -82,6 +82,12 @@ def create_server(base_url=None):
         """Save a new visual style; use preview_production for vision-based style harvesting."""
         return invoke(client.create_style, style_id, name, direction)
 
+    @server.tool()
+    def save_vocabulary_preset(vocab_id: str, name: str, tables: dict, description: str = "",
+                               base_profile: Literal["full", "reduced_flashing"] = "full") -> dict[str, Any]:
+        """Save or update a reusable visual vocabulary preset (filtering or adding entries per category)."""
+        return invoke(client.save_vocabulary, vocab_id, name, tables, description, base_profile)
+
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def inspect_oap(filename: str, allow_unsigned: bool = False) -> dict[str, Any]:
         """Inspect a previously uploaded OAP package; unsigned packages require explicit acceptance."""
@@ -96,6 +102,11 @@ def create_server(base_url=None):
     def delete_style(style_id: str, confirm: bool = False) -> dict[str, Any]:
         """Delete a local style only with user authorization (confirm=true). Completed videos stay."""
         return invoke(client.delete_style, style_id, confirm)
+
+    @server.tool(annotations=ToolAnnotations(destructive_hint=True))
+    def delete_vocabulary_preset(vocab_id: str, confirm: bool = False) -> dict[str, Any]:
+        """Delete a local vocabulary preset only with user authorization (confirm=true). Completed videos stay."""
+        return invoke(client.delete_vocabulary, vocab_id, confirm)
 
     @server.tool()
     def select_api_profile(name: str) -> dict[str, Any]:

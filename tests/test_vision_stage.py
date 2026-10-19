@@ -40,7 +40,7 @@ def test_swap_order_relaunch_and_second_judgment(stage):
                       ('start', 'comfy2'), ('stop', 'comfy2'), ('start', 'qwen'), ('stop', 'qwen')]
     from mmv.vision_check import judge_clip
     assert judge_clip.call_args.args == ('clip.mp4', 48, [0], 'http://127.0.0.1:8083/v1', 'mmv-vision')
-    assert judge_clip.call_args.kwargs == {'framing_allowed': False}
+    assert judge_clip.call_args.kwargs == {'framing_allowed': False, 'compact': False}
 
 
 def test_no_renderer_handle_never_stops_external_comfy(stage):
@@ -278,7 +278,7 @@ def test_mcp_discovery_documents_vision_flag():
             client.return_value.preview.return_value = {'id': 'reviewed-quote'}
             server = create_server()
             tools = await server.list_tools()
-            assert len(tools) == 28
+            assert len(tools) == 30
             preview = next(t for t in tools if t.name == 'preview_production')
             assert 'vision_quality_check' in preview.description
             assert 'paid re-renders require consent' in preview.description

@@ -200,3 +200,29 @@ def test_decode_errors_do_not_retry(clip):
             'mmv.vision_check.subprocess.run', side_effect=subprocess.TimeoutExpired('ffmpeg', 1)):
         result = judge_clip(clip, 24, [], 'http://unused/v1', 'vision')
         assert result['status'] == 'error' and not result['retry']
+
+
+def test_full_size_frames_and_no_token_cap_by_default_compact_opts_in(monkeypatch):
+    import io
+    import json
+    from mmv import vision_check
+    assert vision_check._select_filter('eq(n\\,3)', False) == 'select=eq(n\\,3)'
+    assert "scale='min(512,iw)':-2" in vision_check._select_filter('eq(n\\,3)', True)
+    sent = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        sent.append(json.loads(request.data))
+        return Reply(json.dumps({'choices': [{'message': {'content': '{"frame_fill":"full","defects":[]}'}}]}).encode())
+
+    monkeypatch.setattr(vision_check.urllib.request, 'urlopen', fake_urlopen)
+    vision_check.judge_frame('http://x/v1', 'm', b'png')
+    vision_check.judge_frame('http://x/v1', 'm', b'png', max_tokens=vision_check.COMPACT_MAX_TOKENS)
+    assert 'max_tokens' not in sent[0]
+    assert sent[1]['max_tokens'] == 160

@@ -65,6 +65,18 @@ and renderer configuration before starting; model failures stop production.
    user; free local renderers already retried once, and paid work needs consent. On failure, inspect the operation log and request IDs. Never
    automatically resubmit paid work after a timeout or ambiguous submission.
 
+Silent mouths (`silent_mouths`, default `true`) now applies with or without lyrics;
+set `false` only when the user explicitly wants natural or speaking mouths.
+
+Low-memory option: `compact_prompts: true` (default `false`) shortens the writer
+instructions, trims ident sections that do not apply and shrinks vision-check frames. It can change writing
+quality, so only set it when the user asks for it or the machine is memory-limited.
+
+Visual vocabulary: `vocabulary_profile` selects `full`, `reduced_flashing` or a saved
+preset id; `custom_vocabulary` adds or removes entries per category for one video.
+Use `inspect_studio` kind `vocabularies` first. Saving a preset is free; deleting one
+needs the user's authorization (`confirm`).
+
 For the optional slower batched vision check, set `vision_quality_check: true`
 in the video preview request (default `false`). Explain the extra model loading
 and judging time. It needs a local vision-capable `writer_launch` with mmproj;
