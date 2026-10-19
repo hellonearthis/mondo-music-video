@@ -75,7 +75,12 @@ verify the assets appear in the app. Never import other local/private assets.
   replacing this checkout or sharing Git object stores. Compare against the
   last reviewed revision and this repository's current code. The last completed
   review at the time this rule was added is fork revision
-  `dc71556` (integrated in application release 1.6.11).
+  `dc71556` (integrated in application release 1.6.11). One owner-authorized
+  exception, 2026-10-19: the fork's history through that revision was recorded in
+  this repository with `git merge -s ours` so the collaborator's commits count
+  as contributions; no fork content entered the tree through that merge, and
+  the integrated code was reviewed separately. Do not repeat it without the
+  owner's explicit approval.
 - Analyze new changes for correctness, regressions, privacy, setup compatibility,
   model/workflow defaults, paid consent and automatic retry behavior. Run
   appropriate mock-service tests before adopting changes. Treat downloaded

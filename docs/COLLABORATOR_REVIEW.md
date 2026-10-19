@@ -1,5 +1,16 @@
 # Collaborator review record
 
+## October 19, 2026 — contributor credit by history merge (owner-authorized exception)
+
+On the owner's instruction, the fork's 22 commits after the shared base `7f87f91`
+(all authored as the collaborator's GitHub account) were recorded in this
+repository's history with `git merge -s ours` from `dc71556`, fetched into a
+separate ref. The merge changed no files: the integrated code had already been
+reviewed and adopted by hand (releases 1.6.4 to 1.6.11). The files touched by
+those commits were listed first and contained only source and documentation, no
+actors, media, models, keys or data. This is an exception to the rule against
+sharing Git object stores with the fork and is not a precedent.
+
 ## October 19, 2026 — fork integration, head dc71556 (release 1.6.11)
 
 Fetched at the owner's request after head 4e1cbb0. One commit, `dc71556`: pseudo-random
