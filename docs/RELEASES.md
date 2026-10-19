@@ -1,5 +1,16 @@
 # Releases
 
+## 1.6.13 — Stem separation on smaller GPUs
+
+Measured with the real models on a 4-minute track: 4-stem, fine-tuned and 6-stem Demucs models
+each need about 1.2 GB of VRAM (they work in chunks) and take 8 to 17 s on a GPU or about 71 s on
+CPU (4-stem). Stem separation now uses the GPU when about 3 GB is free (Demucs documents 3 GB as
+its minimum; it was 6 GB) and otherwise falls back to CPU. The editor's download approval states
+the measured sizes (about 81 MB for the 4-stem model, about 53 MB for the 6-stem model). On real
+songs the models agree on drums and bass but differ on vocals, so the default 4-stem model is kept
+and the fine-tuned one is not added until listening shows a benefit. The editor test no longer
+depends on whether Demucs is installed.
+
 ## 1.6.12 — Edit the score before generating, and follow an instrument
 
 "Watch the song conduct" now happens before generation. Idea from a musician friend

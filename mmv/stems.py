@@ -25,7 +25,8 @@ MODELS = {
 }
 DRIVERS = ('mix', 'drums', 'bass', 'vocals', 'other', 'guitar', 'piano')
 INSTALL_HINT = 'pip install demucs'
-MIN_FREE_VRAM_BYTES = 6 * 1024 ** 3
+# Measured about 1.2 GB for every model on a 4-minute track (it works in chunks); Demucs documents 3 GB as its minimum.
+MIN_FREE_VRAM_BYTES = 3 * 1024 ** 3
 
 
 def model_for(driver):
@@ -75,7 +76,7 @@ def prepare_model(store, model, context):
 
 
 def pick_device():
-    """CUDA only when a GPU has comfortable free memory right now, otherwise CPU."""
+    """CUDA only when a GPU has about 3 GB free right now, otherwise CPU (slower, but uses no VRAM)."""
     probe = ('import torch; print(torch.cuda.mem_get_info()[0] if torch.cuda.is_available() else 0)')
     try:
         free = int(subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True,

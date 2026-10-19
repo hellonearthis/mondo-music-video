@@ -388,9 +388,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.12")
+        self.assertEqual(api_version()["version"], "1.6.13")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.12", (root / "README.md").read_text())
+        self.assertIn("1.6.13", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):

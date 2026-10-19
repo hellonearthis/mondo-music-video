@@ -464,7 +464,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
       const consent = document.createElement("input");
       consent.type = "checkbox";
       const approve = text("label", "", "check");
-      approve.append(consent, ` I approve a one-time download of the ${name === "htdemucs" ? "4-stem" : "6-stem"} model (a few hundred MB at most, from the Demucs project).`);
+      approve.append(consent, ` I approve a one-time download of the ${name === "htdemucs" ? "4-stem" : "6-stem"} model (${name === "htdemucs" ? "about 81 MB" : "about 53 MB"}, from the Demucs project).`);
       const go = text("button", `Set up ${name === "htdemucs" ? "4-stem" : "6-stem"} model`, wanted ? "primary" : "secondary");
       go.type = "button";
       go.disabled = true;

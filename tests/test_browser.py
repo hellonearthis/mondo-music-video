@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.12')
+                expect(page.locator('#version')).to_have_text('1.6.13')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -312,6 +312,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             errors = []
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
+                page.route('**/api/stems', lambda route: route.fulfill(json={'installed': False, 'install_command': 'pip install demucs', 'models': {}}))
                 page.goto(self.url)
                 page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
                 page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
@@ -417,7 +418,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.12')
+                expect(page.locator('#version')).to_have_text('1.6.13')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
