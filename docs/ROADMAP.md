@@ -28,6 +28,11 @@ Feature requests should stay within the music-video scope.
 
 ## Ideas (not started)
 
+- Subliminal message mode: optionally replace a video frame with a user-chosen
+  image, or apply a brief text overlay through FFmpeg for a similar blip effect.
+  Timing, duration in frames and repetition controls remain to be designed;
+  preserve the video's duration and audio synchronization. Owner-requested
+  idea; implementation has not started.
 - BONK (actor dancing): let selected actors dance to the song, with movement guided by
   its beat and passage energy. Let users choose who dances and optionally enter
   free-text "Dance direction"; default to simply "Dancing" without requiring
