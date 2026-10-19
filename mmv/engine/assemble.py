@@ -14,25 +14,19 @@ def probe_frames(path: str | Path) -> int:
     out = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', str(path)], check=True, capture_output=True, text=True, timeout=PROBE_TIMEOUT_S).stdout.strip()
     return int(out) if out.isdigit() else 0
 
-def trim_to_frames(src: str | Path, dest: str | Path, frames: int, *, fps: int=FPS, quality: str='high', video_filter: str | None=None, encoder: str='libx264') -> Path:
+def trim_to_frames(src: str | Path, dest: str | Path, frames: int, *, fps: int=FPS, quality: str='high', video_filter: str | None=None) -> Path:
     """Keep exactly the first `frames` frames.
 
-    high: single encode at high quality recipe.
-    low:  single encode at share size.
+    high: single encode at the VHS_VideoCombine settings (CRF 6, preset slow).
+    low:  single encode at share size (CRF 16, preset slow).
     """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    from mmv.video_encoding import get_encoder_args
-    venc_args = get_encoder_args(encoder, quality)
-    cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-i', str(src), '-frames:v', str(frames), *(['-vf', video_filter] if video_filter else []), *venc_args, '-an', str(dest)]
-    try:
-        _run(cmd)
-    except subprocess.CalledProcessError:
-        if encoder != 'libx264':
-            fallback_args = get_encoder_args('libx264', quality)
-            _run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(src), '-frames:v', str(frames), *(['-vf', video_filter] if video_filter else []), *fallback_args, '-an', str(dest)])
-        else:
-            raise
+    if quality == 'low':
+        crf, preset = ('16', 'slow')
+    else:
+        crf, preset = ('6', 'slow')
+    _run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(src), '-frames:v', str(frames), *(['-vf', video_filter] if video_filter else []), '-c:v', 'libx264', '-crf', crf, '-preset', preset, '-pix_fmt', 'yuv420p', '-an', str(dest)])
     return dest
 
 def extract_audio_span(src: str | Path, dest: str | Path, frames: int, *, fps: int=FPS, sample_rate: int=48000) -> Path:
@@ -92,7 +86,7 @@ def mux(video: str | Path, song: str | Path, dest: str | Path, *, quality: str='
     _run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(video), '-i', str(song), '-map', '0:v:0', '-map', '1:a:0', *venc, '-c:a', 'aac', '-b:a', audio_bitrate, '-shortest', str(dest)])
     return dest
 
-def assemble_run(plan, rendered: dict[str, dict], song: str | Path, outdir: str | Path, *, quality: str='high', stems_dir: str | Path | None=None, overlay: dict | None=None, encoder: str='libx264') -> dict[str, str]:
+def assemble_run(plan, rendered: dict[str, dict], song: str | Path, outdir: str | Path, *, quality: str='high', stems_dir: str | Path | None=None, overlay: dict | None=None) -> dict[str, str]:
     """Trim, join, and mux a completed run.
 
     `rendered` maps segment_id -> {"video": path, "audio": path}. Segments with
@@ -111,7 +105,7 @@ def assemble_run(plan, rendered: dict[str, dict], song: str | Path, outdir: str 
             continue
         actual = probe_frames(got['video'])
         text_args = {}
-        tv = trim_to_frames(got['video'], work / f'{seg.segment_id}.mp4', seg.trim_frames, quality=quality, encoder=encoder, **text_args)
+        tv = trim_to_frames(got['video'], work / f'{seg.segment_id}.mp4', seg.trim_frames, quality=quality, **text_args)
         text_start += seg.trim_frames / plan.fps
         trimmed.append(tv)
         if got.get('audio'):
@@ -128,7 +122,7 @@ def assemble_run(plan, rendered: dict[str, dict], song: str | Path, outdir: str 
     write_text_atomic(outdir / 'assembly_report.json', json.dumps(report, indent=2))
     return out
 
-def normalize_clip(src: str | Path, dest: str | Path, *, quality: str='high', encoder: str='libx264') -> Path:
+def normalize_clip(src: str | Path, dest: str | Path, *, quality: str='high') -> Path:
     """Encode one clip once at the lane recipe, full length, no audio.
 
     Attached elements (the ident) enter the picture concat as
@@ -137,17 +131,11 @@ def normalize_clip(src: str | Path, dest: str | Path, *, quality: str='high', en
     """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    from mmv.video_encoding import get_encoder_args
-    venc_args = get_encoder_args(encoder, quality)
-    cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-i', str(src), *venc_args, '-an', str(dest)]
-    try:
-        _run(cmd)
-    except subprocess.CalledProcessError:
-        if encoder != 'libx264':
-            fallback_args = get_encoder_args('libx264', quality)
-            _run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(src), *fallback_args, '-an', str(dest)])
-        else:
-            raise
+    if quality == 'low':
+        crf, preset = ('16', 'slow')
+    else:
+        crf, preset = ('6', 'slow')
+    _run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(src), '-c:v', 'libx264', '-crf', crf, '-preset', preset, '-pix_fmt', 'yuv420p', '-an', str(dest)])
     return dest
 
 def extract_audio(src: str | Path, dest: str | Path, *, sample_rate: int=48000) -> Path:
@@ -186,7 +174,7 @@ def _probe_audio(path: str | Path) -> tuple[int, float]:
         duration = 0.0
     return (sample_rate, duration)
 
-def assemble_run_with_ident(plan, rendered: dict[str, dict], song: str | Path, ident_clip: str | Path, position: str, outdir: str | Path, *, quality: str='high', stems_dir: str | Path | None=None, overlay: dict | None=None, encoder: str='libx264') -> dict[str, str]:
+def assemble_run_with_ident(plan, rendered: dict[str, dict], song: str | Path, ident_clip: str | Path, position: str, outdir: str | Path, *, quality: str='high', stems_dir: str | Path | None=None, overlay: dict | None=None) -> dict[str, str]:
     """Assemble a with-ident final as ONE encode per raw source.
 
     The ident is normalized once at the lane recipe and stream-copy
@@ -206,13 +194,13 @@ def assemble_run_with_ident(plan, rendered: dict[str, dict], song: str | Path, i
             continue
         actual = probe_frames(got['video'])
         text_args = {}
-        tv = trim_to_frames(got['video'], work / f'{seg.segment_id}.mp4', seg.trim_frames, quality=quality, encoder=encoder, **text_args)
+        tv = trim_to_frames(got['video'], work / f'{seg.segment_id}.mp4', seg.trim_frames, quality=quality, **text_args)
         text_start += seg.trim_frames / plan.fps
         trimmed.append(tv)
         report.append({'segment': seg.segment_id, 'status': 'ok', 'requested_frames': seg.gen_frames, 'actual_frames': actual, 'trimmed_to': seg.trim_frames, 'frame_delta': actual - seg.gen_frames})
     if not trimmed:
         raise RuntimeError('nothing rendered; nothing to assemble')
-    ident_video = normalize_clip(ident_clip, work / 'ident_video.mp4', quality=quality, encoder=encoder)
+    ident_video = normalize_clip(ident_clip, work / 'ident_video.mp4', quality=quality)
     if position == 'start':
         picture_clips = [ident_video] + trimmed
     else:
