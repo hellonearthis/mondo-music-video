@@ -308,7 +308,7 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
 
     # 05_receipts
     for name in ('request.json', 'consent.json', 'renders.json', 'quality.json', 'vision.json', 'operation.log', 'prepared.json',
-                 'plan.json', 'score.json', 'casting.json', 'operation.json', 'output.json'):
+                 'plan.json', 'score.json', 'casting.json', 'operation.json', 'output.json', 'passage-plan-prompts.json'):
         pack.put(run / name, f'05_receipts/{name}')
     for file in sorted(run.glob('seg*.json')) + sorted(run.glob('*.log')):
         if not (out / '05_receipts' / file.name).exists():
@@ -395,6 +395,10 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
         modes.append('lip sync (main singer: %s)' % names.get(lip.get('singer'), lip.get('singer')))
     elif mode == 'lip_sync':
         modes.append('lip sync requested, no passage was sung')
+    dance = prepared.get('dance') or {}
+    dancing = [sid for sid, v in (dance.get('passages') or {}).items() if v.get('dancing')]
+    if dancing:
+        modes.append('dancing in %d passage(s): "%s"' % (len(dancing), dance.get('direction', '')))
     if (request.get('analysis_driver') or 'mix') != 'mix':
         modes.append(f'instrument driver: {request["analysis_driver"]}')
     if request.get('vision_quality_check'):

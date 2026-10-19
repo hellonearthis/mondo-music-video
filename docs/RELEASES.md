@@ -1,5 +1,26 @@
 # Releases
 
+## 1.8.0 — BONK: dancing actors
+
+- **Dance mode** (opt-in `dance_mode: group`, off by default; music videos): the cast dances in time with the song. The app reads the song's
+  tempo and beats and tells the writer, per shot, how many beats it holds and where the downbeat falls; intensity comes from the song's
+  energy (calm, medium, high). Up to three dancers per passage, chosen from whoever is cast there; an optional lead is followed by the
+  others and is ignored in shots where the lead is off screen. Deliberate stillness, held poses and slowed movement are welcome
+  choreography. The direction field (`dance_direction`) chooses the style of movement only.
+- **Singing and dancing together**: a singer can also dance. Everyone who is not singing stays sealed while dancing; dancing never
+  changes a mouth rule. Verified on real renders (a singing henchman with a dancing robot and pig, sealed).
+- Dance planning is made once at preview and replayed on resume (a versioned, digest-bound plan, with the prompts bound to it), so a
+  resumed production keeps the same choreography. A bounded wording check rejects prompts that leave a visible dancer without a body
+  action or describe one as merely standing; style advice (follow the lead, downbeat accent, calm wording) is kept on the last try and
+  recorded in `dance-advice-kept.json` instead of failing the run. The sealed-lips sentences are never treated as dancing.
+- **Local renders are no longer limited by a one-hour wait**, and one status check that times out while a render is still running no
+  longer ends the production (the render was already submitted; a hung proxy is retried, never resubmitted).
+- Preview, API, agent client, MCP tools, skill and export package (`passage-plan-prompts.json` receipt, dance line in the README) cover it.
+- Work shared with Codex, which built the passage-plan binding and resume prerequisites and adversarially reviewed the design and
+  integration. Requests that do not use dancing produce byte-identical prompts, job files and fingerprints to 1.7.2 (golden fixtures).
+- **Exceptions to the protected prompting scheme:** the writer, ident and sealed-lips text, the singing wording and the quality rules
+  are unchanged. The owner-approved dance rules are an extra block appended outside the original engine, as the singing rules are.
+
 ## 1.7.2 — Subliminal message mode and sturdier Suno lyric parsing
 
 - **Subliminal message mode** (opt-in, off by default; music videos): flash a chosen picture, or a few words rendered full-frame, for 1 to 12

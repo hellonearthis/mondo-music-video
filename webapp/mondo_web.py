@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.7.2"
+MGL_APP_VERSION = "1.8.0"
 WEB = Path(__file__).parent
 
 
@@ -266,6 +266,10 @@ class ProductionRequest(StrictModel):
     mouth_mode: Literal["sealed", "natural", "lip_sync"] | None = None
     lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
     singers: list[str] = Field(default_factory=list, max_length=9)
+    dance_mode: Literal["off", "group"] = "off"
+    dancers: list[str] = Field(default_factory=list, max_length=9)
+    dance_direction: str = Field("", max_length=200)
+    dance_lead: str | None = None
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -303,6 +307,18 @@ class ProductionRequest(StrictModel):
         if set(value) != set(oap.CONTENT_ENUMS) or any(value[k] not in levels for k, levels in oap.CONTENT_ENUMS.items()):
             raise ValueError("Choose a valid OAP content rating for each category")
         return value
+
+
+DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead")
+
+
+def request_dict(value):
+    """The stored production request. A request without dancing is stored exactly as it was before dancing existed."""
+    request = value.model_dump()
+    if request.get("dance_mode", "off") == "off":
+        for key in DANCE_FIELDS:
+            request.pop(key, None)
+    return request
 
 
 class StartRequest(StrictModel):
@@ -990,15 +1006,15 @@ def create_app(home=None, *, test_hosts=False):
             quotes.clear()
         return {"deleted": vocab_id}
 
-    @app.post("/api/quote")
-    def quote(value: ProductionRequest):
+    def build_quote(value: ProductionRequest, *, resume_directory=None):
         with jobs.lock:
             jobs.require_idle()
-            request = value.model_dump()
+            request = request_dict(value)
             kind = request.get("kind", "video")
             log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
             try:
-                prepared = production.prepare(store, request)
+                prepared = (production.prepare_resume(store, request, resume_directory) if resume_directory is not None
+                            else production.prepare(store, request))
             except Exception as exc:
                 log_studio(store, f"Preview failed ({kind}): {exc}", level="ERROR")
                 raise
@@ -1013,11 +1029,15 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "dance": prepared.get("dance"),
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
+
+    @app.post("/api/quote")
+    def quote(value: ProductionRequest):
+        return build_quote(value)
 
     @app.get("/api/lyrics")
     def lyrics_status():
@@ -1086,7 +1106,7 @@ def create_app(home=None, *, test_hosts=False):
             if (directory / 'output.json').exists():
                 raise ValueError('This production is already complete')
             # Recheck OAP, files, workflow and settings before offering recovery.
-            prepared = production.prepare(store, request)
+            prepared = production.prepare_resume(store, request, directory)
             if production.fingerprint(store, request, prepared) != consent.get('fingerprint'):
                 raise ValueError('Original inputs or settings changed; restore them before resuming')
             prompts = read_json(directory / 'prompts.json', {})
@@ -1098,7 +1118,7 @@ def create_app(home=None, *, test_hosts=False):
                     raise ValueError('Submission outcome unknown. Reconcile the saved receipt with the proxy before resuming')
                 if receipt.get('state') in ('failed', 'canceled', 'expired'):
                     raise ValueError('A Comfy job ended without a usable result; resume will not regenerate it')
-            result = quote(ProductionRequest(**request))
+            result = build_quote(ProductionRequest(**request), resume_directory=directory)
             quotes[result['id']]['resume_run'] = run_id
             result.update(kind=request['kind'], estimate_usd=0, writer_estimate_usd=0, paid=False,
                           note='Resume this local Comfy SDK production using saved validated prompts and request IDs. '
@@ -1121,7 +1141,8 @@ def create_app(home=None, *, test_hosts=False):
             request = quoted["request"]
             kind = request.get("kind", "video")
             try:
-                prepared = production.prepare(store, request)
+                prepared = (production.prepare_resume(store, request, store.home / 'runs' / quoted['resume_run'])
+                            if quoted.get('resume_run') else production.prepare(store, request))
             except Exception as exc:
                 log_studio(store, f"Start preparation failed ({kind}): {exc}", level="ERROR")
                 raise

@@ -152,6 +152,12 @@ export function showQuote(request, quote) {
     text("h2", `Estimated provider cost: $${Number(quote.estimate_usd).toFixed(2)}`),
     text("p", quote.note, "muted")
   );
+  if (quote.dance) {
+    const dancing = Object.values(quote.dance.passages).filter(item => item.dancing).length;
+    const left = [...new Set(Object.values(quote.dance.passages).flatMap(item => item.not_choreographed || []))];
+    summary.append(text("p", `Dancing: ${dancing} of ${Object.keys(quote.dance.passages).length} passages, "${quote.dance.direction}".` +
+      (left.length ? ` Only the first 3 dancers in a passage are choreographed; not choreographed: ${left.join(", ")}.` : ""), "muted"));
+  }
   if (quote.subliminal) {
     summary.append(text("p", `Subliminal flashes: ${quote.subliminal.times.length} × ${quote.subliminal.frames} frame(s) at ${quote.subliminal.times.join(", ")} s. ${quote.subliminal.notice}`, "muted"));
   }

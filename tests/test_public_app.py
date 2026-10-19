@@ -400,9 +400,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.7.2")
+        self.assertEqual(api_version()["version"], "1.8.0")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.7.2", (root / "README.md").read_text())
+        self.assertIn("1.8.0", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -998,6 +998,22 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(comfy_sdk.media_suffix(make('audio/flac', 'x'), '.wav'), '.flac')
         self.assertEqual(comfy_sdk.media_suffix(make('application/octet-stream', 'clip.webm'), '.mp4'), '.webm')
         self.assertEqual(comfy_sdk.media_suffix(make('', ''), '.mp4'), '.mp4')
+
+    def test_dance_is_planned_in_the_preview_and_requests_without_dancing_are_unchanged(self):
+        song = self.song_upload()
+        plan = self.client.post('/api/quote', json={'song': song, 'dance_mode': 'group', 'dance_direction': ' gentle   swaying '})
+        plan.raise_for_status()
+        dance = plan.json()['dance']
+        self.assertEqual((dance['mode'], dance['direction']), ('group', 'gentle swaying'))
+        self.assertTrue(dance['passages'] and dance['digest'] and dance['tempo_bpm'] > 0)
+        off = self.client.post('/api/quote', json={'song': song, 'dance_mode': 'off', 'dance_direction': 'ignored', 'dancers': ['x']})
+        off.raise_for_status()
+        self.assertIsNone(off.json()['dance'])
+        self.assertEqual(off.json()['id'] and self.client.post('/api/quote', json={'song': song}).json()['dance'], None)
+        for bad, code in (({'dance_mode': 'wild'}, 422), ({'dance_mode': 'group', 'dance_direction': 'x' * 201}, 422),
+                          ({'dance_mode': 'group', 'dancers': ['nobody_here']}, 400), ({'dance_mode': 'group', 'dance_lead': 'nobody_here'}, 400)):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post('/api/quote', json={'song': song, **bad}).status_code, code)
 
     def test_subliminal_flashes_are_planned_in_the_preview_and_applied_to_the_finished_video_keeping_a_clean_copy(self):
         song = self.song_upload()

@@ -80,6 +80,10 @@ needs the user's authorization (`confirm`).
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
 
+Dancing: `dance_mode` "group" (default "off"), optional `dancers` (actor ids; empty = whole cast, at most 3 per passage are choreographed),
+`dance_direction` (style only, default "Dancing") and `dance_lead` (actor id or "none"; ignored where the lead is off screen). Mouths keep
+following `mouth_mode`; a singer may also dance. The preview returns `dance`. Dancing is free to plan; it adds no cost.
+
 Subliminal flash: `subliminal` (mode off/image/text, `text` or an uploaded `image`, `frames` 1-12, `placement` manual with `times` in
 seconds on the finished video's clock, or `downbeats` with `count`) flashes a few frames; flashes stay 1 s apart, the clean video is kept as
 `music-video-clean.mp4`, and the user should be warned that flashing can affect photosensitive viewers.

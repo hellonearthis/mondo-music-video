@@ -2,7 +2,7 @@
 import os, re, subprocess
 from pathlib import Path
 from . import media
-from .pipeline import prepare, fingerprint, produce
+from .pipeline import prepare, prepare_resume, fingerprint, produce
 from .storage import inside, write_json
 
 def upscale(store, source, model, scale, context):

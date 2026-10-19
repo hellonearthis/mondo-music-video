@@ -61,6 +61,13 @@ def create_server(base_url=None):
         one-time model download that only the user approves in the app (see
         inspect_studio kind "stems"). The first separation of a song takes minutes.
 
+        Dancing: `dance_mode` "group" makes the cast dance to the song's beat (default "off"); `dancers` lists actor ids (empty =
+        everyone cast), `dance_direction` is a short style such as "gentle swaying" (default "Dancing"; it can only choose the
+        movement style, never mouths or lyrics), `dance_lead` is an actor id or "none" (defaults to the main singer when lip sync
+        is on; ignored in shots where the lead is off screen). At most 3 dancers per passage are choreographed. Mouths follow
+        `mouth_mode` unchanged; a singer can also dance. The preview returns `dance` (who dances where). Stillness is allowed
+        only as a described, deliberate hold.
+
         Subliminal flash: `subliminal` {mode: off|image|text, text, image (an uploaded PNG/JPEG id), frames 1-12,
         placement manual|downbeats, times [seconds on the finished video's clock], count} flashes a picture or words
         for a few frames (flashes are kept 1 s apart); the preview returns the resolved times, the audio and length are

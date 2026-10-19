@@ -7,6 +7,8 @@ import json
 import subprocess
 import time
 import uuid
+
+import httpx
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -70,6 +72,23 @@ class SdkSession:
     def close(self):
         self.low.close()
         self.http.close()
+
+
+def wait_for_job(remote, record, receipt_path, timeout=None, pause=.5, retry_pause=5):
+    """Poll a submitted job until it ends. No time limit unless one is passed. A status check that fails in transit (a busy proxy
+    timing out) is only retried: the job is already submitted and the saved receipt keeps it from being submitted again."""
+    deadline = time.monotonic() + timeout if timeout else None
+    while remote.status not in ('succeeded', 'failed', 'canceled', 'expired'):
+        if deadline is not None and time.monotonic() >= deadline:
+            raise BackendError('Comfy job timed out; its saved request can be resumed without resubmitting.')
+        time.sleep(pause)
+        try:
+            remote.refresh()
+        except httpx.TransportError:
+            time.sleep(retry_pause)
+            continue
+        record['state'] = remote.status
+        write_json(receipt_path, record)
 
 
 def check_proxy(url, key=''):
@@ -200,7 +219,7 @@ class ComfySdkH3Backend(LocalH3Backend):
         self.directory.mkdir(parents=True, exist_ok=True)
         self.builder = WorkflowBuilder.load(run.get('map_path'), run.get('root'))
         self.url = validate_proxy_url(run['comfy_sdk_url'])
-        self.timeout = run.get('timeout_s') or 3600
+        self.timeout = run.get('timeout_s')        # None: a local render may take as long as it needs; the operator can cancel
         self.clip_quality = run.get('clip_quality') or 'standard'
         if self.clip_quality not in CLIP_QUALITIES:
             raise BackendError('Unknown clip quality')
@@ -271,14 +290,7 @@ class ComfySdkH3Backend(LocalH3Backend):
                                    'Inspect comfy-request.json and the proxy before generating again.') from None
             record.update(job_id=remote.id, state=remote.status)
             write_json(receipt_path, record)
-        deadline = time.monotonic() + self.timeout
-        while remote.status not in ('succeeded', 'failed', 'canceled', 'expired'):
-            if time.monotonic() >= deadline:
-                raise BackendError('Comfy job timed out; its saved request can be resumed without resubmitting.')
-            time.sleep(.5)
-            remote.refresh()
-            record['state'] = remote.status
-            write_json(receipt_path, record)
+        wait_for_job(remote, record, receipt_path, self.timeout)
         record['state'] = remote.status
         write_json(receipt_path, record)
         if remote.status != 'succeeded':

@@ -32,7 +32,7 @@ Feature requests should stay within the music-video scope.
   finished video, at times the user picks or on bar starts. FFmpeg overlay by frame number after assembly; length, frame count and audio are
   unchanged and the untouched video is kept. Open: a way to preview the flash before rendering, a library of flash pictures, and
   per-flash pictures.
-- BONK (actor dancing): let selected actors dance to the song, with movement guided by
+- BONK (built, release 1.8.0; design in `docs/BONK_DESIGN.md`, reviewed by Codex; group mode first, independent per-part dancing later): let selected actors dance to the song, with movement guided by
   its beat and passage energy. Let users choose who dances and optionally enter
   free-text "Dance direction"; default to simply "Dancing" without requiring
   knowledge of dance styles. Example directions: gentle swaying, energetic
@@ -76,6 +76,18 @@ Feature requests should stay within the music-video scope.
 - Suggest the singer from the voice: estimate whether the vocals stem sounds male or female and
   match it to the cast (the owner would pick a male actor for male vocals). Needs a reliable pitch
   or voice-type estimate and cast metadata, and must stay a suggestion the user can override.
+
+- Actors from the oap-actors repository (owner decision, to ship with the voice/gender check): the starter cast stays pinned in
+  `examples/starter-cast/manifest.json` (actor IDs, package SHA-256, signer key), but the packages are fetched from
+  https://github.com/hodgemann/oap-actors instead of being bundled; fetched files must match the pinned hash, pass the OAP signature
+  check and the install guide's signer acceptance. A local clone can stand in when offline (rented GPU hosts). Mondo can also import
+  *other* actors from that repository on the user's request: the app lists the catalog (`index.json`) with each rider shown, rider
+  restrictions are enforced against the production's content settings (an actor whose rider allows nudity is browsable but not importable
+  by default), and each import verifies the hash, the signature and the signer before anything is added. New repository actors are never
+  imported automatically and the four-actor public roster rule in AGENTS.md changes only with the owner's explicit say-so.
+- Voice/gender check (owner decision, same release): warn in the preview when the vocal sounds clearly male or female and the chosen singer
+  is the other, offer the best match in one click, never block a deliberate mismatch, do nothing when unsure (see "Suggest the singer from
+  the voice" above).
 
 ## To investigate
 
