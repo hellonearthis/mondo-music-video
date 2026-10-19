@@ -630,8 +630,98 @@ export function drawOneAdditionalRandomItem(cat) {
     renderVocabCategoryContent(cat);
   }
   updateTabBadges();
-  renderVocabSelectionSummary();
+  updateVocabCategoryCard(cat);
   notice(`Added "${pick}" to ${cat.replace(/_/g, " ")}.`);
+}
+
+export function updateVocabCategoryCard(cat) {
+  const card = $(`#vocab-random-summary-grid .vocab-summary-cat-card[data-category="${cat}"]`);
+  if (!card || !vocabDataCache) {
+    renderVocabSelectionSummary();
+    return;
+  }
+  const baseItems = vocabDataCache.base?.[cat] || [];
+  const override = vocabWorkingDraft[cat];
+  let activeItems = [];
+  if (override?.mode === "replace") {
+    activeItems = [...(override.add || [])];
+  } else {
+    const exc = new Set(override?.exclude || []);
+    const remaining = baseItems.filter(x => !exc.has(x));
+    const added = override?.add || [];
+    activeItems = [...remaining, ...added];
+  }
+
+  const countBadge = card.querySelector(".vocab-summary-cat-count");
+  if (countBadge) countBadge.textContent = `${activeItems.length} active`;
+
+  const chipsWrap = card.querySelector(".vocab-summary-chips");
+  if (chipsWrap) {
+    chipsWrap.replaceChildren();
+    activeItems.forEach(item => {
+      const chip = document.createElement("span");
+      chip.className = "vocab-chip";
+      const textSpan = document.createElement("span");
+      textSpan.className = "vocab-chip-text";
+      textSpan.textContent = item;
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "vocab-chip-remove";
+      removeBtn.setAttribute("aria-label", `Remove ${item}`);
+      removeBtn.textContent = "×";
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        removeSingleItemFromCategory(cat, item);
+      };
+
+      chip.append(textSpan, removeBtn);
+      chipsWrap.append(chip);
+    });
+
+    if (activeItems.length === 0) {
+      const emptyNote = document.createElement("span");
+      emptyNote.className = "vocab-chip-empty";
+      emptyNote.textContent = "No active items";
+      chipsWrap.append(emptyNote);
+    }
+  }
+
+  // Update overall badge
+  updateVocabSummaryBadge();
+}
+
+function updateVocabSummaryBadge() {
+  const badge = $("#vocab-random-status-badge");
+  if (!badge || !vocabDataCache) return;
+  const categories = vocabDataCache.categories || Object.keys(vocabDataCache.base || {});
+  let totalActive = 0;
+  let customizedCats = 0;
+  categories.forEach(c => {
+    const baseItems = vocabDataCache.base?.[c] || [];
+    const override = vocabWorkingDraft[c];
+    if (override?.mode === "replace") {
+      totalActive += (override.add || []).length;
+      customizedCats++;
+    } else {
+      const exc = new Set(override?.exclude || []);
+      const remaining = baseItems.filter(x => !exc.has(x));
+      const added = override?.add || [];
+      totalActive += remaining.length + added.length;
+      if (exc.size > 0 || added.length > 0) customizedCats++;
+    }
+  });
+
+  if (vocabCurrentRandomKey) {
+    badge.textContent = `🎲 ${vocabCurrentRandomKey} (${totalActive} active)`;
+    badge.style.color = "var(--accent)";
+  } else if (customizedCats > 0) {
+    badge.textContent = `${customizedCats} categories customized (${totalActive} active)`;
+    badge.style.color = "var(--green)";
+  } else {
+    badge.textContent = `All built-in (${totalActive} active)`;
+    badge.style.color = "var(--muted)";
+  }
 }
 
 export function removeSingleItemFromCategory(cat, item) {
@@ -661,7 +751,7 @@ export function removeSingleItemFromCategory(cat, item) {
     renderVocabCategoryContent(cat);
   }
   updateTabBadges();
-  renderVocabSelectionSummary();
+  updateVocabCategoryCard(cat);
 }
 
 function getCategoryActiveCount(cat) {
@@ -702,6 +792,7 @@ export function renderVocabSelectionSummary() {
 
     const card = document.createElement("div");
     card.className = "vocab-summary-cat-card";
+    card.dataset.category = cat;
 
     const header = document.createElement("div");
     header.className = "vocab-summary-cat-header";
