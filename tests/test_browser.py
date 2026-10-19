@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.14')
+                expect(page.locator('#version')).to_have_text('1.7.0')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -394,6 +394,112 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_lip_sync_editor_edits_lyric_lines_and_singer_and_gates_replan(self):
+        from playwright.sync_api import sync_playwright, expect
+        name = self.fixture.client.post('/api/upload/song', files={'file': ('test.wav', self.song.read_bytes(), 'audio/wav')}).json()['file']
+        beats = [{'time': round(0.5 * i, 3), 'downbeat': i % 4 == 1} for i in range(1, 17)]
+        quote = {'detected': {'duration': 8.5, 'tempo_bpm': 120, 'beats_per_bar': 4, 'beats': beats,
+                              'sections': [{'start': 0, 'end': 8.5, 'label': 'mid', 'energy': .5}]},
+                 'score': {'beats': [{'time': b['time'], 'energy': .5} for b in beats],
+                           'passages': [{'index': 0, 'start': 0, 'end': 4, 'shots': [{'start': 0}]}, {'index': 1, 'start': 4, 'end': 8.5, 'shots': [{'start': 4}]}]},
+                 'lipsync': {'singer': 'pig', 'actors': {'pig': 'Hambo', 'goon': 'Henchman'},
+                             'passages': {'seg000': {'singing': True, 'reason': 'main singer', 'actor_id': 'pig'},
+                                          'seg001': {'singing': False, 'reason': 'no sung lines in this passage', 'actor_id': None}}}}
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.route('**/api/stems', lambda route: route.fulfill(json={'installed': False, 'install_command': 'pip install demucs', 'models': {}}))
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
+                    window.__calls = [];
+                    const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
+                    return m.mountScoreEditor(host, {kind: 'video', song: name, mouth_mode: 'lip_sync', actors: ['pig', 'goon'],
+                        lyric_lines: [{start: 0.5, end: 3.5, text: 'Interdimensional lover'}], singers: []}, quote, {
+                        onDirty: () => {}, onReplan: async (e, d, q, lip) => { window.__calls.push(lip); }});
+                })""", [name, quote])
+                expect(page.locator('#test-editor .se-lip')).to_be_visible()
+                expect(page.locator('#test-editor .se-lip-summary')).to_contain_text('Hambo sings (main singer)')
+                expect(page.locator('#test-editor .se-lip-summary')).to_contain_text('sealed (no sung lines in this passage)')
+                expect(page.locator('#test-editor .se-line-row')).to_have_count(1)
+                self.assertEqual(page.get_by_label('Main singer').locator('option').all_inner_texts(), ['Choose for me (seeded)', 'Hambo', 'Henchman'])
+                expect(page.locator('#test-editor .se-status')).to_contain_text('matches what you see')
+                page.get_by_label('Main singer').select_option('goon')
+                expect(page.locator('#test-editor .se-status')).to_contain_text('not planned yet')
+                page.locator('#test-editor button:has-text("Add line at cursor")').click()
+                expect(page.locator('#test-editor .se-line-row')).to_have_count(2)
+                expect(page.locator('#test-editor .se-status')).to_contain_text('Each lyric line needs words')
+                self.assertTrue(page.evaluate('document.querySelector("#test-editor button.primary").disabled'))
+                page.locator('#test-editor .se-line-row input[type=text]').nth(0).fill('I dated you')
+                page.locator('#test-editor button.primary:has-text("Re-plan")').click()
+                page.wait_for_function('window.__calls.length === 1')
+                lip = page.evaluate('window.__calls[0]')
+                self.assertEqual(lip['singers'], ['goon'])
+                self.assertEqual([line['text'] for line in lip['lyric_lines']], ['I dated you', 'Interdimensional lover'])   # kept in time order
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_lyrics_detection_and_pasted_lyrics_fill_the_lines_in_the_editor(self):
+        from playwright.sync_api import sync_playwright, expect
+        name = self.fixture.client.post('/api/upload/song', files={'file': ('test.wav', self.song.read_bytes(), 'audio/wav')}).json()['file']
+        beats = [{'time': round(0.5 * i, 3), 'downbeat': i % 4 == 1} for i in range(1, 17)]
+        quote = {'detected': {'duration': 8.5, 'tempo_bpm': 120, 'beats_per_bar': 4, 'beats': beats,
+                              'sections': [{'start': 0, 'end': 8.5, 'label': 'mid', 'energy': .5}]},
+                 'score': {'beats': [{'time': b['time'], 'energy': .5} for b in beats],
+                           'passages': [{'index': 0, 'start': 0, 'end': 8.5, 'shots': [{'start': 0}]}]},
+                 'lipsync': {'singer': 'pig', 'actors': {'pig': 'Hambo'}, 'passages': {'seg000': {'singing': False, 'reason': 'no sung lines in this passage'}}}}
+        models = {name_: {'cached': name_ == 'large-v3', 'download': 'about 1 GB'} for name_ in ('tiny', 'base', 'small', 'medium', 'large-v3')}
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors, posts = [], []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.route('**/api/stems', lambda route: route.fulfill(json={'installed': False, 'install_command': 'pip install demucs', 'models': {}}))
+                page.route('**/api/lyrics', lambda route: route.fulfill(json={'available': True, 'install_command': 'pip install openai-whisper', 'models': models}))
+                def post(route):
+                    posts.append((route.request.url.rsplit('/', 1)[1], route.request.post_data_json))
+                    if route.request.url.endswith('/detect'):
+                        route.fulfill(json={'id': 'j1', 'state': 'running'})
+                    else:
+                        route.fulfill(json={'lines': [{'start': 1.0, 'end': 3.0, 'text': 'Interdimensional lover', 'timing': 'matched'},
+                                                      {'start': 3.0, 'end': 5.0, 'text': 'I dated you', 'timing': 'interpolated'}], 'source': 'vocals stem'})
+                page.route('**/api/lyrics/detect', post)
+                page.route('**/api/lyrics/align', post)
+                page.route('**/api/status', lambda route: route.fulfill(json={'state': 'complete', 'message': 'Complete', 'result': {
+                    'lines': [{'start': 9.9, 'end': 12.1, 'text': 'Interdimensional lover'}], 'source': 'vocals stem', 'language': 'en', 'model': 'large-v3'}}))
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
+                    const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
+                    return m.mountScoreEditor(host, {kind: 'video', song: name, mouth_mode: 'lip_sync', actors: ['pig'], lyric_lines: [], singers: []}, quote,
+                        {onDirty: () => {}, onReplan: async () => {}});
+                })""", [name, quote])
+                expect(page.locator('#test-editor .se-lip-summary')).to_contain_text('No lyric lines yet')
+                expect(page.get_by_label('Speech model for lyrics detection')).to_have_value('large-v3')
+                self.assertFalse(page.evaluate('document.querySelector("#test-editor .se-lip button[title^=\'Listen\']").disabled'))
+                page.locator('#test-editor button:has-text("Detect lyrics")').click()
+                expect(page.locator('#test-editor .se-line-row')).to_have_count(1, timeout=15000)
+                expect(page.locator('#test-editor .se-status')).to_contain_text('Detected 1 lines from the vocals stem')
+                self.assertEqual(posts[0][1]['model'], 'large-v3')
+                page.locator('#test-editor textarea').fill('Interdimensional lover\nI dated you')
+                page.locator('#test-editor button:has-text("Time pasted lyrics")').click()
+                expect(page.locator('#test-editor .se-line-row')).to_have_count(2)
+                expect(page.locator('#test-editor .se-status')).to_contain_text('1 line(s) could not be matched well')
+                expect(page.locator('#test-editor .se-lip-summary')).to_contain_text('not used for singing until you confirm')
+                page.locator('#test-editor button:has-text("Confirm timing")').click()
+                expect(page.locator('#test-editor .se-lip-summary')).not_to_contain_text('guessed timing')
+                self.assertEqual(posts[1][1]['text'], 'Interdimensional lover\nI dated you')
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_saved_custom_vocabulary_preset_survives_reload(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.client.post('/api/vocabularies', json={
@@ -460,7 +566,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.14')
+                expect(page.locator('#version')).to_have_text('1.7.0')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

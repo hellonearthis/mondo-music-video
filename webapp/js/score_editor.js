@@ -157,6 +157,40 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   const driverSetup = text("div", "", "se-driver-setup");
   driverRow.append(driverLabel, qualityLabel, driverNote, driverSetup);
 
+  const lipOn = request.mouth_mode === "lip_sync";
+  let lines = (request.lyric_lines || []).map(item => ({ start: item.start, end: item.end, text: item.text }));
+  let singers = [...(request.singers || [])];
+  const appliedLines = JSON.stringify(lines), appliedSingers = JSON.stringify(singers);
+  const lipBox = text("div", "", "se-lip");
+  lipBox.hidden = !lipOn;
+  const singerSelect = document.createElement("select");
+  singerSelect.setAttribute("aria-label", "Main singer");
+  const singerLabel = text("label", "Main singer ", "se-driver-label",
+    "The actor who sings the lyric lines. Left on 'choose for me', the program picks one with your seed.");
+  singerLabel.append(singerSelect);
+  const lineList = text("div", "", "se-lines");
+  const lineBar = text("div", "", "se-section-bar");
+  const addLine = text("button", "Add line at cursor", "secondary", "Add a lyric line starting where the playback cursor is");
+  addLine.type = "button";
+  lineBar.append(addLine, text("span", "Give each sung line its start, end and words. Passages with at least about three quarters of a second of singing will sing; the others stay sealed.", "muted"));
+  const lipSummary = text("div", "", "se-lip-summary");
+  const detectBar = text("div", "", "se-section-bar");
+  const speechSelect = document.createElement("select");
+  speechSelect.setAttribute("aria-label", "Speech model for lyrics detection");
+  const detectBtn = text("button", "Detect lyrics", "secondary", "Listen to the song (the vocals, if the stems add-on is ready) and fill in the lines. Free, and you can edit every line.");
+  detectBtn.type = "button";
+  detectBar.append(detectBtn, speechSelect);
+  const detectNote = text("p", "", "muted se-lip-note");
+  const speechSetup = text("div", "", "se-lip-setup");
+  const pasteBox = document.createElement("textarea");
+  pasteBox.rows = 4;
+  pasteBox.placeholder = "Or paste the lyrics here, one line per row, and time them against the song";
+  pasteBox.setAttribute("aria-label", "Pasted lyrics");
+  const pasteBtn = text("button", "Time pasted lyrics", "secondary", "Match your words to the song to find when each line is sung (run Detect lyrics first)");
+  pasteBtn.type = "button";
+  lipBox.append(text("h3", "Lyrics and singing"), singerLabel, detectBar, detectNote, speechSetup, pasteBox, pasteBtn,
+    lineList, lineBar, lipSummary);
+
   const sectionHead = text("h3", "Sections");
   sectionHead.title = "Sections decide the montage style. Drag a section's edge on the waveform to move it.";
   const sectionList = text("div", "", "se-sections");
@@ -165,7 +199,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   splitBtn.type = "button";
   sectionBar.append(splitBtn, text("span", "Drag a section's edge on the waveform to move it.", "muted"));
 
-  box.append(stage, strip, caption, legend, bar, status, driverRow, sectionHead, sectionList, sectionBar);
+  box.append(stage, strip, caption, legend, bar, status, driverRow, lipBox, sectionHead, sectionList, sectionBar);
 
   const x = time => time / Math.max(duration, 0.001) * strip.clientWidth;
   const beatTime = index => detected.beats[index].time + edits.beat_nudge_ms / 1000;
@@ -181,6 +215,9 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     return cleanEdits(edits);
   }
 
+  const linesValid = () => lines.every(item => Number.isFinite(item.start) && Number.isFinite(item.end)
+    && item.start >= 0 && item.end > item.start && item.text.trim().length > 0);
+
   function sectionsValid() {
     return sections.every((item, i) => (i === 0 ? item.start === 0 : item.start > sections[i - 1].start + 0.999)
       && (sections[i + 1] ? sections[i + 1].start : duration) - item.start >= 0.999);
@@ -188,13 +225,14 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
 
   function refreshStatus() {
     const current = collectEdits();
-    const dirty = !same(current, applied) || driver !== appliedDriver || (usesQuality(driver) && quality !== appliedQuality);
-    const valid = sectionsValid();
+    const lipDirty = lipOn && (JSON.stringify(lines) !== appliedLines || JSON.stringify(singers) !== appliedSingers);
+    const dirty = !same(current, applied) || driver !== appliedDriver || (usesQuality(driver) && quality !== appliedQuality) || lipDirty;
+    const valid = sectionsValid() && (!lipOn || linesValid());
     barOne.disabled = selected === null;
     muteBtn.disabled = selected === null;
     replanBtn.disabled = !dirty || !valid;
     replanBtn.classList.toggle("attention", dirty && valid);
-    status.textContent = !valid ? "Each section must be at least 1 second long."
+    status.textContent = !valid ? (lipOn && !linesValid() ? "Each lyric line needs words and an end after its start." : "Each section must be at least 1 second long.")
       : dirty ? "You have edits that are not planned yet. Press Re-plan to update the cuts and the cost before you start."
         : "The plan matches what you see.";
     nudgeLabel.textContent = ` ${edits.beat_nudge_ms > 0 ? "+" : ""}${edits.beat_nudge_ms} ms`;
@@ -422,6 +460,9 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     driverSelect.value = "mix";
     quality = "standard";
     qualitySelect.value = "standard";
+    lines = JSON.parse(appliedLines);
+    singers = JSON.parse(appliedSingers);
+    renderLip();
     rebuildRegions();
     refreshStatus();
   };
@@ -448,7 +489,8 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     replanBtn.setAttribute("aria-busy", "true");
     status.textContent = "Planning…";
     try {
-      await onReplan(collectEdits(), driver, usesQuality(driver) ? quality : "standard");
+      await onReplan(collectEdits(), driver, usesQuality(driver) ? quality : "standard",
+        lipOn ? { lyric_lines: lines.map(item => ({ start: item.start, end: item.end, text: item.text.trim(), timing: item.timing || "manual", ...(item.section ? { section: item.section } : {}) })), singers } : null);
     } catch (error) {
       status.textContent = error.message;
       replanBtn.removeAttribute("aria-busy");
@@ -528,6 +570,168 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   api("/api/stems").then(response => response.json()).then(value => { stems = value; renderDriver(); })
     .catch(() => { stems = { installed: false, install_command: "pip install demucs", models: {} }; renderDriver(); });
   renderDriver();
+
+  const confirmed = item => { if (item.timing === "interpolated" || item.timing === "uncertain") item.timing = "manual"; };
+
+  function renderLip() {
+    if (!lipOn) return;
+    const plan = quote.lipsync || { actors: {}, passages: {} };
+    singerSelect.replaceChildren(option("", "Choose for me (seeded)", "Pick one of the cast with the production seed"),
+      ...(request.actors || []).map(id => option(id, plan.actors[id] || id)));
+    singerSelect.value = singers[0] || "";
+    lineList.replaceChildren();
+    lines.forEach((item, i) => {
+      const row = text("div", "", "se-line-row");
+      const field = (label, key, step) => {
+        const input = document.createElement("input");
+        input.type = "number";
+        input.step = step;
+        input.min = "0";
+        input.value = String(item[key]);
+        input.setAttribute("aria-label", `Lyric line ${i + 1} ${label} (seconds)`);
+        input.onchange = () => { item[key] = Number(input.value); confirmed(item); refreshStatus(); };
+        return input;
+      };
+      const words = document.createElement("input");
+      words.type = "text";
+      words.value = item.text;
+      words.placeholder = "The words sung on this line";
+      words.maxLength = 300;
+      words.setAttribute("aria-label", `Lyric line ${i + 1} words`);
+      words.oninput = () => { item.text = words.value; refreshStatus(); };
+      words.onchange = () => { confirmed(item); renderLip(); };
+      if (item.timing === "interpolated" || item.timing === "uncertain") {
+        const confirm = text("button", "Confirm timing", "secondary",
+          "These times were guessed. Check them against the waveform; until you confirm or edit them this line is not used for singing.");
+        confirm.type = "button";
+        confirm.onclick = () => { item.timing = "manual"; renderLip(); refreshStatus(); };
+        row.append(confirm);
+      }
+      const remove = text("button", "Remove", "quiet", "Remove this lyric line");
+      remove.type = "button";
+      remove.onclick = () => { lines.splice(i, 1); renderLip(); refreshStatus(); };
+      if (item.section) {
+        row.classList.add("tagged");
+        row.prepend(text("span", item.section, "se-tag", "Section marker from the pasted lyrics"));
+      }
+      row.append(field("start", "start", "0.1"), field("end", "end", "0.1"), words, remove);
+      lineList.append(row);
+    });
+    lipSummary.replaceChildren();
+    const guessed = lines.filter(item => item.timing === "interpolated" || item.timing === "uncertain").length;
+    if (guessed) {
+      lipSummary.append(text("p", `${guessed} lyric line(s) have guessed timing. They are not used for singing until you confirm or edit them.`, "se-warn"));
+    }
+    const passages = quote.score ? quote.score.passages : [];
+    if (!lines.length) {
+      lipSummary.append(text("p", "No lyric lines yet, so every passage stays sealed. Add the sung lines above, then press Re-plan.", "muted"));
+    }
+    passages.forEach(passage => {
+      const entry = plan.passages[`seg${String(passage.index).padStart(3, "0")}`];
+      if (!entry) return;
+      const who = entry.singing ? `${plan.actors[entry.actor_id] || entry.actor_id} sings (${entry.reason})` : `sealed (${entry.reason})`;
+      lipSummary.append(text("p", `${fmt(passage.start)}–${fmt(passage.end)} · ${who}`, entry.singing ? "se-sings" : "muted"));
+    });
+  }
+  let speech = null;
+  const SPEECH = { tiny: "tiny", base: "base", small: "small", medium: "medium", "large-v3": "large-v3 (most accurate)" };
+  function renderSpeech() {
+    if (!lipOn) return;
+    speechSetup.replaceChildren();
+    if (!speech) { detectNote.textContent = "Checking whether lyrics detection is available…"; return; }
+    const keep = speechSelect.value;
+    speechSelect.replaceChildren(...Object.entries(speech.models).map(([name, info]) =>
+      option(name, `${SPEECH[name]}${info.cached ? " · on this computer" : ` · ${info.download} to download`}`)));
+    speechSelect.value = keep && speech.models[keep] ? keep : (Object.keys(speech.models).filter(n => speech.models[n].cached).pop() || "large-v3");
+    const chosen = speechSelect.value;
+    detectBtn.disabled = !speech.available || !speech.models[chosen].cached;
+    pasteBtn.disabled = detectBtn.disabled;
+    if (!speech.available) {
+      detectNote.textContent = `Automatic lyrics detection is an optional add-on (Whisper, MIT) and is not installed. Install it with "${speech.install_command}" `
+        + "(or point MMV_LYRICS_PYTHON at a Python that already has it). You can still type or paste the lines and set their times.";
+    } else if (!speech.models[chosen].cached) {
+      detectNote.textContent = `The ${chosen} speech model is not on this computer yet (${speech.models[chosen].download}). Nothing downloads without your approval.`;
+      const consent = document.createElement("input");
+      consent.type = "checkbox";
+      const approve = text("label", "", "check");
+      approve.append(consent, ` I approve a one-time download of the ${chosen} speech model (${speech.models[chosen].download}, from OpenAI's Whisper release).`);
+      const go = text("button", `Set up ${chosen} model`, "primary");
+      go.type = "button";
+      go.disabled = true;
+      consent.onchange = () => { go.disabled = !consent.checked; };
+      go.onclick = async () => {
+        go.disabled = true;
+        status.textContent = "Downloading the speech model…";
+        try {
+          await json("/api/lyrics/prepare", { model: chosen, consent: true });
+          await pollJob();
+          speech = await (await api("/api/lyrics")).json();
+          renderSpeech();
+          status.textContent = "The speech model is ready.";
+        } catch (error) { status.textContent = error.message; go.disabled = false; }
+      };
+      const row = text("div", "", "se-setup-row");
+      row.append(approve, go);
+      speechSetup.append(row);
+    } else {
+      detectNote.textContent = "Detection listens to the vocals when the stems add-on is ready (much more accurate), otherwise to the whole mix. Every detected line can be edited.";
+    }
+  }
+  async function pollJob() {
+    for (let wait = 0; wait < 1800; wait += 1) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const job = await (await api("/api/status")).json();
+      if (job.state !== "running") {
+        if (job.state === "failed") throw new Error(job.message);
+        return job;
+      }
+    }
+    throw new Error("This is taking too long; check the studio log");
+  }
+  speechSelect.onchange = renderSpeech;
+  detectBtn.onclick = async () => {
+    detectBtn.disabled = true;
+    detectBtn.setAttribute("aria-busy", "true");
+    status.textContent = "Listening to the song… this can take a minute.";
+    try {
+      await json("/api/lyrics/detect", { song: request.song, model: speechSelect.value, beats_per_bar: request.beats_per_bar || 4 });
+      const job = await pollJob();
+      const found = job.result.lines.map(item => ({ start: item.start, end: item.end, text: item.text, timing: "matched" }));
+      if (!found.length) throw new Error("No words were heard. Is this song instrumental? You can still add lines by hand.");
+      lines = found;
+      renderLip();
+      refreshStatus();
+      status.textContent = `Detected ${found.length} lines from the ${job.result.source}. Check them, then press Re-plan.`;
+    } catch (error) { status.textContent = error.message; }
+    detectBtn.removeAttribute("aria-busy");
+    renderSpeech();
+  };
+  pasteBtn.onclick = async () => {
+    status.textContent = "Timing your lyrics against the song…";
+    try {
+      const result = await json("/api/lyrics/align", { song: request.song, model: speechSelect.value, beats_per_bar: request.beats_per_bar || 4, text: pasteBox.value });
+      lines = result.lines.map(item => ({ start: item.start, end: item.end, text: item.text, timing: item.timing, section: item.section || null }));
+      renderLip();
+      refreshStatus();
+      const guessed = lines.filter(item => item.timing === "interpolated" || item.timing === "uncertain").length;
+      status.textContent = guessed ? `${guessed} line(s) could not be matched well and have guessed times; confirm or edit them.` : "Your lyrics are timed. Check them, then press Re-plan.";
+    } catch (error) { status.textContent = error.message; }
+  };
+  api("/api/lyrics").then(response => response.json()).then(value => { speech = value; renderSpeech(); })
+    .catch(() => { speech = { available: false, install_command: "pip install openai-whisper", models: { "large-v3": { cached: false, download: "about 3.1 GB" } } }; renderSpeech(); });
+  renderSpeech();
+  singerSelect.onchange = () => { singers = singerSelect.value ? [singerSelect.value] : []; refreshStatus(); };
+  addLine.onclick = () => {
+    const at = Math.round((ws ? ws.getCurrentTime() : 0) * 10) / 10;
+    lines.push({ start: at, end: Math.min(duration, Math.round((at + 3) * 10) / 10), text: "" });
+    lines.sort((a, b) => a.start - b.start);
+    renderLip();
+    refreshStatus();
+    const rows = lineList.querySelectorAll('input[type="text"]');
+    const idx = lines.findIndex(item => item.start === at && item.text === "");
+    if (rows[idx]) rows[idx].focus();
+  };
+  renderLip();
 
   const resize = new ResizeObserver(schedule);
   resize.observe(strip);

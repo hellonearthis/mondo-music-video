@@ -18,6 +18,22 @@ SSH browser forwarding, and account for cloud rental charges even when the
 local-renderer quote is $0. A Pod-specific end-to-end test is still required
 before claiming generation is verified.
 
+## Install tiers
+
+Early on, ask which install the user wants. Offer these three by name:
+
+| Tier | What it installs |
+| --- | --- |
+| **MINIMUM GOOSE** | Bare bones: the app, one writer, local Laya review and one renderer. None of the optional parts: no stem separation, lyrics detection, vision quality check, starter cast or style presets. Choosing it counts as declining the starter cast and styles; they can be added later. |
+| **CHOOSE-YOUR-GOOSE** | The default when the user does not pick. Go through the optional parts one at a time (the starter cast and styles, stem separation, lyrics detection, the vision quality check), explain each in plain words, recommend a choice from the detected hardware, and install only what they pick. |
+| **MAXIMUM GOOSE** | Every optional part the machine can run: starter cast and styles, stem separation with all its models, lyrics detection and the vision quality check. Still check the hardware: skip or warn about anything the machine cannot run well, and say why. |
+
+Every tier still needs the single download approval described below, with sizes,
+destinations and terms listed for everything that would be downloaded, including
+MAXIMUM GOOSE. Approval is never implied by the tier name. No tier installs Topaz
+(user-owned) or starts paid work. Say which tier was installed in the readiness
+report, and tell the user they can add skipped parts later.
+
 ## 1. Inspect before downloading
 
 Clone into a new, ordinary checkout if necessary. Read root `AGENTS.md` and the
@@ -36,6 +52,25 @@ Use read-only system tools to determine:
 - Existing ComfyUI installations, compatible model files, llama-server and
   OpenAI-compatible writer services, using configured or conventional paths.
   Ask for a location if necessary; do not search unrelated private directories.
+
+### Use what the user already has
+
+Many users, including friends of the project, already run their own H3 and their own language models. Look for these
+first and build the plan around them; the answer to "what should I download?" is often "nothing".
+
+- **H3 / ComfyUI.** Find existing ComfyUI folders (ask where; check conventional locations and any path the user gives), the
+  H3 model and text-encoder files they use, and the custom nodes their graph needs. Keep their files and workflows untouched and
+  adapt a private copy of the Mondo graph to what they have ([H3 workflow setup](H3_WORKFLOW_SETUP.md)); a different quantisation,
+  loader or node pack is normal, not a reason to download a second copy. Confirm with a built submission graph before any inference.
+- **Writer and vision language models.** Ask which tools they already run. Anything that serves an OpenAI-compatible
+  `/v1` API works as a writer or vision service: llama.cpp's `llama-server`, Ollama, LM Studio, vLLM, KoboldCpp, text-generation-webui
+  and similar, each with its own conventional port. With the user's consent, check loopback addresses only, ask the service for
+  its model list (`/v1/models`) and report what you found; do not assume a default port is theirs. A model listing is not a
+  generation test: send one real request and check the JSON the writer returns before calling it ready. Also reuse model files already
+  on disk (for example a GGUF in another tool's folder) instead of downloading again, and tell the user the vision-capable ones.
+- **Whisper and other add-ons.** Reuse an existing Whisper environment and model files before proposing anything (see lyrics detection).
+- **Say it in the plan.** The single approval proposal lists what is being reused, with its location, separately from anything to be
+  downloaded, so the user sees that their existing setup is being respected.
 
 Before running pip or an OS package manager, explain the proposed dependencies.
 PyTorch and GPU runtime packages can themselves be gigabytes. Obtain download
@@ -89,6 +124,21 @@ model download for the user without that approval; the app's editor and
 approval, verify with `inspect_studio` kind `stems` that the chosen models show
 `ready: true`. Do not equate a successful install with tested separation: preview
 a real song with an `analysis_driver` (see AGENT_SETUP.md) before saying it works.
+
+### Optional: lyrics detection (for lip-sync mode)
+
+Lip-sync mode needs the sung lines and their times. Detecting them automatically is an optional
+add-on (Whisper, MIT); the user can always type or paste lyrics and set times by hand. Ask: "Do you want
+automatic lyrics detection? It listens to the song, writes down the words with their times, and
+you can fix any line." Recommend from the hardware (`inspect_studio` kind `lyrics` reports the GPU,
+free VRAM, RAM, which models are already on disk and a recommendation). Measured with the existing
+large-v3 (3.1 GB): about 10.2 GB of VRAM and 46 s per minute of song on a GPU, or about 164 s per minute on
+a CPU, so it uses the GPU only when it fits in free memory. Smaller models (tiny about 75 MB, base about
+145 MB, small about 470 MB, medium about 1.5 GB) are faster and fit smaller GPUs, but their accuracy on
+singing has not been measured: do not claim they are as good. Detection is best on the isolated vocals,
+so offer it together with stem separation. Reuse an existing Whisper environment and model files when
+the machine has them (`MMV_LYRICS_PYTHON`, `MMV_WHISPER_DIR`) before proposing any download. Install and
+model downloads follow the single approval and are listed with sizes, like every other optional part.
 
 For the writer, prefer a supported existing service. For a new local writer,
 consider official Qwen3 GGUF quantizations with llama.cpp. Qwen3-4B Q4_K_M is

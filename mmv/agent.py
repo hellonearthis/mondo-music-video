@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "outputs", "settings", "update", "agreements"):
+        if kind not in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -78,6 +78,14 @@ class AgentClient:
         if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest"):
             raise ValueError("Preview requires a music video, ident or harvest request object")
         return self._json("POST", "/api/quote", request)
+
+    def detect_lyrics(self, song, model="large-v3", use_vocals=True):
+        """Start free local lyrics detection for an uploaded song; poll status, the lines arrive in its result."""
+        return self._json("POST", "/api/lyrics/detect", {"song": song, "model": model, "use_vocals": bool(use_vocals)})
+
+    def align_lyrics(self, song, text, model="large-v3"):
+        """Time pasted lyric lines against a song that detect_lyrics has already listened to."""
+        return self._json("POST", "/api/lyrics/align", {"song": song, "text": text, "model": model})
 
     def start(self, quote_id, consent=False):
         if consent is not True:
@@ -245,6 +253,11 @@ class AgentClient:
         run_id = str(output_file).split("/")[0]
         return self._json("GET", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/score")
 
+    def export_package(self, run_id, zip_it=False, allow_private_actors=False):
+        """Copy a finished production into an editing package under the app's data folder (never published)."""
+        return self._json("POST", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/package",
+                          {"zip": bool(zip_it), "allow_private_actors": bool(allow_private_actors)})
+
     def upscale(self, source, model="ahq-12", scale=2):
         return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})
 
@@ -253,7 +266,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "outputs", "settings", "update", "agreements", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "agreement"))

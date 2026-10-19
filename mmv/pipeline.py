@@ -276,11 +276,16 @@ def prepare(store, request):
             raise ValueError('The planned cast exceeds this renderer’s reference limit')
     casting = assign(p, roster, policy=request['casting_policy'], seed=request['seed'],
                      ref_policy=request['ref_policy'], ensemble_mode=request['ensemble_mode'], on_screen=request['on_screen']) if roster else None
+    lip_sync = None
+    if kind == 'video' and request.get('mouth_mode') == 'lip_sync':
+        from . import lipsync
+        lip_sync = lipsync.plan_passages(p.segments, casting, lipsync.clean_lines(request.get('lyric_lines')),
+                                         request.get('singers') or [], request['seed'])
     render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None,
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0
     return {'settings': settings, 'segments': [asdict(s) for s in p.segments], 'plan': asdict(p), 'score': asdict(score),
-            'detected': detected, 'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
+            'detected': detected, 'lipsync': lip_sync, 'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
             'seconds': score.duration_seconds, 'estimate': round(render_cost + writer_cost, 4),
             'render_estimate': render_cost, 'writer_estimate': writer_cost,
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),

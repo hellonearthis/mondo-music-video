@@ -1,5 +1,51 @@
 # Releases
 
+## 1.7.0 — Lip-sync mode and optional lyrics detection
+
+Designed with Codex (read-only design review, `docs/LIPSYNC_DESIGN.md`). The owner approved the direction.
+
+- **Third Facial movement mode, "Lip sync to vocals"** (`mouth_mode`: `sealed` default, `natural`,
+  `lip_sync`; the old `silent_mouths` flag still works). Every passage stays sealed (rule, rigging tail
+  and validators unchanged) except those whose audible slice carries about 0.75 s or more of sung lyric
+  lines. Singing passages use a second prompt set: the natural-mouths system text, a new `SINGING_RULES`
+  block, a cast block without sealed-lips rules, the singer's `lines` in the job, no rigging tail, the
+  singer's picture tag and quoted words required in the shots that overlap singing (a deterministic
+  shot-level check, since Laya has no singing question), and the audio sentence replaced outside the
+  engine. Everything is outside `mmv/engine/`. The singing wording was approved by the owner.
+- **Lyrics and singing in the score editor**: editable lyric lines with times, a main-singer choice (or a
+  seeded pick; only the main singer sings: a passage where they are not on screen, or with no cast,
+  stays sealed), and a per-passage summary of who sings. Plans resolve at preview and are stored in
+  `prepared.json`, so resume replays them. Cached prompts are not reused for singing passages.
+- **Optional lyrics detection** (Whisper, MIT, an optional add-on): detect timed lines from the vocals
+  stem (when the stems add-on is ready; on the full mix otherwise), or paste lyrics and have them timed
+  against what was heard (matching with uncertainty flags; unmatched lines get guessed times and are
+  marked). Reuses an existing Whisper environment (`MMV_LYRICS_PYTHON`) and model files
+  (`MMV_WHISPER_DIR`, default `~/.cache/whisper`); nothing installs or downloads without approval. Measured
+  with large-v3: about 10.2 GB of VRAM and 46 s on a GPU or 164 s on a CPU for a 60 s clip, so the GPU is
+  used only when the model fits in free memory. Smaller models are untested on singing.
+- **Suno lyric format**: pasted lyrics may use section markers (`[Verse 1]`, `[Chorus]`, inline `[Chorus] la la`)
+  and `(backing vocals)`. Markers never become lines or lower the match; each sung line keeps its section label (shown
+  in the editor and passed to the writer), blocks marked instrumental, solo, interlude, break, drop or beat are not
+  timed (a voice word such as "Vocal Solo" keeps a block sung), and repeated choruses stay in order. Detection also
+  drops hallucinated blips under 0.25 s (Whisper invented "We'll be right back." at the end of a real clip). Tested on
+  the owner's 57 s song "halp fren": 12 of 13 lines heard almost word for word, all 13 pasted lines timed.
+  Parser written by Codex in a separate worktree and reviewed and merged by Claude Code.
+- **Export production package** (owner request for the demo video, owner's friend edits it): an "Export package" button
+  on each finished video, `POST /api/outputs/{run}/package` and the `export_production_package` tool copy the production
+  into `MMV_HOME/exports/<title>_<date>_<time>/` (plus a zip; for example `halp_fren_lip_sync_test_2026-10-19_0409`): the finished video, every raw per-passage clip, the song, one prompt file
+  per passage, the receipts (request, consent, render request IDs, quality and vision checks, plan, score, casting, logs),
+  one still per passage, a README with a per-passage table (who sings, lyric lines used) and a checksum manifest. Keys and
+  secrets are never copied (the stored keys are also redacted by value), home paths are shortened, only the four public
+  starter actors' reference pictures are included, and a run with other actors needs an explicit confirmation and carries a
+  warning not to publish it. Pure file copying; a first version written by a Claude helper and adapted by Claude Code.
+- **Agents**: `detect_lyrics` and `align_lyrics` tools (32 tools; 33 with the package export below), `inspect_studio` kind `lyrics` (status,
+  hardware, recommendation), and `mouth_mode`, `lyric_lines` and `singers` on `preview_production`.
+- **Verified once on real H3 output** (operator GPU run, 2026-10-19): the owner's 57 s song "halp fren" at 0.3 MP with three public
+  starter actors, Henchman #1 as singer and 13 lyric lines in Suno format. All six passages validated, rendered and passed the
+  automatic motion/framing checks on the first render with no warnings (34 min including writing prompts); frames show the singer
+  with his mouth open in the sung close-ups. Whether the lip movement matches the words is the owner's judgement from watching the
+  video; stills cannot show it. It took four prompt-writer attempts per passage under the singing check. Backup singers are pinned on the roadmap.
+
 ## 1.6.14 — Stem quality option and hardware-aware agent guidance
 
 - **Stem quality** (`stem_quality`: `standard` default, or `high`): high uses the fine-tuned

@@ -26,7 +26,8 @@ export async function preview(form) {
     for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) {
       request[name] = Number(request[name]);
     }
-    request.silent_mouths = request.silent_mouths === "true";
+    request.mouth_mode = request.mouth_mode || "sealed";
+    request.silent_mouths = request.mouth_mode !== "natural";   // older agents read this flag
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;
     request.vision_quality_check = Boolean(form.elements.vision_quality_check?.checked);
     request.content = {};
@@ -114,8 +115,8 @@ export function showQuote(request, quote) {
   }
   dialog.showModal();
   mountScoreEditor($("#score-editor"), request, quote, {
-    onReplan: async (edits, driver, quality) => {
-      const next = { ...request, score_edits: edits, analysis_driver: driver || "mix", stem_quality: quality || "standard" };
+    onReplan: async (edits, driver, quality, lip) => {
+      const next = { ...request, score_edits: edits, analysis_driver: driver || "mix", stem_quality: quality || "standard", ...(lip || {}) };
       state.lastRequest = next;
       const replanned = await json("/api/quote", next);
       logSession(`Re-planned with score edits: quote_id='${replanned.id}'`);

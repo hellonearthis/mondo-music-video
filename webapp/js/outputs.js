@@ -1,6 +1,6 @@
 // Finished Videos, Musical Score Canvas visualization, and Topaz upscale dialog.
 
-import { $, $$, api, handle, json, option, state, text } from "./core.js";
+import { $, $$, api, handle, json, notice, option, state, text } from "./core.js";
 
 // One theme observer for all score views; loadOutputs disposes views before replacing cards.
 const scoreViews = new Set();
@@ -15,6 +15,41 @@ const GRAMMAR_CLASSES = {
   "Chaotic multi-scene": "chaotic",
   "Single-subject fragmentation": "fragmentation"
 };
+
+// Copies the finished production (clips, song, prompts, receipts, README) into an editing package; nothing is published.
+function exportButton(output) {
+  const button = text("button", "Export package", "quiet",
+    `Copy ${output.title} with its raw clips, song, prompts and receipts into an editing folder inside your Mondo data folder`);
+  button.onclick = handle(async () => {
+    const runId = output.file.split("/")[0];
+    const attempt = async allow => json(`/api/outputs/${encodeURIComponent(runId)}/package`,
+      { zip: true, allow_private_actors: allow });
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    try {
+      try {
+        await attempt(false);
+      } catch (error) {
+        if (!String(error.message).startsWith("PRIVATE_ACTORS")) throw error;
+        if (!window.confirm(error.message.replace("PRIVATE_ACTORS: ", "") + "\n\nExport it anyway?")) return;
+        await attempt(true);
+      }
+      for (let wait = 0; wait < 900; wait += 1) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const job = await (await api("/api/status")).json();
+        if (job.state === "running") continue;
+        if (job.state === "failed") throw new Error(job.message);
+        const result = job.result || {};
+        notice(`Package written: ${result.path} (${result.files} files)${result.zip ? " and " + result.zip : ""}`);
+        return;
+      }
+    } finally {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    }
+  });
+  return button;
+}
 
 export function scoreView(output, video) {
   const box = text("details", "", "score-view");
@@ -208,6 +243,7 @@ export async function loadOutputs() {
       card.append(warning);
     }
     card.append(download, upscale);
+    if (output.kind === "video") card.append(exportButton(output));
     return card;
   }));
   if (!outputs.length) {

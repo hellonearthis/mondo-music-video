@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -60,8 +60,29 @@ def create_server(base_url=None):
         use the 6-stem model); it needs the optional Demucs add-on and a
         one-time model download that only the user approves in the app (see
         inspect_studio kind "stems"). The first separation of a song takes minutes.
+
+        Lip sync: `mouth_mode` "lip_sync" keeps every passage sealed except those covered by `lyric_lines`
+        [{start, end, text}] (seconds on the song clock; use detect_lyrics or align_lyrics); `singers` lists actor
+        ids (the first is the main singer; empty means a seeded pick). The preview's `lipsync` shows which passages
+        sing and who sings. "sealed" (default) and "natural" are unchanged.
         """
         return invoke(client.preview, request)
+
+    @server.tool()
+    def detect_lyrics(song: str, model: Literal["tiny", "base", "small", "medium", "large-v3"] = "large-v3",
+                      use_vocals: bool = True) -> dict[str, Any]:
+        """Listen to an uploaded song and detect timed lyric lines (free, local; poll inspect_studio status).
+
+        Needs the optional Whisper add-on and a speech model already on the machine (see inspect_studio kind
+        "lyrics", which also reports hardware and a recommendation); the model download is approved by the user
+        in the app, never started here. Detection is most accurate on the vocals stem when the stems add-on is ready.
+        """
+        return invoke(client.detect_lyrics, song, model, use_vocals)
+
+    @server.tool()
+    def align_lyrics(song: str, text: str, model: Literal["tiny", "base", "small", "medium", "large-v3"] = "large-v3") -> dict[str, Any]:
+        """Time pasted lyrics (one line per row) against a song that detect_lyrics has already heard."""
+        return invoke(client.align_lyrics, song, text, model)
 
     @server.tool()
     def start_production(quote_id: str, consent: bool = False) -> dict[str, Any]:
@@ -204,6 +225,15 @@ def create_server(base_url=None):
         Use it to explain why the video is paced the way it is. Internal cuts are planned; the
         generated clip may not follow every one exactly."""
         return invoke(client.music_score, output_file)
+
+    @server.tool()
+    def export_production_package(run_id: str, zip: bool = False, allow_private_actors: bool = False) -> dict[str, Any]:
+        """Copy a finished production (video, raw clips, song, prompts, receipts, README) into an editing package.
+
+        Written under the app's data folder; nothing is published. Keys are never copied. If the run used actors
+        outside the four public starters, set allow_private_actors only after the user confirms (their reference
+        images are still not copied). The result is a job: poll inspect_studio status for the package path."""
+        return invoke(client.export_package, run_id, zip, allow_private_actors)
 
     @server.tool()
     def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:

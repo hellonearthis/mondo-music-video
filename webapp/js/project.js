@@ -131,6 +131,11 @@ export async function restoreProject() {
   }
 
   const formsData = saved.forms || {};
+  // Projects saved before lip sync stored the mouth setting as a true/false silent_mouths value.
+  const legacy = formsData["video-form"];
+  if (legacy && legacy.silent_mouths !== undefined && legacy.mouth_mode === undefined) {
+    legacy.mouth_mode = String(legacy.silent_mouths) === "false" ? "natural" : "sealed";
+  }
   Object.entries(formsData).forEach(([formId, data]) => {
     const form = $("#" + formId);
     if (!form) return;

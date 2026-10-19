@@ -599,3 +599,17 @@ reviewed frame by frame. A first attempt (`78d85b3e`) failed with a ReadTimeout 
 ComfyUI staged a model for passage 2 (cause unknown, RAM fine); one fresh retry
 succeeded. One run per setting, so compact versus full is still not statistically
 compared, and the vision comparison at 512 px above stands as the only direct test.
+
+## Lip-sync (HONK) real GPU run, 2026-10-19
+
+Operator-authorised free local run through the Comfy SDK path (proxy 8189, ComfyUI 8188 started by the operator because the
+vision check was off): run `f72cf0421eb24ff3a8f4af7b1030a053`, "halp fren" (57.3 s), 0.3 MP (736x416, 24 fps), seed 1, actors
+`henchman_1` (singer), `human_female_casual_01`, `animal_pig`, `mouth_mode: lip_sync`, 13 lyric lines (Suno format, aligned from the
+detected words on the vocals stem). Result: 6 passages, 5 sung (the 1.6 s outro stays sealed); every passage passed the pixel checks
+on the first render, no quality warnings; 33 min 58 s in total (prompts were validated in an earlier attempt of the same inputs and
+resumed after ComfyUI had not been started; see below). Earlier attempts failed in the prompt-writing phase before any rendering:
+the singing check rejected valid prompts because actors appear as `<Subject N>` in shots (not picture tags), quoted lyrics were split at
+punctuation, pronoun-led sentences were not credited, and bystander "lips part" was missed; each was fixed with a regression test built
+from the real writer output. A render attempt also failed once with "Failed to reach ComfyUI" because the SDK path expects ComfyUI to be
+running when the vision check is off. NOT established: lip-sync accuracy (needs the owner's viewing), repeatability across seeds, and
+studio-quality clips (separate feature).

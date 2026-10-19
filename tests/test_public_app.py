@@ -37,6 +37,18 @@ def picture():
 from mock_comfy_v2 import ComfyV2Mixin, reset_v2
 
 
+def mock_singing_body(job, shot, text):
+    """Like the real writer: actors are `<Subject N>` (cast position); singing shots quote the words the job assigns them."""
+    singing = job.get("singing")
+    if not singing:
+        return text * 3 + " Subject Rigging: lips firmly sealed shut, jaw completely relaxed, to prevent any facial babbling or lip-sync hallucinations."
+    index = [i for i, member in enumerate(job["cast"]) if member["actor_id"] == singing["actor_id"]][0] + 1
+    wanted = next((item for item in singing["shots"] if item["n"] == shot["n"]), {})
+    if wanted.get("sung"):
+        return f'<Subject {index}> sings "{wanted["words"]}" while lips and jaw shape each word. ' + text * 3
+    return text * 3
+
+
 class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
     requests = []
     video = b""
@@ -87,7 +99,7 @@ class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
                 text = "The fully clothed performer moves through warm light as wind lifts the fabric of a blue jacket. Reflections trace shifting patterns across nearby glass while the camera follows with deliberate rhythmic motion and the scene remains grounded in a coherent physical space. The subject stays recognizable and each movement carries the energy of the music through precise visible changes in posture and light. "
                 content = json.dumps({"segment_id":job["segment_id"], "style_opening":"Cinematic daylight photography with expressive movement.",
                     "subject_definitions":[], "summary":"A fully clothed performer in sunlight.", "retention_analysis":[],
-                    "shot_bodies":[text * 3 + " Subject Rigging: lips firmly sealed shut, jaw completely relaxed, to prevent any facial babbling or lip-sync hallucinations." for shot in job["shots"]], "overall_soundscape":"Wind and quiet footsteps.", "non_diegetic_music":"N/A"})
+                    "shot_bodies":[(mock_singing_body(job, shot, text)) for shot in job["shots"]], "overall_soundscape":"Wind and quiet footsteps.", "non_diegetic_music":"N/A"})
             if self.invalid_writer: content = "{}"
             self.reply({"choices":[{"message":{"content":content}}]})
         elif self.path == "/queue":
@@ -388,9 +400,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.14")
+        self.assertEqual(api_version()["version"], "1.7.0")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.14", (root / "README.md").read_text())
+        self.assertIn("1.7.0", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -809,6 +821,116 @@ class PublicAppTests(unittest.TestCase):
                 self.assertIn("subject_definitions:",read_json(self.home/"runs"/started.json()["id"]/"prompts.json")["seg000"])
                 receipt=read_json(self.home/"runs"/started.json()["id"]/"renders.json")["seg000"]
                 self.assertEqual(receipt["request_id"],"hosted-test")
+
+    def test_lyrics_detection_needs_the_addon_and_model_and_never_downloads_unasked(self):
+        from mmv import lyrics
+        song = self.song_upload()
+        report = self.client.get('/api/lyrics').json()
+        self.assertIn('install_command', report)
+        self.assertEqual(self.client.post('/api/lyrics/prepare', json={'model': 'small'}).status_code, 400)       # no consent
+        with patch.object(lyrics, 'available', return_value=False):
+            missing = self.client.post('/api/lyrics/detect', json={'song': song})
+            self.assertEqual(missing.status_code, 400)
+            self.assertIn('Whisper add-on', missing.json()['detail'])
+        self.assertEqual(self.client.post('/api/lyrics/detect', json={'song': song, 'model': 'huge'}).status_code, 422)
+        self.assertNotEqual(self.client.post('/api/lyrics/detect', json={'song': '../../etc/passwd'}).status_code, 200)
+        self.assertIn('Detect the lyrics first', self.client.post('/api/lyrics/align', json={'song': song, 'text': 'hello'}).json()['detail'])
+        fake = {'words': [{'word': 'hello', 'start': 1.0, 'end': 1.4}, {'word': 'there', 'start': 1.5, 'end': 1.9}],
+                'lines': [{'start': 1.0, 'end': 1.9, 'text': 'hello there'}], 'source': 'vocals stem', 'language': 'en'}
+        with patch.object(lyrics, 'require_ready'), patch.object(lyrics, 'transcribe', return_value=fake) as transcribe:
+            started = self.client.post('/api/lyrics/detect', json={'song': song, 'model': 'small'})
+            started.raise_for_status()
+            status = self.wait()
+            self.assertEqual(status['state'], 'complete')
+            self.assertEqual(status['result']['lines'], fake['lines'])
+            self.assertEqual(status['result']['source'], 'vocals stem')
+            self.assertEqual(transcribe.call_args.args[3], 'small')
+        with patch.object(lyrics, 'cached_words', return_value={'words': fake['words'], 'source': 'vocals stem'}):
+            aligned = self.client.post('/api/lyrics/align', json={'song': song, 'text': 'Hello there'})
+            aligned.raise_for_status()
+            self.assertEqual(aligned.json()['lines'][0]['timing'], 'matched')
+        with patch.object(lyrics, 'available', return_value=True), patch.object(lyrics, 'prepare_model', return_value={'model': 'small'}) as prepare:
+            self.client.post('/api/lyrics/prepare', json={'model': 'small', 'consent': True}).raise_for_status()
+            self.assertEqual(self.wait()['state'], 'complete')
+            self.assertEqual(prepare.call_args.args[1], 'small')
+
+    def test_lip_sync_mode_sings_only_the_passages_with_lyrics_and_keeps_the_others_sealed(self):
+        from mmv.engine.schema import RIGGING_TAIL
+        actors.create_actor(self.store, 'blue', 'Blue', 'Blue jacket', picture())
+        song = self.song_upload()
+        base = {'song': song, 'actors': ['blue']}
+        sealed = self.client.post('/api/quote', json=base)
+        sealed.raise_for_status()
+        self.assertIsNone(sealed.json().get('lipsync'))
+        lines = [{'start': 0.0, 'end': 1.1, 'text': 'Interdimensional lover'}]
+        silent = self.client.post('/api/quote', json={**base, 'mouth_mode': 'lip_sync', 'lyric_lines': []})
+        silent.raise_for_status()
+        self.assertFalse(any(p['singing'] for p in silent.json()['lipsync']['passages'].values()))
+        self.assertEqual(self.client.post('/api/quote', json={**base, 'mouth_mode': 'lip_sync', 'lyric_lines': [{'start': 3, 'end': 1, 'text': 'x'}]}).status_code, 400)
+        guessed = self.client.post('/api/quote', json={**base, 'mouth_mode': 'lip_sync', 'singers': ['blue'],
+                                                       'lyric_lines': [{**lines[0], 'timing': 'interpolated'}]})
+        guessed.raise_for_status()
+        self.assertFalse(guessed.json()['lipsync']['passages']['seg000']['singing'])      # guessed timing never unseals a passage
+        self.assertEqual(guessed.json()['lipsync']['unconfirmed_lines'], 1)
+        self.assertEqual(self.client.post('/api/quote', json={**base, 'mouth_mode': 'lip_sync', 'lyric_lines': [{**lines[0], 'timing': 'bogus'}]}).status_code, 422)
+        quote, started = self.start({**base, 'mouth_mode': 'lip_sync', 'lyric_lines': lines, 'singers': ['blue']})
+        plan = quote.json()['lipsync']
+        self.assertTrue(plan['passages']['seg000']['singing'])
+        self.assertEqual(plan['singer'], 'blue')
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        run = self.home / 'runs' / started.json()['id']
+        self.assertIn('This passage contains singing', (run / 'writer_system_singing.md').read_text())
+        self.assertNotIn('This passage contains singing', (run / 'writer_system.md').read_text())
+        job = read_json(run / 'writer_jobs' / 'seg000.json')
+        self.assertEqual(job['cast'][0]['lines'], ['Interdimensional lover'])
+        self.assertEqual(job['singing']['actor_id'], 'blue')
+        self.assertNotIn('rigging', job)
+        prompt = read_json(run / 'prompts.json')['seg000']
+        self.assertIn('Interdimensional', prompt)
+        self.assertEqual([s['sung'] for s in job['singing']['shots']][:1], [True])
+        self.assertIn('follow the sung vocal', prompt)
+        self.assertNotIn(RIGGING_TAIL.rstrip('.').lower(), prompt.lower())
+        # the same song in the default mode still seals every mouth
+        quote, started = self.start(base)
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        run = self.home / 'runs' / started.json()['id']
+        self.assertFalse((run / 'writer_system_singing.md').exists())
+        self.assertIn(RIGGING_TAIL.rstrip('.').lower(), read_json(run / 'prompts.json')['seg000'].lower())
+
+    def test_a_finished_production_exports_as_an_editing_package_through_the_api(self):
+        actors.create_actor(self.store, 'blue', 'Blue', 'Blue jacket', picture())          # not a public starter actor
+        self.store.save_key('MMV_COMFY_API_KEY', 'export-test-key-9876543210')
+        quote, started = self.start({'song': self.song_upload(), 'actors': ['blue']})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        run_id = started.json()['id']
+        refused = self.client.post(f'/api/outputs/{run_id}/package', json={})
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn('PRIVATE_ACTORS', refused.json()['detail'])
+        self.assertEqual(self.client.post('/api/outputs/not-a-run/package', json={'allow_private_actors': True}).status_code, 400)
+        self.assertEqual(self.client.post(f'/api/outputs/{run_id}/package', json={'bogus': 1}).status_code, 422)
+        exported = self.client.post(f'/api/outputs/{run_id}/package', json={'allow_private_actors': True, 'zip': True})
+        exported.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        result = status['result']
+        package = Path(result['path'])
+        self.assertEqual(package.parent, self.home / 'exports')
+        self.assertRegex(package.name, r'^[A-Za-z0-9_]+_\d{4}-\d\d-\d\d_\d{4}$')           # title and date-time, not a random id
+        self.assertEqual(result['private_actors'], ['blue'])
+        self.assertTrue(Path(result['zip']).is_file())
+        for name in ('README.md', 'MANIFEST.json', '01_final/music-video.mp4', '05_receipts/request.json'):
+            self.assertTrue((package / name).is_file(), name)
+        self.assertIn('PRIVATE_ACTORS_WARNING', (package / 'README.md').read_text())
+        self.assertTrue(any((package / '02_raw_clips').glob('seg000_*_raw.mp4')))
+        everything = ' '.join(p.read_text(errors='ignore') for p in package.rglob('*') if p.is_file() and p.suffix in ('.json', '.md', '.txt', '.log'))
+        self.assertNotIn('export-test-key-9876543210', everything)
+        self.assertNotIn(str(Path.home()), everything)
+        self.assertFalse((package / '07_actor_references').exists())                         # no private reference images
+        self.assertTrue(list((package / '06_stills').glob('*.png')))                         # stills come from the clips
 
     def test_failed_writer_never_renders(self):
         MockService.invalid_writer=True

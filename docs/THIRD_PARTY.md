@@ -14,6 +14,7 @@ under their respective licenses; this project does not relicense them.
 | MCP Python SDK (optional) | stdio agent tools | https://github.com/modelcontextprotocol/python-sdk; see upstream distribution notices |
 | wavesurfer.js 7.10.1 (vendored: `webapp/vendor/wavesurfer/`) | Waveform display and draggable regions in the pre-generation score editor | BSD-3-Clause; copyright katspaugh and contributors; licence copy included; https://github.com/katspaugh/wavesurfer.js |
 | Demucs (optional add-on, not bundled) | Instrument stem separation for the score editor | MIT; installed by the user with `pip install demucs`; model weights download once after approval; https://github.com/adefossez/demucs |
+| openai-whisper (optional add-on, not bundled) | Optional lyrics detection | MIT; installed by the user with `pip install openai-whisper` or an existing Whisper Python is reused; model files download once after approval; https://github.com/openai/whisper |
 | FFmpeg / ffprobe | External, user-installed media tools | Licenses depend on the user's build; no binary is bundled |
 | ComfyUI, custom nodes and model files | Optional, user-installed local generation | Separate upstream terms; no copies bundled |
 | Topaz | Optional, user-owned export tool | Separate vendor license; no copy bundled |

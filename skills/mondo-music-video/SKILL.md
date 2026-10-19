@@ -77,6 +77,14 @@ preset id; `custom_vocabulary` adds or removes entries per category for one vide
 Use `inspect_studio` kind `vocabularies` first. Saving a preset is free; deleting one
 needs the user's authorization (`confirm`).
 
+Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
+and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
+
+Lip sync: `mouth_mode` `lip_sync` with `lyric_lines` ([{start, end, text}] seconds) and optional `singers`
+makes only the passages with sung lines sing; the others stay sealed. Use `detect_lyrics` / `align_lyrics`
+(optional Whisper add-on; `inspect_studio` kind `lyrics` shows availability, hardware and advice; the user
+approves any model download in the app). Do not claim verified lip-sync before an operator GPU test.
+
 Video previews include `score` (beats, energy, planned cuts) and `detected` (the
 unedited beat grid and sections). If the grid looks wrong, preview again with
 `score_edits` (`bar_one_beat`, `beat_nudge_ms`, `muted_beats`, `sections` as

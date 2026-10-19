@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.14"
+MGL_APP_VERSION = "1.7.0"
 WEB = Path(__file__).parent
 
 
@@ -191,6 +191,14 @@ class VocabularyRequest(StrictModel):
         return value
 
 
+class LyricLine(StrictModel):
+    start: float = Field(ge=0, le=36000)
+    end: float = Field(gt=0, le=36000)
+    text: str = Field(min_length=1, max_length=300)
+    timing: Literal["manual", "matched", "interpolated", "uncertain"] = "manual"
+    section: str | None = Field(default=None, max_length=40)
+
+
 class ScoreSectionEdit(StrictModel):
     start: float = Field(ge=0, le=36000)
     label: Literal["low", "mid", "high", "peak"]
@@ -201,6 +209,24 @@ class ScoreEdits(StrictModel):
     beat_nudge_ms: int = Field(default=0, ge=-250, le=250)
     muted_beats: list[int] = Field(default_factory=list, max_length=2000)
     sections: list[ScoreSectionEdit] = Field(default_factory=list, max_length=64)
+
+
+class LyricsRequest(StrictModel):
+    song: str = Field(max_length=128)
+    model: Literal["tiny", "base", "small", "medium", "large-v3"] = "large-v3"
+    beats_per_bar: int = Field(default=4, ge=2, le=12)
+    use_vocals: bool = True
+    text: str = Field(default="", max_length=16000)
+
+
+class LyricsPrepareRequest(StrictModel):
+    model: Literal["tiny", "base", "small", "medium", "large-v3"] = "large-v3"
+    consent: bool = False
+
+
+class PackageRequest(StrictModel):
+    zip: bool = False
+    allow_private_actors: bool = False
 
 
 class StemsPrepareRequest(StrictModel):
@@ -227,6 +253,9 @@ class ProductionRequest(StrictModel):
     conceptual_theme: str = Field(default="", max_length=2000)
     lyrics: str = Field(default="", max_length=16000)
     silent_mouths: bool = True
+    mouth_mode: Literal["sealed", "natural", "lip_sync"] | None = None
+    lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
+    singers: list[str] = Field(default_factory=list, max_length=9)
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -972,11 +1001,48 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"),
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
+
+    @app.get("/api/lyrics")
+    def lyrics_status():
+        from mmv import lyrics
+        return lyrics.status(store)
+
+    @app.post("/api/lyrics/prepare")
+    def lyrics_prepare(value: LyricsPrepareRequest):
+        from mmv import lyrics
+        if value.consent is not True:
+            raise ValueError("Approve the one-time speech model download first")
+        return jobs.start("lyrics", lambda context: lyrics.prepare_model(store, value.model, context))
+
+    @app.post("/api/lyrics/detect")
+    def lyrics_detect(value: LyricsRequest):
+        from mmv import lyrics
+        song = inside(store.home / "uploads", value.song)
+        if not song.is_file():
+            raise ValueError("Upload your song first")
+        lyrics.require_ready(value.model)
+        digest = lyrics.song_digest(song, value.beats_per_bar)
+
+        def detect(context):
+            found = lyrics.transcribe(store, song, digest, value.model, context, value.use_vocals)
+            return {"lines": found["lines"], "source": found["source"], "language": found.get("language"), "model": value.model}
+        return jobs.start("lyrics", detect)
+
+    @app.post("/api/lyrics/align")
+    def lyrics_align(value: LyricsRequest):
+        from mmv import lyrics
+        song = inside(store.home / "uploads", value.song)
+        if not song.is_file():
+            raise ValueError("Upload your song first")
+        found = lyrics.cached_words(store, lyrics.song_digest(song, value.beats_per_bar), value.model)
+        if not found:
+            raise ValueError("Detect the lyrics first: the song is listened to once, then your pasted words are timed against it")
+        return {"lines": lyrics.align_lines(value.text, found["words"]), "source": found["source"]}
 
     @app.get("/api/stems")
     def stems_status():
@@ -1074,6 +1140,13 @@ def create_app(home=None, *, test_hosts=False):
             record = read_json(path)
             result.append({**record, "file": path.parent.name + "/" + record["file"]})
         return result
+
+    @app.post("/api/outputs/{run_id}/package")
+    def output_package(run_id: str, value: PackageRequest):
+        from mmv import package_export
+        package_export.check_package(store, run_id, value.allow_private_actors)
+        return jobs.start("export", lambda context: package_export.export_package(
+            store, run_id, zip_it=value.zip, allow_private=value.allow_private_actors, context=context))
 
     @app.get("/api/outputs/{run_id}/score")
     def output_score(run_id: str):

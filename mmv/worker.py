@@ -164,7 +164,10 @@ def run(home, directory, *, resume=False):
     actor.load_actor_meta = lambda actor_id: actor_records[actor_id]
     # Sealed-lips rigging applies to every production unless the operator picks natural
     # expressions; lyrics text no longer switches it off (a lip-sync mode will own that).
-    effective_silent_mouths = bool(request.get('silent_mouths', True))
+    mouth_mode = request.get('mouth_mode') or ('sealed' if request.get('silent_mouths', True) else 'natural')
+    # Lip sync keeps every passage sealed except those the approved plan marks as singing.
+    effective_silent_mouths = mouth_mode in ('sealed', 'lip_sync')
+    singing_plan = ((prepared.get('lipsync') or {}).get('passages') or {}) if mouth_mode == 'lip_sync' else {}
     cast_block = actor.cast_writer_block([a['actor_id'] for a in roster], silent_mouths=effective_silent_mouths)
     restrictions = [name for name in ('nudity','blood','violence','sexual') if request['content'].get({'blood':'blood_gore','sexual':'sexual_content'}.get(name,name), 'none') == 'none']
     # OAP's own category names are enforced independently by check_cast.
@@ -229,6 +232,14 @@ def run(home, directory, *, resume=False):
                         silent_mouths=effective_silent_mouths, lyrics=request['lyrics'] or None, direction=request['direction'] or None)
             system += quality.WRITER_RULES
             (directory / 'writer_system.md').write_text(system, encoding='utf-8')
+            system_singing = cast_block_singing = None
+            if any(item.get('singing') for item in singing_plan.values()):
+                from . import lipsync
+                cast_block_singing = actor.cast_writer_block([a['actor_id'] for a in roster], silent_mouths=False)
+                system_singing = style.compose_writer_prompt(str(style_dir), actor_block=cast_block_singing, restrictions=restrictions,
+                        silent_mouths=False, lyrics=request['lyrics'] or None, direction=request['direction'] or None)
+                system_singing += '\n\n' + lipsync.SINGING_RULES + quality.WRITER_RULES
+                (directory / 'writer_system_singing.md').write_text(system_singing, encoding='utf-8')
             jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
             cache_dir = store.home / 'cache' / 'prompts'
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -237,14 +248,26 @@ def run(home, directory, *, resume=False):
             reuse_prompts = request.get('reuse_prompts', True)
             for index, seg in enumerate(plan.segments):
                 tags = backend.ref_tags(seg.ref_image_slots, 0, 1)
-                job = build_writer_request(plan, seg, tags, casting.cast_for(prepared['casting'], seg.segment_id), silent_mouths=effective_silent_mouths)
+                sing = singing_plan.get(seg.segment_id) or {}
+                singing = bool(sing.get('singing')) and system_singing is not None
+                seg_silent = effective_silent_mouths and not singing
+                seg_system = system_singing if singing else system
+                seg_cast_block = cast_block_singing if singing else cast_block
+                cast_entries = casting.cast_for(prepared['casting'], seg.segment_id)
+                if singing:
+                    from . import lipsync
+                    cast_entries = lipsync.with_singer_lines(cast_entries, sing['actor_id'], sing['lines'])
+                job = build_writer_request(plan, seg, tags, cast_entries, silent_mouths=seg_silent)
+                if singing:
+                    job['singing'] = {'actor_id': sing['actor_id'], 'picture_tag': sing['picture_tag'], 'lines': sing['lines'],
+                                      'shots': lipsync.shot_lyrics(seg, sing['lines'])}
                 if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
                 write_json(jobs_dir / (seg.segment_id+'.json'), job)
 
-                if reuse_prompts:
+                if reuse_prompts and not singing:
                     cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', system, job, seg, tags, cleared_at=cleared_at)
                     if cached and not quality.prompt_problems(cached, seg, request['direction']):
-                        if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in cached.lower():
+                        if seg_silent and RIGGING_TAIL.rstrip(".").lower() not in cached.lower():
                             soundscape_pos = cached.find("\noverall_soundscape:")
                             if soundscape_pos > 0:
                                 cached = cached[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + cached[soundscape_pos:]
@@ -258,39 +281,42 @@ def run(home, directory, *, resume=False):
                 progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
                 feedback = ''
                 compact = bool(request.get('compact_prompts'))
-                attempts = 3 if settings['writer_mode'] == 'local' else 1
+                attempts = (4 if singing else 3) if settings['writer_mode'] == 'local' else 1
                 for attempt in range(attempts):
                     if compact:
-                        raw = llm(system, _compact_writer_job(job) + feedback)
+                        raw = llm(seg_system, _compact_writer_job(job) + feedback)
                     else:
-                        raw = llm(system + feedback, json.dumps(job, indent=2))
+                        raw = llm(seg_system + feedback, json.dumps(job, indent=2))
                     (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
                     try:
                         response = WriterResponse.parse(raw, seg.segment_id)
                         prompt = assemble_prompt(seg, response, tags)
-                        if effective_silent_mouths and RIGGING_TAIL.rstrip(".").lower() not in prompt.lower():
+                        if singing:
+                            prompt = lipsync.swap_audio_sentence(prompt, tags.music_tag)
+                        if seg_silent and RIGGING_TAIL.rstrip(".").lower() not in prompt.lower():
                             soundscape_pos = prompt.find("\noverall_soundscape:")
                             if soundscape_pos > 0:
                                 prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
                             else:
                                 prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
-                        problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=effective_silent_mouths)
-                                    + quality.prompt_problems(prompt, seg, request['direction']))
+                        problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent)
+                                    + quality.prompt_problems(prompt, seg, request['direction'])
+                                    + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else []))
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
                         problems = [str(exc)]
                     if not problems:
                         progress(f'Laya reviewing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
                         state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
-                                 'lyrics_flavor':request['lyrics'], 'director_direction':request['direction'],
-                                 'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':cast_block}
-                        response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
-                        clip = validator.last_clipboard_request if hasattr(validator, 'last_clipboard_request') else validator.build_clipboard_request(prompt,seg,tags,silent_mouths=effective_silent_mouths,state=state)
+                                 'lyrics_flavor':(' / '.join(item['text'] for item in sing['lines']) if singing else request['lyrics']), 'director_direction':request['direction'],
+                                 'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':seg_cast_block}
+                        response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=seg_silent,state=state)
+                        clip = validator.last_clipboard_request if hasattr(validator, 'last_clipboard_request') else validator.build_clipboard_request(prompt,seg,tags,silent_mouths=seg_silent,state=state)
                         write_json(directory / f'{seg.segment_id}.laya-request-{attempt+1}.json', clip)
                         write_json(directory / f'{seg.segment_id}.laya-response-{attempt+1}.json', response)
                     if not problems:
                         prompts[seg.segment_id] = prompt
                         write_json(directory / 'prompts.json', prompts)
-                        save_cached_passage_prompt(cache_dir, system, job, prompt, seg.segment_id)
+                        save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id)
                         break
                     write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
                     feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
