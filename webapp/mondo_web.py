@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.7"
+MGL_APP_VERSION = "1.6.8"
 WEB = Path(__file__).parent
 
 
@@ -437,6 +437,13 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/app.js")
     def javascript():
         return FileResponse(WEB / "app.js", media_type="text/javascript")
+
+    @app.get("/js/{module_name}")
+    def js_module(module_name: str):
+        path = inside(WEB / "js", module_name)
+        if not path.is_file() or path.suffix != ".js":
+            raise ValueError("Module not found")
+        return FileResponse(path, media_type="text/javascript")
 
     @app.get("/style.css")
     def css():

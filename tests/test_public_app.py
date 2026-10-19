@@ -387,10 +387,21 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.7")
+        self.assertEqual(api_version()["version"], "1.6.8")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.7", (root / "README.md").read_text())
+        self.assertIn("1.6.8", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
+
+    def test_frontend_es_modules_served_and_protected(self):
+        app_res = self.client.get("/app.js")
+        self.assertEqual(app_res.status_code, 200)
+        self.assertIn("text/javascript", app_res.headers["content-type"])
+        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocabulary.js"):
+            res = self.client.get(f"/js/{mod}")
+            self.assertEqual(res.status_code, 200, mod)
+            self.assertIn("text/javascript", res.headers["content-type"])
+        self.assertEqual(self.client.get("/js/nonexistent.js").status_code, 400)
+        self.assertEqual(self.client.get("/js/index.html").status_code, 400)
 
     def test_video_encoding_settings_and_probing(self):
         from mmv.video_encoding import VIDEO_ENCODERS, get_encoder_args, probe_encoder_support
