@@ -1,5 +1,21 @@
 # Releases
 
+## 1.6.11 — Pseudo-random vocabulary keys
+
+Integrates hellonearthis's fork commit `dc71556` (fork 1.6.11). Credit: hellonearthis.
+
+- **Pseudo-random vocabulary generator**: a `seed:count` key deterministically
+  keeps `count` entries per category and excludes the rest; quick bar (roll,
+  apply, reroll, save, edit, clear) in the main panel, matching tools in the
+  vocabulary dialog, saved keys kept in the browser, and the key stored with the
+  project (`vocab_random_key`). Typed custom entries are preserved when a key is
+  applied.
+- Integration: draft-replacing paths use `showVocabCategory` (the earlier
+  stale-text fix) so a replaced draft cannot be overwritten by editor text. The
+  largest vocabulary category (269 entries) fits the 500-entry exclude limit. A key
+  reproduces the same selection only while the built-in vocabulary lists are
+  unchanged.
+
 ## 1.6.10 — Collaborator integration, part 2: module split, guide dialog, preview feedback
 
 Integrates hellonearthis's fork changes after `3365943` up to reviewed head

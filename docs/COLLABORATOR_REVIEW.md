@@ -1,5 +1,15 @@
 # Collaborator review record
 
+## October 19, 2026 — fork integration, head dc71556 (release 1.6.11)
+
+Fetched at the owner's request after head 4e1cbb0. One commit, `dc71556`: pseudo-random
+vocabulary generator with reproducible keys, quick editing and preset saving.
+
+| Change | Decision | Reason and evidence |
+| --- | --- | --- |
+| Pseudo-random vocabulary keys (`vocabulary.js`, `index.html`, `style.css`, `vocab_random_key` in the project state) | Adopted with a fix | Draft-replacing paths now use `showVocabCategory`; the largest category (269) fits the 500-entry exclude cap; project persistence test passes. A key is only reproducible while the built-in lists are unchanged (noted in RELEASES). |
+| Version 1.6.11 | Matches the fork | Owner's compact option, labels and silent-mouth decision preserved when merging `index.html`. |
+
 ## October 18, 2026 — fork integration, head 4e1cbb0 (release 1.6.10)
 
 Fetched into an isolated checkout at task start. Reviewed `3365943..4e1cbb0`

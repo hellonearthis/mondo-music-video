@@ -387,9 +387,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.10")
+        self.assertEqual(api_version()["version"], "1.6.11")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.10", (root / "README.md").read_text())
+        self.assertIn("1.6.11", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1234,6 +1234,32 @@ class UtilityTests(unittest.TestCase):
             self.assertIn("markdown", guide_data)
             self.assertIn("Visual Vocabulary", guide_data["markdown"])
             self.assertIn("title", guide_data)
+
+    def test_project_vocab_random_key_persistence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+
+            # Save project with a pseudo-random vocabulary key
+            payload = {
+                "panel": "video",
+                "forms": {"video": {"title": "Neon Dreams"}},
+                "vocab_random_key": "482910:5",
+                "custom_vocabulary": {
+                    "lighting": {"mode": "append", "add": [], "exclude": ["strobe lights"]}
+                }
+            }
+            res = client.put("/api/project", json=payload)
+            self.assertEqual(res.status_code, 200)
+
+            # Retrieve project and verify vocab_random_key persists
+            get_res = client.get("/api/project")
+            self.assertEqual(get_res.status_code, 200)
+            data = get_res.json()
+            self.assertEqual(data.get("vocab_random_key"), "482910:5")
+            self.assertEqual(data.get("forms", {}).get("video", {}).get("title"), "Neon Dreams")
+            self.assertIn("lighting", data.get("custom_vocabulary", {}))
 
 
 if __name__ == "__main__":

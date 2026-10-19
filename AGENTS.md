@@ -72,7 +72,7 @@ verify the assets appear in the app. Never import other local/private assets.
   replacing this checkout or sharing Git object stores. Compare against the
   last reviewed revision and this repository's current code. The last completed
   review at the time this rule was added is fork revision
-  `4e1cbb0` (integrated in application release 1.6.10).
+  `dc71556` (integrated in application release 1.6.11).
 - Analyze new changes for correctness, regressions, privacy, setup compatibility,
   model/workflow defaults, paid consent and automatic retry behavior. Run
   appropriate mock-service tests before adopting changes. Treat downloaded
