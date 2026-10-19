@@ -1,7 +1,5 @@
-// Navigation, project state persistence, song audio preview, and resolution selector.
-
 import { $, $$, api, json, option, state, updateLogDisplay } from "./core.js";
-import { updateVocabCustomBadge } from "./vocabulary.js";
+import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 
 let saveDebounceTimer = null;
 
@@ -12,6 +10,9 @@ export function panel(name) {
     node.classList.toggle("active", active);
     node.setAttribute("aria-current", active ? "page" : "false");
   });
+  if (name === "vocab") {
+    openVocabularyPanel().catch(() => {});
+  }
   scheduleSave();
 }
 
@@ -81,7 +82,7 @@ export function getProjectState() {
     files,
     custom_vocabulary: state.currentCustomVocab,
     vocab_random_key: state.currentVocabRandomKey || "",
-    details_open: Boolean($("#video-form details")?.open),
+    details_open: Boolean($("#video-form details[open]")),
     log_open: Boolean($("#operation-log") && !$("#operation-log").hidden)
   };
 }
@@ -214,7 +215,8 @@ export function initNavigation() {
     form.addEventListener("change", scheduleSave);
   });
 
-  const videoDetails = $("#video-form details");
-  if (videoDetails) videoDetails.addEventListener("toggle", scheduleSave);
+  $$("#video-form details").forEach(details => {
+    details.addEventListener("toggle", scheduleSave);
+  });
 }
 

@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.8.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.8.1** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 

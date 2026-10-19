@@ -190,29 +190,43 @@ export function populateVocabProfileSelects() {
   }
 }
 
+export async function openVocabularyPanel() {
+  await loadVocabularyCatalog();
+  vocabWorkingDraft = JSON.parse(JSON.stringify(state.currentCustomVocab || {}));
+  vocabCurrentRandomKey = state.currentVocabRandomKey || "";
+  const currentProfile = $("#vocab-profile-select")?.value || "full";
+  if ($("#vocab-dialog-preset-select")) $("#vocab-dialog-preset-select").value = currentProfile;
+  updateDeletePresetBtnVisibility();
+  renderSavedKeysSelect();
+
+  if ($("#vocab-random-key")) $("#vocab-random-key").value = vocabCurrentRandomKey;
+  renderVocabTabs();
+  showVocabCategory(vocabActiveCategory);
+  renderVocabSelectionSummary();
+
+  const panelVocab = $("#panel-vocab");
+  if (panelVocab) {
+    const navBtn = $(".nav[data-panel='vocab']");
+    if (navBtn) navBtn.click();
+  } else {
+    const dialog = $("#vocabulary-dialog");
+    if (dialog?.showModal) dialog.showModal();
+  }
+}
+
 export function setupVocabularyCustomizer() {
-  const dialog = $("#vocabulary-dialog");
-  const openBtn = $("#open-vocab-dialog");
+  const panelVocab = $("#panel-vocab");
+  const openBtn = $("#open-vocab-panel-btn") || $("#open-vocab-dialog");
   const quickBarRollBtn = $("#roll-vocab-random-btn");
-  if (!dialog || !openBtn) return;
+  if (!panelVocab && !$("#vocabulary-dialog")) return;
 
   loadVocabularyCatalog().catch(() => {});
 
-  openBtn.onclick = handle(async () => {
-    await loadVocabularyCatalog();
-    vocabWorkingDraft = JSON.parse(JSON.stringify(state.currentCustomVocab || {}));
-    vocabCurrentRandomKey = state.currentVocabRandomKey || "";
-    const currentProfile = $("#vocab-profile-select")?.value || "full";
-    if ($("#vocab-dialog-preset-select")) $("#vocab-dialog-preset-select").value = currentProfile;
-    updateDeletePresetBtnVisibility();
-    renderSavedKeysSelect();
-
-    if ($("#vocab-random-key")) $("#vocab-random-key").value = vocabCurrentRandomKey;
-    renderVocabTabs();
-    showVocabCategory(vocabActiveCategory);
-    renderVocabSelectionSummary();
-    dialog.showModal();
-  });
+  if (openBtn) {
+    openBtn.onclick = handle(async () => {
+      await openVocabularyPanel();
+    });
+  }
 
   // Quick bar "Roll Random" button in main panel
   if (quickBarRollBtn) {
@@ -288,11 +302,11 @@ export function setupVocabularyCustomizer() {
 
   const quickEditBtn = $("#vocab-quick-edit-btn");
   if (quickEditBtn) {
-    quickEditBtn.onclick = () => {
-      openBtn.click();
+    quickEditBtn.onclick = handle(async () => {
+      await openVocabularyPanel();
       const details = $("#vocab-random-summary-details");
       if (details) details.open = true;
-    };
+    });
   }
 
   const quickClearBtn = $("#vocab-quick-clear-btn");
@@ -535,7 +549,14 @@ export function setupVocabularyCustomizer() {
       state.currentVocabRandomKey = vocabCurrentRandomKey || "";
       updateVocabCustomBadge();
       scheduleSave();
-      dialog.close();
+      const dialog = $("#vocabulary-dialog");
+      if (dialog && typeof dialog.close === "function" && dialog.open) {
+        dialog.close();
+      }
+      const videoNavBtn = $(".nav[data-panel='video']");
+      if (videoNavBtn && $("#panel-vocab") && !$("#panel-vocab").hidden) {
+        videoNavBtn.click();
+      }
       notice("Vocabulary customizations applied to current video.");
     });
   }
@@ -634,6 +655,57 @@ export function drawOneAdditionalRandomItem(cat) {
   notice(`Added "${pick}" to ${cat.replace(/_/g, " ")}.`);
 }
 
+const MAX_SUMMARY_CHIPS = 20;
+
+function buildCategoryChips(cat, activeItems) {
+  const chipsWrap = document.createElement("div");
+  chipsWrap.className = "vocab-summary-chips";
+
+  if (activeItems.length === 0) {
+    const emptyNote = document.createElement("span");
+    emptyNote.className = "vocab-chip-empty";
+    emptyNote.textContent = "No active items";
+    chipsWrap.append(emptyNote);
+    return chipsWrap;
+  }
+
+  const itemsToShow = activeItems.slice(0, MAX_SUMMARY_CHIPS);
+  itemsToShow.forEach(item => {
+    const chip = document.createElement("span");
+    chip.className = "vocab-chip";
+    const textSpan = document.createElement("span");
+    textSpan.className = "vocab-chip-text";
+    textSpan.textContent = item;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "vocab-chip-remove";
+    removeBtn.setAttribute("aria-label", `Remove ${item}`);
+    removeBtn.textContent = "×";
+    removeBtn.onclick = (e) => {
+      e.stopPropagation();
+      removeSingleItemFromCategory(cat, item);
+    };
+
+    chip.append(textSpan, removeBtn);
+    chipsWrap.append(chip);
+  });
+
+  if (activeItems.length > MAX_SUMMARY_CHIPS) {
+    const moreBtn = document.createElement("button");
+    moreBtn.type = "button";
+    moreBtn.className = "vocab-chip-more";
+    moreBtn.textContent = `+${activeItems.length - MAX_SUMMARY_CHIPS} more (open tab)`;
+    moreBtn.onclick = (e) => {
+      e.stopPropagation();
+      selectVocabCategory(cat);
+    };
+    chipsWrap.append(moreBtn);
+  }
+
+  return chipsWrap;
+}
+
 export function updateVocabCategoryCard(cat) {
   const card = $(`#vocab-random-summary-grid .vocab-summary-cat-card[data-category="${cat}"]`);
   if (!card || !vocabDataCache) {
@@ -655,36 +727,12 @@ export function updateVocabCategoryCard(cat) {
   const countBadge = card.querySelector(".vocab-summary-cat-count");
   if (countBadge) countBadge.textContent = `${activeItems.length} active`;
 
-  const chipsWrap = card.querySelector(".vocab-summary-chips");
-  if (chipsWrap) {
-    chipsWrap.replaceChildren();
-    activeItems.forEach(item => {
-      const chip = document.createElement("span");
-      chip.className = "vocab-chip";
-      const textSpan = document.createElement("span");
-      textSpan.className = "vocab-chip-text";
-      textSpan.textContent = item;
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "vocab-chip-remove";
-      removeBtn.setAttribute("aria-label", `Remove ${item}`);
-      removeBtn.textContent = "×";
-      removeBtn.onclick = (e) => {
-        e.stopPropagation();
-        removeSingleItemFromCategory(cat, item);
-      };
-
-      chip.append(textSpan, removeBtn);
-      chipsWrap.append(chip);
-    });
-
-    if (activeItems.length === 0) {
-      const emptyNote = document.createElement("span");
-      emptyNote.className = "vocab-chip-empty";
-      emptyNote.textContent = "No active items";
-      chipsWrap.append(emptyNote);
-    }
+  const oldWrap = card.querySelector(".vocab-summary-chips");
+  const newWrap = buildCategoryChips(cat, activeItems);
+  if (oldWrap) {
+    oldWrap.replaceWith(newWrap);
+  } else {
+    card.append(newWrap);
   }
 
   // Update overall badge
@@ -837,37 +885,7 @@ export function renderVocabSelectionSummary() {
       selectVocabCategory(cat);
     };
 
-    const chipsWrap = document.createElement("div");
-    chipsWrap.className = "vocab-summary-chips";
-
-    activeItems.forEach(item => {
-      const chip = document.createElement("span");
-      chip.className = "vocab-chip";
-      const textSpan = document.createElement("span");
-      textSpan.className = "vocab-chip-text";
-      textSpan.textContent = item;
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "vocab-chip-remove";
-      removeBtn.setAttribute("aria-label", `Remove ${item}`);
-      removeBtn.textContent = "×";
-      removeBtn.onclick = (e) => {
-        e.stopPropagation();
-        removeSingleItemFromCategory(cat, item);
-      };
-
-      chip.append(textSpan, removeBtn);
-      chipsWrap.append(chip);
-    });
-
-    if (activeItems.length === 0) {
-      const emptyNote = document.createElement("span");
-      emptyNote.className = "vocab-chip-empty";
-      emptyNote.textContent = "No active items";
-      chipsWrap.append(emptyNote);
-    }
-
+    const chipsWrap = buildCategoryChips(cat, activeItems);
     card.append(header, chipsWrap);
     return card;
   });
@@ -970,7 +988,7 @@ export function renderVocabCategoryContent(cat) {
       vocabWorkingDraft[cat].exclude = [...exc];
       updateActiveCategoryCount();
       updateTabBadges();
-      renderVocabSelectionSummary();
+      updateVocabCategoryCard(cat);
     };
     label.append(cb, document.createTextNode(item));
     grid.append(label);
@@ -983,7 +1001,7 @@ export function renderVocabCategoryContent(cat) {
       saveActiveCategoryCustomText();
       updateActiveCategoryCount();
       updateTabBadges();
-      renderVocabSelectionSummary();
+      updateVocabCategoryCard(cat);
     };
   }
 
