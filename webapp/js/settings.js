@@ -168,67 +168,37 @@ export async function navigatePicker(targetPath) {
   renderPickerEntries();
 }
 
+export const escapeHtml = str =>
+  String(str).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+
+export const pickerEntryHtml = (entry, isSelected = false) => {
+  const icon = entry.isDir ? "📁" : "📄";
+  const selectedClass = isSelected ? " selected" : "";
+  return `<div class="picker-entry${selectedClass}" tabindex="0" role="button" data-path="${escapeHtml(entry.path)}" data-isdir="${entry.isDir ? 'true' : 'false'}"><span class="picker-entry-icon">${icon}</span><span class="picker-entry-name">${escapeHtml(entry.name)}</span></div>`;
+};
+
 export function renderPickerEntries() {
   const container = $("#picker-entries");
-  container.replaceChildren();
-  const filter = ($("#picker-filter").value || "").toLowerCase().trim();
+  if (!container) return;
+  const filter = ($("#picker-filter")?.value || "").toLowerCase().trim();
+  const selectedPath = $("#picker-selected-path")?.value || "";
 
   const filtered = currentPickerState.allEntries.filter(entry =>
     !filter || entry.name.toLowerCase().includes(filter)
   );
 
   if (!filtered.length) {
-    const empty = document.createElement("div");
-    empty.className = "picker-entry";
-    empty.style.color = "var(--muted)";
-    empty.textContent = "(No matching folders or files)";
-    container.append(empty);
+    container.innerHTML = `<div class="picker-entry" style="color: var(--muted);">(No matching folders or files)</div>`;
     return;
   }
 
-  for (const entry of filtered) {
-    const row = document.createElement("div");
-    row.className = "picker-entry";
-    row.tabIndex = 0;
-    row.setAttribute("role", "button");
-    if ($("#picker-selected-path").value === entry.path) {
-      row.classList.add("selected");
-    }
-
-    const icon = document.createElement("span");
-    icon.className = "picker-entry-icon";
-    icon.textContent = entry.isDir ? "📁" : "📄";
-
-    const name = document.createElement("span");
-    name.className = "picker-entry-name";
-    name.textContent = entry.name;
-
-    row.append(icon, name);
-
-    row.onclick = () => {
-      $("#picker-selected-path").value = entry.path;
-      $("#picker-confirm").disabled = currentPickerState.mode === "file" && entry.isDir;
-      container.querySelectorAll(".picker-entry").forEach(el => el.classList.remove("selected"));
-      row.classList.add("selected");
-    };
-
-    row.ondblclick = () => {
-      if (entry.isDir) {
-        navigatePicker(entry.path).catch(error => notice(error.message));
-      } else {
-        if (currentPickerState.onSelect) {
-          currentPickerState.onSelect(entry.path);
-        }
-        $("#folder-picker-dialog").close();
-      }
-    };
-
-    row.onkeydown = event => {
-      if (event.key === "Enter") { event.preventDefault(); row.ondblclick(); }
-      if (event.key === " ") { event.preventDefault(); row.click(); }
-    };
-    container.append(row);
-  }
+  container.innerHTML = filtered.map(entry => pickerEntryHtml(entry, entry.path === selectedPath)).join("");
 }
 
 export function openPicker(options) {
@@ -434,6 +404,49 @@ export function initSettingsAndPicker() {
         currentPickerState.onSelect(selected);
       }
       $("#folder-picker-dialog").close();
+    };
+  }
+
+  const pickerEntries = $("#picker-entries");
+  if (pickerEntries) {
+    pickerEntries.onclick = (event) => {
+      const row = event.target.closest(".picker-entry[data-path]");
+      if (!row) return;
+      const path = row.dataset.path;
+      const isDir = row.dataset.isdir === "true";
+      $("#picker-selected-path").value = path;
+      if (pickerConfirm) {
+        pickerConfirm.disabled = currentPickerState.mode === "file" && isDir;
+      }
+      pickerEntries.querySelectorAll(".picker-entry").forEach(el => el.classList.remove("selected"));
+      row.classList.add("selected");
+    };
+
+    pickerEntries.ondblclick = (event) => {
+      const row = event.target.closest(".picker-entry[data-path]");
+      if (!row) return;
+      const path = row.dataset.path;
+      const isDir = row.dataset.isdir === "true";
+      if (isDir) {
+        navigatePicker(path).catch(error => notice(error.message));
+      } else {
+        if (currentPickerState.onSelect) {
+          currentPickerState.onSelect(path);
+        }
+        $("#folder-picker-dialog").close();
+      }
+    };
+
+    pickerEntries.onkeydown = (event) => {
+      const row = event.target.closest(".picker-entry[data-path]");
+      if (!row) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      } else if (event.key === " ") {
+        event.preventDefault();
+        row.click();
+      }
     };
   }
 }

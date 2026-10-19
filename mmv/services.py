@@ -1,6 +1,7 @@
 """Live service health, availability and processing activity probe for Mondo."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import time
 import urllib.error
@@ -26,12 +27,7 @@ def check_services(store, active_job=None, force: bool = False) -> dict:
     return _evaluate_service_activity(store, _cached_probe_results, active_job)
 
 
-def _probe_raw_services(store) -> dict:
-    settings = store.settings()
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    results = {}
-
-    # 1. ComfyUI
+def _probe_comfy(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     comfy_url = (settings.get("comfy_url") or "").rstrip("/")
     comfy = {
         "url": comfy_url,
@@ -68,9 +64,10 @@ def _probe_raw_services(store) -> dict:
         except Exception as exc:
             comfy["available"] = False
             comfy["error"] = str(exc)
-    results["comfy"] = comfy
+    return comfy
 
-    # 2. llama.cpp / Writer
+
+def _probe_writer(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     writer_mode = settings.get("writer_mode", "local")
     writer_url = (settings.get("writer_url") or "").rstrip("/")
     writer_model = settings.get("writer_model") or ""
@@ -102,9 +99,10 @@ def _probe_raw_services(store) -> dict:
         except Exception as exc:
             writer["available"] = False
             writer["error"] = str(exc)
-    results["writer"] = writer
+    return writer
 
-    # 3. Laya Semantic Validator
+
+def _probe_laya(settings: dict) -> dict:
     laya_dir_str = settings.get("laya_model_dir") or ""
     laya_dir = Path(laya_dir_str).expanduser() if laya_dir_str else None
     laya_device = settings.get("laya_device", "cuda")
@@ -114,13 +112,14 @@ def _probe_raw_services(store) -> dict:
             (laya_dir / name).exists()
             for name in ("model.safetensors", "rl_agent_config.json", "tokenizer", "encoder/config.json")
         )
-    results["laya"] = {
+    return {
         "model_dir": str(laya_dir) if laya_dir else "",
         "device": laya_device,
         "available": laya_staged,
     }
 
-    # 4. Vision Service
+
+def _probe_vision(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     vision_url = (settings.get("vision_url") or "").rstrip("/")
     vision_model = settings.get("vision_model") or ""
     vision = {
@@ -130,21 +129,50 @@ def _probe_raw_services(store) -> dict:
         "error": None,
     }
     if vision_url:
-        if vision_url == writer_url and writer_mode == "local":
-            vision["available"] = writer["available"]
-            vision["error"] = writer["error"]
-        else:
-            try:
-                req = urllib.request.Request(f"{vision_url}/models", headers={"Accept": "application/json"})
-                with opener.open(req, timeout=0.3) as resp:
-                    if resp.status == 200:
-                        vision["available"] = True
-            except Exception as exc:
-                vision["available"] = False
-                vision["error"] = str(exc)
-    results["vision"] = vision
+        try:
+            req = urllib.request.Request(f"{vision_url}/models", headers={"Accept": "application/json"})
+            with opener.open(req, timeout=0.3) as resp:
+                if resp.status == 200:
+                    vision["available"] = True
+        except Exception as exc:
+            vision["available"] = False
+            vision["error"] = str(exc)
+    return vision
 
-    return results
+
+def _probe_raw_services(store) -> dict:
+    settings = store.settings()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    writer_url = (settings.get("writer_url") or "").rstrip("/")
+    vision_url = (settings.get("vision_url") or "").rstrip("/")
+    writer_mode = settings.get("writer_mode", "local")
+    shared_vision = bool(vision_url and vision_url == writer_url and writer_mode == "local")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        f_comfy = executor.submit(_probe_comfy, settings, opener)
+        f_writer = executor.submit(_probe_writer, settings, opener)
+        f_vision = None if shared_vision else executor.submit(_probe_vision, settings, opener)
+
+        comfy = f_comfy.result()
+        writer = f_writer.result()
+        if shared_vision:
+            vision = {
+                "url": vision_url,
+                "model": settings.get("vision_model") or "",
+                "available": writer["available"],
+                "error": writer["error"],
+            }
+        else:
+            vision = f_vision.result()
+
+    laya = _probe_laya(settings)
+    return {
+        "comfy": comfy,
+        "writer": writer,
+        "laya": laya,
+        "vision": vision,
+    }
 
 
 def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:

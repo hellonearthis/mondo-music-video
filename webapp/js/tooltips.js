@@ -5,6 +5,18 @@ import { $ } from "./core.js";
 let activeTooltipTrigger = null;
 let tooltipTimeout = null;
 
+export const computeTooltipPosition = (rect, tipRect, viewportWidth, viewportHeight, gap = 8, padding = 10) => {
+  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+  left = Math.max(padding, Math.min(left, viewportWidth - tipRect.width - padding));
+
+  let top = rect.bottom + gap;
+  if (top + tipRect.height > viewportHeight - padding) {
+    top = Math.max(padding, rect.top - tipRect.height - gap);
+  }
+
+  return { left: Math.round(left), top: Math.round(top) };
+};
+
 export function showTooltip(target) {
   if (!target) return;
   const tipText = target.dataset.tooltip || target.getAttribute("title");
@@ -24,19 +36,10 @@ export function showTooltip(target) {
 
   const rect = target.getBoundingClientRect();
   const tipRect = tip.getBoundingClientRect();
-  const gap = 8;
-  const padding = 10;
+  const pos = computeTooltipPosition(rect, tipRect, window.innerWidth, window.innerHeight);
 
-  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
-  left = Math.max(padding, Math.min(left, window.innerWidth - tipRect.width - padding));
-
-  let top = rect.bottom + gap;
-  if (top + tipRect.height > window.innerHeight - padding) {
-    top = Math.max(padding, rect.top - tipRect.height - gap);
-  }
-
-  tip.style.left = `${Math.round(left)}px`;
-  tip.style.top = `${Math.round(top)}px`;
+  tip.style.left = `${pos.left}px`;
+  tip.style.top = `${pos.top}px`;
 }
 
 export function hideTooltip(immediate = false) {
@@ -46,9 +49,6 @@ export function hideTooltip(immediate = false) {
     if (tip) tip.hidden = true;
     if (activeTooltipTrigger) {
       activeTooltipTrigger.removeAttribute("aria-describedby");
-      if (activeTooltipTrigger.dataset.tooltip) {
-        activeTooltipTrigger.setAttribute("title", activeTooltipTrigger.dataset.tooltip);
-      }
       activeTooltipTrigger = null;
     }
   };

@@ -50,6 +50,37 @@ export function setupOapGuide() {
   }
 }
 
+export function tuneLlamaCommand(currentJson, preset = "hellonearthis") {
+  if (preset === "current") return currentJson;
+  const args = typeof currentJson === "string" ? JSON.parse(currentJson) : currentJson;
+  if (!Array.isArray(args) || !args.length || args.some(arg => typeof arg !== "string")) {
+    throw new Error("Configure a JSON array launch command first.");
+  }
+  const options = {
+    "-c": "16384",
+    "--ctx-size": "16384",
+    "-b": "2048",
+    "--batch-size": "2048",
+    "-ub": "1024",
+    "--ubatch-size": "1024"
+  };
+  if (args.some(arg => arg === "--mmproj" || arg.startsWith("--mmproj="))) {
+    options["--image-min-tokens"] = "1024";
+  }
+  const result = [args[0]];
+  for (let i = 1; i < args.length; i++) {
+    const flag = args[i].split("=", 1)[0];
+    if (Object.hasOwn(options, flag)) {
+      if (!args[i].includes("=")) i++;
+    } else {
+      result.push(args[i]);
+    }
+  }
+  result.push("-c", "16384", "-b", "2048", "-ub", "1024");
+  if (options["--image-min-tokens"]) result.push("--image-min-tokens", "1024");
+  return JSON.stringify(result);
+}
+
 export function setupLlamaGuide() {
   const dialog = $("#llama-helper-dialog");
   if (!dialog) return;
@@ -57,34 +88,7 @@ export function setupLlamaGuide() {
   const picker = $("#writer-tuning-preset");
   function commandPreview() {
     const current = $("input[name=writer_launch]")?.value || "";
-    if (picker.value === "current") return current;
-    const args = JSON.parse(current);
-    if (!Array.isArray(args) || !args.length || args.some(arg => typeof arg !== "string")) {
-      throw new Error("Configure a JSON array launch command first.");
-    }
-    const options = {
-      "-c": "16384",
-      "--ctx-size": "16384",
-      "-b": "2048",
-      "--batch-size": "2048",
-      "-ub": "1024",
-      "--ubatch-size": "1024"
-    };
-    if (args.some(arg => arg === "--mmproj" || arg.startsWith("--mmproj="))) {
-      options["--image-min-tokens"] = "1024";
-    }
-    const result = [args[0]];
-    for (let i = 1; i < args.length; i++) {
-      const flag = args[i].split("=", 1)[0];
-      if (Object.hasOwn(options, flag)) {
-        if (!args[i].includes("=")) i++;
-      } else {
-        result.push(args[i]);
-      }
-    }
-    result.push("-c", "16384", "-b", "2048", "-ub", "1024");
-    if (options["--image-min-tokens"]) result.push("--image-min-tokens", "1024");
-    return JSON.stringify(result);
+    return tuneLlamaCommand(current, picker.value);
   }
   function showPreview() {
     try {

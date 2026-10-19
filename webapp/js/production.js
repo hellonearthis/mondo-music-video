@@ -240,6 +240,8 @@ export function showQuote(request, quote) {
   }).catch(error => notice(error.message));
 }
 
+const serviceStateCache = new Map();
+
 export function renderServices(services) {
   if (!services || typeof services !== "object") return;
   const entries = [
@@ -250,12 +252,16 @@ export function renderServices(services) {
   ];
   for (const { id, data } of entries) {
     if (!data) continue;
+    const activity = data.activity || (data.available ? "sleeping" : "offline");
+    const detailText = data.detail || (data.available ? "Ready" : "Offline");
+    const cacheKey = `${activity}|${detailText}|${Boolean(data.available)}`;
+    if (serviceStateCache.get(id) === cacheKey) continue;
+    serviceStateCache.set(id, cacheKey);
+
     const dot = $(`#service-dot-${id}`);
     const badge = $(`#service-badge-${id}`);
     const detail = $(`#service-detail-${id}`);
     const card = $(`#service-card-${id}`);
-
-    const activity = data.activity || (data.available ? "sleeping" : "offline");
 
     if (dot) {
       dot.className = `service-pulse-dot dot-${activity}`;
@@ -275,7 +281,7 @@ export function renderServices(services) {
     }
 
     if (detail) {
-      detail.textContent = data.detail || (data.available ? "Ready" : "Offline");
+      detail.textContent = detailText;
       detail.title = data.detail || "";
     }
 

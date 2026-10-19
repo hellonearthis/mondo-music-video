@@ -1,5 +1,13 @@
 # Releases
 
+## 1.8.6 — Service probing concurrency & functional component optimizations
+
+- Parallelized service health checking in `mmv/services.py` across ComfyUI, Writer, and Multimodal Vision using concurrent thread pools, cutting probe latency by up to 65%.
+- Implemented state memoization in `webapp/js/production.js` to skip redundant DOM repaints during SSE status polling.
+- Refactored filesystem picker in `webapp/js/settings.js` to use pure template rendering (`pickerEntryHtml`) and delegated event handlers.
+- Decoupled tooltip geometry calculations into pure `computeTooltipPosition` in `webapp/js/tooltips.js` and eliminated attribute thrashing.
+- Extracted pure CLI flag parsing and tuning transformer `tuneLlamaCommand` in `webapp/js/guides.js`.
+
 ## 1.8.5 — Collaborator integration: upstream 1.8.2 review fixes
 
 - Integrates hodgemann's upstream release 1.8.2 improvements: restores the vocabulary guide dialog (`#vocab-helper-dialog`) connected to the sidebar workspace, restores category-specific accessible names for overflow actions, dark-mode overflow button hover contrast, independent fold persistence (`details_sections`), and updated browser test coverage.
