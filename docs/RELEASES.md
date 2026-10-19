@@ -1,5 +1,34 @@
 # Releases
 
+## 1.8.5 — Collaborator integration: upstream 1.8.2 review fixes
+
+- Integrates hodgemann's upstream release 1.8.2 improvements: restores the vocabulary guide dialog (`#vocab-helper-dialog`) connected to the sidebar workspace, restores category-specific accessible names for overflow actions, dark-mode overflow button hover contrast, independent fold persistence (`details_sections`), and updated browser test coverage.
+- Maintains full compatibility with 1.8.4 offline engine guards and 1.8.3 functional architecture.
+
+## 1.8.4 — Required engine offline protection & operator warnings
+
+- Pre-flight engine availability checks in `POST /api/quote` and `POST /api/start`: halts production and warns the operator with actionable instructions when Prompt Writer (`llama.cpp`), Video Renderer (`ComfyUI`), Reviewer (`Laya`), or Multimodal (`Vision`) is offline and has no launch command configured.
+- UI service alert banners, disabled consent and start controls, and pulsing status card indicators on offline failure.
+
+## 1.8.3 — Functional UI refactoring & incomplete runs manager
+
+- Refactored `vocabulary.js`, `library.js`, and `outputs.js` into modular functional template engines.
+- Added incomplete runs management table with resume/clean controls and confirmation modal for video deletion.
+
+
+## 1.8.2 — Vocabulary guide and accessibility review fixes
+
+- Addresses Antigravity’s UI review: restores the missing vocabulary guide dialog and connects its navigation to the workspace.
+- Gives overflow buttons readable dark-mode hover colors and category-specific accessible names; explains when unapplied workspace edits are discarded.
+- Protected prompts and generation defaults are unchanged. Both Claude Code and Antigravity reviews are received and triaged in the [review record](COLLABORATOR_REVIEW.md).
+
+## 1.8.1 — Vocabulary workspace and faster editing
+
+- Integrates hellonearthis’s fork contributions through `1704454`: a dedicated Visual vocabulary workspace, updates limited to the edited summary card, and bounded summary chips with access to the full category.
+- Groups advanced production controls into pacing, camera and render folds, each remembering its open state. Existing generation defaults are preserved.
+- Fixes workspace navigation recursion and restores saved vocabulary before opening the workspace. Updates browser regression coverage and navigation labels.
+- Windows launcher uses Python UTF-8 mode; protected prompts and fingerprints are unchanged. See [integration review](COLLABORATOR_REVIEW.md).
+
 ## 1.8.0 — BONK: dancing actors
 
 - **Dance mode** (opt-in `dance_mode: group`, off by default; music videos): the cast dances in time with the song. The app reads the song's

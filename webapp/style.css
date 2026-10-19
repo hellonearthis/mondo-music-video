@@ -443,6 +443,7 @@ button[aria-busy="true"], button.processing {
 [data-theme=dark] .vocab-chip-more {
   background: rgba(255, 255, 255, 0.05);
 }
+[data-theme=dark] .vocab-chip-more:hover { background: #354e3e; color: var(--lime); }
 [data-theme=dark] .vocab-random-quick-bar {
   background: #1f2e25;
   border-color: #354e3e;

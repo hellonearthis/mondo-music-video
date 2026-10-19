@@ -154,12 +154,7 @@ export function setupVocabGuide() {
   $$(".nav-to-vocab-btn").forEach(btn => {
     btn.onclick = () => {
       if (dialog.open) dialog.close();
-      const customizerDialog = $("#vocabulary-dialog");
-      if (customizerDialog) {
-        const openBtn = $("#open-vocab-dialog");
-        if (openBtn) openBtn.click();
-        else customizerDialog.showModal();
-      }
+      $(".nav[data-panel=vocab]")?.click();
     };
   });
 

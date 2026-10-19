@@ -400,9 +400,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.4")
+        self.assertEqual(api_version()["version"], "1.8.5")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.4", (root / "README.md").read_text())
+        self.assertIn("1.8.5", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -531,6 +531,7 @@ class PublicAppTests(unittest.TestCase):
             "forms": {"video-form": {"title": "My Track", "backend": "local_h3"}},
             "files": {"video-form": {"song": "test.wav", "references": []}},
             "details_open": True,
+            "details_sections": {"director-camera": True, "director-render": False},
             "log_open": False
         }
         res = self.client.put("/api/project", json=project)
@@ -540,6 +541,7 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(got["panel"], "video")
         self.assertEqual(got["forms"]["video-form"]["title"], "My Track")
         self.assertTrue(got["details_open"])
+        self.assertEqual(got["details_sections"], project["details_sections"])
 
     def test_clear_log_endpoint(self):
         studio_log = self.home / "studio.log"

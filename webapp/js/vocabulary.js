@@ -82,7 +82,7 @@ const chipsHtml = (cat, activeItems) => {
     .join("");
   const moreHtml =
     activeItems.length > MAX_SUMMARY_CHIPS
-      ? `<button type="button" class="vocab-chip-more" data-action="select-cat" data-category="${escCat}">+${activeItems.length - MAX_SUMMARY_CHIPS} more (open tab)</button>`
+      ? `<button type="button" class="vocab-chip-more" data-action="select-cat" data-category="${escCat}" aria-label="Show all entries in ${escapeHtml(cat.replace(/_/g, " "))}">+${activeItems.length - MAX_SUMMARY_CHIPS} more (open tab)</button>`
       : "";
   return `<div class="vocab-summary-chips">${itemsHtml}${moreHtml}</div>`;
 };

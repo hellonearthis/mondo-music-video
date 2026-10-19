@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.4"
+MGL_APP_VERSION = "1.8.5"
 WEB = Path(__file__).parent
 
 
@@ -456,6 +456,7 @@ class ProjectState(StrictModel):
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     vocab_random_key: str = Field(default="", max_length=128)
     details_open: bool = False
+    details_sections: dict[str, bool] = Field(default_factory=dict)
     log_open: bool = False
 
 

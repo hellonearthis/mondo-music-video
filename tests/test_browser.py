@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.4')
+                expect(page.locator('#version')).to_have_text('1.8.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -280,18 +280,91 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
-                page.evaluate('() => document.querySelector("#open-vocab-dialog").click()')
-                expect(page.locator('#vocabulary-dialog')).to_be_visible()
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.evaluate('() => document.querySelector("#open-vocab-panel-btn").click()')
+                expect(page.locator('#panel-vocab')).to_be_visible()
                 textarea = page.locator('#vocab-custom-textarea')
                 textarea.fill('stale entry that was never applied')
                 page.locator('#vocab-reset-all-btn').click()
                 expect(textarea).to_have_value('')
                 textarea.fill('dismissed edit')
-                page.keyboard.press('Escape')
-                page.evaluate('() => document.querySelector("#open-vocab-dialog").click()')
+                page.locator('.nav[data-panel=video]').click()
+                page.locator('.nav[data-panel=vocab]').click()
                 expect(textarea).to_have_value('')
                 self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_vocabulary_workspace_restores_selection_and_independent_folds(self):
+        from playwright.sync_api import sync_playwright, expect
+        project = {
+            'panel': 'vocab',
+            'forms': {'video-form': {'vocabulary_profile': 'full'}},
+            'custom_vocabulary': {'settings': {'mode': 'replace', 'add': ['Workspace fixture', 'Remaining fixture'], 'exclude': []}},
+            'details_sections': {'director-pacing': False, 'director-camera': True, 'director-render': False},
+        }
+        self.fixture.client.put('/api/project', json=project).raise_for_status()
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                expect(page.locator('#panel-vocab')).to_be_visible()
+                card = page.locator('.vocab-summary-cat-card[data-category=settings]')
+                expect(card).to_contain_text('Workspace fixture')
+                # Edits to one card preserve the other cards and remain stable after opening.
+                page.evaluate('window.otherCard = document.querySelector(".vocab-summary-cat-card[data-category=lighting]")')
+                page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
+                card.locator('.vocab-chip-remove').first.click()
+                expect(card).not_to_contain_text('Workspace fixture')
+                expect(card).to_contain_text('Remaining fixture')
+                self.assertTrue(page.evaluate('window.otherCard === document.querySelector(".vocab-summary-cat-card[data-category=lighting]")'))
+                page.locator('#vocab-apply-btn').click()
+                expect(page.locator('#panel-video')).to_be_visible()
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, True, False])
+                page.wait_for_function('() => JSON.parse(localStorage.getItem("mmv_project_draft") || "{}").panel === "video"')
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, True, False])
+                page.locator('.nav[data-panel=vocab]').click()
+                expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_vocabulary_guide_navigation_and_dark_overflow_contrast(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.locator('#video-form .vocab-help-btn').click()
+                expect(page.locator('#vocab-helper-dialog')).to_be_visible()
+                expect(page.locator('#vocab-guide-raw')).to_contain_text('Visual vocabulary')
+                page.locator('.nav-to-vocab-btn').click()
+                expect(page.locator('#vocab-helper-dialog')).not_to_be_visible()
+                expect(page.locator('#panel-vocab')).to_be_visible()
+                page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
+                page.evaluate('document.documentElement.dataset.theme = "dark"')
+                more = page.locator('.vocab-chip-more').first
+                expect(more).to_have_attribute('aria-label', __import__('re').compile('Show all entries in .+'))
+                more.hover()
+                colors = more.evaluate('(el) => { const s = getComputedStyle(el); return [s.color, s.backgroundColor]; }')
+                def luminance(rgb):
+                    channels = [int(n) / 255 for n in __import__('re').findall(r'\d+', rgb)[:3]]
+                    linear = [c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4 for c in channels]
+                    return sum(c * w for c, w in zip(linear, [.2126, .7152, .0722]))
+                light, dark = sorted(map(luminance, colors), reverse=True)
+                self.assertGreaterEqual((light + .05) / (dark + .05), 4.5)
+                more.click()
+                expect(page.locator('#vocab-editor-pane')).to_be_visible()
+                page.locator('#panel-vocab .vocab-help-btn').click()
+                expect(page.locator('#vocab-helper-dialog')).to_be_visible()
             finally:
                 browser.close()
 
@@ -314,7 +387,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             try:
                 page.route('**/api/stems', lambda route: route.fulfill(json={'installed': False, 'install_command': 'pip install demucs', 'models': {}}))
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
                     window.__dirty = []; window.__replans = []; window.__drivers = [];
                     const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
@@ -368,7 +441,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             try:
                 page.route('**/api/stems', lambda route: route.fulfill(json={'installed': True, 'install_command': 'pip install demucs', 'models': models}))
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
                     window.__calls = [];
                     const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
@@ -414,7 +487,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             try:
                 page.route('**/api/stems', lambda route: route.fulfill(json={'installed': False, 'install_command': 'pip install demucs', 'models': {}}))
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
                     window.__calls = [];
                     const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
@@ -475,7 +548,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.route('**/api/status', lambda route: route.fulfill(json={'state': 'complete', 'message': 'Complete', 'result': {
                     'lines': [{'start': 9.9, 'end': 12.1, 'text': 'Interdimensional lover'}], 'source': 'vocals stem', 'language': 'en', 'model': 'large-v3'}}))
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
                     const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
                     return m.mountScoreEditor(host, {kind: 'video', song: name, mouth_mode: 'lip_sync', actors: ['pig'], lyric_lines: [], singers: []}, quote,
@@ -508,7 +581,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 expect(page.locator('#scheme-notice')).to_be_hidden()
                 page.route('**/api/integrity', lambda route: route.fulfill(json={
                     'intact': False, 'changed': ['the writer prompt'], 'notice': 'This installation has changed Mondo\'s protected prompting scheme (the writer prompt). Videos made with it may not meet the Mondo standard.'}))
@@ -528,8 +601,8 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
-                page.evaluate('() => { document.querySelector("#video-form details").open = true; }')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.evaluate('() => { document.querySelectorAll("#video-form details").forEach(el => el.open = true); }')
                 fields = page.locator('#video-form .subliminal-fields')
                 expect(fields).to_be_hidden()
                 page.locator('#video-form select[name=subliminal_mode]').select_option('text')
@@ -570,8 +643,8 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
-                page.evaluate('() => { document.querySelector("#video-form details").open = true; }')
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.evaluate('() => { document.querySelectorAll("#video-form details").forEach(el => el.open = true); }')
                 page.locator('#video-form select[name=subliminal_mode]').select_option('image')
                 counter = {'n': 0}
 
@@ -626,7 +699,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             try:
                 page.goto(self.url)
                 page.wait_for_function('() => document.querySelector("#vocab-profile-select option[value=mine]") !== null')
-                page.evaluate('() => { document.querySelector("#video-form details").open = true; }')
+                page.evaluate('() => { document.querySelectorAll("#video-form details").forEach(el => el.open = true); }')
                 page.locator('#vocab-profile-select').select_option('mine')
                 page.evaluate("() => import('/js/project.js').then(m => m.saveProject())")
                 page.reload()
@@ -681,7 +754,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.4')
+                expect(page.locator('#version')).to_have_text('1.8.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

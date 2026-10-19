@@ -305,6 +305,7 @@
       <input type="text" id="vocab-preset-name" placeholder="Display name (e.g. Vintage Indie)">
       <button type="button" id="vocab-save-preset-btn" class="secondary">Save as Preset</button>
     </div>
+    <p class="muted">Choose Apply to Current Video to keep your edits. Leaving this workspace without applying discards them when you reopen it.</p>
     <div class="vocab-dialog-actions">
       <button type="button" id="vocab-reset-all-btn" class="quiet">Reset all customizations</button>
       <button type="button" id="vocab-apply-btn" class="primary">Apply to Current Video</button>
@@ -404,6 +405,12 @@
   <button type="button" id="delete-cancel-btn" class="quiet">Cancel</button>
   <button type="button" id="delete-confirm-btn" class="primary" style="background:#b91c1c;border-color:#991b1b;color:#fff;">Delete permanently</button>
 </div>
+</dialog>
+<dialog id="vocab-helper-dialog" class="oap-dialog" aria-labelledby="vocab-guide-title">
+<form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide">×</button></form>
+<h2 id="vocab-guide-title">Visual vocabulary guide</h2>
+<pre id="vocab-guide-raw">Loading guide…</pre>
+<div class="oap-dialog-footer"><button type="button" class="secondary nav-to-vocab-btn">Open Visual vocabulary</button><button type="button" class="primary close-vocab-dialog">Close guide</button></div>
 </dialog>
 <div id="studio-tooltip" class="studio-tooltip" role="tooltip" hidden></div>
 </body></html>

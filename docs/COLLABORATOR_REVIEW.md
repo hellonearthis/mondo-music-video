@@ -1,5 +1,69 @@
 # Collaborator review record
 
+## October 19, 2026 — Antigravity review follow-up (release 1.8.2)
+
+Antigravity delivered its read-only review of fork `1704454`; model/effort were
+self-reported as Gemini 3.8 Flash / High, not independently verified. Codex checked
+all findings against the integration and original 1.8.0 source.
+
+| Finding | Verified disposition |
+| --- | --- |
+| Navigation recursion, multi-fold restoration, actor numbering | Already fixed in 1.8.1 with browser coverage. Recursion crosses an `await`; repeated asynchronous reopening is established, while the report's synchronous stack-overflow mechanism is not. |
+| Missing vocabulary guide dialog | Confirmed, including in pre-fork 1.8.0. Restored a small dialog displaying the existing guide endpoint and wired its Open Visual vocabulary action to the sidebar workspace. Both guide entry points and the return action are covered in Chromium. |
+| Stale guide navigation to removed editor dialog | Confirmed stale code; now targets the workspace. The formerly missing guide meant this handler was unreachable before the repair. |
+| Dark hover contrast on the new overflow button | Confirmed pale-on-pale colors. Added a dark background/light foreground hover rule; browser regression computes rendered contrast and requires at least 4.5:1. |
+| Overflow action lacks category context | Added a category-specific accessible name, checked in Chromium. |
+| Unapplied draft discarded on navigation/reopen | Preserved existing Apply/discard semantics, added visible workspace copy explaining them. A dirty indicator or draft-preservation change remains a separate UX decision; it is not silently enabled. |
+| Category tab roles | Pre-existing accessibility gap. Deferred to a complete keyboard/focus/tab-semantics implementation; adding roles alone would leave tab keyboard behavior incomplete. |
+| Narrow action bar wrapping | Review concern, not a demonstrated regression; no viewport measurement was supplied. Deferred responsive assessment rather than presenting it as a proven collision. |
+| Legacy dialog class names | Harmless CSS compatibility names retained to avoid unnecessary selector churn. |
+
+Antigravity made no tracked edits or test/render calls. Both requested helper reviews
+are now received and triaged. Validation is recorded in VERIFICATION.md.
+
+## October 19, 2026 — fork integration, head 1704454 (release 1.8.1)
+
+Reviewed isolated checkout `/tmp/mmv-fork-review-20261019` at exact revision
+`1704454c4d3f538866b1cb3eed72af5dfb74f0e5`, following last reviewed fork head
+`dc71556b5ef12876042ce0ab13fda5bcc5c9670f`. The intervening history includes our
+own releases through `47c745a` (1.8.0), merged by fork commit `889abc7`; the new
+contribution commits from hellonearthis are `50e7d59` and `1704454`.
+Compared their final tree against our current 1.8.0, rather than reapplying our releases.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Targeted vocabulary summary updates | Adopted: edit only the affected category card; cap summary chips at 20 with a link to the complete category tab. Browser regression checks that unrelated cards keep their DOM identity. |
+| Dedicated Visual vocabulary workspace | Adopted with fixes: the fork's `panel("vocab")` called `openVocabularyPanel()`, which unconditionally clicked the same navigation button, causing repeated asynchronous reopening and draft resets. Navigation now occurs only when the workspace is hidden; initialization does not navigate again. Restore the saved vocabulary and profile before opening the workspace. |
+| Three advanced production folds | Adopted with independent persistence: the fork saved whether any fold was open but restored only the first. Stable fold IDs and `details_sections` preserve each fold; old `details_open` drafts still restore. Updated moved-control browser selectors and actor navigation numbers. |
+| Windows Python UTF-8 mode | Adopted: `start.ps1` adds `-X utf8` to the application launch. No prompt files, scheme pins or protection tests changed. Windows execution remains unverified on this Linux host. |
+| Version and assertions | Adopted 1.8.1 once for this delivery; updated additional browser assertions missing from the fork and retained our release history. |
+
+Claude Code independently reviewed the in-repository fork diff and integration (CLI receipt:
+`claude-haiku-5-5`, read-only; no tests run by the helper). The coordinator triaged its
+additional findings against `47c745a`:
+
+| Additional review point | Disposition |
+| --- | --- |
+| Navigation silently swallows catalog-loading errors | Fixed: workspace navigation reports failures through the existing notice UI. |
+| Hidden quick bar/saved-key row allegedly overridden by flex CSS | Rejected with evidence: `style.css` already has global `[hidden]{display:none!important}`; the helper missed it. |
+| Random key retained after manual edits; randomization switches replace to append | Existing behavior in the original `buildPseudoRandomDraft`, category randomization and edit handlers, unchanged by these commits. Deferred to a separate vocabulary behavior change with reproduction tests; clarify whether the key describes the initial draw or the entire edited selection before changing its semantics. |
+| Empty category possible through checkboxes/Clear all | Existing UI validation gap; `mmv/pipeline.py:apply_vocabulary_overrides` rejects an empty final pool explicitly. Deferred: add consistent UI validation without changing the planner. |
+| Quick Reset clears manual customizations without confirmation | Existing handler and reset behavior, unchanged. Deferred: review wording/confirmation and preservation of manual additions as a separate usability fix. |
+| Duplicate counts and preset/custom layering | Existing counting and preset handlers; backend deduplicates final pools. Layering impact remains to be reproduced. Deferred: test effective pools and align displayed counts before changing behavior. |
+| Deleted preset selection not immediately saved | Existing delete handler, unchanged. Deferred: reproduce delete/reload and add a persistence regression test. |
+| Summary header keyboard access and legacy dialog branches | Existing header and compatibility branches; new overflow control is a native button that opens the complete tab. Deferred header accessibility cleanup; no removal of compatibility code in this integration. |
+
+Antigravity was assigned a separate read-only UI review via the local task board; no
+callable terminal connection was available and no report had arrived at validation time.
+That review was pending for 1.8.1; the completed follow-up is recorded above.
+
+No new renderer/model defaults, paid submissions, retry paths, OAP behavior or private assets
+are introduced by this delta. Agent/MCP operation continues through the existing vocabulary
+preset tools and preview fields; no new tool is needed for a web navigation/layout change.
+Validation is recorded in the delivery verification notes. No commit, push or publication
+is part of this integration.
+
+
 ## October 19, 2026 — contributor credit by history merge (owner-authorized exception)
 
 On the owner's instruction, the fork's 22 commits after the shared base `7f87f91`
