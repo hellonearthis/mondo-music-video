@@ -35,8 +35,13 @@ def music_score(store, run_id):
     score, plan = read_json(directory / "score.json"), read_json(directory / "plan.json")
     if not isinstance(score, dict) or not isinstance(plan, dict):
         raise ValueError("This video has no saved musical analysis")
-    fps = float(plan["fps"])
     offset = _opening_offset(store, read_json(directory / "request.json", {}))
+    return build_score(score, plan, offset=offset, title=output.get("title"), duration=output.get("duration"))
+
+
+def build_score(score, plan, *, offset=0.0, title=None, duration=None):
+    """The score structure from a saved or freshly prepared analysis and plan (both as dicts)."""
+    fps = float(plan["fps"])
     at = lambda frame: round(offset + frame / fps, 4)
     beats, downbeats = list(score["beat_frames"]), set(score["downbeat_frames"])
     beat_set = set(beats)
@@ -60,7 +65,7 @@ def music_score(store, run_id):
                          "grammar": name, "grammar_description": description,
                          "beats": sum(1 for b in beats if start <= b < end), "shots": shots})
 
-    return {"title": output.get("title"), "duration": output.get("duration"), "offset": offset,
+    return {"title": title, "duration": duration, "offset": offset,
             "song_end": at(plan["total_frames"]), "tempo_bpm": score.get("tempo_bpm"),
             "beats_per_bar": score.get("beats_per_bar"),
             "beats": [{"time": at(b), "downbeat": b in downbeats, "energy": e}

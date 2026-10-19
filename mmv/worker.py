@@ -566,6 +566,10 @@ def main():
         path=Path(sys.argv[3]); temp=path.with_suffix('.tmp')
         analyze(sys.argv[2],beats_per_bar=int(sys.argv[4])).to_json(temp)
         temp.replace(path)
+    elif sys.argv[1] == 'drive':
+        from .engine.analyze import ScoreMap
+        from .stems import driven_score
+        driven_score(ScoreMap.from_json(sys.argv[2]), sys.argv[3]).to_json(sys.argv[4])
     elif sys.argv[1] == 'produce':
         home,directory=Path(sys.argv[2]),Path(sys.argv[3])
         import signal

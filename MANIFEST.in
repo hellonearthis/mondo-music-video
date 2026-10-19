@@ -33,3 +33,5 @@ global-exclude removed-assets.json
 # Shared agent protocol is published; per-session state is not.
 include CLAUDE.md tools/ask_peer.py
 exclude docs/TEAM_STATUS.md
+
+recursive-include webapp/vendor *.js LICENSE

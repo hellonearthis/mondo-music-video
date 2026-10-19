@@ -1,4 +1,5 @@
 """Public boundary and complete mocked-renderer productions with real media assembly."""
+import shutil
 import hashlib
 import importlib.util
 import io
@@ -387,9 +388,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.11")
+        self.assertEqual(api_version()["version"], "1.6.12")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.11", (root / "README.md").read_text())
+        self.assertIn("1.6.12", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -717,6 +718,68 @@ class PublicAppTests(unittest.TestCase):
         response=self.client.post("/api/quote",json={"song":self.song_upload()})
         self.assertEqual(response.status_code,400)
         self.assertEqual(MockService.requests,[])
+
+    def test_preview_returns_editable_score_and_edits_change_the_plan(self):
+        self.store.save_key("WAVESPEED_API_KEY","mock-only-key")
+        image=self.client.post("/api/upload/reference",files={"file":("ref.png",picture())}).json()["file"]
+        song=self.song_upload()
+        base={"song":song,"backend":"wavespeed","resolution":"768p","references":[image]}
+        plain=self.client.post("/api/quote",json=base)
+        plain.raise_for_status()
+        score=plain.json()["score"]
+        self.assertTrue(score["beats"] and score["passages"] and "tempo_bpm" in score)
+        edited=self.client.post("/api/quote",json={**base,"score_edits":{"bar_one_beat":1,"beat_nudge_ms":50,"muted_beats":[0]}})
+        edited.raise_for_status()
+        self.assertNotEqual(plain.json()["id"],edited.json()["id"])
+        self.assertEqual(len(edited.json()["score"]["beats"]),len(score["beats"])-1)
+        invalid=self.client.post("/api/quote",json={**base,"score_edits":{"muted_beats":[99999]}})
+        self.assertEqual(invalid.status_code,400)
+        self.assertEqual(self.client.post("/api/quote",json={**base,"score_edits":{"beat_nudge_ms":9999}}).status_code,422)
+        self.assertEqual(self.client.post("/api/quote",json={**base,"score_edits":{"unknown":1}}).status_code,422)
+        peaks=self.client.get("/api/waveform",params={"song":song})
+        peaks.raise_for_status()
+        self.assertTrue(peaks.json()["peaks"])
+        self.assertNotEqual(self.client.get("/api/waveform",params={"song":"../../etc/passwd"}).status_code,200)
+
+    def test_instrument_driver_needs_the_addon_and_model_then_drives_energy(self):
+        from mmv import stems
+        self.store.save_key("WAVESPEED_API_KEY","mock-only-key")
+        image=self.client.post("/api/upload/reference",files={"file":("ref.png",picture())}).json()["file"]
+        song=self.song_upload()
+        base={"song":song,"backend":"wavespeed","resolution":"768p","references":[image]}
+        report=self.client.get("/api/stems").json()
+        self.assertIn("install_command",report)
+        self.assertFalse(any(model["ready"] for model in report["models"].values()))
+        with patch.object(stems,"installed",return_value=False):
+            missing=self.client.post("/api/quote",json={**base,"analysis_driver":"drums"})
+            self.assertEqual(missing.status_code,400)
+            self.assertIn("Demucs add-on",missing.json()["detail"])
+        with patch.object(stems,"installed",return_value=True):
+            self.assertIn("stem model first",self.client.post("/api/quote",json={**base,"analysis_driver":"drums"}).json()["detail"])
+            self.assertEqual(self.client.post("/api/stems/prepare",json={"model":"htdemucs"}).status_code,400)
+            self.assertEqual(MockService.requests,[])
+            calls=[]
+            def fake_prepare(store,model,context):
+                calls.append(model)
+                (store.home/"analysis"/"stems").mkdir(parents=True,exist_ok=True)
+                write_json(store.home/"analysis"/"stems"/(model+".ready"),{"model":model})
+                return {"model":model}
+            with patch.object(stems,"prepare_model",side_effect=fake_prepare):
+                self.client.post("/api/stems/prepare",json={"model":"htdemucs","consent":True}).raise_for_status()
+                self.wait()
+            self.assertEqual(calls,["htdemucs"])
+            self.assertTrue(self.client.get("/api/stems").json()["models"]["htdemucs"]["ready"])
+            def fake_separate(store,path,digest,model):
+                folder=store.home/"analysis"/"stems"/"fake"
+                folder.mkdir(parents=True,exist_ok=True)
+                for stem in stems.MODELS[model]:
+                    shutil.copy(path,folder/(stem+".wav"))
+                return folder
+            with patch.object(stems,"separate",side_effect=fake_separate):
+                driven=self.client.post("/api/quote",json={**base,"analysis_driver":"drums"})
+                driven.raise_for_status()
+                self.assertTrue(driven.json()["score"]["beats"])
+                self.assertEqual(self.client.post("/api/quote",json={**base,"analysis_driver":"banjo"}).status_code,422)
 
     def test_hosted_original_adapters_and_consent(self):
         self.store.save_key("WAVESPEED_API_KEY","mock-only-key")

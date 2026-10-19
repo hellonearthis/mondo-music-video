@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -49,6 +49,15 @@ def create_server(base_url=None):
         H3 needs comfy_launch and ComfyUI closed so Mondo can manage its own
         process. Read output quality_warnings for skipped/failed checks. One
         shared free local retry per passage; paid re-renders require consent.
+
+        Video previews return `score` (beats, energy, planned cuts) and `detected`
+        (the unedited analysis). To correct the analysis, pass `score_edits`
+        {bar_one_beat, beat_nudge_ms, muted_beats, sections:[{start, label}]} and
+        preview again; edits are free and change the plan and quote.
+        `analysis_driver` (mix, drums, bass, vocals, other, guitar, piano) makes
+        one instrument drive the energy; it needs the optional Demucs add-on and a
+        one-time model download that only the user approves in the app (see
+        inspect_studio kind "stems"). The first separation of a song takes minutes.
         """
         return invoke(client.preview, request)
 

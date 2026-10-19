@@ -232,6 +232,13 @@ def prepare(store, request):
             if result.returncode:
                 raise ValueError('Original song analysis failed: ' + result.stderr[-1500:])
         score = ScoreMap.from_json(score_path)
+        from .score_edit import apply_score_edits, detected_view
+        driver = request.get('analysis_driver') or 'mix'
+        if driver != 'mix':
+            from .stems import drive_score
+            score = drive_score(store, song, score_path, digest, driver)
+        detected = detected_view(score)
+        score = apply_score_edits(score, request.get('score_edits'))
         for key in ('start_ident', 'end_ident'):
             if request.get(key):
                 try:
@@ -242,6 +249,7 @@ def prepare(store, request):
                 if not p.is_file() or record.get('kind') != 'ident' or record.get('file') != p.name:
                     raise ValueError('Choose a completed ident')
     else:
+        detected = None
         seconds = request['ident_seconds']
         score = ScoreMap('ident', round(seconds * 24), 22050, 0, 4, sections=[Section(0, round(seconds * 24), 0, .2, 'low')])
     aspect_w, aspect_h = map(int, request['aspect'].split(':'))
@@ -254,6 +262,11 @@ def prepare(store, request):
              cast_size=len(roster), on_screen=request['on_screen'], ensemble_mode=request['ensemble_mode'], backend=backend)
     if not p.segments:
         raise ValueError('The original planner produced no musical segments for this track')
+    if kind == 'video':
+        from .score_edit import check_plan_coverage, is_empty
+        if not is_empty(request.get('score_edits')):
+            check_plan_coverage([{'song_start_frame': s.song_start_frame, 'trim_frames': s.trim_frames}
+                                 for s in p.segments], score.duration_frames)
     for s in p.segments:
         if s.gen_frames > backend.max_gen_frames:
             raise ValueError('A detected passage exceeds the renderer limit; the original planner cannot fit this track')
@@ -267,7 +280,7 @@ def prepare(store, request):
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0
     return {'settings': settings, 'segments': [asdict(s) for s in p.segments], 'plan': asdict(p), 'score': asdict(score),
-            'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
+            'detected': detected, 'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
             'seconds': score.duration_seconds, 'estimate': round(render_cost + writer_cost, 4),
             'render_estimate': render_cost, 'writer_estimate': writer_cost,
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),

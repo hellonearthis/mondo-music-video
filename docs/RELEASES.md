@@ -1,5 +1,41 @@
 # Releases
 
+## 1.6.12 — Edit the score before generating, and follow an instrument
+
+"Watch the song conduct" now happens before generation. Idea from a musician friend
+of the owner; designed with Codex (read-only design review, `docs/SCORE_EDITOR_DESIGN.md`).
+
+- **Score editor in Preview production**: a waveform (wavesurfer.js 7.10.1, vendored,
+  BSD-3-Clause), the detected beat grid, energy curve and planned cuts, playback, and
+  edits that cost nothing: shift the grid, choose which beat starts a bar, mute beats
+  as cut candidates, and drag, split, merge and relabel sections. Press Re-plan to
+  rebuild the cuts and cost; Start production stays disabled while edits are unplanned.
+- **`score_edits` request field** (also for agents): applied to a copy of the cached
+  analysis between analysis and planning, validated and quantized to frames. The
+  original engine sources and the analysis cache are unchanged; edits enter the quote
+  fingerprint, `request.json` and the approved `prepared.json` that resume replays.
+  Previews now return `score` and `detected` (the unedited analysis), and
+  `GET /api/waveform` returns bounded peaks computed with ffmpeg.
+- **Instrument driver (optional add-on)**: `analysis_driver` (mix, drums, bass, vocals,
+  other, guitar, piano) takes per-beat energy and section ranking from one stem while
+  the beat grid stays from the whole mix. It needs the optional Demucs add-on (MIT,
+  `pip install demucs`) and a one-time model download that is never automatic: it is
+  approved with a checkbox in the editor (`POST /api/stems/prepare`). Separation runs in
+  a subprocess, is cached per song and model, uses the GPU only if about 6 GB is free,
+  and the stems are analysis input only; the video keeps the original audio.
+  `inspect_studio` kind `stems` reports availability.
+- **Limits**: the driver changes energy (cut density, camera, scale, montage style), not
+  where cuts land; following an off-beat attack would need engine changes. Muted beats
+  are not cut candidates but still count in bar counting. Hearing a single stem in the
+  editor and a stem waveform are not built yet.
+- Defaults unchanged: no edits and driver `mix` plan exactly as before.
+- **Review fixes (Codex, read-only)**: edited section boundaries just after a downbeat could
+  make the planner silently drop a sliver of the song (shifting picture against music), so
+  edited plans must now cover the song contiguously or the preview is rejected with a plain
+  message, and the editor snaps section edges to downbeats; beat 0 is now a valid bar-one
+  choice; bar phase follows each beat's original index when a nudge drops edge beats. The
+  editor also shows the first section at 0 s like the planner. Each has a regression test.
+
 ## 1.6.11 — Pseudo-random vocabulary keys
 
 Integrates hellonearthis's fork commit `dc71556` (fork 1.6.11). Credit: hellonearthis.

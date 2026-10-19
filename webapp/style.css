@@ -437,3 +437,23 @@ button[aria-busy="true"], button.processing {
   color: #ff9a9a;
 }
 
+
+#preview-dialog:has(.score-editor:not([hidden])){width:min(960px,96vw)!important;max-width:96vw!important;max-height:94vh;overflow:auto}
+.score-editor{margin:12px 0;--score-accent:#c2711d}[data-theme=dark] .score-editor{--score-accent:#f0a24e}
+.score-editor-box summary{font-weight:600;margin-bottom:8px}
+.se-wave{min-height:96px;margin:8px 0 2px;border-radius:4px;overflow:hidden}
+.se-strip{display:block;width:100%;height:84px;cursor:pointer;border-radius:4px;touch-action:none}
+.se-strip:focus-visible{outline:2px solid var(--score-accent);outline-offset:3px}
+.se-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 0}
+.se-clock{font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
+.se-nudge{display:flex;align-items:center;gap:6px;font-size:12px}.se-nudge-label{min-width:60px;font-variant-numeric:tabular-nums}
+.se-status{font-size:12px;min-height:1.4em;margin:4px 0 10px}
+.score-editor button.attention{box-shadow:0 0 0 3px var(--score-accent)}
+.score-editor button:disabled{opacity:.5;cursor:not-allowed}
+.se-sections{display:grid;gap:6px;margin:6px 0}.se-section-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:12px}
+.se-section-time{min-width:90px;font-variant-numeric:tabular-nums}.se-section-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:6px;font-size:12px}
+.se-section-row select{width:auto;min-width:96px}.se-nudge{white-space:nowrap}.se-nudge input{width:180px}
+.se-wave ::part(region-content),.se-wave [part~=region-content]{font-size:12px;padding:2px 6px;pointer-events:none}
+.se-driver{margin:14px 0 6px;padding:10px 0;border-top:1px solid var(--line)}.se-driver-label{font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.se-driver select{width:auto;min-width:240px}.se-driver-note{font-size:12px;line-height:1.5;margin:6px 0}
+.se-setup-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:6px 0;font-size:12px}

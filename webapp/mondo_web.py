@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.11"
+MGL_APP_VERSION = "1.6.12"
 WEB = Path(__file__).parent
 
 
@@ -191,6 +191,23 @@ class VocabularyRequest(StrictModel):
         return value
 
 
+class ScoreSectionEdit(StrictModel):
+    start: float = Field(ge=0, le=36000)
+    label: Literal["low", "mid", "high", "peak"]
+
+
+class ScoreEdits(StrictModel):
+    bar_one_beat: int | None = Field(default=None, ge=0, le=100000)
+    beat_nudge_ms: int = Field(default=0, ge=-250, le=250)
+    muted_beats: list[int] = Field(default_factory=list, max_length=2000)
+    sections: list[ScoreSectionEdit] = Field(default_factory=list, max_length=64)
+
+
+class StemsPrepareRequest(StrictModel):
+    model: Literal["htdemucs", "htdemucs_6s"] = "htdemucs"
+    consent: bool = False
+
+
 class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
@@ -221,6 +238,8 @@ class ProductionRequest(StrictModel):
     reuse_prompts: bool = True
     vision_quality_check: bool = False
     compact_prompts: bool = False
+    score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
+    analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
 
@@ -434,6 +453,13 @@ def create_app(home=None, *, test_hosts=False):
         if not path.is_file() or path.suffix != ".js":
             raise ValueError("Module not found")
         return FileResponse(path, media_type="text/javascript")
+
+    @app.get("/vendor/{asset_path:path}")
+    def vendor_asset(asset_path: str):
+        path = inside(WEB / "vendor", asset_path)
+        if not path.is_file() or path.suffix not in (".js", "") or (path.suffix == "" and path.name != "LICENSE"):
+            raise ValueError("Asset not found")
+        return FileResponse(path, media_type="text/javascript" if path.suffix == ".js" else "text/plain")
 
     @app.get("/style.css")
     def css():
@@ -944,10 +970,29 @@ def create_app(home=None, *, test_hosts=False):
             return {"id": quote_id, "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
+                    "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
+                    "detected": prepared.get("detected"),
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
+
+    @app.get("/api/stems")
+    def stems_status():
+        from mmv import stems
+        return stems.status(store)
+
+    @app.post("/api/stems/prepare")
+    def stems_prepare(value: StemsPrepareRequest):
+        from mmv import stems
+        if value.consent is not True:
+            raise ValueError("Approve the one-time stem model download first")
+        return jobs.start("stems", lambda context: stems.prepare_model(store, value.model, context))
+
+    @app.get("/api/waveform")
+    def waveform(song: str):
+        from mmv.waveform import waveform_peaks
+        return waveform_peaks(inside(store.home / "uploads", song))
 
     @app.post("/api/resume/quote")
     def resume_quote(value: ResumeRequest):

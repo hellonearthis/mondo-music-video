@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.11')
+                expect(page.locator('#version')).to_have_text('1.6.12')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -295,6 +295,62 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_score_editor_edits_beats_and_sections_and_gates_start(self):
+        import json
+        from playwright.sync_api import sync_playwright, expect
+        name = self.fixture.client.post('/api/upload/song', files={'file': ('test.wav', self.song.read_bytes(), 'audio/wav')}).json()['file']
+        beats = [{'time': round(0.5 * i, 3), 'downbeat': i % 4 == 1} for i in range(1, 17)]
+        detected = {'duration': 8.5, 'tempo_bpm': 120, 'beats_per_bar': 4, 'beats': beats,
+                    'sections': [{'start': 0, 'end': 4, 'label': 'low', 'energy': .2}, {'start': 4, 'end': 8.5, 'label': 'high', 'energy': .8}]}
+        score = {'beats': [{'time': b['time'], 'energy': .5} for b in beats],
+                 'passages': [{'start': 0, 'end': 4, 'shots': [{'start': 0}, {'start': 2}]}, {'start': 4, 'end': 8.5, 'shots': [{'start': 4}]}]}
+        quote = {'detected': detected, 'score': score}
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
+                    window.__dirty = []; window.__replans = []; window.__drivers = [];
+                    const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
+                    return m.mountScoreEditor(host, {kind: 'video', song: name}, quote, {
+                        onDirty: d => window.__dirty.push(d), onReplan: async (e, d) => { window.__replans.push(e); window.__drivers.push(d); }});
+                })""", [name, quote])
+                strip = page.locator('#test-editor .se-strip')
+                expect(strip).to_be_visible()
+                expect(page.locator('#test-editor .se-status')).to_contain_text('matches what you see')
+                expect(page.locator('#test-editor .se-section-row')).to_have_count(2)
+                strip.focus()
+                page.keyboard.press('ArrowRight')
+                page.keyboard.press('ArrowRight')
+                page.keyboard.press('m')
+                page.keyboard.press('b')
+                page.locator('#test-editor input[type=range]').fill('50')
+                expect(page.locator('#test-editor .se-status')).to_contain_text('not planned yet')
+                self.assertTrue(page.evaluate('window.__dirty.at(-1)'))
+                page.locator('#test-editor .se-section-row select').first.select_option('peak')
+                expect(page.locator('#test-editor .se-driver-note')).to_contain_text('pip install demucs')
+                self.assertTrue(page.evaluate('document.querySelector("#test-editor .se-driver option[value=drums]").disabled'))
+                self.assertFalse(page.evaluate('document.querySelector("#test-editor .se-driver option[value=mix]").disabled'))
+                page.locator('#test-editor button.primary').click()
+                page.wait_for_function('window.__replans.length === 1')
+                edits = page.evaluate('window.__replans[0]')
+                self.assertEqual(page.evaluate('window.__drivers[0]'), 'mix')
+                self.assertEqual(edits['muted_beats'], [1])
+                self.assertEqual(edits['bar_one_beat'], 1)
+                self.assertEqual(edits['beat_nudge_ms'], 50)
+                self.assertEqual(edits['sections'], [{'start': 0, 'label': 'peak'}, {'start': 4, 'label': 'high'}])
+                page.locator('#test-editor button:has-text("Reset edits")').click()
+                expect(page.locator('#test-editor .se-status')).to_contain_text('matches what you see')
+                self.assertFalse(page.evaluate('window.__dirty.at(-1)'))
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_saved_custom_vocabulary_preset_survives_reload(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.client.post('/api/vocabularies', json={
@@ -361,7 +417,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.11')
+                expect(page.locator('#version')).to_have_text('1.6.12')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

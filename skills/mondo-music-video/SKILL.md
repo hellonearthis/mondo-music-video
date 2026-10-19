@@ -77,6 +77,15 @@ preset id; `custom_vocabulary` adds or removes entries per category for one vide
 Use `inspect_studio` kind `vocabularies` first. Saving a preset is free; deleting one
 needs the user's authorization (`confirm`).
 
+Video previews include `score` (beats, energy, planned cuts) and `detected` (the
+unedited beat grid and sections). If the grid looks wrong, preview again with
+`score_edits` (`bar_one_beat`, `beat_nudge_ms`, `muted_beats`, `sections` as
+`{start, label}` with labels low/mid/high/peak); this is free and replaces the quote.
+`analysis_driver` (`mix` default, or `drums`, `bass`, `vocals`, `other`, `guitar`,
+`piano`) lets one instrument drive energy. It needs the optional Demucs add-on and
+a one-time model download; check `inspect_studio` kind `stems`, and have the user
+approve the download in the app's score editor (never start it for them).
+
 For the optional slower batched vision check, set `vision_quality_check: true`
 in the video preview request (default `false`). Explain the extra model loading
 and judging time. It needs a local vision-capable `writer_launch` with mmproj;

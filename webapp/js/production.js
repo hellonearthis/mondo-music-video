@@ -1,6 +1,7 @@
 // Production quote/preview, operation controls, live AI service dock, SSE stream, and update status.
 
 import { $, $$, api, copyToClipboard, handle, json, logSession, notice, state, text, updateLogDisplay, upload } from "./core.js";
+import { disposeScoreEditor, mountScoreEditor } from "./score_editor.js";
 import { loadActors, loadStyles } from "./library.js";
 import { loadOutputs } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
@@ -67,6 +68,7 @@ export async function preview(form) {
 
   try {
     logSession(`Preview requested for kind='${request.kind}' backend='${request.backend}'`);
+    state.lastRequest = request;
     state.currentQuote = await json("/api/quote", request);
     logSession(`Preview ready: quote_id='${state.currentQuote.id}' estimate=$${Number(state.currentQuote.estimate_usd).toFixed(2)}`);
     if ($("#notice") && $("#notice").textContent === noticeMsg) {
@@ -105,7 +107,28 @@ export function showQuote(request, quote) {
     }
   }
   $("#consent").checked = false;
-  $("#preview-dialog").showModal();
+  const dialog = $("#preview-dialog");
+  if (!dialog.dataset.scoreEditorBound) {
+    dialog.dataset.scoreEditorBound = "1";
+    dialog.addEventListener("close", disposeScoreEditor);
+  }
+  dialog.showModal();
+  mountScoreEditor($("#score-editor"), request, quote, {
+    onReplan: async (edits, driver) => {
+      const next = { ...request, score_edits: edits, analysis_driver: driver || "mix" };
+      state.lastRequest = next;
+      const replanned = await json("/api/quote", next);
+      logSession(`Re-planned with score edits: quote_id='${replanned.id}'`);
+      showQuote(next, replanned);
+    },
+    onDirty: dirty => {
+      const start = $("#start-production");
+      if (start) {
+        start.disabled = dirty;
+        start.title = dirty ? "Re-plan first: your score edits are not in the plan yet" : "";
+      }
+    }
+  }).catch(error => notice(error.message));
 }
 
 export function renderServices(services) {

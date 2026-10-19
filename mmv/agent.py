@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "outputs", "settings", "update", "agreements"):
+        if kind not in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "outputs", "settings", "update", "agreements"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -253,7 +253,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "outputs", "settings", "update", "agreements", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "agreement"))
