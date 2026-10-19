@@ -20,6 +20,14 @@ const GRAMMAR_CLASSES = {
 let pendingExportRun = null;
 let pendingDeleteRun = null;
 
+const escapeHtml = (s = "") =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 function showDeleteDialog(output) {
   const dialog = $("#delete-video-dialog");
   if (!dialog) return;
@@ -155,7 +163,6 @@ function exportButton(output) {
   });
   return button;
 }
-
 
 export function scoreView(output, video) {
   const box = text("details", "", "score-view");
@@ -340,7 +347,6 @@ export async function loadOutputs() {
       $("#upscale-dialog").showModal();
     };
 
-    const runId = output.file.split("/")[0];
     const deleteBtn = text("button", "Delete", "delete-btn", `Delete ${output.title} from studio`);
     deleteBtn.onclick = () => showDeleteDialog(output);
 
@@ -363,8 +369,6 @@ export async function loadOutputs() {
     return card;
   }));
 
-
-
   if (!outputs.length) {
     $("#output-list").append(text("div", "Your finished videos and idents will appear here.", "empty", "No completed productions yet"));
   }
@@ -382,6 +386,34 @@ export async function loadOutputs() {
   await loadUnfinishedRuns();
 }
 
+// --- Pure Template Generator for Unfinished Runs ---
+
+const unfinishedRunRowHtml = (run) => {
+  const escId = escapeHtml(run.id);
+  const escTitle = escapeHtml(run.title);
+  const passages = run.segments ? `${run.validated_prompts}/${run.segments}` : "—";
+  const statusHtml = run.can_finish
+    ? '<span style="color:#16a34a;font-weight:600;">Ready to finish</span>'
+    : '<span class="muted">Draft / Partial</span>';
+  const finishBtn = run.can_finish
+    ? `<button type="button" class="secondary" data-action="finish-run" style="padding:4px 8px;font-size:11px;margin-right:8px;" title="Resume generation for ${escTitle}">Finish / Resume</button>`
+    : "";
+
+  return `
+    <tr data-id="${escId}" data-title="${escTitle}" data-size="${run.size_mb}" style="border-bottom:1px solid var(--line);">
+      <td style="padding:8px;font-weight:600;">${escTitle}</td>
+      <td style="padding:8px;" class="muted">${escapeHtml(run.created_str)}</td>
+      <td style="padding:8px;">${passages}</td>
+      <td style="padding:8px;">${statusHtml}</td>
+      <td style="padding:8px;" class="muted">${run.size_mb} MB</td>
+      <td style="padding:8px;text-align:right;">
+        ${finishBtn}
+        <button type="button" class="delete-btn" data-action="purge-run" style="padding:4px 8px;font-size:11px;" title="Delete draft ${escTitle}">Purge</button>
+      </td>
+    </tr>
+  `;
+};
+
 export async function loadUnfinishedRuns() {
   const tbody = $("#unfinished-runs-list");
   const countBadge = $("#unfinished-count");
@@ -389,101 +421,53 @@ export async function loadUnfinishedRuns() {
   try {
     const list = await (await api("/api/runs/unfinished")).json();
     if (countBadge) countBadge.textContent = String(list.length);
-    tbody.replaceChildren();
 
     if (!list.length) {
-      const emptyRow = document.createElement("tr");
-      const emptyCell = document.createElement("td");
-      emptyCell.colSpan = 6;
-      emptyCell.className = "muted";
-      emptyCell.style.padding = "16px 8px";
-      emptyCell.style.textAlign = "center";
-      emptyCell.textContent = "No unfinished drafts or interrupted renders found.";
-      emptyRow.append(emptyCell);
-      tbody.append(emptyRow);
+      tbody.innerHTML = '<tr><td colspan="6" class="muted" style="padding:16px 8px;text-align:center;">No unfinished drafts or interrupted renders found.</td></tr>';
       return;
     }
 
-    list.forEach(run => {
-      const row = document.createElement("tr");
-      row.style.borderBottom = "1px solid var(--line)";
-
-      // Title
-      const titleTd = document.createElement("td");
-      titleTd.style.padding = "8px";
-      titleTd.style.fontWeight = "600";
-      titleTd.textContent = run.title;
-
-      // Date
-      const dateTd = document.createElement("td");
-      dateTd.style.padding = "8px";
-      dateTd.className = "muted";
-      dateTd.textContent = run.created_str;
-
-      // Passages
-      const passTd = document.createElement("td");
-      passTd.style.padding = "8px";
-      passTd.textContent = run.segments ? `${run.validated_prompts}/${run.segments}` : "—";
-
-      // Status
-      const statusTd = document.createElement("td");
-      statusTd.style.padding = "8px";
-      if (run.can_finish) {
-        statusTd.innerHTML = '<span style="color:#16a34a;font-weight:600;">Ready to finish</span>';
-      } else {
-        statusTd.innerHTML = '<span class="muted">Draft / Partial</span>';
-      }
-
-      // Size
-      const sizeTd = document.createElement("td");
-      sizeTd.style.padding = "8px";
-      sizeTd.className = "muted";
-      sizeTd.textContent = `${run.size_mb} MB`;
-
-      // Actions
-      const actionsTd = document.createElement("td");
-      actionsTd.style.padding = "8px";
-      actionsTd.style.textAlign = "right";
-
-      if (run.can_finish) {
-        const finishBtn = text("button", "Finish / Resume", "secondary", `Resume generation for ${run.title}`);
-        finishBtn.style.padding = "4px 8px";
-        finishBtn.style.fontSize = "11px";
-        finishBtn.style.marginRight = "8px";
-        finishBtn.onclick = handle(async () => {
-          notice("Loading resume preview...");
-          const quote = await json("/api/resume/quote", { run_id: run.id });
-          notice("");
-          showQuote({ kind: quote.kind }, quote);
-        });
-        actionsTd.append(finishBtn);
-      }
-
-      const delBtn = text("button", "Purge", "delete-btn", `Delete draft ${run.title}`);
-      delBtn.style.padding = "4px 8px";
-      delBtn.style.fontSize = "11px";
-      delBtn.onclick = handle(async () => {
-        if (!window.confirm(`Purge draft "${run.title}" (${run.size_mb} MB)? This cannot be undone.`)) return;
-        delBtn.disabled = true;
-        try {
-          await api(`/api/runs/unfinished/${encodeURIComponent(run.id)}`, { method: "DELETE" });
-          notice(`Purged draft "${run.title}".`);
-          await loadUnfinishedRuns();
-        } finally {
-          delBtn.disabled = false;
-        }
-      });
-      actionsTd.append(delBtn);
-
-      row.append(titleTd, dateTd, passTd, statusTd, sizeTd, actionsTd);
-      tbody.append(row);
-    });
+    tbody.innerHTML = list.map(unfinishedRunRowHtml).join("");
   } catch (err) {
     console.error("Failed to load unfinished runs:", err);
   }
+}
+
+// Single delegated click listeners initialized once
+function setupOutputsDelegatedHandlers() {
+  const tbody = $("#unfinished-runs-list");
+  if (tbody && !tbody._hasDelegatedActions) {
+    tbody._hasDelegatedActions = true;
+    tbody.addEventListener("click", handle(async (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const row = btn.closest("tr[data-id]");
+      if (!row) return;
+      const { id, title, size } = row.dataset;
+      const action = btn.dataset.action;
+
+      if (action === "finish-run") {
+        notice("Loading resume preview...");
+        const quote = await json("/api/resume/quote", { run_id: id });
+        notice("");
+        showQuote({ kind: quote.kind }, quote);
+      } else if (action === "purge-run") {
+        if (!window.confirm(`Purge draft "${title}" (${size} MB)? This cannot be undone.`)) return;
+        btn.disabled = true;
+        try {
+          await api(`/api/runs/unfinished/${encodeURIComponent(id)}`, { method: "DELETE" });
+          notice(`Purged draft "${title}".`);
+          await loadUnfinishedRuns();
+        } finally {
+          btn.disabled = false;
+        }
+      }
+    }));
+  }
 
   const purgeAllBtn = $("#purge-all-unfinished-btn");
-  if (purgeAllBtn) {
+  if (purgeAllBtn && !purgeAllBtn._hasClickAction) {
+    purgeAllBtn._hasClickAction = true;
     purgeAllBtn.onclick = handle(async (e) => {
       e.stopPropagation();
       if (!window.confirm("Purge ALL unfinished drafts and interrupted runs? Completed music videos will NOT be touched.")) return;
@@ -500,6 +484,7 @@ export async function loadUnfinishedRuns() {
 }
 
 export function initUpscaleForm() {
+  setupOutputsDelegatedHandlers();
   $("#upscale-form").onsubmit = handle(async event => {
     const body = Object.fromEntries(new FormData(event.target));
     body.scale = Number(body.scale);
@@ -507,4 +492,3 @@ export function initUpscaleForm() {
     $("#upscale-dialog").close();
   });
 }
-
