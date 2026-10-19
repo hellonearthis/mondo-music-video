@@ -80,6 +80,7 @@ export function getProjectState() {
     forms,
     files,
     custom_vocabulary: state.currentCustomVocab,
+    vocab_random_key: state.currentVocabRandomKey || "",
     details_open: Boolean($("#video-form details")?.open),
     log_open: Boolean($("#operation-log") && !$("#operation-log").hidden)
   };
@@ -120,6 +121,9 @@ export async function restoreProject() {
     $("#operation-log").hidden = false;
     $("#show-log").textContent = "Hide log";
     updateLogDisplay();
+  }
+  if (saved.vocab_random_key) {
+    state.currentVocabRandomKey = String(saved.vocab_random_key);
   }
   if (saved.custom_vocabulary && typeof saved.custom_vocabulary === "object") {
     state.currentCustomVocab = saved.custom_vocabulary;

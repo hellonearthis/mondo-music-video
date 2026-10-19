@@ -11,6 +11,7 @@ export const state = {
   currentRun: null,
   upscaleSource: null,
   currentCustomVocab: {},
+  currentVocabRandomKey: "",
   formFiles: new WeakMap(),
   sessionLogs: []
 };
