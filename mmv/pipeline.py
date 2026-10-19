@@ -173,6 +173,10 @@ def prepare(store, request):
         if not _model_dir_staged(Path(settings['laya_model_dir']).expanduser()):
             raise ValueError('Configure your Laya model folder in Settings before music-video production')
     backend = get_backend(request['backend'])
+    clip_quality = request.get('clip_quality') or 'standard'
+    if clip_quality != 'standard' and (request['backend'] != 'comfy_sdk_h3' or kind != 'video'):
+        raise ValueError('Studio-quality raw clips are available for music videos on the Comfy SDK renderer only. '
+                         'Choose Standard, or switch the renderer.')
     refs, descriptions = references(store, request)
     if request['backend'] not in ('local_h3', 'comfy_sdk_h3') and not store.key():
         raise ValueError('Configure your WaveSpeed API key in Settings')
@@ -190,7 +194,13 @@ def prepare(store, request):
         require_sdk()
         validate_proxy_url(settings['comfy_sdk_url'])
         from .engine.comfy import WorkflowBuilder
-        WorkflowBuilder.load(settings['workflow_map_path'], ENGINE)
+        builder = WorkflowBuilder.load(settings['workflow_map_path'], ENGINE)
+        if clip_quality != 'standard':
+            from .comfy_sdk import studio_node_id
+            node = builder.base.get(studio_node_id(builder.map) or '')
+            if not node or node.get('class_type') != 'VHS_VideoCombine':
+                raise ValueError('Studio-quality clips need the workflow\'s VideoHelperSuite save node (VHS_VideoCombine); '
+                                 'the active workflow has none. Choose Standard.')
         check_proxy(settings['comfy_sdk_url'], store.key('MMV_COMFY_API_KEY'))
     if kind == 'video' and request.get('vision_quality_check'):
         from .runtime import http_ok

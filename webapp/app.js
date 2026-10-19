@@ -8,6 +8,7 @@ import {
   initOperationControls,
   initProductionForms,
   loadUpdateStatus,
+  loadSchemeNotice,
   refreshServices,
   setupEventStream
 } from "./js/production.js";
@@ -56,6 +57,7 @@ async function initialize() {
   setupLlamaGuide();
   setupVocabGuide();
   loadUpdateStatus();
+  loadSchemeNotice();
 
   state.catalog = await (await api("/api/catalog")).json();
   const version = await (await api("/api/version")).json();

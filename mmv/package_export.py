@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import time
 
+from . import protected_scheme
 from .starter_assets import ACTORS as PUBLIC_ACTORS
 from .storage import identifier, inside
 
@@ -274,7 +275,8 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
 
     for p in pas:
         raw, work = run / 'renders' / p['id'], run / 'assembly' / 'work'
-        pack.put(recorded(p['id'], 'video', raw / 'video.mp4'), f'02_raw_clips/{label[p["id"]]}_raw.mp4')
+        source = recorded(p['id'], 'video', raw / 'video.mp4')
+        pack.put(source, f'02_raw_clips/{label[p["id"]]}_raw{source.suffix.lower() if source.suffix else ".mp4"}')
         audio = pack.put(recorded(p['id'], 'audio', raw / 'audio.wav'), f'02_raw_clips/{label[p["id"]]}_raw_audio.wav')
         if audio and editor_wav(audio, audio.with_suffix('.pcm.tmp.wav')):
             audio.with_suffix('.pcm.tmp.wav').replace(audio)           # same name, now a real PCM WAV
@@ -338,15 +340,27 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
             if sheet:
                 pack.put(sheet, f'07_actor_references/{actor_id}{sheet.suffix}')
 
-    # 08_timeline: an EDL that places the trimmed passage clips on the song clock
-    clips = [(f'{label[p["id"]]}_trimmed_for_edit.mp4', p['start_frame'], p['frames']) for p in pas
-             if (out / '02_raw_clips' / f'{label[p["id"]]}_trimmed_for_edit.mp4').is_file()]
+    # Studio-quality raw clips (ProRes / FFV1, both intra-coded) are cut to the exact passage length without re-encoding.
+    studio = {}
+    ffmpeg_bin = shutil.which('ffmpeg')
+    for p in pas:
+        raw_clip = next(iter(sorted((out / '02_raw_clips').glob(f'{label[p["id"]]}_raw.*'))), None)
+        video, _ = probe(raw_clip) if raw_clip and raw_clip.suffix.lower() in ('.mov', '.mkv') else (None, None)
+        if ffmpeg_bin and video and video.get('codec_name') in ('prores', 'ffv1') and p['frames']:
+            target = out / '02_raw_clips' / f'{label[p["id"]]}_studio_trimmed{raw_clip.suffix.lower()}'
+            done = subprocess.run([ffmpeg_bin, '-y', '-v', 'error', '-i', str(raw_clip), '-t', f'{p["frames"] / p["fps"]:.6f}',
+                                   '-c', 'copy', str(target)], capture_output=True, timeout=600)
+            if done.returncode == 0 and target.is_file():
+                studio[p['id']] = target.name
+    # 08_timeline: an EDL that places the trimmed passage clips on the song clock (studio copies when they exist)
+    clips = [(studio.get(p['id']) or f'{label[p["id"]]}_trimmed_for_edit.mp4', p['start_frame'], p['frames']) for p in pas
+             if p['id'] in studio or (out / '02_raw_clips' / f'{label[p["id"]]}_trimmed_for_edit.mp4').is_file()]
     if clips and song_target is not None and pas:
         fps = pas[0]['fps']
         total = (read_json(run / 'plan.json') or {}).get('total_frames') or max(s + f for _, s, f in clips)
         slug = re.sub(r'[^A-Za-z0-9]+', '_', request.get('title') or run.name).strip('_')[:40] or 'production'
         pack.write(f'08_timeline/{slug}.edl', edl(request.get('title') or run.name, fps, clips, song_target.name, total))
-    readme = readme_text(run, request, casting, prepared, pas, label, cast, private, pack, stills, idents)
+    readme = readme_text(run, request, casting, prepared, pas, label, cast, private, pack, stills, idents, bool(studio))
     (out / 'README.md').write_text(readme, encoding='utf-8')
     files = {}
     for file in sorted(p for p in out.rglob('*') if p.is_file() and p.name != 'MANIFEST.json'):
@@ -368,7 +382,7 @@ def cell(value):
     return str(value).replace('|', '/').replace('\n', ' ')
 
 
-def readme_text(run, request, casting, prepared, pas, label, cast, private, pack, stills, idents):
+def readme_text(run, request, casting, prepared, pas, label, cast, private, pack, stills, idents, studio=False):
     out = pack.out
     plan = read_json(run / 'plan.json') or prepared.get('plan') or {}
     output = read_json(run / 'output.json', {}) or {}
@@ -405,7 +419,8 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
               f'- Direction: {request.get("direction", "")}', f'- Style: {request.get("style_id", "")}',
               '- Actors: ' + (', '.join(f'{n} (`{i}`)' for i, n in cast) or 'none'),
               '- Mode: ' + ('; '.join(modes) or 'standard'),
-              f'- Production time: {clock(run_seconds(run))} (from operation.json / operation.log)', '',
+              f'- Production time: {clock(run_seconds(run))} (from operation.json / operation.log)',
+              '- Prompting scheme: ' + (protected_scheme.notice() or 'unmodified (the protected prompts, sealed-lips scheme and checks match the released Mondo scheme)'), '',
               '## Passages (times are on the song clock)', '',
               '| # | Start-end (s) | Shots | Montage grammar | Cast | Sings | Clip | Prompt |', '|---|---|---|---|---|---|---|---|']
     for p in pas:
@@ -422,17 +437,26 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
         lines += ['', '## Lyric lines used (seconds on the song clock)', '', '| Start-end | Section | Words |', '|---|---|---|']
         lines += [f'| {stamp(l["start"])}-{stamp(l["end"])} | {cell(l.get("section") or "")} | {cell(l["text"])} |' for l in lyric_lines]
     final = next(iter(sorted((out / '01_final').glob('music-video.mp4'))), None)
-    raw = next(iter(sorted((out / '02_raw_clips').glob('*_raw.mp4'))), None)
+    raw = next(iter(sorted((out / '02_raw_clips').glob('*_raw.*'))), None)
+    studio_clip = next(iter(sorted((out / '02_raw_clips').glob('*_studio_trimmed.*'))), None)
     trimmed = next(iter(sorted((out / '02_raw_clips').glob('*_trimmed_for_edit.mp4'))), None)
     master = next(iter(sorted((out / '03_audio').glob('*'))), None)
     lines += ['', '## Media format (for your editor)', '',
-              'Set the project to match: the timeline frame rate below, the frame size below and 48 kHz audio. All video is H.264 at a constant frame rate, '
-              'which every editor opens directly; transcode to ProRes or DNxHR only if you prefer an intermediate codec. Audio files in this package are true PCM WAV '
-              '(the renderer\'s own audio is converted from FLAC), so none of them depend on a codec your editor may lack.', '']
-    for label_, item in (('Finished video', final), ('Raw passage clip', raw), ('Trimmed passage clip', trimmed), ('Song (master audio)', master)):
+              'Set the project to match: the timeline frame rate below, the frame size below and 48 kHz audio. ' +
+              ('The finished video and the `_trimmed_for_edit` clips are H.264 at a constant frame rate, which every editor opens directly; the studio clips are ProRes or FFV1 '
+               '(intra-coded masters). ' if studio else 'All video is H.264 at a constant frame rate, which every editor opens directly; transcode to ProRes or DNxHR only if you '
+               'prefer an intermediate codec. ') +
+              'Separate audio files in this package are true PCM WAV (the renderer\'s own audio is converted from FLAC), so none of them depend on a codec your editor may lack.', '']
+    for label_, item in (('Finished video', final), ('Raw passage clip', raw), ('Studio trimmed clip (exact length, not re-encoded)', studio_clip),
+                         ('Trimmed passage clip (H.264, as used in the final video)', trimmed), ('Song (master audio)', master)):
         if item:
             lines.append(f'- {label_} (`{item.name}`): {describe(item)}')
-    lines += ['- Raw clips are slightly longer than the passage and carry the video model\'s own audio; trimmed clips are exact length and picture-only.', '']
+    lines += ['- Raw clips are slightly longer than the passage and carry the video model\'s own audio; the H.264 `_trimmed_for_edit` clips are exact length and picture-only.']
+    if studio:
+        lines += ['- This production saved **studio-quality raw clips**. The `_studio_trimmed` files are the exact passage lengths cut from them '
+                  'without re-encoding (the timeline file points at them) and keep the video model\'s own audio inside; the H.264 `_trimmed_for_edit` files are what the '
+                  'finished video was built from.']
+    lines += ['']
     lines += ['', '## What is in each folder', '',
               '- `01_final`: the finished music video (`music-video.mp4`), the assembler copy, the picture-only cut and the mixed diegetic audio.',
               '- `02_raw_clips`: every passage clip as the video model produced it (`_raw`, a little longer than needed, with its own audio), '

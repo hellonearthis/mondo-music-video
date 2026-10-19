@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.7.0"
+MGL_APP_VERSION = "1.7.1"
 WEB = Path(__file__).parent
 
 
@@ -266,6 +266,7 @@ class ProductionRequest(StrictModel):
     end_ident: str = Field(default="", max_length=128)
     reuse_prompts: bool = True
     vision_quality_check: bool = False
+    clip_quality: Literal["standard", "prores", "lossless"] = "standard"
     compact_prompts: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
@@ -1147,6 +1148,12 @@ def create_app(home=None, *, test_hosts=False):
         package_export.check_package(store, run_id, value.allow_private_actors)
         return jobs.start("export", lambda context: package_export.export_package(
             store, run_id, zip_it=value.zip, allow_private=value.allow_private_actors, context=context))
+
+    @app.get("/api/integrity")
+    def integrity():
+        from mmv import protected_scheme
+        changed = protected_scheme.check()
+        return {"intact": not changed, "changed": protected_scheme.describe(changed), "notice": protected_scheme.notice() if changed else None}
 
     @app.get("/api/outputs/{run_id}/score")
     def output_score(run_id: str):

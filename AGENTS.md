@@ -57,9 +57,25 @@ verify the assets appear in the app. Never import other local/private assets.
   disabled, startup only checks/notifies and links to the installation's own
   tracked repository. Preserve local work, private data and active operations.
 - Do not publish or push without user authorization.
+- The owner's internal lab nicknames, member titles and who-is-who are private. Never put them in published files,
+  commit messages, release notes, credits, posts or demo text; credit collaborators only by their public handles.
+  The private details live in the local, ignored `docs/TEAM_STATUS.md`.
 - When adding user-facing capabilities, audit the agent client, MCP tools,
   included skill and agent documentation for coverage. Keep version/tool discovery
   and mock transport tests current; preserve confirmation and paid-consent guards.
+
+## Protected prompting scheme (read before editing; applies to forks too)
+
+Mondo's writer and ident prompts, the sealed-lips scheme (rule text, closing phrase, validators), the planning and schema code,
+the approved singing wording and the quality rules are delicate: they were tuned over months of real renders, and an edit that
+looks harmless can make every video worse. The full list and procedure are in
+[docs/PROMPT_SCHEME_PROTECTION.md](docs/PROMPT_SCHEME_PROTECTION.md); the fingerprints are in `mmv/protected_scheme.py`.
+
+Before any change that touches them, **stop and warn the person in plain words** that this is delicate, that videos may fall below
+the Mondo standard and that the app will show a warning banner; offer an opt-in alternative that leaves the originals as the
+default; proceed only after a clear yes. Never edit the pins, the source hashes in `docs/SOURCE_EXTRACTION.json`, the protection
+tests, the banner or the export note to hide a change, and do not run `tools/update_protected_pins.py` without the owner of the
+scheme's approval. Validate real before/after renders (same song and seed) before calling a prompt change done.
 
 ## Collaborative fork review
 
@@ -111,6 +127,7 @@ exists (it is local session state and is not published). Read `README.md` and th
 
 Use the shared collaboration protocol for both Codex and Claude Code. Preserve
 existing uncommitted work. Do not infer that another open terminal is idle.
+Before committing or pushing, follow the shared-checkout commit rules in `docs/COLLABORATION.md`.
 Do not start product changes until the user assigns a task. Never stage or
 publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
 are documentation and never trigger a version bump.

@@ -11,7 +11,8 @@ a list of commands for them to run when you can run those commands yourself.
 This guide directs the agent; the shell installer itself does not automatically
 select or download a complete model stack.
 
-For RunPod installations, also follow [the RunPod handoff](RUNPOD.md). Discover
+For RunPod installations, also follow [the RunPod handoff](RUNPOD.md); for other rented GPU machines (Vast.ai, Lambda, TensorDock, Paperspace and
+the big clouds) also follow [the rented GPU machine guide](GPU_CLOUD.md), and for RunPod too where it applies. Discover
 and handle both fresh Pods and existing stacks; do not require the user to
 inventory them. Set persistent data/model locations before installing, arrange
 SSH browser forwarding, and account for cloud rental charges even when the

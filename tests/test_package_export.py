@@ -116,6 +116,31 @@ def test_renderer_flac_named_wav_becomes_a_real_pcm_wav_and_the_media_guide_and_
     assert 'seg001_2.00-4.00s_trimmed_for_edit.mp4' in names           # the EDL only names files that exist
 
 
+@pytest.mark.skipif(not FFMPEG, reason='needs ffmpeg')
+def test_studio_clips_keep_their_extension_get_exact_length_copies_and_the_edl_points_at_them(tmp_path):
+    data, run = build_run(tmp_path)
+    for sid in ('seg000', 'seg001'):
+        (run / 'renders' / sid / 'video.mp4').unlink()
+        made = subprocess.run([FFMPEG, '-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=s=64x64:r=24:d=3', '-c:v', 'prores_ks',
+                               '-profile:v', '4444', '-pix_fmt', 'yuv444p10le', str(run / 'renders' / sid / 'video.mov')])
+        if made.returncode:
+            pytest.skip('this ffmpeg has no prores_ks encoder')
+    receipts = {sid: {'video': str(run / 'renders' / sid / 'video.mov'), 'request_id': sid} for sid in ('seg000', 'seg001')}
+    (run / 'renders.json').write_text(json.dumps(receipts))
+    out = tmp_path / 'out'
+    exporter.export(run, out, log=lambda *_: None)
+    raw = out / '02_raw_clips/seg000_0.00-2.00s_raw.mov'
+    assert raw.is_file() and exporter.probe(raw)[0]['codec_name'] == 'prores'
+    trimmed = out / '02_raw_clips/seg000_0.00-2.00s_studio_trimmed.mov'
+    video, _ = exporter.probe(trimmed)
+    assert video['codec_name'] == 'prores' and video['nb_frames'] == '48'              # 2.0 s at 24 fps, not re-encoded
+    edl = (out / '08_timeline/Demo.edl').read_text()
+    assert '* FROM CLIP NAME: seg000_0.00-2.00s_studio_trimmed.mov' in edl and 'trimmed_for_edit' not in edl
+    readme = (out / 'README.md').read_text()
+    assert 'studio-quality raw clips' in readme and 'Studio trimmed clip' in readme
+    assert 'studio clips are ProRes or FFV1' in readme and 'All video is H.264' not in readme and 'keep the video model' in readme
+
+
 def test_timecodes_follow_the_frame_rate():
     assert exporter.timecode(0, 24) == '01:00:00:00'
     assert exporter.timecode(24 * 61 + 5, 24) == '01:01:01:05'
@@ -164,6 +189,18 @@ def test_refuses_inside_the_run_and_never_overwrites(tmp_path):
     empty.mkdir()
     summary = exporter.export(run, empty, zip_it=True, log=lambda *_: None)      # an empty folder is allowed
     assert (tmp_path / 'empty.zip').is_file() and summary['zip'].endswith('empty.zip') and summary['files'] > 10
+
+
+def test_the_readme_says_whether_the_prompting_scheme_is_unmodified(tmp_path):
+    from unittest.mock import patch
+    data, run = build_run(tmp_path)
+    out = tmp_path / 'out'
+    exporter.export(run, out, log=lambda *_: None)
+    assert 'Prompting scheme: unmodified' in (out / 'README.md').read_text()
+    with patch.object(exporter.protected_scheme, 'check', return_value=['mmv/engine/prompts/writer_base.md']):
+        changed = tmp_path / 'changed'
+        exporter.export(run, changed, log=lambda *_: None)
+    assert 'changed Mondo\'s protected prompting scheme (the writer prompt)' in (changed / 'README.md').read_text()
 
 
 def test_the_exact_keys_stored_in_the_app_are_redacted_wherever_they_appear(tmp_path):

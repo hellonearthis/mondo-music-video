@@ -181,6 +181,19 @@ to make it visible. The coordinator reviews diffs and integrates agreed commits
 sequentially; no automatic merges or pushes. Git worktrees separate edits but
 are not security boundaries. Do not modify another worker's worktree.
 
+### Committing and pushing when other sessions may be active
+
+More than one terminal or agent can work in the same checkout, and one commit can sweep up another session's unfinished work.
+Before any commit or push:
+
+1. Run `git status` and `git log -5`, and check `docs/TEAM_STATUS.md` for an active claim. If there are changes you did not make, new
+   commits you did not make, or the user mentions another terminal, **stop and ask the user** before committing.
+2. Stage **only the files you changed, by name**. Do not use `git add -A`, `git add .`, `git commit -a` or `git stash` in a shared
+   checkout, except when you have just confirmed the tree holds only your own work.
+3. Fetch before you push, never force-push, and never rewrite or amend a commit another session made.
+4. Commit and push only when the user has said to. A request to "commit everything" still means confirming what that includes when work
+   from another session is present.
+
 ## Handoffs and verification
 
 Before handing off, update TEAM_STATUS.md with changed files, validation actually

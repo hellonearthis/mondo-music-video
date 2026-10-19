@@ -96,6 +96,10 @@ export function showQuote(request, quote) {
     text("h2", `Estimated provider cost: $${Number(quote.estimate_usd).toFixed(2)}`),
     text("p", quote.note, "muted")
   );
+  if (request.clip_quality && request.clip_quality !== "standard") {
+    summary.append(text("p", `Studio-quality raw clips (${request.clip_quality === "prores" ? "ProRes 4444" : "FFV1 lossless"}): each passage clip is saved near-lossless for editing. `
+      + "Expect much larger files and a little more time; the final video is still encoded from them.", "muted"));
+  }
   if (request.vision_quality_check) {
     summary.append(text("p", "Vision quality check on: after rendering, your local vision model inspects sampled frames. "
       + "This adds several minutes and restarts ComfyUI; free local passages may be re-rendered once.", "muted"));
@@ -269,6 +273,18 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("pageshow", event => {
   if (event.persisted) setupEventStream();
 });
+
+// A fork that changed the protected prompting scheme sees a persistent warning (see docs/PROMPT_SCHEME_PROTECTION.md).
+export async function loadSchemeNotice() {
+  try {
+    const status = await (await api("/api/integrity")).json();
+    const banner = $("#scheme-notice");
+    if (banner && status.notice) {
+      banner.textContent = status.notice;
+      banner.hidden = false;
+    }
+  } catch { /* The notice must not block the studio UI. */ }
+}
 
 export async function loadUpdateStatus() {
   try {

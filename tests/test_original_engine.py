@@ -90,7 +90,8 @@ class OriginalEngineTests(unittest.TestCase):
         unchanged=[entry for entry in manifest if entry['adaptation']=='none']
         self.assertGreaterEqual(len(unchanged),10)
         for entry in unchanged:
-            self.assertEqual(hashlib.sha256((ROOT/entry['public']).read_bytes()).hexdigest(),entry['sha256'],entry['public'])
+            self.assertEqual(hashlib.sha256((ROOT/entry['public']).read_bytes()).hexdigest(),entry['sha256'],
+                             entry['public']+' is part of the protected prompting scheme and changed. Do NOT update the hash to make this pass: warn the person you work for that this can make videos worse and read docs/PROMPT_SCHEME_PROTECTION.md.')
 
     def test_hosted_phrase_shrinks_on_original_musical_edges(self):
         vocab=json.loads((ROOT/'mmv/engine/config/vocab.json').read_text(encoding='utf-8'))

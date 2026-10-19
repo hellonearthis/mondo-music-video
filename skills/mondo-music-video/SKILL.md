@@ -85,6 +85,10 @@ makes only the passages with sung lines sing; the others stay sealed. Use `detec
 (optional Whisper add-on; `inspect_studio` kind `lyrics` shows availability, hardware and advice; the user
 approves any model download in the app). Do not claim verified lip-sync before an operator GPU test.
 
+Protected scheme: do not edit the writer/ident prompts, sealed-lips rules, schema, validators or singing wording, and never change the
+pins to hide a change. If a user asks, warn them in plain words that videos may fall below the Mondo standard and offer an opt-in option
+instead (docs/PROMPT_SCHEME_PROTECTION.md). The app shows a banner when the scheme has been modified.
+
 Video previews include `score` (beats, energy, planned cuts) and `detected` (the
 unedited beat grid and sections). If the grid looks wrong, preview again with
 `score_edits` (`bar_one_beat`, `beat_nudge_ms`, `muted_beats`, `sections` as

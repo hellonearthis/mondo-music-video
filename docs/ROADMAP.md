@@ -80,6 +80,11 @@ Feature requests should stay within the music-video scope.
 
 ## To investigate
 
+- A tested install on a second rented-GPU host. `docs/GPU_CLOUD.md` documents Vast.ai, Lambda, TensorDock, Paperspace and the big
+  clouds from the RunPod guide but nothing has been run on them. A single Dockerfile (or image recipe) could replace several
+  per-host procedures; it is not written. Whether Comfy's hosted platform should be offered as a renderer for people with no GPU is
+  a separate provider question, untested.
+
 - Topaz online upscaling through its API (today upscaling uses the user's local Topaz
   Video AI). The owner has a Topaz account, so a real test is possible. Open questions,
   not yet verified: whether Topaz offers a suitable video API and on what terms and

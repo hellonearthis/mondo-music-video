@@ -1,0 +1,8 @@
+# Changes to Mondo's prompting scheme need the owner's review. See docs/PROMPT_SCHEME_PROTECTION.md.
+/mmv/engine/ @hodgemann
+/mmv/lipsync.py @hodgemann
+/mmv/quality.py @hodgemann
+/mmv/protected_scheme.py @hodgemann
+/skills/ @hodgemann
+/AGENTS.md @hodgemann
+/docs/PROMPT_SCHEME_PROTECTION.md @hodgemann

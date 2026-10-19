@@ -400,9 +400,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.7.0")
+        self.assertEqual(api_version()["version"], "1.7.1")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.7.0", (root / "README.md").read_text())
+        self.assertIn("1.7.1", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -931,6 +931,73 @@ class PublicAppTests(unittest.TestCase):
         self.assertNotIn(str(Path.home()), everything)
         self.assertFalse((package / '07_actor_references').exists())                         # no private reference images
         self.assertTrue(list((package / '06_stills').glob('*.png')))                         # stills come from the clips
+
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
+    def test_studio_clip_quality_saves_the_studio_file_names_it_by_type_and_still_assembles(self):
+        self.configure_sdk()
+        actors.create_actor(self.store, 'blue', 'Blue', 'Blue jacket', picture())
+        song = self.song_upload()
+        standard = self.start({'backend': 'comfy_sdk_h3', 'song': song, 'actors': ['blue']})[1]
+        standard.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        plain_graph = self.server.v2_submits[-1][1]['workflow']
+        self.assertEqual(plain_graph['148']['inputs']['crf'], 6)                       # standard keeps the shipped workflow
+        plain_run = self.home / 'runs' / standard.json()['id']
+        self.assertTrue(next((plain_run / 'renders').glob('*/video.mp4')).is_file())   # and the old names
+        for quality, fmt, suffix in (('prores', 'video/ProRes', '.mov'), ('lossless', 'video/ffv1-mkv', '.mkv')):
+            quote, started = self.start({'backend': 'comfy_sdk_h3', 'song': song, 'actors': ['blue'], 'clip_quality': quality})
+            started.raise_for_status()
+            status = self.wait()
+            self.assertEqual(status['state'], 'complete', status)
+            node = self.server.v2_submits[-1][1]['workflow']['148']['inputs']
+            self.assertEqual(node['format'], fmt)
+            self.assertNotIn('crf', node)
+            self.assertNotIn('pix_fmt', node)
+            run = self.home / 'runs' / started.json()['id']
+            clip = next((run / 'renders').glob('*/video' + suffix))
+            self.assertTrue(clip.is_file(), clip)
+            self.assertEqual(read_json(next((run / 'renders').glob('*/result.json')))['clip_quality'], quality)
+            self.assertTrue((run / 'music-video.mp4').is_file())                          # the final video is still the encoded mp4
+            self.assertAlmostEqual(media.duration(run / 'music-video.mp4'), 1.1, delta=.08)
+        # if the job does not return the studio file, the standard clip is used and the run says so
+        self.server.v2_no_studio = True
+        _, started = self.start({'backend': 'comfy_sdk_h3', 'song': song, 'actors': ['blue'], 'clip_quality': 'prores'})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        fallback = read_json(next((self.home / 'runs' / started.json()['id'] / 'renders').glob('*/result.json')))
+        self.assertIn('Studio-quality clip was not returned', fallback['clip_quality_note'])
+        self.assertTrue(fallback['video'].endswith('video.mp4'))
+        output = read_json(self.home / 'runs' / started.json()['id'] / 'output.json')
+        self.assertTrue(any('Studio-quality clip not delivered' in w for w in output['quality_warnings']), output)
+        self.assertEqual((output['clip_quality'], output['clip_quality_requested']), ('standard', 'prores'))     # delivered vs requested
+        outputs = self.client.get('/api/outputs').json()
+        self.assertTrue(any('Studio-quality clip not delivered' in ' '.join(o.get('quality_warnings', [])) for o in outputs))
+
+    def test_studio_clips_are_refused_where_they_cannot_work_and_graphs_are_switched_cleanly(self):
+        from mmv import comfy_sdk
+        from mmv.engine.comfy import WorkflowBuilder
+        song = self.song_upload()
+        refused = self.client.post('/api/quote', json={'song': song, 'clip_quality': 'prores'})            # local H3, not the SDK path
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn('Comfy SDK renderer only', refused.json()['detail'])
+        self.assertEqual(self.client.post('/api/quote', json={'song': song, 'clip_quality': 'raw'}).status_code, 422)
+        root = Path(__file__).resolve().parents[1] / 'mmv/engine'
+        builder = WorkflowBuilder.load(root / 'config/injection_map.json', root)
+        base = json.loads(json.dumps(builder.base))
+        self.assertIs(comfy_sdk.studio_graph(base, builder.map, 'standard'), base)
+        studio = comfy_sdk.studio_graph(base, builder.map, 'prores')
+        self.assertEqual(studio['148']['inputs']['format'], 'video/ProRes')
+        self.assertEqual(studio['148']['inputs']['profile'], '4444')
+        self.assertEqual(base['148']['inputs']['format'], 'video/h264-mp4')                                  # the input graph is untouched
+        self.assertEqual(comfy_sdk.studio_graph(base, builder.map, 'lossless')['148']['inputs']['format'], 'video/ffv1-mkv')
+        broken = {k: v for k, v in base.items() if k != '148'}
+        with self.assertRaises(comfy_sdk.BackendError):
+            comfy_sdk.studio_graph(broken, builder.map, 'prores')
+        make = lambda ct, name: type('O', (), {'content_type': ct, 'name': name})()
+        self.assertEqual(comfy_sdk.media_suffix(make('video/quicktime', 'x'), '.mp4'), '.mov')
+        self.assertEqual(comfy_sdk.media_suffix(make('audio/flac', 'x'), '.wav'), '.flac')
+        self.assertEqual(comfy_sdk.media_suffix(make('application/octet-stream', 'clip.webm'), '.mp4'), '.webm')
+        self.assertEqual(comfy_sdk.media_suffix(make('', ''), '.mp4'), '.mp4')
 
     def test_failed_writer_never_renders(self):
         MockService.invalid_writer=True

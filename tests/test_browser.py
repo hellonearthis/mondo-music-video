@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.7.0')
+                expect(page.locator('#version')).to_have_text('1.7.1')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -500,6 +500,24 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_a_modified_prompting_scheme_shows_a_warning_banner_and_an_intact_one_shows_nothing(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                expect(page.locator('#scheme-notice')).to_be_hidden()
+                page.route('**/api/integrity', lambda route: route.fulfill(json={
+                    'intact': False, 'changed': ['the writer prompt'], 'notice': 'This installation has changed Mondo\'s protected prompting scheme (the writer prompt). Videos made with it may not meet the Mondo standard.'}))
+                page.reload()
+                expect(page.locator('#scheme-notice')).to_be_visible()
+                expect(page.locator('#scheme-notice')).to_contain_text('may not meet the Mondo standard')
+            finally:
+                browser.close()
+
     def test_saved_custom_vocabulary_preset_survives_reload(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.client.post('/api/vocabularies', json={
@@ -566,7 +584,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.7.0')
+                expect(page.locator('#version')).to_have_text('1.7.1')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

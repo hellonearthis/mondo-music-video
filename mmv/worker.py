@@ -364,7 +364,8 @@ def run(home, directory, *, resume=False):
                         song=None, steps=20, timeout_s=3600, comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
                         map_path=settings['workflow_map_path'], root=ENGINE,
-                        comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'))
+                        comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'),
+                        clip_quality=request.get('clip_quality') or 'standard')
     try:
         song = inside(store.home / 'uploads', request['song']) if request['kind'] == 'video' else directory / 'silence.wav'
         if request['kind'] == 'ident':
@@ -439,8 +440,17 @@ def run(home, directory, *, resume=False):
     vision_note = read_json(directory / 'vision.json', {}).get('note')
     if vision_note:
         warnings.insert(0, vision_note)
+    # Studio-quality clips: say plainly when the requested master was not delivered (never resubmitted automatically).
+    lost = sorted(sid for sid, got in rendered.items() if isinstance(got, dict) and got.get('clip_quality_note'))
+    if lost:
+        warnings.insert(0, 'Studio-quality clip not delivered for ' + ', '.join(lost) + '; the standard clip was used for the final video and the export.')
+    delivered = request.get('clip_quality') or 'standard'
+    if lost and len(lost) == len(rendered):
+        delivered = 'standard'
     write_json(directory/'output.json',{'file':output.name,'duration':duration(output),'kind':request['kind'],
                                        'title':request['title'] or 'Music video',
+                                       **({'clip_quality': delivered, 'clip_quality_requested': request.get('clip_quality')}
+                                          if (request.get('clip_quality') or 'standard') != 'standard' else {}),
                                        **({'quality_warnings': warnings} if warnings else {})})
     progress('Complete',100)
 

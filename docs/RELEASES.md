@@ -1,5 +1,26 @@
 # Releases
 
+## 1.7.1 — Studio-quality clips, prompting-scheme protection, rented-GPU guide
+
+- **Studio-quality raw clips** (opt-in `clip_quality`: `standard` default, `prores`, `lossless`; Comfy SDK renderer, music videos only). The
+  SDK path used to keep ComfyUI's built-in SaveVideo output (ordinary H.264, about 1.4 Mbps for a 736x416 clip) and the final video was
+  rebuilt from it. Studio mode switches the workflow's VideoHelperSuite save node to ProRes 4444 (near-lossless, editor-friendly) or FFV1
+  (mathematically lossless) with the audio inside, and takes that file as the passage clip; the final video is still encoded from it by
+  ffmpeg at assembly. Files are much larger, so it is off by default. Clips are now named by what they really are (`video.mov`,
+  `video.mkv`, `audio.flac`): the renderer's audio used to be FLAC data under a `.wav` name that many editors cannot open. If the job does
+  not return the studio file, the standard clip is used and the run records a note. The shipped workflow and engine are unchanged.
+- **Export package for editors**: raw clips keep their real extension; ProRes and FFV1 clips also get exact-length `_studio_trimmed` copies
+  cut without re-encoding, and the timeline (`.edl`) points at them; audio files are true PCM WAV; the README has a media-format guide and
+  says whether the prompting scheme is unmodified. Folders are named by title and date-time.
+- **Prompting-scheme protection** (`docs/PROMPT_SCHEME_PROTECTION.md`): the writer and ident prompts, the sealed-lips scheme, the schema,
+  validators, plan code, the singing wording and the quality rules are pinned in `mmv/protected_scheme.py` (line endings ignored). A fork
+  that changes them sees an orange banner in the app (`GET /api/integrity`), exports say so, tests fail with a message that tells an agent
+  to warn the person in plain words, offer an opt-in alternative and never edit the pins; `AGENTS.md`, `mmv/engine/PROTECTED.md`, the
+  skill and `.github/CODEOWNERS` carry the same rule. `tools/update_protected_pins.py` refuses to run without an explicit owner flag.
+- **Install guides**: `docs/GPU_CLOUD.md` for other rented GPU hosts (Vast.ai, Lambda, TensorDock, Paperspace, the big clouds), derived from
+  the RunPod guide and reviewed by Codex; **not tested on any of them**. `PLATFORMS.md` refreshed. A rule that internal lab names are
+  never published.
+
 ## 1.7.0 — Lip-sync mode and optional lyrics detection
 
 Designed with Codex (read-only design review, `docs/LIPSYNC_DESIGN.md`). The owner approved the direction.
