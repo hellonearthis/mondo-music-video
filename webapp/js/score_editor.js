@@ -28,6 +28,13 @@ const DRIVERS = [
   ["piano", "Piano (6-stem model)", "Needs the larger 6-stem model; piano separation is the least reliable"]
 ];
 const SIX_STEM = new Set(["guitar", "piano"]);
+const MODELS = {
+  htdemucs: { label: "standard 4-stem", size: "about 81 MB" },
+  htdemucs_ft: { label: "high-quality 4-stem", size: "about 324 MB" },
+  htdemucs_6s: { label: "6-stem", size: "about 53 MB" }
+};
+const usesQuality = driver => driver !== "mix" && !SIX_STEM.has(driver);
+const modelFor = (driver, quality) => SIX_STEM.has(driver) ? "htdemucs_6s" : quality === "high" ? "htdemucs_ft" : "htdemucs";
 const peaksCache = new Map();
 let active = null;
 
@@ -71,6 +78,8 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   const applied = cleanEdits({ ...emptyEdits(), ...(request.score_edits || {}) });
   const appliedDriver = request.analysis_driver || "mix";
   let driver = appliedDriver;
+  const appliedQuality = request.stem_quality || "standard";
+  let quality = appliedQuality;
   let stems = null;
   const edits = cleanEdits(applied);
   const muted = new Set(edits.muted_beats);
@@ -134,12 +143,19 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   driverSelect.setAttribute("aria-label", "Which part of the song drives the video's energy");
   DRIVERS.forEach(([value, label, help]) => driverSelect.append(option(value, label, help)));
   driverSelect.value = driver;
+  const qualitySelect = document.createElement("select");
+  qualitySelect.setAttribute("aria-label", "Stem separation quality");
+  qualitySelect.append(option("standard", "Standard (default)", "The standard model: fast, good for most songs"),
+    option("high", "High (slower, cleaner on some songs)", "The fine-tuned model: about 2 to 3 times slower, sometimes leaks less of other instruments"));
+  qualitySelect.value = quality;
+  const qualityLabel = text("label", "Stem quality ", "se-driver-label", "High uses a fine-tuned model that is slower and, on some songs, picks up fewer stray sounds in a stem.");
+  qualityLabel.append(qualitySelect);
   const driverLabel = text("label", "Follow this part of the song ", "se-driver-label",
     "The video's energy, and so its cutting speed and montage style, follows the part you pick. The beat grid still comes from the whole song.");
   driverLabel.append(driverSelect);
   const driverNote = text("p", "", "muted se-driver-note");
   const driverSetup = text("div", "", "se-driver-setup");
-  driverRow.append(driverLabel, driverNote, driverSetup);
+  driverRow.append(driverLabel, qualityLabel, driverNote, driverSetup);
 
   const sectionHead = text("h3", "Sections");
   sectionHead.title = "Sections decide the montage style. Drag a section's edge on the waveform to move it.";
@@ -172,7 +188,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
 
   function refreshStatus() {
     const current = collectEdits();
-    const dirty = !same(current, applied) || driver !== appliedDriver;
+    const dirty = !same(current, applied) || driver !== appliedDriver || (usesQuality(driver) && quality !== appliedQuality);
     const valid = sectionsValid();
     barOne.disabled = selected === null;
     muteBtn.disabled = selected === null;
@@ -404,11 +420,18 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     sections = detected.sections.map(s => ({ start: s.start, label: s.label }));
     driver = "mix";
     driverSelect.value = "mix";
+    quality = "standard";
+    qualitySelect.value = "standard";
     rebuildRegions();
     refreshStatus();
   };
   driverSelect.onchange = () => {
     driver = driverSelect.value;
+    renderDriver();
+    refreshStatus();
+  };
+  qualitySelect.onchange = () => {
+    quality = qualitySelect.value;
     renderDriver();
     refreshStatus();
   };
@@ -425,7 +448,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     replanBtn.setAttribute("aria-busy", "true");
     status.textContent = "Planning…";
     try {
-      await onReplan(collectEdits(), driver);
+      await onReplan(collectEdits(), driver, usesQuality(driver) ? quality : "standard");
     } catch (error) {
       status.textContent = error.message;
       replanBtn.removeAttribute("aria-busy");
@@ -438,10 +461,12 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
 
   function renderDriver() {
     driverSetup.replaceChildren();
-    for (const option of driverSelect.options) {
-      option.disabled = option.value !== "mix" && !modelReady(SIX_STEM.has(option.value) ? "htdemucs_6s" : "htdemucs")
-        && option.value !== driver;
+    for (const entry of driverSelect.options) {
+      entry.disabled = entry.value !== "mix" && !modelReady(modelFor(entry.value, quality)) && entry.value !== driver;
     }
+    qualityLabel.hidden = !usesQuality(driver);
+    qualitySelect.value = quality;
+    for (const item of qualitySelect.options) item.disabled = item.value === "high" && !modelReady("htdemucs_ft") && quality !== "high";
     if (!stems) {
       driverNote.textContent = "Checking whether instrument analysis is available…";
       return;
@@ -452,20 +477,23 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
         + `To enable it, run "${stems.install_command}" in this app's environment, then reopen this preview.`;
       return;
     }
-    const need = driver === "mix" ? [] : [SIX_STEM.has(driver) ? "htdemucs_6s" : "htdemucs"];
-    const missing = ["htdemucs", "htdemucs_6s"].filter(name => !modelReady(name));
+    const need = driver === "mix" ? [] : [modelFor(driver, quality)];
+    const missing = Object.keys(MODELS).filter(name => !modelReady(name));
     driverNote.textContent = driver === "mix"
       ? "Following the whole mix, as before. Pick an instrument to drive the video from that part instead. "
         + "The first time for a song, separating it can take several minutes; it is saved afterwards."
       : `Following ${driver}. Press Re-plan to apply it; the first time for a song can take several minutes.`;
+    if (stems.recommendation) {
+      driverNote.textContent += " For this computer: " + stems.recommendation.notes[0];
+    }
     for (const name of missing) {
       const wanted = need.includes(name);
       const row = text("div", "", "se-setup-row");
       const consent = document.createElement("input");
       consent.type = "checkbox";
       const approve = text("label", "", "check");
-      approve.append(consent, ` I approve a one-time download of the ${name === "htdemucs" ? "4-stem" : "6-stem"} model (${name === "htdemucs" ? "about 81 MB" : "about 53 MB"}, from the Demucs project).`);
-      const go = text("button", `Set up ${name === "htdemucs" ? "4-stem" : "6-stem"} model`, wanted ? "primary" : "secondary");
+      approve.append(consent, ` I approve a one-time download of the ${MODELS[name].label} model (${MODELS[name].size}, from the Demucs project).`);
+      const go = text("button", `Set up ${MODELS[name].label} model`, wanted ? "primary" : "secondary");
       go.type = "button";
       go.disabled = true;
       consent.onchange = () => { go.disabled = !consent.checked; };

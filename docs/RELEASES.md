@@ -1,5 +1,22 @@
 # Releases
 
+## 1.6.14 — Stem quality option and hardware-aware agent guidance
+
+- **Stem quality** (`stem_quality`: `standard` default, or `high`): high uses the fine-tuned
+  Demucs model (`htdemucs_ft`, about 324 MB, 2 to 3 times slower). On the owner's songs it left far
+  less stray sound in the vocals stem on one song (2% vs 23% of frames with quiet bleed),
+  made no difference on two, and was slightly worse on one, so it is opt-in. The editor offers it
+  with its own one-time download approval; guitar and piano always use the 6-stem model, which was
+  noisier on vocals and is never used for them. Plans from the two settings were nearly identical
+  on the tested song (19 shots each).
+- **Hardware-aware recommendation**: `GET /api/stems` (and `inspect_studio` kind `stems`) now
+  reports the GPU, free VRAM and RAM, per-model download sizes and a plain-language
+  recommendation from measured figures; the editor shows the first line.
+- **Agent installation**: the install guide, AGENTS.md, the skill and `AGENT_SETUP.md` now tell
+  agents to mention instrument analysis, ask whether the user wants it, recommend a model quality
+  for the detected hardware, include the add-on and model sizes in the single download proposal,
+  and never install or download without approval.
+
 ## 1.6.13 — Stem separation on smaller GPUs
 
 Measured with the real models on a 4-minute track: 4-stem, fine-tuned and 6-stem Demucs models

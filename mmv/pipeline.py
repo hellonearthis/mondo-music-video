@@ -236,7 +236,7 @@ def prepare(store, request):
         driver = request.get('analysis_driver') or 'mix'
         if driver != 'mix':
             from .stems import drive_score
-            score = drive_score(store, song, score_path, digest, driver)
+            score = drive_score(store, song, score_path, digest, driver, request.get('stem_quality') or 'standard')
         detected = detected_view(score)
         score = apply_score_edits(score, request.get('score_edits'))
         for key in ('start_ident', 'end_ident'):

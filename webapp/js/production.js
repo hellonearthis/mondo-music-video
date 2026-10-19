@@ -114,8 +114,8 @@ export function showQuote(request, quote) {
   }
   dialog.showModal();
   mountScoreEditor($("#score-editor"), request, quote, {
-    onReplan: async (edits, driver) => {
-      const next = { ...request, score_edits: edits, analysis_driver: driver || "mix" };
+    onReplan: async (edits, driver, quality) => {
+      const next = { ...request, score_edits: edits, analysis_driver: driver || "mix", stem_quality: quality || "standard" };
       state.lastRequest = next;
       const replanned = await json("/api/quote", next);
       logSession(`Re-planned with score edits: quote_id='${replanned.id}'`);

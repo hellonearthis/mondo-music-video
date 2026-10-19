@@ -222,7 +222,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.13')
+                expect(page.locator('#version')).to_have_text('1.6.14')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -352,6 +352,48 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_stem_quality_choice_needs_its_own_model_and_passes_through_replan(self):
+        from playwright.sync_api import sync_playwright, expect
+        name = self.fixture.client.post('/api/upload/song', files={'file': ('test.wav', self.song.read_bytes(), 'audio/wav')}).json()['file']
+        beats = [{'time': round(0.5 * i, 3), 'downbeat': i % 4 == 1} for i in range(1, 17)]
+        quote = {'detected': {'duration': 8.5, 'tempo_bpm': 120, 'beats_per_bar': 4, 'beats': beats,
+                              'sections': [{'start': 0, 'end': 8.5, 'label': 'mid', 'energy': .5}]},
+                 'score': {'beats': [{'time': b['time'], 'energy': .5} for b in beats],
+                           'passages': [{'start': 0, 'end': 8.5, 'shots': [{'start': 0}]}]}}
+        models = {'htdemucs': {'ready': True}, 'htdemucs_ft': {'ready': False}, 'htdemucs_6s': {'ready': False}}
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.route('**/api/stems', lambda route: route.fulfill(json={'installed': True, 'install_command': 'pip install demucs', 'models': models}))
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-dialog").onclick !== null')
+                page.evaluate("""([name, quote]) => import('/js/score_editor.js').then(m => {
+                    window.__calls = [];
+                    const host = document.createElement('div'); host.id = 'test-editor'; document.body.append(host);
+                    return m.mountScoreEditor(host, {kind: 'video', song: name}, quote, {
+                        onDirty: () => {}, onReplan: async (e, d, q) => { window.__calls.push([d, q]); }});
+                })""", [name, quote])
+                disabled = lambda sel: page.evaluate('s => document.querySelector(s).disabled', sel)
+                expect(page.locator('#test-editor .se-driver select').first).to_be_visible()
+                self.assertFalse(disabled('#test-editor .se-driver option[value=drums]'))
+                self.assertTrue(disabled('#test-editor .se-driver option[value=guitar]'))
+                self.assertEqual(page.locator('#test-editor .se-setup-row').count(), 2)      # high-quality and 6-stem still missing
+                expect(page.locator('#test-editor .se-driver-setup')).to_contain_text('about 324 MB')
+                self.assertTrue(page.locator('#test-editor .se-driver-label:has-text("Stem quality")').is_hidden())
+                page.locator('#test-editor .se-driver select').first.select_option('drums')
+                self.assertTrue(page.locator('#test-editor .se-driver-label:has-text("Stem quality")').is_visible())
+                self.assertTrue(disabled('#test-editor select option[value=high]'))
+                models['htdemucs_ft']['ready'] = True
+                page.locator('#test-editor button:has-text("Reset edits")').click()
+                page.locator('#test-editor .se-driver select').first.select_option('drums')
+                page.locator('#test-editor button.primary:has-text("Re-plan")').click()
+                page.wait_for_function('window.__calls.length === 1')
+                self.assertEqual(page.evaluate('window.__calls[0]'), ['drums', 'standard'])
+            finally:
+                browser.close()
+
     def test_saved_custom_vocabulary_preset_survives_reload(self):
         from playwright.sync_api import sync_playwright, expect
         self.fixture.client.post('/api/vocabularies', json={
@@ -418,7 +460,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.6.13')
+                expect(page.locator('#version')).to_have_text('1.6.14')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -55,7 +55,9 @@ def create_server(base_url=None):
         {bar_one_beat, beat_nudge_ms, muted_beats, sections:[{start, label}]} and
         preview again; edits are free and change the plan and quote.
         `analysis_driver` (mix, drums, bass, vocals, other, guitar, piano) makes
-        one instrument drive the energy; it needs the optional Demucs add-on and a
+        one instrument drive the energy (`stem_quality` standard or high: high uses the
+        fine-tuned model, cleaner on some songs but 2-3x slower; guitar and piano always
+        use the 6-stem model); it needs the optional Demucs add-on and a
         one-time model download that only the user approves in the app (see
         inspect_studio kind "stems"). The first separation of a song takes minutes.
         """

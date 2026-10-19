@@ -12,6 +12,9 @@ Do not declare the system ready to generate just because the web UI opens.
 Ask about existing API providers and follow `docs/API_PROVIDER_SETUP.md` for
 compatible service configuration or a requested new adapter. Do not equate a
 successful model listing with verified generation or video compatibility.
+Tell the user that optional instrument analysis (stem separation) exists, ask
+whether they want it, and recommend model quality from their hardware as
+described in the install guide; never install it or download its models unasked.
 Offer multiple named API profiles and independent writer, vision and video
 selections. Preserve existing accounts when adding another. Profile credentials
 are private: never stage or package `api-profiles.json`. Do not automatically

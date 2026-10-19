@@ -21,6 +21,7 @@ from .storage import read_json, write_json
 
 MODELS = {
     'htdemucs': ('drums', 'bass', 'other', 'vocals'),
+    'htdemucs_ft': ('drums', 'bass', 'other', 'vocals'),
     'htdemucs_6s': ('drums', 'bass', 'other', 'vocals', 'guitar', 'piano'),
 }
 DRIVERS = ('mix', 'drums', 'bass', 'vocals', 'other', 'guitar', 'piano')
@@ -29,10 +30,18 @@ INSTALL_HINT = 'pip install demucs'
 MIN_FREE_VRAM_BYTES = 3 * 1024 ** 3
 
 
-def model_for(driver):
+QUALITIES = ('standard', 'high')
+
+
+def model_for(driver, quality='standard'):
+    """Guitar and piano need the 6-stem model; the other parts use the standard or the fine-tuned (high) model."""
     if driver not in DRIVERS or driver == 'mix':
         raise ValueError('Unknown instrument driver')
-    return 'htdemucs_6s' if driver in ('guitar', 'piano') else 'htdemucs'
+    if quality not in QUALITIES:
+        raise ValueError('Stem quality is standard or high')
+    if driver in ('guitar', 'piano'):
+        return 'htdemucs_6s'
+    return 'htdemucs_ft' if quality == 'high' else 'htdemucs'
 
 
 def _root(store):
@@ -43,16 +52,70 @@ def installed():
     return importlib.util.find_spec('demucs') is not None
 
 
+_HARDWARE = {'at': 0.0, 'value': None}
+SIZES = {'htdemucs': '81 MB', 'htdemucs_ft': '324 MB', 'htdemucs_6s': '53 MB'}
+_GPU_PROBE = ('import json, torch; ok = torch.cuda.is_available(); free, total = torch.cuda.mem_get_info() if ok else (0, 0); '
+              'print(json.dumps({"gpu": torch.cuda.get_device_name(0) if ok else None, "free": free, "total": total}))')
+
+
+def _gpu():
+    try:
+        out = subprocess.run([sys.executable, '-c', _GPU_PROBE], capture_output=True, text=True, timeout=120).stdout
+        return json.loads(out.strip().splitlines()[-1])
+    except (ValueError, IndexError, subprocess.SubprocessError, OSError):
+        return {'gpu': None, 'free': 0, 'total': 0}
+
+
+def _ram_gb():
+    try:
+        import os
+        return round(os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 1024 ** 3, 1)
+    except (ValueError, OSError, AttributeError):
+        return None
+
+
+def hardware():
+    """What this machine can handle for separation (GPU memory right now, system RAM); cached briefly."""
+    if _HARDWARE['value'] is None or time.time() - _HARDWARE['at'] > 30:
+        gpu = _gpu()
+        _HARDWARE.update(at=time.time(), value={
+            'gpu': gpu['gpu'], 'vram_free_gb': round(gpu['free'] / 1024 ** 3, 1),
+            'vram_total_gb': round(gpu['total'] / 1024 ** 3, 1), 'ram_gb': _ram_gb()})
+    return _HARDWARE['value']
+
+
+def recommend(hw):
+    """Plain-language advice an installer or agent can read to the user; measured figures from this project's tests."""
+    gpu_ok = hw['vram_free_gb'] * 1024 ** 3 >= MIN_FREE_VRAM_BYTES
+    notes = []
+    if gpu_ok:
+        notes.append(f"Separation will use the GPU ({hw['gpu']}, {hw['vram_free_gb']} GB free): about 8 s per 4-minute song "
+                     "with the standard model, 17 s with high quality. It needs about 1.2 GB of VRAM.")
+    else:
+        notes.append('Separation will run on the CPU (no GPU with about 3 GB free): about 70 s per 4-minute song with the '
+                     'standard model, and about 2.5 times that with high quality. It needs about 2 to 3.5 GB of RAM and no VRAM.')
+    if hw['ram_gb'] is not None and hw['ram_gb'] < 6:
+        notes.append(f"System RAM is {hw['ram_gb']} GB; separation can need up to 3.5 GB, so close other programs first.")
+    notes.append('Standard quality (81 MB) is recommended for everyone: it matched the other models on drums and bass.')
+    notes.append('High quality (324 MB, 2 to 3 times slower) was cleaner on some songs and no better on others; '
+                 + ('worth offering on this machine.' if gpu_ok else 'on a CPU-only machine, offer it only if stray sounds bother the user.'))
+    notes.append('The 6-stem model (53 MB) is needed only for guitar or piano; piano separation is the least reliable.')
+    return {'device': 'cuda' if gpu_ok else 'cpu', 'quality': 'standard', 'notes': notes}
+
+
 def status(store):
     markers = {name: read_json(_root(store) / f'{name}.ready', None) for name in MODELS}
+    hw = hardware()
     return {'installed': installed(), 'install_command': INSTALL_HINT,
-            'models': {name: {'ready': bool(markers[name]), 'stems': list(MODELS[name])} for name in MODELS},
+            'models': {name: {'ready': bool(markers[name]), 'stems': list(MODELS[name]), 'download': SIZES[name]}
+                       for name in MODELS},
+            'hardware': hw, 'recommendation': recommend(hw),
             'note': 'Optional add-on (Demucs, MIT). The model downloads once after you approve it; '
                     'nothing is installed or downloaded automatically.'}
 
 
-def require_ready(store, driver):
-    model = model_for(driver)
+def require_ready(store, driver, quality='standard'):
+    model = model_for(driver, quality)
     if not installed():
         raise ValueError(f'Instrument analysis needs the optional Demucs add-on. Install it with "{INSTALL_HINT}" '
                          'in this app\'s environment, then set up the stem model in the score editor.')
@@ -77,13 +140,7 @@ def prepare_model(store, model, context):
 
 def pick_device():
     """CUDA only when a GPU has about 3 GB free right now, otherwise CPU (slower, but uses no VRAM)."""
-    probe = ('import torch; print(torch.cuda.mem_get_info()[0] if torch.cuda.is_available() else 0)')
-    try:
-        free = int(subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True,
-                                  timeout=120).stdout.strip() or 0)
-    except (ValueError, subprocess.SubprocessError):
-        free = 0
-    return 'cuda' if free >= MIN_FREE_VRAM_BYTES else 'cpu'
+    return 'cuda' if _gpu()['free'] >= MIN_FREE_VRAM_BYTES else 'cpu'
 
 
 def separate(store, song, digest, model):
@@ -107,10 +164,10 @@ def separate(store, song, digest, model):
     return cache
 
 
-def drive_score(store, song, score_path, digest, driver):
+def drive_score(store, song, score_path, digest, driver, quality='standard'):
     """The cached ScoreMap with energy and section labels taken from one stem; the beat grid stays from the mix."""
     from .engine.analyze import ScoreMap
-    model = require_ready(store, driver)
+    model = require_ready(store, driver, quality)
     cache = _root(store) / f'driven-{digest}-{model}-{driver}.json'
     if not cache.is_file():
         stems = separate(store, song, digest, model)

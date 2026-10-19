@@ -55,8 +55,30 @@ class StemTests(unittest.TestCase):
                 stems.require_ready(self.store, 'drums')
             self.assertEqual(stems.model_for('guitar'), 'htdemucs_6s')
             self.assertEqual(stems.model_for('vocals'), 'htdemucs')
+            self.assertEqual(stems.model_for('vocals', 'high'), 'htdemucs_ft')
+            self.assertEqual(stems.model_for('guitar', 'high'), 'htdemucs_6s')     # 6-stem has no high variant
+            with self.assertRaises(ValueError):
+                stems.model_for('drums', 'ultra')
+            with self.assertRaisesRegex(ValueError, 'htdemucs_ft'):
+                stems.require_ready(self.store, 'drums', 'high')
             with self.assertRaises(ValueError):
                 stems.model_for('mix')
+
+    def test_recommendation_follows_the_hardware_and_never_downloads(self):
+        gpu = {'gpu': 'Test GPU', 'vram_free_gb': 8.0, 'vram_total_gb': 12.0, 'ram_gb': 32.0}
+        advice = stems.recommend(gpu)
+        self.assertEqual((advice['device'], advice['quality']), ('cuda', 'standard'))
+        self.assertIn('Test GPU', advice['notes'][0])
+        small = stems.recommend({'gpu': 'Tiny', 'vram_free_gb': 1.0, 'vram_total_gb': 4.0, 'ram_gb': 4.0})
+        self.assertEqual(small['device'], 'cpu')
+        self.assertTrue(any('RAM is 4.0 GB' in note for note in small['notes']))
+        self.assertTrue(any('only if stray sounds' in note for note in small['notes']))
+        with patch.object(stems, '_gpu', return_value={'gpu': None, 'free': 0, 'total': 0}), \
+                patch.dict(stems._HARDWARE, {'at': 0.0, 'value': None}), patch.object(stems, 'installed', return_value=False):
+            report = stems.status(self.store)
+        self.assertEqual(report['recommendation']['device'], 'cpu')
+        self.assertEqual(report['models']['htdemucs_ft']['download'], '324 MB')
+        self.assertFalse(any(model['ready'] for model in report['models'].values()))
 
     def test_prepare_model_downloads_through_the_job_and_records_a_marker(self):
         context = FakeContext()
@@ -73,8 +95,6 @@ class StemTests(unittest.TestCase):
         calls = []
 
         def fake_run(argv, **kwargs):
-            if argv[1:3] == ['-c', 'import torch; print(torch.cuda.mem_get_info()[0] if torch.cuda.is_available() else 0)']:
-                return subprocess.CompletedProcess(argv, 0, '0\n', '')
             calls.append(argv)
             out = Path(argv[argv.index('-o') + 1]) / argv[argv.index('-n') + 1]
             out.mkdir(parents=True)
@@ -84,7 +104,8 @@ class StemTests(unittest.TestCase):
 
         song = Path(self.temp.name) / 'song.wav'
         stem_wave(song, 1)
-        with patch.object(stems.subprocess, 'run', side_effect=fake_run):
+        with patch.object(stems.subprocess, 'run', side_effect=fake_run), \
+                patch.object(stems, '_gpu', return_value={'gpu': None, 'free': 0, 'total': 0}):
             first = stems.separate(self.store, song, 'abc', 'htdemucs')
             second = stems.separate(self.store, song, 'abc', 'htdemucs')
             self.assertEqual(first, second)
@@ -98,8 +119,8 @@ class StemTests(unittest.TestCase):
         song = Path(self.temp.name) / 'song.wav'
         stem_wave(song, 1)
         failed = subprocess.CompletedProcess([], 1, '', 'boom')
-        ok_probe = subprocess.CompletedProcess([], 0, '0\n', '')
-        with patch.object(stems.subprocess, 'run', side_effect=[ok_probe, failed]):
+        with patch.object(stems.subprocess, 'run', side_effect=[failed]), \
+                patch.object(stems, '_gpu', return_value={'gpu': None, 'free': 0, 'total': 0}):
             with self.assertRaisesRegex(ValueError, 'Stem separation failed'):
                 stems.separate(self.store, song, 'abc', 'htdemucs')
         self.assertFalse((self.store.home / 'analysis' / 'stems' / 'abc-htdemucs').exists())

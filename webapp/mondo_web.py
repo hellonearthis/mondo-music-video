@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.6.13"
+MGL_APP_VERSION = "1.6.14"
 WEB = Path(__file__).parent
 
 
@@ -204,7 +204,7 @@ class ScoreEdits(StrictModel):
 
 
 class StemsPrepareRequest(StrictModel):
-    model: Literal["htdemucs", "htdemucs_6s"] = "htdemucs"
+    model: Literal["htdemucs", "htdemucs_ft", "htdemucs_6s"] = "htdemucs"
     consent: bool = False
 
 
@@ -240,6 +240,7 @@ class ProductionRequest(StrictModel):
     compact_prompts: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
+    stem_quality: Literal["standard", "high"] = "standard"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
 

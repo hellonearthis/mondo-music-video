@@ -57,6 +57,39 @@ A working music-video setup needs **a writer, local Laya review, and a renderer*
 Optional vision/style harvesting and Topaz are separate; do not install them
 unless requested. Reuse working components before proposing new downloads.
 
+### Optional: instrument analysis (stems)
+
+Music-video planning can follow one instrument instead of the whole mix. This is
+an optional add-on; **do not install it unless the user wants it**, but do tell
+them it exists and ask. Explain it plainly: "Mondo can plan the cuts from just the
+drums, bass, vocals or other instruments, and it lets you fix the beat grid and
+sections before generating. Following an instrument needs a small add-on (Demucs,
+MIT) that separates the song into parts. Want me to set it up?"
+
+Recommend by what the machine can do. Read `inspect_studio` kind `stems` (after the
+app is running) or the hardware you already inspected: it reports the GPU, free
+VRAM and RAM and a ready-made `recommendation`. Measured figures (RTX 4090 and CPU):
+
+| Model | Download | When to offer it |
+| --- | --- | --- |
+| Standard 4-stem (`htdemucs`) | 81 MB | Recommended to everyone. Drums, bass, vocals, other. About 8 s per 4-minute song on a GPU, about 70 s on CPU. |
+| High-quality 4-stem (`htdemucs_ft`) | 324 MB | Optional. 2 to 3 times slower; cleaner (less stray sound in a stem) on some songs, no better on others. Worth offering when a GPU with about 3 GB free is present; on a CPU-only machine offer it only if the user hears stray sounds. |
+| 6-stem (`htdemucs_6s`) | 53 MB | Only if the user wants guitar or piano. Piano is the least reliable. It was noisier than the 4-stem model on vocals, so it is never used for them. |
+
+Separation needs about 1.2 GB of VRAM (any model, any song length) and uses the GPU
+only when about 3 GB is free, otherwise the CPU (no VRAM, 2 to 3.5 GB of RAM). Warn
+below about 6 GB of system RAM. Stems are analysis input only: the video keeps the
+original audio. If the user has a small GPU that ComfyUI already fills, expect CPU.
+
+Install and download only after the user approves, and list them in the single
+download proposal with the other items: `pip install demucs` (about 20 MB; it
+reuses the installed torch) plus the chosen model sizes above. Never start the
+model download for the user without that approval; the app's editor and
+`POST /api/stems/prepare` need `consent: true` that only the user gives. After
+approval, verify with `inspect_studio` kind `stems` that the chosen models show
+`ready: true`. Do not equate a successful install with tested separation: preview
+a real song with an `analysis_driver` (see AGENT_SETUP.md) before saying it works.
+
 For the writer, prefer a supported existing service. For a new local writer,
 consider official Qwen3 GGUF quantizations with llama.cpp. Qwen3-4B Q4_K_M is
 about 2.50 GB of weights; Qwen3-8B Q4_K_M is about 5.03 GB. These are starting
@@ -108,7 +141,8 @@ one. A hosted renderer still needs the writer and local Laya setup.
 Present a compact proposal listing each new model/runtime, source, exact bytes
 where published (otherwise an explicit estimate/unknown), local destination,
 license/terms link, aggregate download and free disk space with headroom. Separate
-existing/reused files from downloads. Include dependency downloads. Explain why
+existing/reused files from downloads. Include dependency downloads and, if the
+user chose instrument analysis, the Demucs add-on and each stem model with its size. Explain why
 the proposed configuration suits the detected machine and any remaining risks.
 
 Ask once for approval of that plan. Approval covers only the listed downloads

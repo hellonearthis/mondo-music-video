@@ -388,9 +388,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.6.13")
+        self.assertEqual(api_version()["version"], "1.6.14")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.6.13", (root / "README.md").read_text())
+        self.assertIn("1.6.14", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -780,6 +780,16 @@ class PublicAppTests(unittest.TestCase):
                 driven.raise_for_status()
                 self.assertTrue(driven.json()["score"]["beats"])
                 self.assertEqual(self.client.post("/api/quote",json={**base,"analysis_driver":"banjo"}).status_code,422)
+                self.assertEqual(self.client.post("/api/quote",json={**base,"analysis_driver":"drums","stem_quality":"ultra"}).status_code,422)
+                not_ready=self.client.post("/api/quote",json={**base,"analysis_driver":"drums","stem_quality":"high"})
+                self.assertEqual(not_ready.status_code,400)
+                self.assertIn("htdemucs_ft",not_ready.json()["detail"])
+                with patch.object(stems,"prepare_model",side_effect=fake_prepare):
+                    self.client.post("/api/stems/prepare",json={"model":"htdemucs_ft","consent":True}).raise_for_status()
+                    self.wait()
+                high=self.client.post("/api/quote",json={**base,"analysis_driver":"drums","stem_quality":"high"})
+                high.raise_for_status()
+                self.assertTrue(high.json()["score"]["beats"])
 
     def test_hosted_original_adapters_and_consent(self):
         self.store.save_key("WAVESPEED_API_KEY","mock-only-key")
