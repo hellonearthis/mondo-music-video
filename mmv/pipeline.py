@@ -134,7 +134,7 @@ def roster_for(store, request, refs):
     return roster
 
 
-def prepare(store, request):
+def prepare(store, request, *, saved_prepared=None):
     from .render import get_backend
     from .engine.plan import plan
     from .engine.analyze import ScoreMap, Section
@@ -286,8 +286,10 @@ def prepare(store, request):
             raise ValueError('The planned cast exceeds this renderer’s reference limit')
     casting = assign(p, roster, policy=request['casting_policy'], seed=request['seed'],
                      ref_policy=request['ref_policy'], ensemble_mode=request['ensemble_mode'], on_screen=request['on_screen']) if roster else None
-    lip_sync = None
-    if kind == 'video' and request.get('mouth_mode') == 'lip_sync':
+    from . import passage_plans
+    replay_plans = saved_prepared is not None and passage_plans.verify(saved_prepared)
+    lip_sync = saved_prepared.get('lipsync') if replay_plans else None
+    if not replay_plans and kind == 'video' and request.get('mouth_mode') == 'lip_sync':
         from . import lipsync
         lip_sync = lipsync.plan_passages(p.segments, casting, lipsync.clean_lines(request.get('lyric_lines')),
                                          request.get('singers') or [], request['seed'])
@@ -302,20 +304,28 @@ def prepare(store, request):
             closing = float((read_json(inside(store.home / 'runs', request['end_ident']).parent / 'output.json', {}) or {}).get('duration') or 0.0)
         sub_plan = subliminal.plan_run(request['subliminal'], fps, p.total_frames + round((opening + closing) * fps),
                                        score.downbeat_frames, round(opening * fps), store.home / 'uploads')
+    dance_plan = saved_prepared.get('dance') if replay_plans else None
+    if not replay_plans and kind == 'video' and request.get('dance_mode', 'off') != 'off':
+        from . import dance
+        dance_plan = dance.plan_passages(p.segments, casting, asdict(score), request, singer=(lip_sync or {}).get('singer'),
+                                        source={'analysis_driver': request.get('analysis_driver') or 'mix', 'score_edited': any(bool(v) for v in (request.get('score_edits') or {}).values())})
     render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None,
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0
-    return {'settings': settings, 'segments': [asdict(s) for s in p.segments], 'plan': asdict(p), 'score': asdict(score),
+    prepared = {'settings': settings, 'segments': [asdict(s) for s in p.segments], 'plan': asdict(p), 'score': asdict(score),
             'detected': detected, 'lipsync': lip_sync, 'subliminal': sub_plan, 'casting': casting, 'style': style, 'references': refs, 'descriptions': descriptions,
             'seconds': score.duration_seconds, 'estimate': round(render_cost + writer_cost, 4),
             'render_estimate': render_cost, 'writer_estimate': writer_cost,
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),
                          'downbeats': len(score.downbeat_frames), 'sections': len(score.sections),
                          'shots': sum(len(s.shots) for s in p.segments), 'width': width, 'height': height}}
+    if dance_plan is not None:
+        prepared['dance'] = dance_plan             # absent when off, so existing fingerprints are unchanged
+    return passage_plans.restore(prepared, saved_prepared) if replay_plans else prepared
 
 
 def fingerprint(store, request, prepared):
-    payload = {k:v for k,v in prepared.items() if k not in ('references',)}
+    payload = {k:v for k,v in prepared.items() if k not in ('references', 'passage_plan_binding')}
     digest = hashlib.sha256(json.dumps({'request': request, 'prepared': payload}, sort_keys=True).encode())
     files = list(prepared['references'])
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))
@@ -335,8 +345,25 @@ def fingerprint(store, request, prepared):
     return digest.hexdigest()
 
 
+def prepare_resume(store, request, directory):
+    from . import passage_plans
+    saved = read_json(directory / 'prepared.json', {})
+    passage_plans.verify_prompts(directory, saved)
+    return prepare(store, request, saved_prepared=saved)
+
+
 def produce(store, request, prepared, context, *, resume=False):
+    from . import passage_plans
     directory = context.log_path.parent
+    if resume:
+        saved = read_json(directory / 'prepared.json', {})
+        passage_plans.verify_prompts(directory, saved)
+        if passage_plans.verify(saved):
+            if passage_plans.binding(prepared) != saved[passage_plans.KEY]:
+                raise ValueError('Resume passage plan digest mismatch; request a new resume preview')
+            prepared = passage_plans.restore(prepared, saved)
+    elif passage_plans.plans(prepared):
+        prepared = {**prepared, passage_plans.KEY: passage_plans.binding(prepared)}
     write_json(directory / 'request.json', request)
     write_json(directory / 'consent.json', prepared['consent'])
     data = {**prepared, 'references': [str(p) for p in prepared['references']]}

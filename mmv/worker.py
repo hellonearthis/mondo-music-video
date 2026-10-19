@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -11,13 +12,28 @@ from urllib.parse import urlparse
 from .storage import Storage, inside, read_json, write_json
 
 
-def find_cached_passage_prompt(cache_dir, runs_dir, system, job, seg, tags, cleared_at=0.0):
-    cache_key = hashlib.sha256(("validated-v2\n" + system + "\n---\n" + json.dumps(job, sort_keys=True)).encode('utf-8')).hexdigest()
+def passage_cache_key(system, job, validators_version=''):
+    # Empty version deliberately preserves every existing cache identity.
+    prefix = "validated-v2\n" + ("validators:" + validators_version + "\n" if validators_version else "")
+    return hashlib.sha256((prefix + system + "\n---\n" + json.dumps(job, sort_keys=True)).encode('utf-8')).hexdigest()
+
+
+def cached_shot_bodies(prompt):
+    """Recover assembled shot clauses for opt-in cache validators (never writer prose)."""
+    detailed = prompt.partition('\ndetailed_description:\n')[2].partition('\noverall_soundscape:')[0]
+    return re.split(r'\[Shot \d+\]', detailed)[1:]
+
+
+def find_cached_passage_prompt(cache_dir, runs_dir, system, job, seg, tags, cleared_at=0.0,
+                               *, extra_validators=(), validators_version=''):
+    cache_key = passage_cache_key(system, job, validators_version)
+    def acceptable(prompt):
+        return all(not validate(prompt) for validate in extra_validators)
     cache_file = cache_dir / f"{cache_key}.json"
     if cache_file.exists() and (cleared_at <= 0 or cache_file.stat().st_mtime >= cleared_at):
         try:
             cached = read_json(cache_file)
-            if cached and isinstance(cached.get("prompt"), str) and cached["prompt"]:
+            if cached and isinstance(cached.get("prompt"), str) and cached["prompt"] and acceptable(cached["prompt"]):
                 return cached["prompt"]
         except Exception:
             pass
@@ -30,7 +46,7 @@ def find_cached_passage_prompt(cache_dir, runs_dir, system, job, seg, tags, clea
             if not job_file.exists():
                 continue
             try:
-                if (run_dir / "writer_system.md").read_text(encoding="utf-8") != system or read_json(job_file) != job:
+                if not any(path.read_text(encoding="utf-8") == system for path in run_dir.glob("writer_system*.md")) or read_json(job_file) != job:
                     continue
             except Exception:
                 continue
@@ -41,6 +57,8 @@ def find_cached_passage_prompt(cache_dir, runs_dir, system, job, seg, tags, clea
                     p_dict = read_json(run_prompts, {})
                     if seg.segment_id in p_dict and isinstance(p_dict[seg.segment_id], str):
                         prompt = p_dict[seg.segment_id]
+                        if not acceptable(prompt):
+                            continue
                         write_json(cache_file, {"prompt": prompt, "segment_id": seg.segment_id})
                         return prompt
                 except Exception:
@@ -49,10 +67,10 @@ def find_cached_passage_prompt(cache_dir, runs_dir, system, job, seg, tags, clea
     return None
 
 
-def save_cached_passage_prompt(cache_dir, system, job, prompt, seg_id):
+def save_cached_passage_prompt(cache_dir, system, job, prompt, seg_id, *, validators_version=''):
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_key = hashlib.sha256(("validated-v2\n" + system + "\n---\n" + json.dumps(job, sort_keys=True)).encode('utf-8')).hexdigest()
+        cache_key = passage_cache_key(system, job, validators_version)
         write_json(cache_dir / f"{cache_key}.json", {"prompt": prompt, "segment_id": seg_id})
     except Exception:
         pass
@@ -106,6 +124,9 @@ def run(home, directory, *, resume=False):
     store = Storage(home)
     request = read_json(directory / 'request.json')
     prepared = read_json(directory / 'prepared.json')
+    from . import passage_plans
+    if resume:
+        passage_plans.verify_prompts(directory, prepared)
     settings = prepared['settings']
     from .engine import style, actor, casting, assemble
     from .engine.plan import ShotPlan
@@ -168,6 +189,8 @@ def run(home, directory, *, resume=False):
     # Lip sync keeps every passage sealed except those the approved plan marks as singing.
     effective_silent_mouths = mouth_mode in ('sealed', 'lip_sync')
     singing_plan = ((prepared.get('lipsync') or {}).get('passages') or {}) if mouth_mode == 'lip_sync' else {}
+    dance_plan = prepared.get('dance') or None
+    dance_passages = ((dance_plan or {}).get('passages') or {}) if request['kind'] == 'video' else {}
     cast_block = actor.cast_writer_block([a['actor_id'] for a in roster], silent_mouths=effective_silent_mouths)
     restrictions = [name for name in ('nudity','blood','violence','sexual') if request['content'].get({'blood':'blood_gore','sexual':'sexual_content'}.get(name,name), 'none') == 'none']
     # OAP's own category names are enforced independently by check_cast.
@@ -240,6 +263,15 @@ def run(home, directory, *, resume=False):
                         silent_mouths=False, lyrics=request['lyrics'] or None, direction=request['direction'] or None)
                 system_singing += '\n\n' + lipsync.SINGING_RULES + quality.WRITER_RULES
                 (directory / 'writer_system_singing.md').write_text(system_singing, encoding='utf-8')
+            system_dance = system_singing_dance = None
+            if any(item.get('dancing') for item in dance_passages.values()):
+                from . import dance
+                tail = quality.WRITER_RULES            # the quality rules stay last: base, singing rules, dance rules, quality rules
+                system_dance = system[:-len(tail)] + '\n\n' + dance.DANCE_RULES + tail
+                (directory / 'writer_system_dance.md').write_text(system_dance, encoding='utf-8')
+                if system_singing is not None:
+                    system_singing_dance = system_singing[:-len(tail)] + '\n\n' + dance.DANCE_RULES + ' ' + dance.DANCE_SINGER_SENTENCE + tail
+                    (directory / 'writer_system_singing_dance.md').write_text(system_singing_dance, encoding='utf-8')
             jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
             cache_dir = store.home / 'cache' / 'prompts'
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -251,7 +283,9 @@ def run(home, directory, *, resume=False):
                 sing = singing_plan.get(seg.segment_id) or {}
                 singing = bool(sing.get('singing')) and system_singing is not None
                 seg_silent = effective_silent_mouths and not singing
-                seg_system = system_singing if singing else system
+                dpass = dance_passages.get(seg.segment_id) or {}
+                dancing = bool(dpass.get('dancing')) and system_dance is not None
+                seg_system = (system_singing_dance if dancing else system_singing) if singing else (system_dance if dancing else system)
                 seg_cast_block = cast_block_singing if singing else cast_block
                 cast_entries = casting.cast_for(prepared['casting'], seg.segment_id)
                 if singing:
@@ -261,11 +295,26 @@ def run(home, directory, *, resume=False):
                 if singing:
                     job['singing'] = {'actor_id': sing['actor_id'], 'picture_tag': sing['picture_tag'], 'lines': sing['lines'],
                                       'shots': lipsync.shot_lyrics(seg, sing['lines'])}
+                if dancing:
+                    job['dance'] = dance.job(dpass, dance_plan)
                 if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
                 write_json(jobs_dir / (seg.segment_id+'.json'), job)
 
-                if reuse_prompts and not singing:
-                    cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', system, job, seg, tags, cleared_at=cleared_at)
+                cache_validators = []
+                if singing:
+                    cache_validators = [
+                        lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=False),
+                        lambda prompt: lipsync.lipsync_problems(prompt, cached_shot_bodies(prompt), seg, sing,
+                                                              *lipsync.cast_refs(cast_entries, sing['actor_id']))]
+                dance_version = ''
+                if dancing:
+                    if not singing:
+                        cache_validators.append(lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent))
+                    dance_version = f'dance-v{dance.VERSION}'
+                    cache_validators.append(lambda prompt: dance.dance_problems(prompt, cached_shot_bodies(prompt), seg, dpass, dance_plan))
+                if reuse_prompts:
+                    cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', seg_system, job, seg, tags,
+                                                        cleared_at=cleared_at, extra_validators=cache_validators, validators_version=dance_version)
                     if cached and not quality.prompt_problems(cached, seg, request['direction']):
                         if seg_silent and RIGGING_TAIL.rstrip(".").lower() not in cached.lower():
                             soundscape_pos = cached.find("\noverall_soundscape:")
@@ -279,9 +328,9 @@ def run(home, directory, *, resume=False):
                         continue
 
                 progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
-                feedback = ''
+                feedback, soft_fallback = '', None
                 compact = bool(request.get('compact_prompts'))
-                attempts = (4 if singing else 3) if settings['writer_mode'] == 'local' else 1
+                attempts = (4 if singing or dancing else 3) if settings['writer_mode'] == 'local' else 1
                 for attempt in range(attempts):
                     if compact:
                         raw = llm(seg_system, _compact_writer_job(job) + feedback)
@@ -301,9 +350,16 @@ def run(home, directory, *, resume=False):
                                 prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
                         problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent)
                                     + quality.prompt_problems(prompt, seg, request['direction'])
-                                    + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else []))
+                                    + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else [])
+                                    + (dance.dance_problems(prompt, response.shot_bodies, seg, dpass, dance_plan) if dancing else []))
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
                         problems = [str(exc)]
+                    if dancing and problems and all(dance.is_soft(x) for x in problems) and soft_fallback is None:
+                        soft_fallback = (prompt, problems)          # only style advice left: keep the first such draft as the fallback
+                    if dancing and problems and attempt == attempts - 1 and soft_fallback is not None:
+                        prompt, kept = soft_fallback                # a later try got worse; use the best draft and record its advice
+                        write_json(directory / f'{seg.segment_id}.dance-advice-kept.json', kept)
+                        problems = []
                     if not problems:
                         progress(f'Laya reviewing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
                         state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
@@ -316,7 +372,7 @@ def run(home, directory, *, resume=False):
                     if not problems:
                         prompts[seg.segment_id] = prompt
                         write_json(directory / 'prompts.json', prompts)
-                        save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id)
+                        save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id, validators_version=dance_version)
                         break
                     write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
                     feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
@@ -338,6 +394,8 @@ def run(home, directory, *, resume=False):
         prompts = read_json(directory / 'prompts.json', {})
         if any(not isinstance(prompts.get(seg.segment_id), str) or not prompts[seg.segment_id] for seg in plan.segments):
             raise ValueError('Resume requires saved validated prompts for every passage')
+    if not resume:
+        passage_plans.bind_prompts(directory, prepared, prompts)
     progress('All prompts validated; opening renderer', 32)
     vision_wanted = request['kind'] == 'video' and request.get('vision_quality_check')
     def start_comfy():
@@ -361,7 +419,7 @@ def run(home, directory, *, resume=False):
             return prompt_id
         ComfyClient.queue = record_queue
     backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
-                        song=None, steps=20, timeout_s=3600, comfy_host=url.hostname, comfy_port=url.port or 8188,
+                        song=None, steps=20, timeout_s=None, comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
                         map_path=settings['workflow_map_path'], root=ENGINE,
                         comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'),
