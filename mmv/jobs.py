@@ -79,7 +79,7 @@ class JobContext:
         self.check()
         kwargs = {"start_new_session": True} if os.name != "nt" else {
             "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-        proc_env = {**os.environ, **(env or {}), "PYTHONIOENCODING": "utf-8"}
+        proc_env = {**os.environ, **(env or {}), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
         with self.log_path.open("ab") as log:
             process = subprocess.Popen([str(x) for x in argv], stdout=log,
                                        stderr=log, env=proc_env, cwd=cwd, **kwargs)

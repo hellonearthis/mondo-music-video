@@ -130,16 +130,21 @@ function Test-HttpOk([string]$url, [int]$timeoutSec = 2) {
 }
 
 function Get-DiscoveredModels {
-    $found = @()
-    if (-not (Test-Path $modelsDir)) { return $found }
-    $files = Get-ChildItem -Path $modelsDir -Recurse -Filter "*.gguf" -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -notmatch "mmproj" }
+    if (-not (Test-Path $modelsDir)) { return @() }
+    $allGgufs = Get-ChildItem -Path $modelsDir -Recurse -Filter "*.gguf" -File -ErrorAction SilentlyContinue
+    if (-not $allGgufs) { return @() }
+    $projByDir = @{}
+    foreach ($item in $allGgufs) {
+        if ($item.Name -match "mmproj" -and -not $projByDir.ContainsKey($item.DirectoryName)) {
+            $projByDir[$item.DirectoryName] = $item.FullName.Substring($LlamaDir.Length).TrimStart("\/")
+        }
+    }
 
-    foreach ($file in $files) {
+    $found = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($file in $allGgufs) {
+        if ($file.Name -match "mmproj") { continue }
         $relPath = $file.FullName.Substring($LlamaDir.Length).TrimStart("\/")
-        $dir = $file.DirectoryName
-        $proj = Get-ChildItem -Path $dir -Filter "*mmproj*.gguf" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-        $projRel = if ($proj) { $proj.FullName.Substring($LlamaDir.Length).TrimStart("\/") } else { "" }
+        $projRel = if ($projByDir.ContainsKey($file.DirectoryName)) { $projByDir[$file.DirectoryName] } else { "" }
         $sizeGb = [Math]::Round($file.Length / 1GB, 2)
         $parentFolder = $file.Directory.Parent.Name
         if ($file.Directory.FullName -eq $modelsDir) {
@@ -152,7 +157,7 @@ function Get-DiscoveredModels {
         $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $alias = $name.ToLower() -replace "-gguf$", "" -replace "-q[0-9].*$", "" -replace "-bf16.*$", "" -replace "-f16.*$", ""
 
-        $found += [PSCustomObject]@{
+        $found.Add([PSCustomObject]@{
             Name          = $name
             FileName      = $file.Name
             RelativePath  = $relPath
@@ -162,9 +167,9 @@ function Get-DiscoveredModels {
             MmprojRelPath = $projRel
             FolderTag     = $folderTag
             DefaultAlias  = $alias
-        }
+        })
     }
-    return $found
+    return $found.ToArray()
 }
 
 # If GUI requested

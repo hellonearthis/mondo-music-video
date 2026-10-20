@@ -1,5 +1,11 @@
 # Releases
 
+## 1.9.6 — Collaborator performance improvements
+
+Integrated compatible work from [hellonearthis](https://github.com/hellonearthis)'s fork commits `5b026e5` and `e6ef03e`: Windows model/projector discovery now scans GGUF files once, production child processes started by `JobContext` use UTF-8 mode, service probes reuse workers and validated launch commands, the color wheel reuses its rendered image, and unfinished-run listing uses directory entries for faster traversal. The run-size cache expires after five seconds because writes in nested folders do not update the run folder's mtime. The writer working-directory label now mentions llama.cpp while retaining its generic meaning for other local writers. Existing preview, start, paid consent, deletion confirmation and agent actions are unchanged.
+
+No performance timings or Windows execution are claimed from this Linux review. See [collaborator review](COLLABORATOR_REVIEW.md) for integration decisions.
+
 ## 1.9.5 — Bounded instrument action repair
 
 For opted-in instrument performances, a clearly attributed but vague guitar action such as “strikes the guitar” can be corrected to explicit string and fret contact before the normal prompt, motion and Laya checks. The original writer response remains in the run record, and a small repair receipt lists the edited shots. Wrong-instrument gestures, lyrics and ambiguous attribution stay with the writer for correction. Retry feedback names the failing actor and shot, gives a physically specific example, and asks the writer to preserve the other shots. Passage lengths, protected core prompting and paid retry limits remain unchanged.

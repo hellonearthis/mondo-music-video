@@ -1,4 +1,10 @@
-# Verification — 1.9.5
+# Verification — 1.9.6
+
+## 1.9.6 — Fork performance integration
+
+Final complete mock-service and browser suite: **626 tests + 141 subtests passed**, 106.51s. Focused unfinished-run, engine-lifecycle and public-app tests: **108 tests + 18 subtests passed**, 26.85s. A temporary run regression grows a nested file while the cache is fresh and confirms the displayed size refreshes after its five-second expiry. `node --check webapp/js/colorwheel.js` and `git diff --check` passed. A fresh import of the version handler returned 1.9.6; the editable package metadata was rebuilt locally to 1.9.6. `mmv.protected_scheme.check()` returned `[]`.
+
+Claude Code Sonnet 5.5 completed a read-only review of the exact fork patch; its confirmed defects and integration dispositions are recorded in [COLLABORATOR_REVIEW.md](COLLABORATOR_REVIEW.md). A 1.9.6 wheel under `/tmp/mmv-v196-packages` passed a public-asset/private-path audit: exactly four authorized starter OAPs, six public styles and two included instrument PNGs, with no collaboration state or credentials. PowerShell is unavailable on this Linux host, so the optimized Windows model scan was reviewed statically but not executed or timed. At the owner's follow-up request, the idle app was restarted with its existing data folder and port and automatic update installation disabled. Live `/api/version` reports 1.9.6, the home page returns HTTP 200, and `/api/status` shows the prior operation complete. No real generation, GPU/paid work, private asset import, stage, commit, push or publication occurred.
 
 ## 1.9.5 — Instrument action correction
 

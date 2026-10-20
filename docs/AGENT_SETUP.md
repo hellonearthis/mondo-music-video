@@ -41,7 +41,7 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.9.5 exposes **39 tools** and advertises the
+v1.9.6 exposes **39 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -210,6 +210,8 @@ Agreements do not move money, approve rider exceptions or establish signer trust
 | `update_studio_settings` | Patch supported model/service/profile preferences, Laya device, H3 model selections, or the auto-update switch. Executable launch commands and secret values are excluded; configure those with the installer/GUI. |
 | `install_starter_assets` | Install only the four public actors and six styles, preserving existing items and removals. Without signer acceptance, return pending actors, public signer and riders for review. Set `accept_starter_signer` only with user acceptance; set `restore_removed` only when explicitly restoring deleted starters. |
 | `delete_actor`, `delete_style` | Remove an unwanted local asset with authorization and `confirm=true`, keeping completed outputs/exports. Production blocks deletion. |
+| `export_style` | Retrieve a visual style card as JSON, including its 11-axis breakdown when present. |
+| `import_style` | Import a visual style card. IDs match `^[a-z0-9][a-z0-9_-]{0,63}$`; overwriting an existing style requires `overwrite=true`. |
 
 All mutations go through the app's idle guard; existing paid consent and retry
 rules are unchanged. Adding/selecting profiles never submits a paid generation.
