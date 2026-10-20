@@ -1,5 +1,13 @@
 # Releases
 
+## 1.9.7 — Performance optimizations
+
+- **Launcher model discovery (`start.ps1`)**: Discovers GGUF models and mmproj projectors in a single filesystem pass with hashtable lookups by folder, reducing discovery time on large model collections from ~1.5–3.0s down to milliseconds.
+- **Unfinished runs listing (`webapp/mondo_web.py`)**: Switched directory entry iteration to `os.scandir` to utilize OS-cached file metadata on Windows, and added mtime-based directory size caching (`_run_size_cache`), eliminating deep recursive filesystem walks on every UI poll.
+- **Service probe efficiency (`mmv/services.py`)**: Cached launch command validation via `@functools.lru_cache`, avoiding repetitive JSON parsing during health checks, and reused a persistent `ThreadPoolExecutor` worker pool to eliminate thread creation and teardown overhead on 2.5s polling cycles.
+- **Color wheel rendering (`webapp/js/colorwheel.js`)**: Cached rendered wheel image data keyed by pixel dimensions, rendering subsequent color wheel mounts and modal openings instantaneously without recomputing 150,000+ pixels.
+- Bumped application version to 1.9.7 across package manifests, README, agent endpoints, and test suites.
+
 ## 1.9.6 — LLama directory settings label
 
 - Renamed the `writer_cwd` setting label in the Studio Settings interface from "Writer working folder" to "LLama Directory", matching launcher and operator conventions for configuring `llama-server.exe` working directories.

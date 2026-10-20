@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.9.6"
+MGL_APP_VERSION = "1.9.7"
 WEB = Path(__file__).parent
 
 
@@ -1332,6 +1332,8 @@ def create_app(home=None, *, test_hosts=False):
         changed = protected_scheme.check()
         return {"intact": not changed, "changed": protected_scheme.describe(changed), "notice": protected_scheme.notice() if changed else None}
 
+    _run_size_cache: dict[str, tuple[float, float]] = {}
+
     @app.delete("/api/outputs/{run_id}")
     def delete_output(run_id: str):
         with jobs.lock:
@@ -1341,8 +1343,30 @@ def create_app(home=None, *, test_hosts=False):
             if not target.is_dir() or not (target / "output.json").is_file():
                 raise ValueError("Output not found")
             shutil.rmtree(target, ignore_errors=True)
+            _run_size_cache.pop(run_id, None)
             quotes.clear()
         return {"deleted": run_id}
+
+    def run_folder_size_mb(path: Path, mtime: float) -> float:
+        cached = _run_size_cache.get(path.name)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        total = 0
+        stack = [str(path)]
+        while stack:
+            cur = stack.pop()
+            try:
+                with os.scandir(cur) as it:
+                    for item in it:
+                        if item.is_file(follow_symlinks=False):
+                            total += item.stat().st_size
+                        elif item.is_dir(follow_symlinks=False):
+                            stack.append(item.path)
+            except OSError:
+                pass
+        size_mb = round(total / (1024 * 1024), 2)
+        _run_size_cache[path.name] = (mtime, size_mb)
+        return size_mb
 
     def rendered_clips(path):
         return sum(1 for _ in (path / "renders").glob("*.mp4"))
@@ -1353,8 +1377,18 @@ def create_app(home=None, *, test_hosts=False):
         runs_dir = store.home / "runs"
         if not runs_dir.is_dir():
             return []
-        for path in sorted(runs_dir.iterdir(), key=lambda p: p.stat().st_mtime if p.is_dir() else 0, reverse=True):
-            if not path.is_dir() or (path / "output.json").is_file():
+        entries = []
+        try:
+            with os.scandir(runs_dir) as it:
+                for entry in it:
+                    if entry.is_dir(follow_symlinks=False):
+                        entries.append(entry)
+        except OSError:
+            return []
+        entries.sort(key=lambda e: e.stat().st_mtime, reverse=True)
+        for entry in entries:
+            path = Path(entry.path)
+            if (path / "output.json").is_file():
                 continue
             request = read_json(path / "request.json", {}) or {}
             title = request.get("title") or "Untitled Draft"
@@ -1366,25 +1400,19 @@ def create_app(home=None, *, test_hosts=False):
             total_segments = len(segments)
             validated_prompts = sum(1 for seg in segments if bool(prompts.get(f"seg{seg['index']:03d}")))
             can_finish = (total_segments > 0 and validated_prompts == total_segments and (backend in ("comfy_sdk_h3", "local_h3")))
-            
-            # calculate folder size
-            try:
-                folder_size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-            except Exception:
-                folder_size = 0
-
+            mtime = entry.stat().st_mtime
             results.append({
-                "id": path.name,
+                "id": entry.name,
                 "title": title.strip().strip('"'),
                 "backend": backend,
                 "kind": kind,
-                "mtime": path.stat().st_mtime,
-                "created_str": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                "mtime": mtime,
+                "created_str": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime)),
                 "segments": total_segments,
                 "validated_prompts": validated_prompts,
                 "can_finish": can_finish,
                 "rendered_clips": rendered_clips(path),
-                "size_mb": round(folder_size / (1024 * 1024), 2)
+                "size_mb": run_folder_size_mb(path, mtime)
             })
         return results
 
@@ -1401,6 +1429,7 @@ def create_app(home=None, *, test_hosts=False):
             if rendered_clips(target) and not confirm_rendered:
                 raise ValueError("This run holds rendered clips that may have been paid for; confirm to delete them")
             shutil.rmtree(target, ignore_errors=True)
+            _run_size_cache.pop(run_id, None)
             quotes.clear()
         return {"deleted": run_id}
 
@@ -1416,6 +1445,7 @@ def create_app(home=None, *, test_hosts=False):
             for path in purgeable:
                 if path not in kept:
                     shutil.rmtree(path, ignore_errors=True)
+            _run_size_cache.clear()
             quotes.clear()
         return {"purged_count": len(purgeable) - len(kept), "kept_with_clips": len(kept)}
 

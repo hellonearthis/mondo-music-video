@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import functools
 import json
 import time
 import urllib.error
@@ -12,6 +13,7 @@ _last_probe_time = 0.0
 _cached_probe_home = None
 _cached_probe_results = None
 _CACHE_TTL_SECONDS = 2.5
+_probe_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="mmv-service-probe")
 
 
 def check_services(store, active_job=None, force: bool = False) -> dict:
@@ -27,6 +29,7 @@ def check_services(store, active_job=None, force: bool = False) -> dict:
     return _evaluate_service_activity(store, _cached_probe_results, active_job)
 
 
+@functools.lru_cache(maxsize=32)
 def _launch_problem(raw) -> str | None:
     """None when raw is a usable JSON argv launch command, otherwise why it is not (empty means unset)."""
     if not raw:
@@ -188,23 +191,22 @@ def _probe_raw_services(store) -> dict:
     writer_mode = settings.get("writer_mode", "local")
     shared_vision = bool(vision_url and vision_url == writer_url and writer_mode == "local")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        f_quality = executor.submit(_probe_vision_quality, settings, opener)
-        f_comfy = executor.submit(_probe_comfy, settings, opener)
-        f_writer = executor.submit(_probe_writer, settings, opener)
-        f_vision = None if shared_vision else executor.submit(_probe_vision, settings, opener)
+    f_quality = _probe_executor.submit(_probe_vision_quality, settings, opener)
+    f_comfy = _probe_executor.submit(_probe_comfy, settings, opener)
+    f_writer = _probe_executor.submit(_probe_writer, settings, opener)
+    f_vision = None if shared_vision else _probe_executor.submit(_probe_vision, settings, opener)
 
-        comfy = f_comfy.result()
-        writer = f_writer.result()
-        if shared_vision:
-            vision = {
-                "url": vision_url,
-                "model": settings.get("vision_model") or "",
-                "available": writer["available"],
-                "error": writer["error"],
-            }
-        else:
-            vision = f_vision.result()
+    comfy = f_comfy.result()
+    writer = f_writer.result()
+    if shared_vision:
+        vision = {
+            "url": vision_url,
+            "model": settings.get("vision_model") or "",
+            "available": writer["available"],
+            "error": writer["error"],
+        }
+    else:
+        vision = f_vision.result()
 
     laya = _probe_laya(settings)
     return {

@@ -27,8 +27,17 @@ export function parseHex(text) {
   return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16));
 }
 
+const wheelImageCache = new Map();
+
 function drawWheel(canvas) {
-  const px = canvas.width, radius = px / 2, image = new ImageData(px, px);
+  const px = canvas.width;
+  const ctx = canvas.getContext("2d");
+  const cached = wheelImageCache.get(px);
+  if (cached) {
+    ctx.putImageData(cached, 0, 0);
+    return;
+  }
+  const radius = px / 2, image = new ImageData(px, px);
   for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
     const dx = x + 0.5 - radius, dy = y + 0.5 - radius, distance = Math.hypot(dx, dy);
     if (distance > radius) continue;
@@ -36,7 +45,8 @@ function drawWheel(canvas) {
     const i = (y * px + x) * 4;
     image.data.set([r, g, b, distance > radius - 1 ? Math.round(255 * (radius - distance)) : 255], i);   // soft edge
   }
-  canvas.getContext("2d").putImageData(image, 0, 0);
+  wheelImageCache.set(px, image);
+  ctx.putImageData(image, 0, 0);
 }
 
 export function mountColourWheel(input) {
