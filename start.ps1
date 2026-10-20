@@ -17,7 +17,7 @@ param(
     [int]$Port = 8091,
     [int]$LlamaPort = 8081,
     [ValidateRange(512, 1048576)]
-    [int]$ContextSize = 8192,
+    [int]$ContextSize = 16384,
     [ValidateSet("current", "hellonearthis")]
     [string]$TuningPreset = "current",
     [ValidateRange(0, 1048576)]
@@ -47,7 +47,7 @@ if ($Help) {
     Write-Host "  -Port <int>        Mondo Studio web port (default: 8091)"
     Write-Host "  -LlamaPort <int>   llama-server port (default: 8081)"
     Write-Host "  -TuningPreset <name> current (default) or hellonearthis (16k/vision batches)"
-    Write-Host "  -ContextSize <int> llama-server context window (default: 8192)"
+    Write-Host "  -ContextSize <int> llama-server context window (default: 16384)"
     Write-Host "  -BatchSize <int>   Optional logical batch size; 0 keeps server default"
     Write-Host "  -MicroBatchSize <int> Optional micro-batch size; 0 keeps server default"
     Write-Host "  -ImageMinTokens <int> Optional vision token minimum; 0 keeps server default"
@@ -63,6 +63,33 @@ if ($TuningPreset -eq "hellonearthis") {
     if (-not $PSBoundParameters.ContainsKey("BatchSize")) { $BatchSize = 2048 }
     if (-not $PSBoundParameters.ContainsKey("MicroBatchSize")) { $MicroBatchSize = 1024 }
     if (-not $PSBoundParameters.ContainsKey("ImageMinTokens")) { $ImageMinTokens = 1024 }
+} else {
+    if (-not $PSBoundParameters.ContainsKey("ContextSize")) {
+        try {
+            $settingsFile = Join-Path $env:LOCALAPPDATA "mondo-music-video\settings.json"
+            if (Test-Path $settingsFile) {
+                $existing = Get-Content $settingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($existing.writer_launch) {
+                    $existingLaunch = $existing.writer_launch | ConvertFrom-Json
+                    for ($k = 0; $k -lt $existingLaunch.Length - 1; $k++) {
+                        if ($existingLaunch[$k] -in @("-c", "--ctx-size")) {
+                            $parsedCtx = [int]$existingLaunch[$k + 1]
+                            if ($parsedCtx -ge 512) { $ContextSize = $parsedCtx }
+                        } elseif ($existingLaunch[$k] -in @("-b", "--batch-size") -and -not $PSBoundParameters.ContainsKey("BatchSize")) {
+                            $parsedB = [int]$existingLaunch[$k + 1]
+                            if ($parsedB -gt 0) { $BatchSize = $parsedB }
+                        } elseif ($existingLaunch[$k] -in @("-ub", "--ubatch-size") -and -not $PSBoundParameters.ContainsKey("MicroBatchSize")) {
+                            $parsedUb = [int]$existingLaunch[$k + 1]
+                            if ($parsedUb -gt 0) { $MicroBatchSize = $parsedUb }
+                        } elseif ($existingLaunch[$k] -eq "--image-min-tokens" -and -not $PSBoundParameters.ContainsKey("ImageMinTokens")) {
+                            $parsedImg = [int]$existingLaunch[$k + 1]
+                            if ($parsedImg -gt 0) { $ImageMinTokens = $parsedImg }
+                        }
+                    }
+                }
+            }
+        } catch {}
+    }
 }
 
 $MmvProjectDir = $PSScriptRoot
@@ -220,11 +247,15 @@ if ($selectedModel) {
         "--sleep-idle-seconds", "10"
     )
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)", "--image-min-tokens", "1024")
+        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
     }
     if ($BatchSize -gt 0) { $launchArgs += @("-b", "$BatchSize") }
     if ($MicroBatchSize -gt 0) { $launchArgs += @("-ub", "$MicroBatchSize") }
-    if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) { $launchArgs += @("--image-min-tokens", "$ImageMinTokens") }
+    if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) {
+        $launchArgs += @("--image-min-tokens", "$ImageMinTokens")
+    } elseif ($selectedModel.HasVision) {
+        $launchArgs += @("--image-min-tokens", "1024")
+    }
 
     $settingsPayload = @{
         writer_url = "http://127.0.0.1:$LlamaPort/v1"
@@ -274,12 +305,16 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
             "--sleep-idle-seconds", "10"
         )
         if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath), "--image-min-tokens", "1024")
+            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
         }
 
         if ($BatchSize -gt 0) { $serverArgs += @("-b", "$BatchSize") }
         if ($MicroBatchSize -gt 0) { $serverArgs += @("-ub", "$MicroBatchSize") }
-        if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) { $serverArgs += @("--image-min-tokens", "$ImageMinTokens") }
+        if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) {
+            $serverArgs += @("--image-min-tokens", "$ImageMinTokens")
+        } elseif ($selectedModel.HasVision) {
+            $serverArgs += @("--image-min-tokens", "1024")
+        }
 
         Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $LlamaDir -WindowStyle Minimized
 

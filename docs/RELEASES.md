@@ -1,5 +1,13 @@
 # Releases
 
+## 1.8.10 — 16k context preservation and batch tuning in launcher
+
+- Launcher context and batch preservation (`start.ps1`):
+  - Upgraded the default writer context allocation (`$ContextSize`) from 8,192 to 16,384 tokens to prevent prompt truncation on long multi-shot musical passages.
+  - Resolved an issue where running `start.ps1` without CLI arguments stomped existing `-c`, `-b`, `-ub`, and `--image-min-tokens` settings in `settings.json` back to default 8,192.
+  - Eliminated duplicate `--image-min-tokens` argument injection when vision-capable models are configured with custom token minimums.
+- Bumped application version to `1.8.10`.
+
 ## 1.8.9 — Fix operation log clearing and active session log reset
 
 - Resolved an issue where clicking "Clear log" failed to clear the diagnostic log view:
