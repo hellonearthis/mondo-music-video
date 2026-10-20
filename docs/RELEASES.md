@@ -1,5 +1,48 @@
 # Releases
 
+## 1.9.5 — Bounded instrument action repair
+
+For opted-in instrument performances, a clearly attributed but vague guitar action such as “strikes the guitar” can be corrected to explicit string and fret contact before the normal prompt, motion and Laya checks. The original writer response remains in the run record, and a small repair receipt lists the edited shots. Wrong-instrument gestures, lyrics and ambiguous attribution stay with the writer for correction. Retry feedback names the failing actor and shot, gives a physically specific example, and asks the writer to preserve the other shots. Passage lengths, protected core prompting and paid retry limits remain unchanged.
+
+Claude Code Sonnet 5.5 at medium effort improved the opt-in feedback; Codex added the bounded correction and verified it against the saved failed draft without running a model.
+
+## 1.9.4 — Instrument prompt retry
+
+Natural hand actions such as striking guitar strings now pass the opt-in instrument guard. One clear reference binding can carry through later shots that continue to name the assigned instrument. A failed, unrendered prompt run offers **Try again** in the GUI: it creates a fresh preview from the saved request and still requires the operator to review and approve a new start. The agent client, CLI and MCP expose the same retry-preview path. The misleading context-size hint is no longer appended to unrelated validation failures. The protected core prompting scheme is unchanged.
+
+Claude Code Sonnet 5.5 at medium effort implemented the instrument guard change; Codex reviewed it against saved writer drafts, added GUI/agent retry and verified the release with mock services. No production was automatically retried.
+
+## 1.9.3 — Automatic model startup and GPU handoffs
+
+Quality vision now checks its own service on port 8083, independently of style harvesting on vision_url. Previews and starts accept a configured model that Mondo can launch when its stage needs it. Separate quality-vision status and automatic-start badges distinguish launch capability from a running model. Invalid launch settings name the configuration problem.
+
+Mondo releases idle ComfyUI caches before local prompt preparation, confirms its writer has stopped before rendering, and swaps renderer/vision models between stages. Laya uses the GPU only when measured headroom covers its staged weights plus a reserve; otherwise that production uses CPU without rewriting Settings. Unknown memory does not authorize Laya overlap. Known insufficient writer/vision headroom, busy queues, unverified external renderer release and failed process exits prevent competing loads. Known external GPU writer/vision services are preserved and block local renderer startup; external vision also prevents automatic re-render overlap. Existing paid-consent and retry limits remain unchanged.
+
+The lower-left sidebar tagline now reads “You can do anything”.
+
+Daylight Cinema now includes a complete 11-axis harvest-style card, free axes, borrowable motifs and detailed aesthetic direction. Untouched factory daylight files upgrade automatically; customized or deliberately removed defaults are preserved.
+
+Claude Code Sonnet 5.5 at medium effort implemented the main lifecycle, memory policy, interface and regression tests, and a fresh session expanded daylight; Codex reviewed and tightened conservative cases and integrated the release. No protected prompting sources changed.
+
+## 1.9.2 — Vision checks with ComfyUI already running
+
+Vision-enabled previews now accept an existing ComfyUI. After rendering, Mondo requests cache/model release while its queue is idle and waits for memory release before loading vision; it leaves external ComfyUI alive and preserves other queued/running work. Mondo-owned processes keep their existing stop/restart path. No automatic paid retry changes.
+
+Removed contributor handles from the displayed visual-vocabulary and writer-tuning labels; the vocabulary profile ID, legacy tuning compatibility and contribution credit remain. OPP is acknowledged as the forthcoming prop import/use protocol; no speculative schema was added.
+
+## 1.9.1 — Instrument controls without internal validation warnings
+
+Removed the instrument caution banner and its preview/export text. Instrument selection stays optional, with normal activity/reference information. Agent instructions no longer ask agents to repeat that caution. Validation tracking stays in developer documentation; the original protected-scheme integrity safeguards are unchanged.
+
+## 1.9.0 — Opt-in instrument-playing actors (operator validation pending)
+
+- Per-actor drums, bass, guitar and keyboard assignments; existing-stem energy/pauses with explicit unknown/mix fallback. No implicit separation or downloads.
+- Instrument references are wired per passage after actor references, only for cast players with playing/unknown activity, with shared-design deduplication, renderer budget/cost checks and backend labels. Saved plans, cache validators and consent fingerprints include instrument decisions and sheet identity.
+- BONK-style extension outside protected originals, off by default; form/preview/export warning. Players are excluded from dance choreography; approved singing and mouth rules are preserved.
+- Instrument library/import API, agent method, CLI discovery and MCP import tool (38 total), private-provenance export redaction. Props remain separate from OAP actors; OAP verification and consent guards are unchanged.
+- Owner-supplied guitar and keyboard sheets bundled at their created resolutions under Apache-2.0; drums/bass sheets pending.
+- Claude Code Haiku reviewed the architecture/implementation; staging, privacy and unknown-activity findings were addressed. See [instrument documentation](INSTRUMENTS.md) for asset limits and pending same-song/seed real-render validation.
+
 ## 1.8.14 — Custom caption colours and fonts
 
 Joint Claude Code and Codex work: the backend was written and tested by Claude Code, the browser controls by Codex in an isolated worktree, and the diff was reviewed and integrated by Claude Code.

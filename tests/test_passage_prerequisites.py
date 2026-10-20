@@ -18,7 +18,7 @@ class StopBeforeRender(Exception):
     pass
 
 
-def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=None, body=None, **request_fields):
+def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=None, instrument_settings=None, body=None, prepared_settings=None, stop_process=None, expect=StopBeforeRender, match=None, **request_fields):
     home, directory = tmp_path / 'home', tmp_path / 'run'
     directory.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv('MMV_HOME', str(home))
@@ -32,7 +32,7 @@ def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=N
               'sheet_path': 'fixture.png', 'picture_tag': '<Picture 1>'}
     singing = {'singing': True, 'actor_id': 'fixture_actor', 'picture_tag': '<Picture 1>',
                'lines': [{'start': 0, 'end': 2, 'text': 'hello world'}]}
-    prepared = {'settings': {'writer_mode': 'api'}, 'plan': asdict(plan), 'score': {},
+    prepared = {'settings': {'writer_mode': 'api', **(prepared_settings or {})}, 'plan': asdict(plan), 'score': {},
                 'casting': {'roster': [member], 'segments': {'seg000': {'cast': [member]}}},
                 'style': {'direction': 'Soft daylight and moving fabric.'},
                 'lipsync': {'passages': {'seg000': singing}} if mode == 'lip_sync' else None}
@@ -41,6 +41,25 @@ def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=N
         prepared['dance'] = dance.plan_passages([seg], prepared['casting'], {'tempo_bpm': 120.0, 'beats_per_bar': 4,
                                                 'beat_frames': [0, 12, 24, 36], 'downbeat_frames': [0]}, dance_settings,
                                                 singer='fixture_actor' if mode == 'lip_sync' else None)
+    if instrument_settings:
+        from mmv import instruments
+        request.update(instrument_settings)
+        prepared['instruments'] = instruments.plan_passages([seg], prepared['casting'],
+            {'tempo_bpm': 120.0, 'beat_frames': [0, 12, 24, 36], 'downbeat_frames': [0]}, request)
+        if request.get('instrument_references', True):
+            from mmv import instrument_assets
+            from mmv.storage import Storage
+            import io
+            from PIL import Image
+            store = Storage(home)
+            for kind in dict.fromkeys(prepared['instruments']['assignments'].values()):
+                if not (home / 'instruments' / kind).exists():
+                    data = io.BytesIO()
+                    Image.new('RGB', (64, 96), 'teal').save(data, 'PNG')
+                    instrument_assets.import_sheet(store, kind, data.getvalue(), license='test', provenance='synthetic test fixture')
+                prepared['instruments']['assets'][kind] = instrument_assets.locate(store, kind)
+        plan = instruments.apply_slots(plan, prepared['instruments'], 9)
+        prepared['plan'] = asdict(plan)
     write_json(directory / 'request.json', request)
     write_json(directory / 'prepared.json', prepared)
     monkeypatch.setattr(worker, 'Storage', Mock(return_value=NS(home=home, key=lambda *a: '', actor=lambda *a: {'description': 'Blue jacket'})))
@@ -66,8 +85,8 @@ def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=N
     validator.last_clipboard_request = {}
     validator.format_retry_feedback.side_effect = lambda problems: '; '.join(problems)
     monkeypatch.setattr('mmv.engine.validators.LayaSemanticValidator', Mock(return_value=validator))
-    monkeypatch.setattr('mmv.runtime.stop_process', lambda *a: (_ for _ in ()).throw(StopBeforeRender()))
-    with pytest.raises(StopBeforeRender):
+    monkeypatch.setattr('mmv.runtime.stop_process', stop_process or (lambda *a: (_ for _ in ()).throw(StopBeforeRender())))
+    with pytest.raises(expect, match=match):
         worker.run(home, directory)
     cache = sorted((home / 'cache' / 'prompts').glob('*.json'))
     return {'calls': calls, 'validation': trace, 'cache_keys': [p.stem for p in cache]}, home, directory, request, prepared

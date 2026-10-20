@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.8.14** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.9.5** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -42,6 +42,7 @@ passage to its planned frames, joins the picture, and restores your original son
 
 - Music videos with beat-driven cuts and energy-aware montage grammar.
 - Optional group dancing or independent dancing with per-actor beat/drums/bass/vocals assignments.
+- Opt-in [instrument-playing actors](docs/INSTRUMENTS.md) with drums/bass/guitar/keyboards assignments and per-passage references; guitar/keyboard sheets included, drums/bass sheets pending.
 - Output folders named for the uploaded song plus date and time; existing runs retain their IDs.
 - Consistent reference-image actors with Open Actor Protocol built in.
 - Your own visual styles, including styles harvested from reference images, plus
@@ -55,6 +56,12 @@ with progress, logs and cancellation. You provide your media, models and API
 keys. Four optional [starter actors](examples/starter-cast/README.md) are included
 as importable OAP packages. Model weights and third-party commercial software
 are not bundled.
+
+If prompt review exhausts its attempts before rendering, **Try again** loads a
+new preview from that failed run in the GUI. Review it and approve the new start;
+the failed run and its diagnostics remain available.
+In instrument mode, Mondo can correct an unambiguous vague guitar action to
+explicit string and fret contact, then run the full prompt checks as usual.
 
 ## Updates
 
@@ -89,7 +96,7 @@ after reloading a saved project. Live operation updates fall back to polling if
 the stream disconnects. Service failures identify the failing component and
 include relevant writer/ComfyUI logs.
 
-The local writer guide offers optional hellonearthis tuning while preserving
+The local writer guide offers optional 16k-context tuning while preserving
 your selected model paths. Laya device and fallback modes are explicit choices;
 your existing CUDA and workflow defaults remain intact. An optional reduced
 flash/strobe vocabulary keeps the full expanded pool as the default. See
@@ -239,7 +246,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.8.14 MCP server has 37 tools, including API profile add/select/remove,
+The v1.9.5 MCP server has 39 tools, including prompt-retry previews, instrument-sheet import, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 

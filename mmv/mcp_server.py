@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -36,9 +36,20 @@ def create_server(base_url=None):
         return invoke(client.preview_resume, run_id)
 
     @server.tool()
+    def preview_retry_prompts(run_id: str) -> dict[str, Any]:
+        """Get a fresh quote after prompt validation stopped an unrendered run. Review it and obtain consent before starting again; paid work never retries automatically."""
+        return invoke(client.preview_retry_prompts, run_id)
+
+    @server.tool()
     def upload_media(kind: Literal["song", "reference", "oap", "agreement"], path: str) -> dict[str, Any]:
         """Upload a user-selected file from this machine into the local app; returns its upload ID."""
         return invoke(client.upload, kind, path)
+
+    @server.tool()
+    def import_instrument(instrument_id: Literal["drums", "bass", "guitar", "keyboards"], reference_path: str,
+                          license: str, provenance: str) -> dict[str, Any]:
+        """Import a user-selected instrument sheet with its license/provenance into the local app; never overwrites or publishes."""
+        return invoke(client.import_instrument, instrument_id, reference_path, license, provenance)
 
     @server.tool()
     def preview_production(request: dict) -> dict[str, Any]:
@@ -46,8 +57,9 @@ def create_server(base_url=None):
 
         Video request vision_quality_check (default false) enables slower local
         single-frame judging. Requires a vision-capable writer_launch + mmproj;
-        H3 needs comfy_launch and ComfyUI closed so Mondo can manage its own
-        process. Read output quality_warnings for skipped/failed checks. One
+        Existing ComfyUI can stay running: after rendering, Mondo releases cached models only while its queue is idle,
+        confirms memory release, and loads vision. Mondo-owned ComfyUI still uses process stop/restart.
+        Configure comfy_launch if ComfyUI is offline. Read output quality_warnings for skipped/failed checks. One
         shared free local retry per passage; paid re-renders require consent.
 
         Video previews return `score` (beats, energy, planned cuts) and `detected`
@@ -62,6 +74,14 @@ def create_server(base_url=None):
         inspect_studio kind "stems"). The first separation of a song takes minutes.
 
         Independent mode gives each actor their own movement and musical part. `dance_parts` maps actor ids to `auto`, `beat`, `drums`, `bass` or `vocals`; auto cycles drums/bass/vocals/beat in cast order. No lead applies. Existing stem audio/analysis supplies per-part cues; unavailable parts explicitly fall back to the overall beat. This mode never downloads models or starts separation. Precise visual timing needs operator validation.
+
+        Instruments: instrument_mode "perform" (default "off"), instrument_assignments {actor_id: drums|bass|guitar|keyboards},
+        instrument_references true (default) attaches imported/bundled sheets only for active cast players. Inspect kind "instruments" first;
+        import missing sheets with import_instrument or set instrument_references false for text-only guidance. Previews return instruments,
+        shot activity and fallback notes. Uses existing stems only, with CPU analysis if needed; no separation or downloads.
+        Unknown activity follows the mix; guitar/piano need six-stem caches, keyboards follow piano only as a proxy. Players are excluded from
+        dance choreography; other actors may dance and approved singers may sing while playing. Slot overflow stops preview. Note/finger sync
+        and visual consistency require deliberate operator verification. All consent, OAP and one-operation guards remain in force.
 
         Dancing: `dance_mode` "group" or "independent" makes the cast dance to the song's beat (default "off"); `dancers` lists actor ids (empty =
         everyone cast), `dance_direction` is a short style such as "gentle swaying" (default "Dancing"; it can only choose the

@@ -13,6 +13,19 @@ FFMPEG = shutil.which('ffmpeg')
 SECRET = 'sk-abcdefghijklmnopqrstuvwx'
 
 
+def test_instrument_import_provenance_and_paths_stay_out_of_demo_receipts(tmp_path):
+    source = tmp_path / 'prepared.json'
+    source.write_text(json.dumps({'instruments': {'notice': 'old internal validation note', 'assets': {'guitar': {
+        'path': '/private/family/record.png', 'provenance': 'private origin notes', 'license': 'test', 'sha256': 'hash'}}}}))
+    pack = exporter.Package(tmp_path / 'out')
+    target = pack.put(source, 'prepared.json')
+    exported = target.read_text()
+    assert 'family' not in exported and 'private origin notes' not in exported
+    assert 'old internal validation note' not in exported
+    assert json.loads(exported)['instruments']['assets']['guitar']['sha256'] == 'hash'
+    assert 'private origin notes' in source.read_text()
+
+
 def media(path, kind):
     path.parent.mkdir(parents=True, exist_ok=True)
     if FFMPEG and kind == 'mp4':

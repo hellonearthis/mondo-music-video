@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mondo-music-video"
-version = "1.8.14"
+version = "1.9.5"
 description = "A focused music-video studio with Open Actor Protocol built in"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,6 +39,7 @@ include = ["mmv*", "webapp*"]
 
 [tool.setuptools.package-data]
 webapp = ["*.html", "*.js", "*.css", "js/*.js", "vendor/wavesurfer/*.js", "vendor/wavesurfer/LICENSE", "vendor/wavesurfer/plugins/*.js"]
+mmv = ["assets/instruments/*/instrument.json", "assets/instruments/*/reference.png", "assets/instruments/README.md"]
 "mmv.engine" = ["config/*.json", "prompts/*.md", "workflows/*.json"]
 "mmv.engine.validators" = ["laya/*.py", "laya/*.md"]
 

@@ -119,4 +119,23 @@ and obtain consent before passing its ID to `start_production`. Recovery reuses
 validated prompts and known generation IDs. It never resubmits an ambiguous,
 failed, canceled or expired job. Do not delete receipts to force a retry.
 
+If prompt validation exhausted its attempts before any rendering, status exposes
+`can_retry_prompts`. Call `preview_retry_prompts(run_id)` (CLI:
+`mondo-music-video-agent preview-retry-prompts RUN_ID`) for a new quote from the
+saved request. Review that quote and obtain fresh start consent, including paid
+consent where applicable. This creates a new run; it does not resume or restart
+the failed run automatically.
+
 Independent dancing: `dance_mode: "independent"`, `dance_parts: {"actor_id": "bass"}`. Parts: auto, beat, drums, bass, vocals. Preview includes stable part/movement-family assignments, per-shot cues and explicit overall-beat fallbacks. No lead, separation or downloads. Version-3 plans add contrasting bounce/step/rotation actions; a fresh preview is required to use the repair, while old productions resume their saved plan. Existing group/off behavior is preserved. Prompt checks do not prove distinct rendered movement.
+
+## Instrument performance (1.9.0)
+
+Use `instrument_mode: "perform"` only when requested (default off), with `instrument_assignments` mapping selected actor IDs to `drums`, `bass`, `guitar` or `keyboards`. `instrument_references: true` uses the instrument library; inspect `instruments` first. Guitar/keyboard sheets are bundled; import missing sheets with `import_instrument(instrument_id, reference_path, license, provenance)` or use `instrument_references: false` for text guidance. Local imports never overwrite or publish.
+
+Inspect preview `instruments` for per-shot cues, mix/unknown fallbacks and per-passage reference counts. Players do not dance; other actors may. Approved singers may sing while playing. Only existing stem caches/audio are used (CPU analysis may run); no separation or downloads start. Keyboards use piano as a proxy. Slot overflow stops preview. Saved plans and sheet hashes are checked on resume. Same-song/seed operator comparison is still pending; do not promise precise finger/note sync or verified visual consistency. Existing OAP, single-operation, quote consent and no paid retry rules apply.
+
+In v1.9.5, an unambiguous vague guitar action may be corrected to explicit
+string/fret contact before normal schema, motion, instrument and Laya checks.
+The private operation log and `segNNN.instrument-repair-N.json` identify edited
+shots; the original writer JSON is preserved. Wrong-instrument gestures and
+ambiguous clauses still fail validation. No extra paid writer call is made.

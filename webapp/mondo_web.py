@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, agreements, production, score_view
+from mmv import actors, agreements, instrument_assets, production, score_view
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.8.14"
+MGL_APP_VERSION = "1.9.5"
 WEB = Path(__file__).parent
 
 
@@ -282,6 +282,9 @@ class ProductionRequest(StrictModel):
     dance_direction: str = Field("", max_length=200)
     dance_lead: str | None = None
     dance_parts: dict[str, Literal["auto", "beat", "drums", "bass", "vocals"]] = Field(default_factory=dict, max_length=9)
+    instrument_mode: Literal["off", "perform"] = "off"
+    instrument_assignments: dict[str, Literal["drums", "bass", "guitar", "keyboards"]] = Field(default_factory=dict, max_length=9)
+    instrument_references: bool = True
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -333,6 +336,11 @@ def request_dict(value):
     if request.get("dance_mode", "off") == "off":
         for key in DANCE_FIELDS:
             request.pop(key, None)
+    if request.get("instrument_mode", "off") == "off":
+        for key in ("instrument_mode", "instrument_assignments", "instrument_references"):
+            request.pop(key, None)
+    elif request["kind"] != "video":
+        raise ValueError("Instrument performance is available for music videos only")
     return request
 
 
@@ -570,10 +578,28 @@ def create_app(home=None, *, test_hosts=False):
     def get_full_status(snapshot=None):
         result = dict(snapshot) if snapshot is not None else jobs.status()
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
+        result['can_retry_prompts'] = retryable_prompt_run(result, previous)
+        if result['can_retry_prompts'] and ' Note: Incomplete responses, JSON formatting errors,' in result.get('message', ''):
+            result['message'] = (result['message'].split(' Note: Incomplete responses, JSON formatting errors,', 1)[0]
+                                 + ' Nothing rendered.')
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
-                                and previous.get('backend') == 'comfy_sdk_h3')
+                                and previous.get('backend') == 'comfy_sdk_h3'
+                                and not result['can_retry_prompts'])
         result['services'] = check_services(store, result)
         return result
+
+    def retryable_prompt_run(snapshot, previous):
+        """Only an unrendered, failed prompt attempt may offer a fresh quote."""
+        if (snapshot.get('state') != 'failed' or snapshot.get('kind') != 'video'
+                or 'prompt validation failed after' not in snapshot.get('message', '')
+                or previous.get('kind') != 'video' or not snapshot.get('id')):
+            return False
+        directory = store.home / 'runs' / identifier(snapshot['id'])
+        return (read_json(directory / 'consent.json', {}).get('accepted') is True
+                and (directory / 'prepared.json').is_file()
+                and not (directory / 'output.json').exists()
+                and not any((directory / 'renders').glob('*'))
+                and any(directory.glob('seg*.validation-*.json')))
 
     @app.get("/api/status")
     def status():
@@ -647,7 +673,8 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/catalog")
     def catalog():
         return {"backends": CATALOG, "ratings": oap.CONTENT_ENUMS, "price_checked": "2026-10-15",
-                "oap_version": oap.OAP_VERSION}
+                "oap_version": oap.OAP_VERSION,
+                "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]}}
 
     @app.get("/api/project")
     def get_project():
@@ -860,6 +887,22 @@ def create_app(home=None, *, test_hosts=False):
             ".aiff": "audio/aiff",
         }
         return FileResponse(path, media_type=media_types.get(suffix, "application/octet-stream"))
+
+    @app.get("/api/instruments")
+    def list_instruments():
+        return instrument_assets.catalog(store)
+
+    @app.post("/api/instruments/{instrument_id}")
+    def import_instrument(instrument_id: str, license: str = Form(...), provenance: str = Form(...),
+                          reference: UploadFile = File(...)):
+        with jobs.lock:
+            jobs.require_idle()
+            return instrument_assets.import_sheet(store, instrument_id, reference.file.read(25 * 1024 * 1024 + 1),
+                                                  license=license, provenance=provenance)
+
+    @app.get("/api/instruments/{instrument_id}/reference")
+    def instrument_reference(instrument_id: str):
+        return FileResponse(instrument_assets.locate(store, instrument_id)["path"], media_type="image/png")
 
     @app.get("/api/actors")
     def list_actors():
@@ -1104,7 +1147,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "voice": prepared.get("voice"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": prepared.get("instruments"), "voice": prepared.get("voice"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
@@ -1114,6 +1157,22 @@ def create_app(home=None, *, test_hosts=False):
     @app.post("/api/quote")
     def quote(value: ProductionRequest):
         return build_quote(value)
+
+    @app.post("/api/retry-prompts/quote")
+    def retry_prompts_quote(value: ResumeRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            run_id = identifier(value.run_id)
+            snapshot = jobs.status()
+            if snapshot.get('id') != run_id:
+                raise ValueError('Choose the latest failed prompt run')
+            directory = store.home / 'runs' / run_id
+            request = read_json(directory / 'request.json', {})
+            if not retryable_prompt_run(snapshot, request):
+                raise ValueError('Only an unrendered production stopped by prompt validation can be tried again')
+            result = build_quote(ProductionRequest(**request))
+            result.update(kind='video', request=request)
+            return result
 
     @app.get("/api/lyrics")
     def lyrics_status():

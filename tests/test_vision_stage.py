@@ -11,15 +11,25 @@ from mmv.vision_stage import VisionStage
 from webapp.mondo_web import ProductionRequest
 
 
+class Proc(str):
+    """A named stand-in process that has already exited."""
+    pid = 1
+
+    def poll(self):
+        return 0
+
+
 @pytest.fixture
 def stage(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime, 'http_ok', Mock(return_value=False))
+    monkeypatch.setattr(runtime, 'serves_model', Mock(return_value=False))
     monkeypatch.setattr(runtime, 'stop_process', Mock())
-    monkeypatch.setattr(runtime, 'start_service', Mock(return_value='qwen'))
+    monkeypatch.setattr(runtime, 'stop_confirmed', Mock(side_effect=lambda p, name: runtime.stop_process(p)))
+    monkeypatch.setattr(runtime, 'start_service', Mock(return_value=Proc('qwen')))
     monkeypatch.setattr('mmv.vision_check.vision_command', Mock(return_value=['llama-server', '--alias', 'mmv-vision']))
     monkeypatch.setattr('mmv.vision_check.judge_clip', Mock(return_value={'status': 'pass', 'problems': [], 'retry': False}))
     plan = NS(segments=[NS(segment_id='seg000', index=0, trim_frames=48, shots=[NS(start_frame=0)])])
-    return VisionStage({'writer_launch': '[]'}, tmp_path, plan, False, 'comfy', Mock(return_value='comfy2'), Mock())
+    return VisionStage({'writer_launch': '[]'}, tmp_path, plan, False, Proc('comfy'), Mock(return_value=Proc('comfy2')), Mock())
 
 
 def items():
@@ -29,8 +39,8 @@ def items():
 def test_swap_order_relaunch_and_second_judgment(stage):
     events = []
     runtime.stop_process.side_effect = lambda p: events.append(('stop', p))
-    runtime.start_service.side_effect = lambda *a, **k: events.append(('start', 'qwen')) or 'qwen'
-    stage.restart_comfy.side_effect = lambda: events.append(('start', 'comfy2')) or 'comfy2'
+    runtime.start_service.side_effect = lambda *a, **k: events.append(('start', 'qwen')) or Proc('qwen')
+    stage.restart_comfy.side_effect = lambda: events.append(('start', 'comfy2')) or Proc('comfy2')
     assert stage.judge(items())['seg000-r1']['status'] == 'pass'
     stage.judge(items())  # no extra swap within the batch
     stage.prepare_render()
@@ -72,9 +82,25 @@ def test_invalid_command_keeps_renderer_running(stage):
 def test_occupied_vision_service_is_not_used_or_stopped(stage):
     runtime.http_ok.return_value = True
     assert stage.judge(items())['seg000-r1']['status'] == 'error'
-    assert 'already in use' in stage.note()
+    assert 'already in use by another service' in stage.note()
     runtime.stop_process.assert_not_called()
     runtime.start_service.assert_not_called()
+
+
+def test_running_matching_vision_service_is_reused_and_never_stopped(stage):
+    runtime.http_ok.return_value = True
+    runtime.serves_model.return_value = True
+    assert stage.judge(items())['seg000-r1']['status'] == 'pass'
+    assert stage.note() is None
+    runtime.start_service.assert_not_called()
+    # The renderer's models left the GPU first; the external server then stays, so no re-render may share the GPU with it.
+    assert [c.args[0] for c in runtime.stop_process.call_args_list if c.args[0] is not None] == ['comfy']
+    assert stage.prepare_render() is False
+    stage.restart_comfy.assert_not_called()
+    assert 'not re-rendered' in stage.skipped and 'did not start' in stage.skipped
+    stage.close()
+    assert [c.args[0] for c in runtime.stop_process.call_args_list if c.args[0] is not None] == ['comfy']
+    runtime.serves_model.assert_called_with('http://127.0.0.1:8083/v1', 'mmv-vision')
 
 
 def test_startup_race_does_not_use_external_vision_server(stage):
@@ -104,7 +130,7 @@ def test_preview_diagnostics_before_analysis(tmp_path, monkeypatch, problem, bac
                 'comfy_input': str(tmp_path), 'comfy_output': str(tmp_path), 'workflow_map_path': 'unused',
                 'comfy_url': 'http://127.0.0.1:8188', 'comfy_launch': '[]', 'writer_launch': '[]',
                 'comfy_sdk_url': 'http://127.0.0.1:8189'}
-    store = NS(settings=lambda: settings, key=lambda *a: '')
+    store = NS(settings=lambda: settings, key=lambda *a: '', style=Mock(side_effect=ValueError('reached style lookup')))
     monkeypatch.setattr('mmv.comfy_sdk.require_sdk', Mock())
     monkeypatch.setattr('mmv.comfy_sdk.check_proxy', Mock())
     monkeypatch.setattr('mmv.engine.validators.laya_semantic._model_dir_staged', lambda p: True)
@@ -117,9 +143,38 @@ def test_preview_diagnostics_before_analysis(tmp_path, monkeypatch, problem, bac
     monkeypatch.setattr('mmv.vision_check.vision_command', command)
     if problem == 'launch':
         settings['comfy_launch'] = ''
-    match = {'mmproj': 'missing mmproj', 'launch': 'launch command', 'running': 'already running'}[problem]
+    if problem == 'running':
+        settings['comfy_launch'] = ''  # Reuse an external service without needing its launch command.
+    match = {'mmproj': 'missing mmproj', 'launch': 'launch command', 'running': 'reached style lookup'}[problem]
     with pytest.raises(ValueError, match=match):
         pipeline.prepare(store, ProductionRequest(vision_quality_check=True, backend=backend_name).model_dump())
+
+
+@pytest.mark.parametrize('serving, match', [(True, 'reached style lookup'), (False, 'Vision quality check unavailable')])
+def test_prepare_does_not_need_a_launch_command_for_a_matching_running_quality_server(tmp_path, monkeypatch, serving, match):
+    settings = {'writer_model': 'test', 'writer_mode': 'local', 'laya_model_dir': str(tmp_path), 'writer_launch': '',
+                'comfy_input': str(tmp_path), 'comfy_output': str(tmp_path), 'workflow_map_path': 'unused',
+                'comfy_url': 'http://127.0.0.1:8188', 'comfy_launch': '', 'comfy_sdk_url': ''}
+    store = NS(settings=lambda: settings, key=lambda *a: '', style=Mock(side_effect=ValueError('reached style lookup')))
+    monkeypatch.setattr('mmv.engine.validators.laya_semantic._model_dir_staged', lambda p: True)
+    monkeypatch.setattr('mmv.render.get_backend', Mock())
+    monkeypatch.setattr(pipeline, 'references', lambda *a: ([], []))
+    monkeypatch.setattr(pipeline.shutil, 'which', lambda s: s)
+    monkeypatch.setattr('mmv.engine.comfy.WorkflowBuilder.load', Mock())
+    monkeypatch.setattr(runtime, 'http_ok', Mock(return_value=True))      # ComfyUI and the quality port both answer
+    monkeypatch.setattr(runtime, 'serves_model', Mock(return_value=serving))
+    with pytest.raises(ValueError, match=match):
+        pipeline.prepare(store, ProductionRequest(vision_quality_check=True, backend='local_h3').model_dump())
+    runtime.serves_model.assert_called_with('http://127.0.0.1:8083/v1', 'mmv-vision')
+
+
+def test_running_matching_server_is_reused_without_a_launch_command(stage):
+    stage.settings['writer_launch'] = ''
+    runtime.http_ok.return_value = runtime.serves_model.return_value = True
+    with patch('mmv.vision_check.vision_command', side_effect=ValueError('writer launch must be a JSON argv list')):
+        assert stage.judge(items())['seg000-r1']['status'] == 'pass'
+    runtime.start_service.assert_not_called()
+    assert stage.note() is None
 
 
 @pytest.fixture
@@ -154,30 +209,32 @@ def production(tmp_path, monkeypatch):
     monkeypatch.setattr('mmv.media.duration', Mock(return_value=2))
     monkeypatch.setattr('mmv.quality.inspect_clip', Mock(return_value={'status': 'pass', 'problems': []}))
     monkeypatch.setattr(runtime, 'http_ok', Mock(return_value=False))
-    monkeypatch.setattr(runtime, 'start_service', Mock(return_value='owned'))
+    monkeypatch.setattr(runtime, 'start_service', Mock(return_value=Proc('owned')))
     monkeypatch.setattr(runtime, 'stop_process', Mock())
     monkeypatch.setattr('mmv.vision_check.vision_command', Mock(return_value=['llama-server', '--alias', 'test']))
     monkeypatch.setattr('mmv.vision_check.judge_clip', Mock(return_value={'status': 'pass', 'problems': [], 'retry': False}))
+    monkeypatch.setattr('mmv.vision_stage.release_cached_models', Mock())
     monkeypatch.setenv('MMV_HOME', str(home))  # restore worker's process-local env mutation
     return home, directory, backend
 
 
-def test_worker_external_comfy_skip_note_and_vision_json(production):
+def test_worker_external_comfy_releases_models_and_checks_vision(production):
     home, directory, backend = production
-    runtime.start_service.return_value = None
+    runtime.start_service.side_effect = [None, Proc('vision-owned')]
     worker.run(home, directory, resume=True)
     report = read_json(directory / 'vision.json')
-    assert report['requested'] and not report['ran']
-    assert 'already running outside Mondo' in report['note']
-    assert read_json(directory / 'output.json')['quality_warnings'][0] == report['note']
-    runtime.stop_process.assert_not_called()
+    assert report == {'requested': True, 'ran': True, 'note': None, 'rerender_skipped': None}
+    from mmv.vision_stage import release_cached_models
+    release_cached_models.assert_called_once_with('http://127.0.0.1:8188')
+    assert all(call.args[0] in ('vision-owned', None) for call in runtime.stop_process.call_args_list)
+    assert 'quality_warnings' not in read_json(directory / 'output.json')
     backend.render_segment.assert_called_once()
 
 
 def test_worker_sdk_launch_and_success_report(production):
     home, directory, backend = production
     worker.run(home, directory, resume=True)
-    assert read_json(directory / 'vision.json') == {'requested': True, 'ran': True, 'note': None}
+    assert read_json(directory / 'vision.json') == {'requested': True, 'ran': True, 'note': None, 'rerender_skipped': None}
     assert [c.kwargs['name'] for c in runtime.start_service.call_args_list] == ['ComfyUI', 'Vision model']
     assert 'quality_warnings' not in read_json(directory / 'output.json')
     assert read_json(directory / 'quality.json')['seg000']['attempts'][0]['vision']['status'] == 'pass'
@@ -185,7 +242,7 @@ def test_worker_sdk_launch_and_success_report(production):
 
 def test_worker_vision_failure_completes_with_warning(production):
     home, directory, backend = production
-    runtime.start_service.side_effect = ['owned', ValueError('Qwen failed')]
+    runtime.start_service.side_effect = [Proc('owned'), ValueError('Qwen failed')]
     worker.run(home, directory, resume=True)
     assert 'Qwen failed' in read_json(directory / 'vision.json')['note']
     assert 'Qwen failed' in read_json(directory / 'output.json')['quality_warnings'][0]
@@ -211,8 +268,7 @@ def test_worker_saves_vision_diagnostics_even_if_quality_stage_fails(production,
             worker.run(home, directory, resume=True)
     report = read_json(directory / 'vision.json')
     assert report['ran'] is False
-    if external:
-        assert 'outside Mondo' in report['note']
+    assert report['note'] is None  # No false "external ComfyUI" skip when no judgment ran.
     backend.close_render.assert_called_once()
 
 
@@ -278,7 +334,7 @@ def test_mcp_discovery_documents_vision_flag():
             client.return_value.preview.return_value = {'id': 'reviewed-quote'}
             server = create_server()
             tools = await server.list_tools()
-            assert len(tools) == 37
+            assert len(tools) == 39
             preview = next(t for t in tools if t.name == 'preview_production')
             assert 'vision_quality_check' in preview.description
             assert 'paid re-renders require consent' in preview.description

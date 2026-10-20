@@ -50,7 +50,7 @@ export function setupOapGuide() {
   }
 }
 
-export function tuneLlamaCommand(currentJson, preset = "hellonearthis") {
+export function tuneLlamaCommand(currentJson, preset = "context_16k") {
   if (preset === "current") return currentJson;
   const args = typeof currentJson === "string" ? JSON.parse(currentJson) : currentJson;
   if (!Array.isArray(args) || !args.length || args.some(arg => typeof arg !== "string")) {

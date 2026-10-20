@@ -157,7 +157,7 @@ export function populateVocabProfileSelects() {
   const presets = (vocabDataCache.vocabularies || []).map((p) => [p.id, `${p.name} (${p.id})`]);
   const entries = [
     ["full", "Full vocabulary (current default)"],
-    ["reduced_flashing", "Reduced flash/strobe cues (hellonearthis)"],
+    ["reduced_flashing", "Reduced flash/strobe cues"],
     ...presets
   ];
 

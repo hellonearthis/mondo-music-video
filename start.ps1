@@ -18,7 +18,6 @@ param(
     [int]$LlamaPort = 8081,
     [ValidateRange(512, 1048576)]
     [int]$ContextSize = 8192,
-    [ValidateSet("current", "hellonearthis")]
     [string]$TuningPreset = "current",
     [ValidateRange(0, 1048576)]
     [int]$BatchSize = 0,
@@ -46,7 +45,7 @@ if ($Help) {
     Write-Host "  -Model <name>      Select model matching name or substring"
     Write-Host "  -Port <int>        Mondo Studio web port (default: 8091)"
     Write-Host "  -LlamaPort <int>   llama-server port (default: 8081)"
-    Write-Host "  -TuningPreset <name> current (default) or hellonearthis (16k/vision batches)"
+    Write-Host "  -TuningPreset <name> current (default) or context_16k (16k/vision batches)"
     Write-Host "  -ContextSize <int> llama-server context window (default: 8192)"
     Write-Host "  -BatchSize <int>   Optional logical batch size; 0 keeps server default"
     Write-Host "  -MicroBatchSize <int> Optional micro-batch size; 0 keeps server default"
@@ -58,7 +57,11 @@ if ($Help) {
     exit 0
 }
 
-if ($TuningPreset -eq "hellonearthis") {
+if ($TuningPreset -notin @("current", "context_16k", "hellonearthis")) {
+    throw "Choose current or context_16k for -TuningPreset."
+}
+$UseAlternateTuning = $TuningPreset -in @("context_16k", "hellonearthis")
+if ($UseAlternateTuning) {
     if (-not $PSBoundParameters.ContainsKey("ContextSize")) { $ContextSize = 16384 }
     if (-not $PSBoundParameters.ContainsKey("BatchSize")) { $BatchSize = 2048 }
     if (-not $PSBoundParameters.ContainsKey("MicroBatchSize")) { $MicroBatchSize = 1024 }
@@ -93,8 +96,8 @@ if ($TuningPreset -eq "hellonearthis") {
 }
 
 # One slot gives the whole context to the active prompt (the default 4 slots leave each a quarter, which truncates long passages
-# on low-memory machines). Dropping the prompt cache is opt-in with the hellonearthis preset: it keeps earlier passages out of VRAM but reuses less.
-$SlotArgs = @("--parallel", "1") + $(if ($TuningPreset -eq "hellonearthis") { @("--no-cache-prompt", "-sps", "0") } else { @() })
+# on low-memory machines). Dropping the prompt cache is opt-in with alternate tuning: it keeps earlier passages out of VRAM but reuses less.
+$SlotArgs = @("--parallel", "1") + $(if ($UseAlternateTuning) { @("--no-cache-prompt", "-sps", "0") } else { @() })
 
 $MmvProjectDir = $PSScriptRoot
 if (-not $MmvProjectDir) { $MmvProjectDir = (Get-Location).Path }

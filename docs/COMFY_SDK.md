@@ -52,14 +52,33 @@ quote and requires consent. With the vision check off, start both ComfyUI and
 the proxy yourself.
 
 With **Vision quality check (slower)** enabled (`vision_quality_check: true`,
-off by default), configure `comfy_launch` and close ComfyUI before preview.
-Mondo launches ComfyUI even on the SDK path, then stops its own ComfyUI process
-to load the local vision-capable writer model with mmproj. If a vision-triggered
-free retry is needed, it restarts ComfyUI and then judges the retry batch.
-The proxy on 8189 can stay running and remains operator-managed. External
-ComfyUI is never stopped; preview rejects it, and a startup race produces a
-visible skip note. This adds model loading and judging time. Vision startup
-failure leaves pixel checks active and reports a warning. No paid retry occurs.
+off by default), ComfyUI can already be running. Mondo releases its cached
+models through `/free` only after rendering and with an empty running/pending
+queue, then waits for reported GPU memory/headroom before loading the
+local vision-capable writer model with mmproj. It leaves that ComfyUI process
+and the proxy on 8189 running. Retry renders reload models in the same service.
+Configure `comfy_launch` if ComfyUI is offline: a process launched by Mondo still
+uses the existing stop/restart handoff. Busy external work is never interrupted;
+failed memory release or vision startup preserves pixel checks and records the
+actual failed check. No paid retry occurs.
+
+Preview and start do not require the models to be running. A local role is
+accepted when it is up or when Mondo can launch it on demand: a valid JSON
+`comfy_launch`/`writer_launch`, and for the vision check a `writer_launch` with a
+local `-m` model and one matching sibling `mmproj*.gguf`. The vision check starts
+its own server on port 8083 (alias `mmv-vision`), separate from the style-harvest
+`vision_url`. A server already running there with that alias is reused and never
+stopped; any other service on that port blocks the check. Missing or invalid
+launch settings are reported as settings errors. `/api/services/status` lists the
+roles, including `vision_quality` (the Quality Vision card); an API writer shows
+`configured`, not online. Launch capability and availability are separate: a role
+that is offline but launchable starts automatically when needed.
+
+Direct H3 production releases ComfyUI's cached models before the writer and Laya
+load, whether or not the vision check is on (SDK H3 does so only for the vision
+check, since it does not render locally otherwise). It checks the same empty queue
+first and stops with a message if ComfyUI is busy. Devices that cannot report model
+memory (Apple, DirectML) stop the handoff before another model loads; an unload acknowledgement alone is insufficient.
 
 ## Workflow and environment
 

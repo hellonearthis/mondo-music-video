@@ -60,9 +60,17 @@ verify the assets appear in the app. Never import other local/private assets.
 - The owner's internal lab nicknames, member titles and who-is-who are private. Never put them in published files,
   commit messages, release notes, credits, posts or demo text; credit collaborators only by their public handles.
   The private details live in the local, ignored `docs/TEAM_STATUS.md`.
-- When adding user-facing capabilities, audit the agent client, MCP tools,
-  included skill and agent documentation for coverage. Keep version/tool discovery
-  and mock transport tests current; preserve confirmation and paid-consent guards.
+- Keep every user-facing capability agent-friendly as a standing release rule. For
+  each new or changed GUI/API workflow, audit and update the agent client/CLI,
+  MCP tools, AGENTS.md, agent setup documentation, and every included project
+  skill or skill reference that teaches the workflow; add a focused skill only
+  when the existing project skill cannot explain it clearly. Cover preview,
+  action, recovery and result inspection where applicable. Keep version/tool
+  discovery and mock transport tests current; preserve confirmation and
+  paid-consent guards. Record any intentional agent-interface limitation in
+  release documentation instead of silently leaving a GUI-only path.
+- Keep contributor GitHub handles out of application labels, tooltips, notices
+  and help text. Preserve contribution credit in contributor/review/release documentation.
 
 ## Functional programming style
 

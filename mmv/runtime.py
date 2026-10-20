@@ -15,6 +15,16 @@ def http_ok(url, timeout=3):
     except Exception:
         return False
 
+def serves_model(base_url, alias, timeout=3):
+    """True when an OpenAI-compatible server at base_url lists the model alias (read-only probe)."""
+    try:
+        with urllib.request.urlopen(base_url.rstrip('/') + '/models', timeout=timeout) as r:
+            data = json.load(r)
+    except Exception:
+        return False
+    items = data.get('data') if isinstance(data, dict) else None
+    return any(isinstance(m, dict) and m.get('id') == alias for m in items or [])
+
 def wait_http(url, timeout=900, interval=2):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -61,6 +71,18 @@ def stop_process(p):
             else: os.killpg(os.getpgid(p.pid), signal.SIGKILL)
         except Exception:
             pass
+        try:
+            p.wait(timeout=10)
+        except Exception:
+            pass
+
+def stop_confirmed(p, name):
+    """Stop a process this production launched and prove it exited; a signal alone is not an exit."""
+    stop_process(p)
+    if p is not None and p.poll() is None:
+        raise ValueError(f'{name} (process {p.pid}) did not exit after being stopped; '
+                         'stop it by hand before the next model loads, or GPU memory may be shared')
+
 
 def cleanup():
     for p in processes:

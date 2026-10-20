@@ -1,5 +1,23 @@
 # Collaborator review record
 
+## October 20, 2026 — Engine lifecycle and GPU memory (1.9.3)
+
+Task-start fork check: exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed, no new revisions. Claude Code Sonnet 5.5, medium effort, owned the main implementation and mock tests. Codex reviewed the two handoffs and tightened unknown Apple memory behavior, unverified renderer release, writer startup headroom, CPU/projector estimates, failed vision-stop ownership, and guards against rendering alongside known external GPU services. API, GUI, agent/MCP status and skill coverage were audited. A fresh isolated Claude medium session expanded the factory daylight preset. Codex added the harvest card free axes/motifs, removed copied legacy rigging/audio directives so preset content cannot override mouth/singing behavior, kept shot scale and ensemble framing free, and verified factory-only migration tests. Helper daylight tests were not run in its restricted session; coordinator ran them after integration. No fork merge, protected-source edit, private-asset import, paid/GPU generation, commit or publication.
+
+## October 20, 2026 — Existing ComfyUI handoff and UI labels (1.9.2)
+
+Fork checked at exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed; no new changes. The reduced-flashing vocabulary exclusions and writer-tuning behavior contributed by hellonearthis remain intact. At the owner's direction, visible labels use descriptive feature names instead of GitHub handles; the vocabulary profile ID and contribution credit are preserved. The writer control now uses `context_16k`; its command helper still accepts the legacy tuning identifier.
+
+## October 20, 2026 — instrument performance (1.9.0)
+
+Task-start fork check and isolated clone: exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed in 1.8.11. No new fork contributions to integrate.
+
+Claude Code Haiku reviewed the opt-in extension (CLI-reported model/receipt recorded locally). Fixed its confirmed Windows filename issue by using instrument staging keys that contain no colon and cannot collide with valid actor IDs. Removed private provenance/license data from writer jobs, stripped paths/provenance from demo instrument receipts, and kept instrument files out of demo exports. Quiet mix/no-sample activity is unknown rather than a forced instrument pause. Added original actor-slot contract checks. Clause attribution, curly quotes, bounded names and mock tests were already being added concurrently; coordinator verified the final paths. Some reported missing assets/tests reflected the earlier tree the helper read. Public authorization comes from the owner's explicit new-instrument request; the four-actor allowlist is unchanged.
+
+A final bounded Haiku review led to explicit saved-mode/assignment/reference-policy checks, pronoun antecedent and ambiguous-pronoun checks, continued-playing wording support and narrower action inflections (a pickup/player noun cannot supply an action). Existing public resume already verifies the original consent fingerprint; the new checks also protect direct preparation/worker use and fail earlier. Original-source hashes were removed from demo receipts; reference-PNG hashes remain for selected-reference identity/cache checks. The helper's claim that original-source hashes entered writer jobs was not supported by the final job structure: only reference-PNG hashes are sent. No API writer or paid-render retries were added.
+
+Guitar and keyboard public sheets supplied by the owner are bundled; drums/bass and real visual validation remain pending. No new fork history merges, private studio assets, protected-pin edits, commit or publication.
+
 ## October 20, 2026 — fork integration, head 59f820d (release 1.8.11)
 
 Reviewed an isolated clone at exact revision `59f820d`, following last reviewed head `73cbd4b` (1.8.9). New commits: `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d`. Codex (low effort, read-only) acted as adversarial reviewer; its findings were checked against source. The owner reports EGG's changes fix a problem that appears on lower-memory machines and was invisible on the owner's larger-memory one.

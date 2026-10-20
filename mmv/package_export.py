@@ -78,6 +78,24 @@ def stamp(seconds):
     return f'{seconds:.2f}'
 
 
+def public_instrument_receipt(value):
+    """Instrument sheets and private import provenance never travel in demo receipts."""
+    if isinstance(value, list):
+        return [public_instrument_receipt(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {key: public_instrument_receipt(item) for key, item in value.items()}
+    if isinstance(result.get('instruments'), dict):
+        performance = result['instruments']
+        performance.pop('notice', None)  # Old saved plans retain their binding, but internal notes do not travel in demo receipts.
+        performance['assets'] = {kind: {key: item for key, item in asset.items() if key not in ('path', 'provenance', 'original_sha256')}
+                                 for kind, asset in performance.get('assets', {}).items()}
+    if isinstance(result.get('reference_identity'), dict):
+        result['reference_identity'] = {kind: {'sha256': asset.get('sha256')}
+                                         for kind, asset in result['reference_identity'].items()}
+    return result
+
+
 class Package:
     def __init__(self, out, secrets=()):
         self.out, self.secrets, self.redactions, self.skipped, self.absent = out, tuple(secrets), {}, [], []
@@ -94,7 +112,13 @@ class Package:
         target = self.out / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         if source.suffix.lower() in TEXT:
-            text, count = sanitize(source.read_text(encoding='utf-8', errors='replace'), self.secrets)
+            content = source.read_text(encoding='utf-8', errors='replace')
+            if source.suffix.lower() == '.json' and (source.name == 'prepared.json' or source.parent.name == 'writer_jobs'):
+                value = json.loads(content)
+                public = public_instrument_receipt(value)
+                if public != value:
+                    content = json.dumps(public, indent=2) + '\n'
+            text, count = sanitize(content, self.secrets)
             target.write_text(text, encoding='utf-8')
             if count:
                 self.redactions[str(relative)] = count
@@ -400,6 +424,8 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
     dancing = [sid for sid, v in (dance.get('passages') or {}).items() if v.get('dancing')]
     if dancing:
         modes.append('dancing in %d passage(s): "%s"' % (len(dancing), dance.get('direction', '')))
+    if prepared.get('instruments'):
+        modes.append('instrument performance: ' + ', '.join(f'{actor}: {kind}' for actor, kind in prepared['instruments']['assignments'].items()))
     if (request.get('analysis_driver') or 'mix') != 'mix':
         modes.append(f'instrument driver: {request["analysis_driver"]}')
     if request.get('vision_quality_check'):

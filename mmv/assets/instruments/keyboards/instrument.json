@@ -1,0 +1,14 @@
+{
+  "kind": "mmv.instrument",
+  "version": 1,
+  "id": "keyboards",
+  "name": "Stage keyboards",
+  "description": "Charcoal electronic stage keyboard, a row of rotary knobs, centered blank display, two left-side wheels, black X stand and one sustain pedal.",
+  "reference": "reference.png",
+  "sha256": "ebec1a3b937a5343b4ca7dcf0cd85ef59f86c1b28cdb69c54d13f0b44a384e19",
+  "original_sha256": "26ec30cbf52f9bf05069afb1494c6ef9ec3a5fc12ee78e875dc4c46e591ed3ad",
+  "width": 1664,
+  "height": 2496,
+  "license": "Apache-2.0",
+  "provenance": "Owner-supplied AI instrument reference sheet for public distribution with Mondo Music Video, 2026-10-20. Generation model not independently verified; native dimensions preserved."
+}

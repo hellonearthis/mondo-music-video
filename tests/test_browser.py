@@ -31,6 +31,44 @@ def _cached_chromium():
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_instrument_assignments_restore_by_actor_and_flat_fields_are_removed(self):
+        from mmv import actors
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        actors.create_actor(self.fixture.store, 'player_a', 'Player A', 'Overview', picture())
+        actors.create_actor(self.fixture.store, 'player_b', 'Player B', 'Overview', picture())
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                form = page.locator('#video-form')
+                expect(form.locator('.instrument-assignments')).to_be_hidden()
+                expect(form.locator('.instrument-notice')).to_have_count(0)
+                form.locator('.actor-select').select_option(['player_a', 'player_b'])
+                form.locator('[name=instrument_mode]').select_option('perform')
+                expect(form.locator('.instrument-notice')).to_have_count(0)
+                form.get_by_label('Player B instrument', exact=True).select_option('keyboards')
+                form.locator('.actor-select').select_option(['player_b'])
+                expect(form.get_by_label('Player B instrument', exact=True)).to_have_value('keyboards')
+                page.wait_for_timeout(800)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                expect(form.get_by_label('Player B instrument', exact=True)).to_have_value('keyboards')
+                result = page.evaluate('''async () => {
+                    const {instrumentsFromForm} = await import('/js/instruments.js');
+                    const request = {actors: ['player_b'], instrument_mode: 'perform', instrument_actor_0: 'keyboards', instrument_assignments_json: '{}'};
+                    instrumentsFromForm(document.querySelector('#video-form'), request);
+                    return request;
+                }''')
+                self.assertEqual(result['instrument_assignments'], {'player_b': 'keyboards'})
+                self.assertTrue(result['instrument_references'])
+                self.assertNotIn('instrument_assignments_json', result)
+                self.assertNotIn('instrument_actor_0', result)
+            finally:
+                browser.close()
+
     def test_independent_dance_parts_follow_actor_and_restore(self):
         from mmv import actors
         from test_public_app import picture
@@ -258,9 +296,18 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.14')
+                expect(page.locator('#version')).to_have_text('1.9.5')
+                page.evaluate("""async () => {
+                  const m = await import('/js/production.js');
+                  m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
+                    detail: 'Mondo starts it when the vision check runs'}});
+                }""")
+                expect(page.locator('#service-badge-vision_quality')).to_have_text('STARTS AUTOMATICALLY')
+                expect(page.locator('#service-detail-vision_quality')).to_contain_text('Mondo starts it')
+                expect(page.locator('#service-card-vision .service-role')).to_have_text('Style Harvester')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(page.locator('#vocab-profile-select')).not_to_contain_text('hellonearthis')
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
                 expect(page.locator('.song-preview')).to_have_attribute('src', __import__('re').compile(r'^blob:'))
                 expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded:')
@@ -275,8 +322,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('select[name=laya_device]')).to_have_value('cuda')
                 page.locator('#panel-settings > .panel-header-row .llama-help-btn').click()
                 expect(page.locator('#llama-helper-dialog')).to_be_visible()
+                expect(page.locator('#writer-tuning-preset')).not_to_contain_text('hellonearthis')
                 expect(page.locator('#llama-current-json')).to_have_text(command)
-                page.locator('#writer-tuning-preset').select_option('hellonearthis')
+                page.locator('#writer-tuning-preset').select_option('context_16k')
                 preview = json.loads(page.locator('#llama-current-json').inner_text())
                 self.assertEqual(preview[preview.index('-m') + 1], "my-model's.gguf")
                 self.assertEqual(preview[preview.index('-c') + 1], '16384')
@@ -977,7 +1025,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.14')
+                expect(page.locator('#version')).to_have_text('1.9.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

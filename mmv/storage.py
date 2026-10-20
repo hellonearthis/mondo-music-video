@@ -58,6 +58,13 @@ def read_json(path: Path, default=None):
     return default
 
 
+def _read_or_none(path: Path):
+    try:
+        return read_json(path)
+    except (OSError, ValueError):
+        return None
+
+
 def identifier(value: str) -> str:
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", value):
         raise ValueError("Use 1–64 lowercase letters, numbers, underscores or hyphens")
@@ -71,11 +78,86 @@ def inside(root: Path, relative: str) -> Path:
     return result
 
 
-DEFAULT_STYLE = {
+# The original three-field factory value; a daylight.json equal to this exactly is upgraded.
+LEGACY_DEFAULT_STYLE = {
     "id": "daylight", "name": "Daylight Cinema",
     "direction": "Expressive music-video photography, natural light, rich color, "
                  "clear compositions and rhythmic movement. Fully clothed subjects; "
                  "no nudity, sexual imagery, blood or violence.",
+}
+
+DEFAULT_STYLE = {
+    "id": "daylight", "name": "Daylight Cinema",
+    "direction": (
+        "Aesthetic directives\n\n"
+        "DAYLIGHT CINEMA — expressive music-video photography in natural light. "
+        "Every shot must embody all of these simultaneously.\n\n"
+        "TONAL STRUCTURE. Blacks are open and gently lifted by ambient daylight, never crushed. "
+        "Highlights are held just below clipping, with the sky and bright surfaces keeping detail. "
+        "Contrast is moderate and global, with generous, well-separated midtones. "
+        "The grade reads as clean, luminous and ungimmicked.\n\n"
+        "COLOR AND INK ECONOMY. Rich, honest color: many distinct hues carry real area, "
+        "each clearly separated and true to the materials. Saturation is full-bodied but never neon "
+        "and never clipped. One deliberate accent color per shot, reserved for the focal point; "
+        "everything else stays in harmony around it. Skin tones stay natural and warm.\n\n"
+        "SURFACE. Fine, even, organic cinema-film grain over clean, high-resolution detail. "
+        "Materials read as tactile — cloth, skin, stone, water, foliage, metal — "
+        "with visible texture at every scale. No plastic smoothing, no digital noise.\n\n"
+        "EDGE BEHAVIOUR. Edges are crisp where the lens is focused and fall away into soft optical blur "
+        "elsewhere. Subjects are unoutlined and separate cleanly from their background. "
+        "A touch of natural bloom is allowed where sun meets lens. No halos, fringing or oversharpening.\n\n"
+        "LIGHT LOGIC. One dominant natural source: the sun, or open sky acting as a large soft box. "
+        "Direction is chosen on purpose — low and raking at golden hour, high and clear at midday, "
+        "directional and filtered, with readable falloff. Fill comes from soft reflected illumination. "
+        "Falloff is gentle and shadows are soft but shaped. Light is depicted as a physical presence: "
+        "visible shafts, rim highlights, lens flare and warm reflected spill. No artificial or colored lighting.\n\n"
+        "DEPTH STRATEGY. Layered foreground, middle ground and background, with overlap, "
+        "linear perspective and light atmospheric haze. Shallow to moderate depth of field separates the subject. "
+        "The image has continuous, physically plausible spatial depth.\n\n"
+        "COMPOSITION GRAMMAR. Clear, readable framing with one clear focal grouping and room to breathe. "
+        "Use off-centre balance, directional visual lines and open negative space; let the supplied staging determine the forms. "
+        "Balance is deliberate, asymmetry is welcome, and the empty-to-occupied ratio stays generous.\n\n"
+        "SCALE RELATIONSHIP. The primary form holds a confident share of the frame, "
+        "at the supplied shot scale, with readable spatial relationships around it.\n\n"
+        "PROVENANCE MARKERS. Gentle lens bloom, a trace of natural vignetting, warm sun-kissed color, "
+        "and fine grain. It reads as well-shot cinema photography, not a render.\n\n"
+        "MOTION IMPLICATION. Give fine textures a restrained pulse and soft-edged surfaces a gentle, continuous deformation. "
+        "Let highlights shift and glint, fine suspended texture drift, and reflected patterns undulate. "
+        "Movement is rhythmic and flowing, answering the beat of the music, "
+        "with confident motion that is never frantic.\n\n"
+        "ANTI-TROPE MANDATE.\n"
+        "- NO neon, colored gels or artificial lighting.\n"
+        "- NO murky, crushed or muddy shadows.\n"
+        "- NO plastic AI skin or digital over-smoothing.\n"
+        "- NO centered \"AI poster\" symmetry, cluttered frames or HDR halos.\n\n"
+        "CAMERA AND FRAMING.\n\n"
+        "The supplied `camera` string is the authoritative motion — use it as written. "
+        "Layer the daylight flavor around it: rhythmic, music-driven movement, clear compositions, "
+        "natural light moving across the frame. Do not write cut or transition language.\n\n"
+        "CONTENT BOUNDARY.\n\n"
+        "All human characters are fictional adults. Human characters are fully clothed in opaque clothing. "
+        "No nudity, sexual imagery, explicit sexual content, real-person likenesses, blood, gore or violence. "
+        "Animals and other non-human subjects are depicted non-sexually."
+    ),
+    "style_card": (
+        "STYLE CARD: Daylight Cinema\n"
+        "1 INK ECONOMY: many distinct natural hues with real area; one accent per shot reserved for the focal point; "
+        "full-bodied saturation below neon.\n"
+        "2 TONAL STRUCTURE: open, gently lifted blacks; highlights held below clipping; moderate global contrast; stretched midtones.\n"
+        "3 SURFACE: fine even cinema-film grain over clean tactile detail; no digital smoothing.\n"
+        "4 EDGE BEHAVIOUR: crisp at focus, soft optical falloff elsewhere; unoutlined; light natural bloom; no halos.\n"
+        "5 LIGHT LOGIC: one dominant natural source, chosen direction, gentle falloff, bounce fill; light is depicted "
+        "(shafts, rim, flare).\n"
+        "6 DEPTH STRATEGY: layered overlap, linear perspective, light haze, shallow-to-moderate focus; continuous spatial depth.\n"
+        "7 COMPOSITION GRAMMAR: clear focal grouping, thirds and leading lines, off-centre balance, generous empty space.\n"
+        "8 SCALE RELATIONSHIP: lifelike relative proportions; primary-form size follows the supplied shot scale.\n"
+        "9 PROVENANCE MARKERS: gentle bloom, slight vignetting, warm sun-kissed color, fine grain.\n"
+        "10 TYPOGRAPHY: none.\n"
+        "11 MOTION IMPLICATION: gentle material deformation; shifting and glinting light; drifting fine texture and undulating reflection; "
+        "rhythmic texture changes within the supplied camera movement.\n"
+        "FREE AXES: natural hue family, daylight direction, placement and primary-form size within the supplied shot scale.\n"
+        "BORROWABLE MOTIFS: narrow directional highlights; fine grain shimmer, re-rendered in the target world materials."
+    ),
 }
 
 DEFAULTS = {
@@ -93,14 +175,21 @@ DEFAULTS = {
 }
 
 
+LAYA_OVERRIDES = ("cpu",)
+
+
 class Storage:
     def __init__(self, home=None):
         self.home = Path(home or default_home()).resolve()
         for name in ("actors", "styles", "vocabularies", "uploads", "runs", "exports", "models", "cache"):
             (self.home / name).mkdir(parents=True, exist_ok=True)
         removed_styles = read_json(self.home / "removed-assets.json", {}).get("styles", [])
-        if not (self.home / "styles/daylight.json").exists() and "daylight" not in removed_styles:
-            write_json(self.home / "styles/daylight.json", DEFAULT_STYLE)
+        daylight = self.home / "styles/daylight.json"
+        if not daylight.exists():
+            if "daylight" not in removed_styles:
+                write_json(daylight, DEFAULT_STYLE)
+        elif _read_or_none(daylight) == LEGACY_DEFAULT_STYLE:
+            write_json(daylight, DEFAULT_STYLE)
 
     def settings(self):
         settings = {**DEFAULTS, **{k:v for k,v in read_json(self.home / "settings.json", {}).items() if k in DEFAULTS}}
@@ -108,6 +197,9 @@ class Storage:
             settings["workflow_map_path"] = DEFAULTS["workflow_map_path"]
         if not settings["laya_model_dir"]:
             settings["laya_model_dir"] = str(self.home / "models/laya")
+        # Per-process override chosen by a worker's GPU hand-off; never read from or written to settings.json.
+        if os.environ.get("MMV_LAYA_DEVICE_OVERRIDE") in LAYA_OVERRIDES:
+            settings["laya_device"] = os.environ["MMV_LAYA_DEVICE_OVERRIDE"]
         from .api_profiles import resolve
         return resolve(self, settings)
 

@@ -7,7 +7,7 @@ preset does not save settings or launch anything.
 ## Preserve the model, choose tuning
 
 - **Keep current configuration** leaves the command as configured.
-- **hellonearthis · 16k context / vision batches** adjusts the existing command to
+- **16k context / vision batches** adjusts the existing command to
   `-c 16384 -b 2048 -ub 1024`. It adds `--image-min-tokens 1024` only when the
   command already contains a `--mmproj` projector argument. The executable,
   model, alias and projector paths are preserved. The preset replaces the
@@ -28,13 +28,7 @@ installed models in Settings.
 ## Windows launcher
 
 Existing defaults remain an 8,192-token context with server-default batch and
-image-token settings. Select the alternate preset explicitly:
-
-```powershell
-.\start.ps1 -TuningPreset hellonearthis
-```
-
-Or choose individual values:
+image-token settings. Select the alternate tuning in Settings, use `-TuningPreset context_16k`, or supply individual values:
 
 ```powershell
 .\start.ps1 -ContextSize 16384 -BatchSize 2048 -MicroBatchSize 1024 -ImageMinTokens 1024
@@ -67,7 +61,7 @@ still stop production before rendering.
 Under the music-video form's **Timing, credits & content**, choose:
 
 - **Full vocabulary:** current default, with the original expanded pool intact.
-- **Reduced flash/strobe cues (hellonearthis):** excludes seven selected lighting
+- **Reduced flash/strobe cues:** excludes seven selected lighting
   cues and two practical-effect cues, matching the reviewed fork's reduced pool.
 
 The optional profile changes only those vocabulary pools. It does not change
