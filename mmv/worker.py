@@ -426,7 +426,7 @@ def run(home, directory, *, resume=False):
             return prompt_id
         ComfyClient.queue = record_queue
     backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
-                        song=None, steps=20, timeout_s=None, comfy_host=url.hostname, comfy_port=url.port or 8188,
+                        song=None, steps=20, timeout_s=request.get('timeout_s') or 7200.0, comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
                         map_path=settings['workflow_map_path'], root=ENGINE,
                         comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'),

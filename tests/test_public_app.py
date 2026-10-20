@@ -379,6 +379,18 @@ class PublicAppTests(unittest.TestCase):
         finally:
             backend.close_render()
 
+    def test_local_h3_timeout_none_defaults_to_float(self):
+        backend = render.get_backend('local_h3')
+        from mmv.pipeline import ENGINE
+        from mmv.engine.comfy import ComfyClient
+        with tempfile.TemporaryDirectory() as tmp, patch.object(ComfyClient, 'is_up', return_value=True):
+            backend.open_render(slug='slug', out_dir=Path(tmp) / 'renders',
+                                map_path=ENGINE / 'config/injection_map.json', root=ENGINE,
+                                timeout_s=None, comfy_host='127.0.0.1', comfy_port=8188,
+                                comfy_input=Path(tmp) / 'in', comfy_output=Path(tmp) / 'out')
+            self.assertEqual(backend._timeout, 7200.0)
+            self.assertIsInstance(backend._timeout, float)
+
     @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
     def test_sdk_rejects_followup_links_to_another_origin(self):
         from mmv.comfy_sdk import SdkSession
@@ -400,9 +412,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.6")
+        self.assertEqual(api_version()["version"], "1.8.7")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.6", (root / "README.md").read_text())
+        self.assertIn("1.8.7", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):

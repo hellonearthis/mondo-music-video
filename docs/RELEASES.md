@@ -1,5 +1,11 @@
 # Releases
 
+## 1.8.7 — Fix LocalH3 backend timeout evaluation
+
+- Fixed a `TypeError: '>' not supported between instances of 'float' and 'NoneType'` bug during segment rendering with the `local_h3` backend when `timeout_s` is omitted or `None`.
+- Ensured `LocalH3Backend` and `mmv/worker.py` default `timeout_s` safely to `7200.0` seconds instead of passing `None` to `ComfyClient.wait()`.
+- Added regression test `test_local_h3_timeout_none_defaults_to_float` verifying safe float default evaluation.
+
 ## 1.8.6 — Service probing concurrency & functional component optimizations
 
 - Parallelized service health checking in `mmv/services.py` across ComfyUI, Writer, and Multimodal Vision using concurrent thread pools, cutting probe latency by up to 65%.

@@ -102,7 +102,7 @@ class LocalH3Backend(Backend):
         selected_map_path = run.get("map_path")
         self._slug = run["slug"]
         self._steps = run.get("steps")
-        self._timeout = run.get("timeout_s")
+        self._timeout = float(run.get("timeout_s") or 7200.0)
         self._comfy_input = Path(comfy_input)
         self._comfy_output = Path(comfy_output)
         self._builder = WorkflowBuilder.load(selected_map_path, run.get("root"))
