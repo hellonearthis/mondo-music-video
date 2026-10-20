@@ -1,5 +1,12 @@
 # Releases
 
+## 1.8.13 — Enable completed video selection and clear guidance for idents
+
+- Ident and credits attachment improvements:
+  - Updated `ident-select` in `webapp/js/outputs.js` to group available outputs by `optgroup` (Idents & Title Cards vs. Completed Video Clips), allowing both dedicated idents and existing video clips to be attached as opening or closing cards.
+  - Added helpful status fallback text ("None (render one in 06. Credits & idents)") when no dedicated idents exist yet in the studio library.
+- Bumped application version to `1.8.13`.
+
 ## 1.8.12 — Eliminate prompt KV cache accumulation across passages
 
 - Context flush and dedicated single-slot tuning:
