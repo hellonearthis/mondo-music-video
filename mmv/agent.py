@@ -139,8 +139,34 @@ class AgentClient:
         return self._multipart("/api/actors", {"actor_id": actor_id, "name": name, "description": description},
                                "reference", reference_path)
 
-    def create_style(self, style_id, name, direction):
-        return self._json("POST", "/api/styles", {"id": style_id, "name": name, "direction": direction})
+    def create_style(self, style_id, name, direction, style_card=None):
+        payload = {"id": style_id, "name": name, "direction": direction}
+        if style_card:
+            payload["style_card"] = style_card
+        return self._json("POST", "/api/styles", payload)
+
+    def export_style(self, style_id, destination=None):
+        path = "/api/styles/" + urllib.parse.quote(style_id, safe="") + "/export"
+        with self._open("GET", path) as response:
+            content = response.read()
+        if destination is not None:
+            dest = Path(destination)
+            if dest.is_dir():
+                dest = dest / f"{style_id}.json"
+            dest.write_bytes(content)
+            return {"saved": str(dest), "bytes": len(content)}
+        return json.loads(content.decode("utf-8"))
+
+    def import_style(self, style_id, name, direction, style_card=None, overwrite=False):
+        payload = {
+            "id": style_id,
+            "name": name,
+            "direction": direction,
+            "overwrite": bool(overwrite),
+        }
+        if style_card:
+            payload["style_card"] = style_card
+        return self._json("POST", "/api/styles/import", payload)
 
     def save_vocabulary(self, vocab_id, name, tables, description="", base_profile="full"):
         return self._json("POST", "/api/vocabularies", {
@@ -289,6 +315,12 @@ def main(argv=None):
     download = sub.add_parser("download")
     download.add_argument("output_file")
     download.add_argument("destination")
+    export_style = sub.add_parser("export-style")
+    export_style.add_argument("id")
+    export_style.add_argument("--destination", default=None)
+    import_style = sub.add_parser("import-style")
+    import_style.add_argument("file", help="Path to style JSON file")
+    import_style.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
     try:
         client = AgentClient(args.url)
@@ -314,6 +346,17 @@ def main(argv=None):
             result = client.delete_vocabulary(args.id, args.confirm)
         elif args.command == "select-api-profile":
             result = client.select_api_profile(args.name)
+        elif args.command == "export-style":
+            result = client.export_style(args.id, args.destination)
+        elif args.command == "import-style":
+            data = json.loads(Path(args.file).read_text(encoding="utf-8"))
+            result = client.import_style(
+                data["id"],
+                data["name"],
+                data["direction"],
+                style_card=data.get("style_card"),
+                overwrite=args.overwrite,
+            )
         else:
             result = client.inspect(args.command)
         print(json.dumps(result, indent=2, allow_nan=False))

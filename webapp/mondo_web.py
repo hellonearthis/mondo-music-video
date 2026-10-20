@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.7"
+MGL_APP_VERSION = "1.8.8"
 WEB = Path(__file__).parent
 
 
@@ -417,9 +417,18 @@ class KeyRequest(StrictModel):
 
 
 class StyleRequest(StrictModel):
-    id: str
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
     name: str = Field(min_length=1, max_length=160)
     direction: str = Field(min_length=1, max_length=8000)
+    style_card: str | None = Field(default=None, max_length=16000)
+
+
+class StyleImportRequest(StrictModel):
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    name: str = Field(min_length=1, max_length=160)
+    direction: str = Field(min_length=1, max_length=8000)
+    style_card: str | None = Field(default=None, max_length=16000)
+    overwrite: bool = False
 
 
 class AgreementRequest(StrictModel):
@@ -927,15 +936,49 @@ def create_app(home=None, *, test_hosts=False):
     def styles():
         return [read_json(path) for path in sorted((store.home / "styles").glob("*.json"))]
 
+    @app.get("/api/styles/{style_id}/export")
+    def export_style(style_id: str):
+        style_id = identifier(style_id)
+        target = inside(store.home / "styles", style_id + ".json")
+        if not target.is_file():
+            raise ValueError("Style not found")
+        return FileResponse(target, filename=f"{style_id}.json", media_type="application/json")
+
     @app.post("/api/styles")
     def add_style(value: StyleRequest):
-        path = store.home / "styles" / (identifier(value.id) + ".json")
+        style_id = identifier(value.id)
+        path = store.home / "styles" / (style_id + ".json")
         with jobs.lock:
             jobs.require_idle()
             if path.exists():
                 raise ValueError("Style already exists; use a different ID")
-            write_json(path, value.model_dump())
-        return value.model_dump()
+            payload = {
+                "id": style_id,
+                "name": value.name.strip(),
+                "direction": value.direction.strip(),
+            }
+            if value.style_card:
+                payload["style_card"] = value.style_card
+            write_json(path, payload)
+        return payload
+
+    @app.post("/api/styles/import")
+    def import_style(value: StyleImportRequest):
+        style_id = identifier(value.id)
+        path = store.home / "styles" / (style_id + ".json")
+        with jobs.lock:
+            jobs.require_idle()
+            if path.exists() and not value.overwrite:
+                raise ValueError(f"Style '{style_id}' already exists; choose a different ID or enable overwrite")
+            payload = {
+                "id": style_id,
+                "name": value.name.strip(),
+                "direction": value.direction.strip(),
+            }
+            if value.style_card:
+                payload["style_card"] = value.style_card
+            write_json(path, payload)
+        return payload
 
     @app.delete("/api/styles/{style_id}")
     def delete_style(style_id: str):

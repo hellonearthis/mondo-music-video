@@ -30,11 +30,22 @@ export function shortDid(did) {
 const styleCardHtml = (style) => {
   const escId = escapeHtml(style.id);
   const escName = escapeHtml(style.name);
+  const styleCardFold = style.style_card ? `
+    <details class="style-card-fold" style="margin-top:8px;font-size:12px;">
+      <summary style="cursor:pointer;color:var(--accent,#d08770);font-weight:600;">View 11-Axis Forensic Card</summary>
+      <pre style="white-space:pre-wrap;background:var(--card-bg,#1a1a1a);padding:8px;border-radius:4px;max-height:200px;overflow-y:auto;margin-top:6px;font-family:monospace;">${escapeHtml(style.style_card)}</pre>
+    </details>
+  ` : "";
   return `
     <article class="card" title="Style card: ${escName}" data-id="${escId}" data-name="${escName}">
       <h2>${escName}</h2>
       <p>${escapeHtml(style.direction)}</p>
-      <button type="button" class="quiet operation-action" data-action="delete-style" title="Delete ${escName} from this machine">Delete style</button>
+      ${styleCardFold}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button type="button" class="secondary" data-action="export-style" title="Download ${escName} style JSON">Download JSON</button>
+        <button type="button" class="secondary" data-action="duplicate-style" title="Duplicate ${escName} style">Duplicate</button>
+        <button type="button" class="quiet operation-action" data-action="delete-style" title="Delete ${escName} from this machine">Delete style</button>
+      </div>
     </article>
   `;
 };
@@ -108,6 +119,7 @@ const agreementCardHtml = (agreement) => {
 
 export async function loadStyles() {
   const styles = await (await api("/api/styles")).json();
+  state.styles = styles;
   $$(".style-select").forEach((select) => {
     const old = select.value;
     select.replaceChildren(...styles.map((style) => option(style.id, style.name, `${style.name} (${style.id})`)));
@@ -219,15 +231,33 @@ export function renderOapReportCard(report, allowUnsigned) {
 export function initLibraryForms() {
   // Delegated handler for Style cards
   $("#style-list")?.addEventListener("click", handle(async (e) => {
-    const btn = e.target.closest("button[data-action='delete-style']");
+    const btn = e.target.closest("button[data-action]");
     if (!btn) return;
     const card = btn.closest("article[data-id]");
     const { id, name } = card.dataset;
-    if (!window.confirm(`Delete style “${name}” from this machine? Completed videos are kept.`)) return;
-    await api(`/api/styles/${encodeURIComponent(id)}`, { method: "DELETE" });
-    await loadStyles();
-    scheduleSave();
-    notice("Style deleted from your local collection.");
+    const action = btn.dataset.action;
+
+    if (action === "delete-style") {
+      if (!window.confirm(`Delete style “${name}” from this machine? Completed videos are kept.`)) return;
+      await api(`/api/styles/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await loadStyles();
+      scheduleSave();
+      notice("Style deleted from your local collection.");
+    } else if (action === "export-style") {
+      await saveDownload(await api(`/api/styles/${encodeURIComponent(id)}/export`), `${id}.json`);
+      notice(`Exported style “${name}” as ${id}.json`);
+    } else if (action === "duplicate-style") {
+      const existing = (state.styles || []).find((s) => s.id === id);
+      const form = $("#style-form");
+      if (form && existing) {
+        form.elements.id.value = `${existing.id}_copy`.slice(0, 64);
+        form.elements.name.value = `${existing.name} (Copy)`.slice(0, 160);
+        form.elements.direction.value = existing.direction || "";
+        form.scrollIntoView({ behavior: "smooth" });
+        form.elements.name.focus();
+        notice(`Duplicating “${name}”. Edit fields and save.`);
+      }
+    }
   }));
 
   // Delegated handler for Actor cards
@@ -291,6 +321,45 @@ export function initLibraryForms() {
     await loadStyles();
     scheduleSave();
   });
+
+  $("#import-style-btn")?.addEventListener("click", handle(async () => {
+    const file = $("#style-import-file")?.files?.[0];
+    if (!file) throw new Error("Choose a style .json file first");
+    const overwrite = Boolean($("#style-import-overwrite")?.checked);
+
+    let parsed;
+    try {
+      const textContent = await file.text();
+      parsed = JSON.parse(textContent);
+    } catch (err) {
+      throw new Error(`Invalid JSON file: ${err.message}`);
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Invalid style format: Root must be a JSON object");
+    }
+
+    const payload = {
+      id: String(parsed.id || "").trim(),
+      name: String(parsed.name || "").trim(),
+      direction: String(parsed.direction || "").trim(),
+      overwrite,
+    };
+    if (parsed.style_card) {
+      payload.style_card = String(parsed.style_card);
+    }
+
+    if (!payload.id) throw new Error("Style JSON must include an 'id'");
+    if (!payload.name) throw new Error("Style JSON must include a 'name'");
+    if (!payload.direction) throw new Error("Style JSON must include 'direction'");
+
+    const result = await json("/api/styles/import", payload);
+    $("#style-import-file").value = "";
+    $("#style-import-overwrite").checked = false;
+    await loadStyles();
+    scheduleSave();
+    notice(`Style “${result.name}” (${result.id}) successfully imported.`);
+  }));
 
   $("#inspect-oap").onclick = handle(async () => {
     const file = $("#oap-file").files[0];

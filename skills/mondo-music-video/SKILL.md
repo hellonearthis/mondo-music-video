@@ -169,7 +169,9 @@ returned public signer and riders before accepting the signer. Preserve existing
 assets and prior deletions; restore removed starters only when requested.
 After an application upgrade, reconnect the MCP client to refresh its tools.
 
-Harvest uses the configured vision service and its per-call cost estimate.
+Harvest uses the configured vision service and its per-call cost estimate. Styles can be
+exported as JSON or imported with 4-layer validation via `export_style` and `import_style`,
+preserving any 11-axis forensic breakdown. Overwrite requires explicit opt-in.
 Generate idents separately, then select their completed output IDs for opening
 or closing credits. Topaz export uses the user's installed compatible Topaz and
 preserves the source. Cancel an operation when the user requests it; already

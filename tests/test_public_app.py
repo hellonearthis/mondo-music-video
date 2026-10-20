@@ -412,9 +412,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.7")
+        self.assertEqual(api_version()["version"], "1.8.8")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.7", (root / "README.md").read_text())
+        self.assertIn("1.8.8", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1638,6 +1638,100 @@ class UtilityTests(unittest.TestCase):
             self.assertEqual(data.get("vocab_random_key"), "482910:5")
             self.assertEqual(data.get("forms", {}).get("video", {}).get("title"), "Neon Dreams")
             self.assertIn("lighting", data.get("custom_vocabulary", {}))
+
+    def test_style_export_import_and_validation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+
+            # Create an initial style with an 11-axis style card
+            create_payload = {
+                "id": "cyberpunk_neon",
+                "name": "Cyberpunk Neon",
+                "direction": "High contrast neon cyan and magenta lighting with heavy film grain.",
+                "style_card": "Color Palette: Neon cyan, magenta\nLighting: Hard directional neon\nCamera: Anamorphic lens flare",
+            }
+            res = client.post("/api/styles", json=create_payload)
+            self.assertEqual(res.status_code, 200)
+            created = res.json()
+            self.assertEqual(created["id"], "cyberpunk_neon")
+            self.assertEqual(created["style_card"], create_payload["style_card"])
+
+            # Export style
+            export_res = client.get("/api/styles/cyberpunk_neon/export")
+            self.assertEqual(export_res.status_code, 200)
+            self.assertIn("application/json", export_res.headers["content-type"])
+            self.assertIn("cyberpunk_neon.json", export_res.headers.get("content-disposition", ""))
+            exported_data = export_res.json()
+            self.assertEqual(exported_data["id"], "cyberpunk_neon")
+            self.assertEqual(exported_data["name"], "Cyberpunk Neon")
+            self.assertEqual(exported_data["style_card"], create_payload["style_card"])
+
+            # Export nonexistent style
+            self.assertEqual(client.get("/api/styles/missing_style/export").status_code, 400)
+
+            # Import existing style without overwrite -> should fail 400
+            import_collision = {
+                "id": "cyberpunk_neon",
+                "name": "Cyberpunk Collision",
+                "direction": "Attempting overwrite without flag.",
+                "overwrite": False,
+            }
+            res_coll = client.post("/api/styles/import", json=import_collision)
+            self.assertEqual(res_coll.status_code, 400)
+            self.assertIn("already exists", res_coll.json()["detail"])
+
+            # Import existing style with overwrite=True -> succeeds and updates
+            import_overwrite = {
+                "id": "cyberpunk_neon",
+                "name": "Cyberpunk 2099",
+                "direction": "Updated rain-slicked concrete aesthetic.",
+                "style_card": "Axis 1: Rain-slicked reflections",
+                "overwrite": True,
+            }
+            res_over = client.post("/api/styles/import", json=import_overwrite)
+            self.assertEqual(res_over.status_code, 200)
+            self.assertEqual(res_over.json()["name"], "Cyberpunk 2099")
+
+            # Verify exported version matches updated data
+            updated_export = client.get("/api/styles/cyberpunk_neon/export").json()
+            self.assertEqual(updated_export["name"], "Cyberpunk 2099")
+            self.assertEqual(updated_export["style_card"], "Axis 1: Rain-slicked reflections")
+            self.assertNotIn("overwrite", updated_export)
+
+            # Import new style
+            import_new = {
+                "id": "vintage_sepia",
+                "name": "Vintage Sepia",
+                "direction": "1920s orthochromatic film look with warm sepia toning.",
+                "overwrite": False,
+            }
+            res_new = client.post("/api/styles/import", json=import_new)
+            self.assertEqual(res_new.status_code, 200)
+
+            # Style list contains both
+            styles_list = client.get("/api/styles").json()
+            ids = [s["id"] for s in styles_list]
+            self.assertIn("cyberpunk_neon", ids)
+            self.assertIn("vintage_sepia", ids)
+
+            # Validation failures:
+            # 1. Invalid ID pattern
+            bad_id = {"id": "Invalid ID!", "name": "Bad", "direction": "Some text"}
+            self.assertEqual(client.post("/api/styles/import", json=bad_id).status_code, 422)
+
+            # 2. Path traversal attempt in ID
+            traversal_id = {"id": "../traversal", "name": "Bad", "direction": "Some text"}
+            self.assertEqual(client.post("/api/styles/import", json=traversal_id).status_code, 422)
+
+            # 3. Empty direction
+            empty_dir = {"id": "valid_id", "name": "Valid", "direction": ""}
+            self.assertEqual(client.post("/api/styles/import", json=empty_dir).status_code, 422)
+
+            # 4. Undeclared fields (StrictModel enforcement)
+            extra_field = {"id": "valid_id_2", "name": "Valid", "direction": "Look", "hack": 123}
+            self.assertEqual(client.post("/api/styles/import", json=extra_field).status_code, 422)
 
 
 if __name__ == "__main__":

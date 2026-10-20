@@ -1,5 +1,21 @@
 # Releases
 
+## 1.8.8 — Style export, import, duplication and validation
+
+- Full portability for harvested and custom visual styles: download style cards as clean JSON and import styles into any Mondo Music Video studio library.
+- Four-layer import validation:
+  1. Strict structural schema checking via Pydantic `StrictModel` (`StyleImportRequest`) rejecting unknown keys.
+  2. ID and path sanitization via regex `^[a-z0-9][a-z0-9_-]{0,63}$` preventing path traversal.
+  3. Collision protection: rejects existing style IDs by default unless explicit `overwrite=true` is set.
+  4. Content and boundary constraints: non-empty directions (up to 8,000 chars), display name bounds (up to 160 chars), and preservation of 11-axis forensic breakdown cards (`style_card` up to 16,000 chars).
+- Visual Styles UI additions:
+  - Download JSON and Duplicate action buttons on every style card.
+  - Collapsible 11-Axis Forensic Card preview on styles harvested with the Multimodal Vision agent.
+  - Dedicated Import Style JSON card with file picker and overwrite checkbox.
+- Agent client and MCP tools extended:
+  - Added `export_style` and `import_style` methods to `AgentClient`, along with `export-style` and `import-style` CLI subcommands.
+  - Added `export_style` and `import_style` tools to the MCP server (bringing the suite to 35 tools).
+
 ## 1.8.7 — Fix LocalH3 backend timeout evaluation
 
 - Fixed a `TypeError: '>' not supported between instances of 'float' and 'NoneType'` bug during segment rendering with the `local_h3` backend when `timeout_s` is omitted or `None`.

@@ -156,6 +156,8 @@ Agreements do not move money, approve rider exceptions or establish signer trust
 | `update_studio_settings` | Patch supported model/service/profile preferences, Laya device, H3 model selections, or the auto-update switch. Executable launch commands and secret values are excluded; configure those with the installer/GUI. |
 | `install_starter_assets` | Install only the four public actors and six styles, preserving existing items and removals. Without signer acceptance, return pending actors, public signer and riders for review. Set `accept_starter_signer` only with user acceptance; set `restore_removed` only when explicitly restoring deleted starters. |
 | `delete_actor`, `delete_style` | Remove an unwanted local asset with authorization and `confirm=true`, keeping completed outputs/exports. Production blocks deletion. |
+| `export_style` | Read-only. Download or retrieve a visual style card as JSON, including any 11-axis forensic breakdown. |
+| `import_style` | Import a visual style card into local styles. ID must match `^[a-z0-9][a-z0-9_-]{0,63}$`. Overwrite requires explicit `overwrite=true`. Preserves 11-axis style cards. |
 
 All mutations go through the app's idle guard; existing paid consent and retry
 rules are unchanged. Adding/selecting profiles never submits a paid generation.
