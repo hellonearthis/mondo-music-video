@@ -1,5 +1,12 @@
 # Releases
 
+## 1.9.8 — Component Labeling Mode & Interface Guide
+
+- **Component Labeling Mode (`webapp/js/component_labeling.js`)**: Implemented pair-programming dev overlay accessible via the studio header button (`🏷️ Labels`) or keyboard shortcut (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> / <kbd>Alt</kbd> + <kbd>L</kbd>). Outlines active components, displays floating badge with Component Name, stable ID, source file, hierarchy nesting breadcrumbs, and one-click copy to clipboard.
+- **Stable UI Component Attributes (`webapp/index.html`)**: Tagged all primary studio sections, forms, cards, folds, and dialogs with immutable kebab-case `data-component-id`, human-readable `data-component`, and `data-component-source="webapp/index.html"` per the `component-labeling` specification.
+- **Studio Interface Guide (`docs/interface-guide.md`)**: Comprehensive documentation of all named UI components, IDs, usage locations, design rules, and hierarchy to streamline AI pair programming and UI refactoring.
+- Bumped application version to 1.9.8 across package manifests, README, agent endpoints, and test suites.
+
 ## 1.9.7 — Performance optimizations
 
 - **Launcher model discovery (`start.ps1`)**: Discovers GGUF models and mmproj projectors in a single filesystem pass with hashtable lookups by folder, reducing discovery time on large model collections from ~1.5–3.0s down to milliseconds.

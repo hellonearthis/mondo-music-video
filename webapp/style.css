@@ -642,3 +642,65 @@ button[aria-busy="true"], button.processing {
 .colour-row{display:flex;gap:8px;align-items:center}
 .colour-swatch{flex:none;width:26px;height:26px;border-radius:6px;box-shadow:0 0 0 1px var(--line)}
 .colour-row input{width:92px;font-family:monospace}
+
+/* Component Labeling Mode Overlay */
+.component-labeling-overlay {
+  position: fixed;
+  pointer-events: none;
+  border: 2px dashed #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 6px;
+  z-index: 99998;
+  box-sizing: border-box;
+  transition: all 0.05s ease-out;
+}
+.component-labeling-badge {
+  position: fixed;
+  z-index: 99999;
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+  white-space: nowrap;
+  user-select: none;
+}
+.component-labeling-badge:hover {
+  background: #1e293b;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 0 1px #10b981;
+}
+.component-labeling-badge .comp-name {
+  font-weight: 700;
+  color: #a3e635;
+}
+.component-labeling-badge .comp-id {
+  color: #93c5fd;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.component-labeling-badge .comp-source {
+  color: #94a3b8;
+  font-size: 10px;
+}
+.component-labeling-badge .comp-copy-hint {
+  font-size: 10px;
+  color: #cbd5e1;
+  opacity: 0.85;
+}
+.component-labeling-active [data-component] {
+  cursor: crosshair !important;
+}
+#toggle-component-labels.active {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #059669 !important;
+  font-weight: 600;
+}

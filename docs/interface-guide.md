@@ -1,0 +1,277 @@
+# Mondo Music Video Interface Guide
+
+This document maintains the stable naming, unique identifiers, hierarchy, and design rules for all user interface components in Mondo Music Video.
+
+When discussing, editing, or requesting changes to UI elements, refer to them by their **Component Name** or stable **ID** (e.g. `card-track-direction` or `director-control-room`).
+
+To toggle Component Labeling Mode in the web interface:
+- Click the **🏷️ Labels** button in the studio header, or
+- Press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> (or <kbd>Alt</kbd> + <kbd>L</kbd>). Press <kbd>Esc</kbd> to exit.
+
+---
+
+## 1. Global Shell & Persistent Frame
+
+### Studio Header
+- **ID**: `studio-header`
+- **Used in**: App layout root (always visible)
+- **Code**: `webapp/index.html`, `webapp/style.css`
+- **Design rules**: Height 56px, fixed at top, flex layout with brand mark, edition text, and `.header-actions`. Uses `--surface-2` background with bottom border.
+- **Notes**: Houses branding, community edition info, `#toggle-component-labels`, `#theme-toggle`, and the OAP version badge.
+
+### Navigation Sidebar
+- **ID**: `nav-sidebar`
+- **Used in**: Main viewport left edge (desktop)
+- **Code**: `webapp/index.html`, `webapp/js/core.js`
+- **Design rules**: Width ~240px, fixed navigation rail. Contains two sections: `YOUR STUDIO` (active tabs 01–08) and `THE FULL STUDIO` (teaser links).
+- **Notes**: Dispatches panel switching via `data-panel` attributes handled by `showPanel()` in `app.js`.
+
+### Operation Control Bar
+- **ID**: `operation-bar`
+- **Used in**: Top of main workspace `<main>`
+- **Code**: `webapp/index.html`, `webapp/js/core.js`
+- **Design rules**: Flexbox control strip with `#status-dot`, status title, status message, progress bar, and action buttons (`#show-log`, `#copy-log`, `#clear-log`, `#cancel`, `#resume-production`).
+- **Notes**: Reflects live pipeline state: idle, analyzing, writing prompts, reviewing with Laya, rendering video.
+
+### Service Dock
+- **ID**: `service-dock`
+- **Used in**: Workspace top (below operation bar)
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Grid of hardware and AI engine cards (`#service-card-laya`, `#service-card-writer`, `#service-card-comfy`, `#service-card-vision`, `#service-card-vision_quality`).
+- **Notes**: Live health check of local and remote service backends with auto-polling and manual refresh button.
+
+---
+
+## 2. Music Video Production (Panel 01)
+
+### Music Video Panel
+- **ID**: `panel-video`
+- **Used in**: Primary production workflow (Section 01)
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Main studio panel hosting the multi-step video production form.
+
+### Video Production Form
+- **ID**: `video-production-form`
+- **Used in**: Inside `panel-video`
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Grid of production configuration cards culminating in the `#start-production` action bar.
+
+### Track & Direction Card
+- **ID**: `card-track-direction`
+- **Used in**: Step 1 of `video-production-form`
+- **Code**: `webapp/index.html`
+- **Design rules**: First card in form grid. Holds audio master upload, title, visual direction prompt, style dropdown, aspect ratio selector, render megapixels, and visual vocabulary controls.
+
+### Cast & Staging Card
+- **ID**: `card-cast-staging`
+- **Used in**: Step 2 of `video-production-form`
+- **Code**: `webapp/index.html`
+- **Design rules**: Second card in form grid. Configures renderer backend, render resolution, multi-actor cast selector, supplemental reference images, facial movement (silent mouths / lip sync), dancing mode, and instrument performance settings.
+
+### Director's Control Room
+- **ID**: `director-control-room`
+- **Used in**: Step 3 of `video-production-form`
+- **Code**: `webapp/index.html`
+- **Design rules**: Full-width card with three distinct collapsible folds for advanced cinematography and render policies.
+
+#### Musical Rhythm Fold
+- **ID**: `director-fold-pacing`
+- **Used in**: Inside `director-control-room`
+- **Code**: `webapp/index.html`
+- **Design rules**: Configures beats per bar, bars per phrase, variation seed (with reroll button), conceptual theme, and song lyrics / flavor text.
+
+#### Camera Policies Fold
+- **ID**: `director-fold-camera`
+- **Used in**: Inside `director-control-room`
+- **Code**: `webapp/index.html`
+- **Design rules**: Configures reference policy (all shots, single-subject, fragmentation), casting rotation policy, ensemble mode, and maximum simultaneous actors on screen.
+
+#### Render Engine Fold
+- **ID**: `director-fold-render`
+- **Used in**: Inside `director-control-room`
+- **Code**: `webapp/index.html`
+- **Design rules**: Configures raw clip quality (Standard, ProRes 4444, FFV1), lyric captions burn-in/sidecar, subliminal flashes, vision quality frame checking, compact prompts, opening/closing idents, and prompt cache reuse.
+
+---
+
+## 3. Visual Vocabulary Engine (Panel 02)
+
+### Visual Vocabulary Workspace
+- **ID**: `panel-vocab`
+- **Used in**: Section 02 navigation
+- **Code**: `webapp/index.html`, `webapp/js/vocab.js`
+- **Design rules**: Interactive vocabulary customization suite for camera, lighting, settings, and prop rotation pools.
+
+### Visual Vocabulary Editor Card
+- **ID**: `card-vocab-editor`
+- **Used in**: Inside `panel-vocab`
+- **Code**: `webapp/index.html`, `webapp/js/vocab.js`
+- **Design rules**: Contains preset loader, pseudo-random seed generator toolbar, active selection chip summary, category tabs, checkbox grid, custom keyword textarea, and save/apply actions.
+
+---
+
+## 4. Actors & Open Actor Protocol (Panel 03)
+
+### Actors & OAP Panel
+- **ID**: `panel-actors`
+- **Used in**: Section 03 navigation
+- **Code**: `webapp/index.html`, `webapp/js/actors.js`, `webapp/js/oap.js`
+- **Design rules**: Cast management, reference portrait binding, and Open Actor Protocol packaging.
+
+### Instrument Reference Library
+- **ID**: `instrument-library-fold`
+- **Used in**: Top of `panel-actors`
+- **Code**: `webapp/index.html`, `webapp/js/actors.js`
+- **Design rules**: Collapsible card displaying drum, bass, guitar, and keyboard reference sheets with an import form.
+
+### Actor Creation Form
+- **ID**: `actor-create-form`
+- **Used in**: Inside `panel-actors`
+- **Code**: `webapp/index.html`, `webapp/js/actors.js`
+- **Design rules**: Card with actor ID, display name, visual description, and portrait reference image upload.
+
+### OAP Import Card
+- **ID**: `oap-import-card`
+- **Used in**: Inside `panel-actors`
+- **Code**: `webapp/index.html`, `webapp/js/oap.js`
+- **Design rules**: `.oap` bundle upload, unsigned package override, signature verification inspector, and trust confirmation checkbox.
+
+### Role Agreements Manager
+- **ID**: `role-agreements-card`
+- **Used in**: Bottom of `panel-actors`
+- **Code**: `webapp/index.html`, `webapp/js/agreements.js`
+- **Design rules**: OAP 0.3 contract drafting form (offer, currency, character, role description, ratings check) and countersigned agreement importer.
+
+---
+
+## 5. Visual Styles & Harvesting (Panels 04 & 05)
+
+### Styles Library Panel
+- **ID**: `panel-styles`
+- **Used in**: Section 04 navigation
+- **Code**: `webapp/index.html`, `webapp/js/styles.js`
+- **Design rules**: Grid of visual style direction cards with preview chips and creation/import cards.
+
+### Style Creation Form
+- **ID**: `style-create-form`
+- **Used in**: Inside `panel-styles`
+- **Code**: `webapp/index.html`, `webapp/js/styles.js`
+- **Design rules**: Custom style ID, name, and visual language prompt directives.
+
+### Style Import Card
+- **ID**: `style-import-card`
+- **Used in**: Inside `panel-styles`
+- **Code**: `webapp/index.html`, `webapp/js/styles.js`
+- **Design rules**: JSON style card importer with 4-layer validation and overwrite option.
+
+### Style Harvest Panel
+- **ID**: `panel-harvest`
+- **Used in**: Section 05 navigation
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Multimodal vision analysis interface to reverse-engineer aesthetic prompt vocabularies from reference pictures.
+
+### Harvest Production Form
+- **ID**: `harvest-production-form`
+- **Used in**: Inside `panel-harvest`
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Narrow card with new style ID, style name, 1–9 reference images, and preview harvest button.
+
+---
+
+## 6. Credits, Idents & Finished Productions (Panels 06 & 07)
+
+### Credits & Idents Panel
+- **ID**: `panel-idents`
+- **Used in**: Section 06 navigation
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Production ident and title card animator.
+
+### Ident Production Form
+- **ID**: `ident-production-form`
+- **Used in**: Inside `panel-idents`
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Design rules**: Title text, motion direction, style select, backend renderer, duration (4–12s), shape, and reference image inputs.
+
+### Finished Videos Panel
+- **ID**: `panel-outputs`
+- **Used in**: Section 07 navigation
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, and export triggers.
+
+### Unfinished Runs Manager
+- **ID**: `unfinished-runs-manager`
+- **Used in**: Bottom of `panel-outputs`
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Design rules**: Collapsible table displaying interrupted or incomplete production runs with Resume, View, and Purge actions.
+
+---
+
+## 7. Studio Settings (Panel 08)
+
+### Studio Settings Panel
+- **ID**: `panel-settings`
+- **Used in**: Section 08 navigation
+- **Code**: `webapp/index.html`, `webapp/js/settings.js`
+- **Design rules**: Local hardware, model parameters, API profiles, and credential configuration.
+
+### Studio Settings Form
+- **ID**: `settings-form`
+- **Used in**: Inside `panel-settings`
+- **Code**: `webapp/index.html`, `webapp/js/settings.js`
+- **Design rules**: Dynamic grid of input fields populated from server configuration schema.
+
+### Provider Keys Form
+- **ID**: `key-form`
+- **Used in**: Inside `panel-settings`
+- **Code**: `webapp/index.html`, `webapp/js/settings.js`
+- **Design rules**: Secret credential storage for Wavespeed, ComfyUI, Vision, and Writer API keys.
+
+---
+
+## 8. Modals & Dialogs
+
+### Pre-Production Review Dialog
+- **ID**: `preview-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/app.js`
+- **Purpose**: Displays musical beat analysis, montage passage breakdown, score editor, and cost estimates. Requires explicit user consent before generation starts.
+
+### Lyric Captions Dialog
+- **ID**: `caption-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Purpose**: Re-encodes finished video with burned-in lyric subtitle lines in selected style, position, and colors.
+
+### Topaz Upscale Dialog
+- **ID**: `upscale-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Purpose**: Launches local Topaz Video AI enhancement job (2x or 4x) on finished renders.
+
+### Folder Picker Dialog
+- **ID**: `folder-picker-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/settings.js`
+- **Purpose**: Native-like filesystem browser for selecting local paths in settings without manual typing.
+
+### OAP Helper Dialog
+- **ID**: `oap-helper-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/oap.js`
+- **Purpose**: Multi-tab guide explaining characters vs references, OAP specification, Ed25519 signatures, safety riders, and pipeline isolation.
+
+### Local Writer Helper Dialog
+- **ID**: `llama-helper-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/settings.js`
+- **Purpose**: Guide and JSON tuner for local `llama.cpp` server flags, context sizes, and vision projectors.
+
+### Production Package Export Dialog
+- **ID**: `export-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Purpose**: Packages raw passage clips, stems, EDL timeline, and prompts into an NLE editing bundle.
+
+### Delete Video Dialog
+- **ID**: `delete-video-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Purpose**: Confirmation modal before deleting finished video files and passages from disk.
+
+### Visual Vocabulary Guide Dialog
+- **ID**: `vocab-helper-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/vocab.js`
+- **Purpose**: Reference guide documenting rotation pools, categories, and keyword syntax.
+
