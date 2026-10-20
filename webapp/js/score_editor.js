@@ -168,6 +168,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   const singerLabel = text("label", "Main singer ", "se-driver-label",
     "The actor who sings the lyric lines. Left on 'choose for me', the program picks one with your seed.");
   singerLabel.append(singerSelect);
+  const voiceNote = text("p", "", "muted se-lip-note");
   const lineList = text("div", "", "se-lines");
   const lineBar = text("div", "", "se-section-bar");
   const addLine = text("button", "Add line at cursor", "secondary", "Add a lyric line starting where the playback cursor is");
@@ -188,7 +189,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   pasteBox.setAttribute("aria-label", "Pasted lyrics");
   const pasteBtn = text("button", "Time pasted lyrics", "secondary", "Match your words to the song to find when each line is sung (run Detect lyrics first)");
   pasteBtn.type = "button";
-  lipBox.append(text("h3", "Lyrics and singing"), singerLabel, detectBar, detectNote, speechSetup, pasteBox, pasteBtn,
+  lipBox.append(text("h3", "Lyrics and singing"), singerLabel, voiceNote, detectBar, detectNote, speechSetup, pasteBox, pasteBtn,
     lineList, lineBar, lipSummary);
 
   const sectionHead = text("h3", "Sections");
@@ -573,12 +574,28 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
 
   const confirmed = item => { if (item.timing === "interpolated" || item.timing === "uncertain") item.timing = "manual"; };
 
+  // Advisory only: a clear voice/singer gender mismatch gets a note and a one-click best match, never a block.
+  function renderVoice(plan) {
+    const info = quote.voice, voiceKind = info && info.voice, genders = (info && info.genders) || {};
+    const singer = singers[0] || plan.singer;
+    voiceNote.replaceChildren();
+    if (!voiceKind || !genders[singer] || genders[singer] === voiceKind) return;
+    const match = (request.actors || []).find(id => genders[id] === voiceKind);
+    voiceNote.append(`The vocals sound ${voiceKind}, but ${plan.actors[singer] || singer} reads as ${genders[singer]}. You can keep this choice. `);
+    if (!match) return;
+    const useMatch = text("button", `Use ${plan.actors[match] || match}`, "secondary", "Make the best-matching actor the main singer");
+    useMatch.type = "button";
+    useMatch.onclick = () => { singers = [match]; singerSelect.value = match; refreshStatus(); renderVoice(plan); };
+    voiceNote.append(useMatch);
+  }
+
   function renderLip() {
     if (!lipOn) return;
     const plan = quote.lipsync || { actors: {}, passages: {} };
     singerSelect.replaceChildren(option("", "Choose for me (seeded)", "Pick one of the cast with the production seed"),
       ...(request.actors || []).map(id => option(id, plan.actors[id] || id)));
     singerSelect.value = singers[0] || "";
+    renderVoice(plan);
     lineList.replaceChildren();
     lines.forEach((item, i) => {
       const row = text("div", "", "se-line-row");

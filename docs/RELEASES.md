@@ -1,5 +1,13 @@
 # Releases
 
+## 1.8.10 — Voice/gender check for lip sync
+
+- New advisory check in the lip-sync preview: when the vocals stem sounds clearly male (median sung pitch under 165 Hz) or female (over 250 Hz) and the main singer reads as the other gender, the editor shows a note under "Main singer" with a one-click button for the best-matching actor. It never blocks a deliberate choice, and it stays silent when the voice or the singer is unclear.
+- Voice comes from the median pitch of the loud, voiced frames of an already cached vocals stem (it never starts a separation); at least 3 seconds of voiced audio are required. Quiet frames are ignored because stem bleed otherwise drags the median around. Actor gender is read from the actor's own description (pronouns and nouns must clearly favor one side).
+- The preview carries it as a separate `voice` key (also in the agent client, MCP preview and skill docs). It is excluded from fingerprints and saved passage plans, so existing runs and resumes are unaffected.
+- Real-song checks (htdemucs, CPU, mock-free): "In Heaven There Is No Beer (Hell) ++++" reads male at 126 Hz. "Let's Go Chill With Hodge(2)" has only about 3 seconds of female vocal; it yields too little clear voiced audio and is correctly left unsure (the ungated stem would have read male from bass bleed). A short female-only clip is therefore not yet verified positive; a longer female vocal is still to be tested.
+- Not changed: the protected prompt scheme, pins and sealed-lips wording.
+
 ## 1.8.9 — Fork integration: style portability, offline-engine guard, run manager
 
 - Version 1.8.9 deliberately skips past the fork's own 1.8.6–1.8.8 tags so the same number never names different code.

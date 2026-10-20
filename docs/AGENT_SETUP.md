@@ -90,7 +90,7 @@ are sensitive to it.
 
 For lip-sync mode, set `mouth_mode: "lip_sync"` and give `lyric_lines` ([{start, end, text}] in seconds on
 the song clock) and optionally `singers` (actor ids; the first is the main singer, empty means a seeded
-pick) in `preview_production`; the preview's `lipsync` shows which passages sing and who sings. Pasted lyrics may use Suno section markers such as `[Verse 1]` and `[Chorus]` and
+pick) in `preview_production`; the preview's `lipsync` shows which passages sing and who sings, and its advisory `voice` (present only with a cached vocals stem) flags a clear voice/singer gender mismatch with a suggested actor; it never blocks. Pasted lyrics may use Suno section markers such as `[Verse 1]` and `[Chorus]` and
 `(backing vocals)`; markers become section labels, not lines. Get lines
 with `detect_lyrics` (free, local, needs the optional Whisper add-on and a speech model already on disk;
 poll `inspect_studio` status for the result) or `align_lyrics` for pasted lyrics. `inspect_studio` kind

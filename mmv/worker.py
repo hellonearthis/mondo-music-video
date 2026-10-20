@@ -696,6 +696,9 @@ def main():
         from .engine.analyze import ScoreMap
         from .stems import driven_score
         driven_score(ScoreMap.from_json(sys.argv[2]), sys.argv[3]).to_json(sys.argv[4])
+    elif sys.argv[1] == 'voice':
+        from .voice import estimate_voice
+        Path(sys.argv[3]).write_text(json.dumps(estimate_voice(sys.argv[2])), encoding='utf-8')
     elif sys.argv[1] == 'produce':
         home,directory=Path(sys.argv[2]),Path(sys.argv[3])
         import signal

@@ -293,6 +293,10 @@ def prepare(store, request, *, saved_prepared=None):
         from . import lipsync
         lip_sync = lipsync.plan_passages(p.segments, casting, lipsync.clean_lines(request.get('lyric_lines')),
                                          request.get('singers') or [], request['seed'])
+    voice_note = None
+    if lip_sync and kind == 'video':
+        from . import voice
+        voice_note = voice.voice_check(store, digest, request, lip_sync)
     sub_plan = None
     if kind == 'video' and (request.get('subliminal') or {}).get('mode', 'off') != 'off':
         from . import subliminal
@@ -323,13 +327,15 @@ def prepare(store, request, *, saved_prepared=None):
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),
                          'downbeats': len(score.downbeat_frames), 'sections': len(score.sections),
                          'shots': sum(len(s.shots) for s in p.segments), 'width': width, 'height': height}}
+    if voice_note is not None:
+        prepared['voice'] = voice_note             # advisory only: kept out of fingerprints and saved plans
     if dance_plan is not None:
         prepared['dance'] = dance_plan             # absent when off, so existing fingerprints are unchanged
     return passage_plans.restore(prepared, saved_prepared) if replay_plans else prepared
 
 
 def fingerprint(store, request, prepared):
-    payload = {k:v for k,v in prepared.items() if k not in ('references', 'passage_plan_binding')}
+    payload = {k:v for k,v in prepared.items() if k not in ('references', 'passage_plan_binding', 'voice')}
     digest = hashlib.sha256(json.dumps({'request': request, 'prepared': payload}, sort_keys=True).encode())
     files = list(prepared['references'])
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))

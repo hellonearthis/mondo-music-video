@@ -79,7 +79,8 @@ def create_server(base_url=None):
         Lip sync: `mouth_mode` "lip_sync" keeps every passage sealed except those covered by `lyric_lines`
         [{start, end, text}] (seconds on the song clock; use detect_lyrics or align_lyrics); `singers` lists actor
         ids (the first is the main singer; empty means a seeded pick). The preview's `lipsync` shows which passages
-        sing and who sings. "sealed" (default) and "natural" are unchanged.
+        sing and who sings; its `voice` (only when a vocals stem is already cached) advises when the vocals sound clearly
+        male or female and the main singer reads as the other, with a suggested actor. It never blocks. "sealed" (default) and "natural" are unchanged.
         """
         return invoke(client.preview, request)
 
