@@ -617,10 +617,11 @@ export function initOperationControls() {
 
   $("#clear-log").onclick = handle(async () => {
     state.sessionLogs.length = 0;
+    state.currentRun = null;
     await api("/api/log/clear", { method: "POST" });
     $("#operation-log").textContent = "Log cleared. Waiting for new activity.";
-    notice("Diagnostic log cleared.");
-    setTimeout(() => { if ($("#notice").textContent === "Diagnostic log cleared.") notice(""); }, 2000);
+    notice("Diagnostic log cleared.", false);
+    setTimeout(() => { if ($("#notice").textContent === "Diagnostic log cleared.") notice("", false); }, 2000);
   });
 
   const rerollSeedBtn = $("#reroll-seed");

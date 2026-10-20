@@ -1,5 +1,15 @@
 # Releases
 
+## 1.8.11 — Fork integration: token telemetry, single-slot writer, log clearing, video clips as idents
+
+Integrates hellonearthis' fork revisions `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d` (fork versions 1.8.9–1.8.13). Credit: hellonearthis.
+
+- Writer token telemetry: each writer call prints `[tokens] <passage>: prompt + generated = total — N% context used, t/s` to the operation log. It only observes the response (`mmv/writer_usage.py`); no request or response is changed. The context percentage appears only when the llama-server context size is known from the launch arguments.
+- Launcher: every preset now runs llama-server with `--parallel 1`. By default llama-server splits `-c` across four slots, so an 8192 context left each prompt about 2048 tokens — a truncation problem on lower-memory machines that larger-memory machines never see. The 16k-context, `--no-cache-prompt` and `-sps 0` settings remain opt-in with `-TuningPreset hellonearthis`. The launcher also keeps existing context/batch/image-token tuning from `settings.json` instead of resetting it, and no longer passes `--image-min-tokens` twice.
+- Clear log: clearing now actually clears. During a run the current size of the operation, writer-service and Comfy-service logs is recorded and only newer output is shown, also after the run finishes; older validation reports stay hidden.
+- Completed video clips can be attached as opening or closing cards (fork `59f820d`), grouped apart from idents in the picker. Preparation now accepts a completed video clip as well as an ident; the fork's picker alone would have been rejected with "Choose a completed ident".
+- Not changed: the protected prompt scheme and pins. Not adopted: the fork's per-request `cache_prompt:false` rewrite (see COLLABORATOR_REVIEW.md).
+
 ## 1.8.10 — Voice/gender check for lip sync
 
 - New advisory check in the lip-sync preview: when the vocals stem sounds clearly male (median sung pitch under 165 Hz) or female (over 250 Hz) and the main singer reads as the other gender, the editor shows a note under "Main singer" with a one-click button for the best-matching actor. It never blocks a deliberate choice, and it stays silent when the voice or the singer is unclear.

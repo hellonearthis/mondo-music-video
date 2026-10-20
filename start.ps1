@@ -63,7 +63,38 @@ if ($TuningPreset -eq "hellonearthis") {
     if (-not $PSBoundParameters.ContainsKey("BatchSize")) { $BatchSize = 2048 }
     if (-not $PSBoundParameters.ContainsKey("MicroBatchSize")) { $MicroBatchSize = 1024 }
     if (-not $PSBoundParameters.ContainsKey("ImageMinTokens")) { $ImageMinTokens = 1024 }
+} else {
+    if (-not $PSBoundParameters.ContainsKey("ContextSize")) {
+        try {
+            $settingsFile = Join-Path $env:LOCALAPPDATA "mondo-music-video\settings.json"
+            if (Test-Path $settingsFile) {
+                $existing = Get-Content $settingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($existing.writer_launch) {
+                    $existingLaunch = $existing.writer_launch | ConvertFrom-Json
+                    for ($k = 0; $k -lt $existingLaunch.Length - 1; $k++) {
+                        if ($existingLaunch[$k] -in @("-c", "--ctx-size")) {
+                            $parsedCtx = [int]$existingLaunch[$k + 1]
+                            if ($parsedCtx -ge 512) { $ContextSize = $parsedCtx }
+                        } elseif ($existingLaunch[$k] -in @("-b", "--batch-size") -and -not $PSBoundParameters.ContainsKey("BatchSize")) {
+                            $parsedB = [int]$existingLaunch[$k + 1]
+                            if ($parsedB -gt 0) { $BatchSize = $parsedB }
+                        } elseif ($existingLaunch[$k] -in @("-ub", "--ubatch-size") -and -not $PSBoundParameters.ContainsKey("MicroBatchSize")) {
+                            $parsedUb = [int]$existingLaunch[$k + 1]
+                            if ($parsedUb -gt 0) { $MicroBatchSize = $parsedUb }
+                        } elseif ($existingLaunch[$k] -eq "--image-min-tokens" -and -not $PSBoundParameters.ContainsKey("ImageMinTokens")) {
+                            $parsedImg = [int]$existingLaunch[$k + 1]
+                            if ($parsedImg -gt 0) { $ImageMinTokens = $parsedImg }
+                        }
+                    }
+                }
+            }
+        } catch {}
+    }
 }
+
+# One slot gives the whole context to the active prompt (the default 4 slots leave each a quarter, which truncates long passages
+# on low-memory machines). Dropping the prompt cache is opt-in with the hellonearthis preset: it keeps earlier passages out of VRAM but reuses less.
+$SlotArgs = @("--parallel", "1") + $(if ($TuningPreset -eq "hellonearthis") { @("--no-cache-prompt", "-sps", "0") } else { @() })
 
 $MmvProjectDir = $PSScriptRoot
 if (-not $MmvProjectDir) { $MmvProjectDir = (Get-Location).Path }
@@ -219,12 +250,13 @@ if ($selectedModel) {
         "--alias", "$($selectedModel.DefaultAlias)",
         "--sleep-idle-seconds", "10"
     )
+    $launchArgs += $SlotArgs
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)", "--image-min-tokens", "1024")
+        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
     }
     if ($BatchSize -gt 0) { $launchArgs += @("-b", "$BatchSize") }
     if ($MicroBatchSize -gt 0) { $launchArgs += @("-ub", "$MicroBatchSize") }
-    if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) { $launchArgs += @("--image-min-tokens", "$ImageMinTokens") }
+    if ($selectedModel.HasVision) { $launchArgs += @("--image-min-tokens", $(if ($ImageMinTokens -gt 0) { "$ImageMinTokens" } else { "1024" })) }
 
     $settingsPayload = @{
         writer_url = "http://127.0.0.1:$LlamaPort/v1"
@@ -273,13 +305,14 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
             "--alias", "$($selectedModel.DefaultAlias)",
             "--sleep-idle-seconds", "10"
         )
+        $serverArgs += $SlotArgs
         if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath), "--image-min-tokens", "1024")
+            $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
         }
 
         if ($BatchSize -gt 0) { $serverArgs += @("-b", "$BatchSize") }
         if ($MicroBatchSize -gt 0) { $serverArgs += @("-ub", "$MicroBatchSize") }
-        if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) { $serverArgs += @("--image-min-tokens", "$ImageMinTokens") }
+        if ($selectedModel.HasVision) { $serverArgs += @("--image-min-tokens", $(if ($ImageMinTokens -gt 0) { "$ImageMinTokens" } else { "1024" })) }
 
         Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $LlamaDir -WindowStyle Minimized
 

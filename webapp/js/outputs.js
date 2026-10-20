@@ -374,12 +374,28 @@ export async function loadOutputs() {
   }
   $$(".ident-select").forEach(select => {
     const old = select.value;
-    select.replaceChildren(
-      option("", "None", "No ident clip attached"),
-      ...outputs.filter(output => output.kind === "ident").map(output =>
-        option(output.file, output.title, `Ident clip: ${output.title}`)
-      )
-    );
+    const identOutputs = outputs.filter(output => output.kind === "ident");
+    const videoOutputs = outputs.filter(output => output.kind === "video");
+
+    const children = [
+      option("", identOutputs.length ? "None" : "None (render one in 06. Credits & idents)", "No ident clip attached")
+    ];
+
+    if (identOutputs.length) {
+      const group = document.createElement("optgroup");
+      group.label = "Idents & Title Cards";
+      identOutputs.forEach(o => group.appendChild(option(o.file, o.title, `Ident clip: ${o.title}`)));
+      children.push(group);
+    }
+
+    if (videoOutputs.length) {
+      const group = document.createElement("optgroup");
+      group.label = "Completed Video Clips";
+      videoOutputs.forEach(o => group.appendChild(option(o.file, `${o.title || "Untitled"} (${o.file.split("/")[0].slice(0, 8)})`, `Attach video: ${o.title}`)));
+      children.push(group);
+    }
+
+    select.replaceChildren(...children);
     if ([...select.options].some(item => item.value === old)) select.value = old;
   });
 

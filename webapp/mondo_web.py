@@ -35,7 +35,8 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.10"
+LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
+MGL_APP_VERSION = "1.8.11"
 WEB = Path(__file__).parent
 
 
@@ -1347,7 +1348,18 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.post("/api/log/clear")
     def clear_log():
-        write_json(store.home / "log_cleared.json", {"cleared_at": time.time()})
+        cleared_offsets = {}
+        try:
+            status = jobs.status()
+            active_id = status.get("id") if status.get("state") in ("running", "cancelling") else None
+            if active_id:
+                active_dir = store.home / "runs" / identifier(active_id)
+                cleared_offsets = {f"{active_dir.name}/{name}": (active_dir / name).stat().st_size
+                                   for name in LOG_FILES if (active_dir / name).exists()}
+        except Exception:
+            pass
+
+        write_json(store.home / "log_cleared.json", {"cleared_at": time.time(), "offsets": cleared_offsets})
         studio_log = store.home / "studio.log"
         if studio_log.exists():
             try:
@@ -1375,10 +1387,13 @@ def create_app(home=None, *, test_hosts=False):
     def operation_log(run_id: str):
         cleared_info = read_json(store.home / "log_cleared.json", {})
         cleared_at = float(cleared_info.get("cleared_at", 0))
+        cleared_offsets = cleared_info.get("offsets", {})
 
         active_id = None
         try:
-            active_id = jobs.status().get("id")
+            status = jobs.status()
+            if status.get("state") in ("running", "cancelling"):
+                active_id = status.get("id")
         except Exception:
             pass
 
@@ -1389,37 +1404,39 @@ def create_app(home=None, *, test_hosts=False):
             directory = runs[0] if runs else None
         else:
             directory = store.home / "runs" / identifier(run_id)
-            if not directory.exists() or (directory.name != active_id and directory.stat().st_mtime < cleared_at):
-                runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                        if p.name == active_id or p.stat().st_mtime >= cleared_at]
-                directory = runs[0] if runs else None
+            if not directory.exists() or ((not active_id or directory.name != active_id) and directory.stat().st_mtime < cleared_at):
+                directory = None
 
-        if directory and directory.is_dir() and (directory.name == active_id or directory.stat().st_mtime >= cleared_at):
-            path = directory / "operation.log"
-            if path.exists():
+        if directory and directory.is_dir():
+            def tail(name, limit):
+                """The last `limit` bytes of a run log, never reaching back before the last clear."""
+                path = directory / name
+                if not path.exists():
+                    return ""
+                offset, size = int(cleared_offsets.get(f"{directory.name}/{name}", 0)), path.stat().st_size
+                if size <= offset:
+                    return ""
                 with path.open("rb") as stream:
-                    stream.seek(max(0, path.stat().st_size - 64000))
-                    sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + stream.read().decode(errors="replace"))
+                    stream.seek(max(offset, size - limit))
+                    return stream.read().decode(errors="replace")
+            content_chunk = tail("operation.log", 64000)
+            if content_chunk.strip():
+                sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + content_chunk)
             # Include any validation failure reports
             validations = sorted(directory.glob("*.validation-*.json"))
             for v in validations:
-                try:
-                    data = json.loads(v.read_text(encoding="utf-8"))
-                    sections.append(f"\n--- Validation Details ({v.name}) ---\n" + json.dumps(data, indent=2))
-                except Exception:
-                    pass
+                if v.stat().st_mtime >= cleared_at:
+                    try:
+                        data = json.loads(v.read_text(encoding="utf-8"))
+                        sections.append(f"\n--- Validation Details ({v.name}) ---\n" + json.dumps(data, indent=2))
+                    except Exception:
+                        pass
             # Include writer service output if present
-            writer_log = directory / "writer-service.log"
-            if writer_log.exists() and writer_log.stat().st_size > 0:
-                with writer_log.open("rb") as stream:
-                    stream.seek(max(0, writer_log.stat().st_size - 16000))
-                    sections.append("\n--- Writer Service Output (llama.cpp) ---\n" + stream.read().decode(errors="replace"))
+            if writer_text := tail("writer-service.log", 16000):
+                sections.append("\n--- Writer Service Output (llama.cpp) ---\n" + writer_text)
             # Include ComfyUI service output if present
-            comfy_log = directory / "comfy-service.log"
-            if comfy_log.exists() and comfy_log.stat().st_size > 0:
-                with comfy_log.open("rb") as stream:
-                    stream.seek(max(0, comfy_log.stat().st_size - 16000))
-                    sections.append("\n--- ComfyUI Service Output ---\n" + stream.read().decode(errors="replace"))
+            if comfy_text := tail("comfy-service.log", 16000):
+                sections.append("\n--- ComfyUI Service Output ---\n" + comfy_text)
             # Include final operation status
             op_info = read_json(directory / "operation.json", {})
             if op_info.get("state") == "failed" and op_info.get("message"):

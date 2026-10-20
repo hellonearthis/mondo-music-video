@@ -1,5 +1,19 @@
 # Collaborator review record
 
+## October 20, 2026 — fork integration, head 59f820d (release 1.8.11)
+
+Reviewed an isolated clone at exact revision `59f820d`, following last reviewed head `73cbd4b` (1.8.9). New commits: `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d`. Codex (low effort, read-only) acted as adversarial reviewer; its findings were checked against source. The owner reports EGG's changes fix a problem that appears on lower-memory machines and was invisible on the owner's larger-memory one.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Clear-log fix (`5a14e85`) | Adopted with fixes. Codex showed the saved offset was dropped once the run finished (cleared output reappeared) and that writer/Comfy service logs and old validation reports were not offset. Offsets now cover all three logs and persist; `tests/test_log_clear.py`. |
+| 16k default context, launcher preservation (`98a1cc0`) | Preservation of saved tuning and the duplicate `--image-min-tokens` fix adopted. The 16k default stays opt-in (`hellonearthis` preset): it costs memory on the machines the fix targets. Open (not fixed): the settings lookup hardcodes `%LOCALAPPDATA%` and ignores `MMV_HOME`; and passing only `-ContextSize` skips restoring saved batch settings. Needs a Windows test. |
+| Token telemetry (`4c6d79b`) | Adopted as a read-only helper (`mmv/writer_usage.py`, lock-guarded, urlopen always restored). It is needed because `engine/writer.py` is pinned. Context percentage omitted when unknown (the fork assumed 16384). |
+| KV-cache flush (`a7cb9df`) | Adapted. `--parallel 1` is now default for every preset (it gives the full context to the active prompt). `--no-cache-prompt`/`-sps 0` are opt-in in the `hellonearthis` preset. The per-request `cache_prompt:false` rewrite was not adopted: it duplicates the server flag and would be sent to paid API writers too (Codex P1; whether a given provider rejects it is unverified). Effect on output quality and speed is unmeasured. |
+| Video clips as idents (`59f820d`) | Adopted with a fix: preparation rejected `kind=video` outputs (Codex P1, confirmed at `mmv/pipeline.py`), so the picker option could not work. Accepted now. A real attach-render check is still to do. |
+
+No paid, GPU or Topaz work; no private assets; no commit, push or message to the collaborator.
+
 ## October 20, 2026 — fork integration, head 73cbd4b (release 1.8.9)
 
 Reviewed an isolated clone of `hellonearthis/mondo-music-video` at exact revision `73cbd4b`, following last reviewed

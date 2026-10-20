@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+from . import writer_usage
 from .storage import Storage, inside, read_json, write_json
 
 
@@ -145,9 +146,11 @@ def run(home, directory, *, resume=False):
     def progress(message, value):
         print(message, flush=True)
         write_json(directory / 'progress.json', {'message': message, 'progress': value})
-    def llm(system, user):
-        ok, text, error = call_llm(None, system, user, .7, 4096, 900,
-                                   profile=(settings, store.key('MMV_WRITER_API_KEY')))
+    ctx_size = writer_usage.launch_context(settings)
+    def llm(system, user, label=None):
+        captured = {}
+        ok, text, error = writer_usage.observe(
+            lambda: call_llm(None, system, user, .7, 4096, 900, profile=(settings, store.key('MMV_WRITER_API_KEY'))), captured)
         if not ok:
             mode = "local llama.cpp" if settings.get('writer_mode') == 'local' else "API writer"
             endpoint = runtime.safe_endpoint(settings.get('writer_url', ''))
@@ -157,6 +160,8 @@ def run(home, directory, *, resume=False):
             raise ValueError(f"Writer ({mode} at {endpoint}) failed: {error or 'Writer returned no output'}")
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"Writer ({settings.get('writer_model') or 'llama.cpp'}) returned empty text")
+        if line := writer_usage.usage_line(captured, ctx_size, label):
+            print(line, flush=True)
         return text
     if request['kind'] == 'harvest':
         progress('Harvesting visual style with the original style contract', 10)
@@ -253,7 +258,7 @@ def run(home, directory, *, resume=False):
                     pass
             if plan.segments[0].segment_id not in prompts:
                 progress('Writing ident with the original ident prompt', 10)
-                raw = llm(system, message).strip()
+                raw = llm(system, message, label='ident').strip()
                 if raw.startswith('```'): raw = '\n'.join(raw.splitlines()[1:-1]).strip()
                 if request['title'] not in raw: raise ValueError('Ident writer omitted the exact requested title')
                 prompts[plan.segments[0].segment_id] = raw
@@ -345,10 +350,11 @@ def run(home, directory, *, resume=False):
                 compact = bool(request.get('compact_prompts'))
                 attempts = (4 if singing or dancing else 3) if settings['writer_mode'] == 'local' else 1
                 for attempt in range(attempts):
+                    tag = f"{seg.segment_id} (attempt {attempt + 1})" if attempt else seg.segment_id
                     if compact:
-                        raw = llm(seg_system, _compact_writer_job(job) + feedback)
+                        raw = llm(seg_system, _compact_writer_job(job) + feedback, label=tag)
                     else:
-                        raw = llm(seg_system + feedback, json.dumps(job, indent=2))
+                        raw = llm(seg_system + feedback, json.dumps(job, indent=2), label=tag)
                     (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
                     try:
                         response = WriterResponse.parse(raw, seg.segment_id)

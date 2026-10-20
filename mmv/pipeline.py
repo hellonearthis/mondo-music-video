@@ -256,8 +256,8 @@ def prepare(store, request, *, saved_prepared=None):
                 except ValueError:
                     raise ValueError(f"Ident path '{request[key]}' is invalid")
                 record = read_json(p.parent / 'output.json', {})
-                if not p.is_file() or record.get('kind') != 'ident' or record.get('file') != p.name:
-                    raise ValueError('Choose a completed ident')
+                if not p.is_file() or record.get('kind') not in ('ident', 'video') or record.get('file') != p.name:
+                    raise ValueError('Choose a completed ident or video clip')
     else:
         detected = None
         seconds = request['ident_seconds']
