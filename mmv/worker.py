@@ -12,6 +12,11 @@ from urllib.parse import urlparse
 from .storage import Storage, inside, read_json, write_json
 
 
+def render_timeout(backend):
+    """The original local adapter requires a number; infinity preserves unlimited waiting."""
+    return float('inf') if backend == 'local_h3' else None
+
+
 def passage_cache_key(system, job, validators_version=''):
     # Empty version deliberately preserves every existing cache identity.
     prefix = "validated-v2\n" + ("validators:" + validators_version + "\n" if validators_version else "")
@@ -267,10 +272,10 @@ def run(home, directory, *, resume=False):
             if any(item.get('dancing') for item in dance_passages.values()):
                 from . import dance
                 tail = quality.WRITER_RULES            # the quality rules stay last: base, singing rules, dance rules, quality rules
-                system_dance = system[:-len(tail)] + '\n\n' + dance.DANCE_RULES + tail
+                system_dance = system[:-len(tail)] + '\n\n' + dance.writer_rules(dance_plan) + tail
                 (directory / 'writer_system_dance.md').write_text(system_dance, encoding='utf-8')
                 if system_singing is not None:
-                    system_singing_dance = system_singing[:-len(tail)] + '\n\n' + dance.DANCE_RULES + ' ' + dance.DANCE_SINGER_SENTENCE + tail
+                    system_singing_dance = system_singing[:-len(tail)] + '\n\n' + dance.writer_rules(dance_plan) + ' ' + dance.DANCE_SINGER_SENTENCE + tail
                     (directory / 'writer_system_singing_dance.md').write_text(system_singing_dance, encoding='utf-8')
             jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
             cache_dir = store.home / 'cache' / 'prompts'
@@ -310,7 +315,7 @@ def run(home, directory, *, resume=False):
                 if dancing:
                     if not singing:
                         cache_validators.append(lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent))
-                    dance_version = f'dance-v{dance.VERSION}'
+                    dance_version = f"dance-v{dance_plan.get('version', dance.VERSION)}"
                     cache_validators.append(lambda prompt: dance.dance_problems(prompt, cached_shot_bodies(prompt), seg, dpass, dance_plan))
                 if reuse_prompts:
                     cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', seg_system, job, seg, tags,
@@ -353,8 +358,9 @@ def run(home, directory, *, resume=False):
                                     + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else [])
                                     + (dance.dance_problems(prompt, response.shot_bodies, seg, dpass, dance_plan) if dancing else []))
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
+                        prompt = None
                         problems = [str(exc)]
-                    if dancing and problems and all(dance.is_soft(x) for x in problems) and soft_fallback is None:
+                    if dancing and prompt is not None and problems and all(dance.is_soft(x) for x in problems) and soft_fallback is None:
                         soft_fallback = (prompt, problems)          # only style advice left: keep the first such draft as the fallback
                     if dancing and problems and attempt == attempts - 1 and soft_fallback is not None:
                         prompt, kept = soft_fallback                # a later try got worse; use the best draft and record its advice
@@ -419,7 +425,7 @@ def run(home, directory, *, resume=False):
             return prompt_id
         ComfyClient.queue = record_queue
     backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
-                        song=None, steps=20, timeout_s=None, comfy_host=url.hostname, comfy_port=url.port or 8188,
+                        song=None, steps=20, timeout_s=render_timeout(request['backend']), comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
                         map_path=settings['workflow_map_path'], root=ENGINE,
                         comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'),

@@ -171,5 +171,123 @@ class DanceTests(unittest.TestCase):
         self.assertEqual(FPS, 24)
 
 
+class IndependentDanceTests(unittest.TestCase):
+    def plan(self, **settings):
+        return dance.plan_passages([segment(), segment(1, 24)], casting({'seg000': CAST[:3], 'seg001': [CAST[2]]}),
+                                   SCORE, {'dance_mode': 'independent', **settings}, singer='ann')
+
+    def test_stable_auto_assignments_no_lead_and_explicit_fallback(self):
+        plan = self.plan()
+        self.assertEqual(plan['parts'], {'ann': 'drums', 'bo': 'bass', 'cy': 'vocals', 'di': 'beat'})
+        self.assertIsNone(plan['lead'])
+        self.assertEqual(plan['passages']['seg001']['dancers'][0]['part'], 'vocals')
+        dancer = plan['passages']['seg000']['dancers'][0]
+        self.assertEqual(dancer['source'], 'mix')
+        self.assertIn('unavailable', dancer['fallback'])
+        self.assertEqual(dance.job(plan['passages']['seg000'], plan)['dancers'][0]['part'], 'drums')
+        self.assertNotIn('move together in step', dance.writer_rules(plan))
+        self.assertEqual(dance.writer_rules({'mode': 'group'}), dance.DANCE_RULES)
+
+    def test_overrides_and_validation(self):
+        self.assertEqual(self.plan(dance_parts={'ann': 'beat'})['parts']['ann'], 'beat')
+        for parts in ({'missing': 'bass'}, {'ann': 'guitar'}, ['bass']):
+            with self.assertRaises(ValueError):
+                self.plan(dance_parts=parts)
+        with self.assertRaisesRegex(ValueError, 'selected dancers'):
+            self.plan(dancers=['ann'], dance_parts={'bo': 'bass'})
+
+    def test_stem_pauses_accents_and_half_open_boundaries(self):
+        score = {**SCORE, 'beat_energy': [0, 0, 1, .8, 0]}
+        plan = dance.plan_passages([segment()], casting({'seg000': CAST[:2]}), SCORE,
+                                   {'dance_mode': 'independent', 'dance_parts': {'ann': 'drums', 'bo': 'beat'}},
+                                   part_scores={'drums': score})
+        passage = plan['passages']['seg000']
+        cues = passage['dancers'][0]['shots']
+        self.assertTrue(cues[0]['paused'])
+        self.assertEqual(cues[1]['accent_times'], [1.0, 1.5])
+        self.assertEqual(passage['dancers'][0]['source'], 'stem')
+        bodies = ['<Subject 1> holds a crouched pose. <Subject 2> steps sideways.', '<Subject 1> jumps. <Subject 2> steps sideways.']
+        self.assertEqual(dance.dance_problems('', bodies, segment(), passage, plan), [])
+        bodies[0] = '<Subject 1> steps. <Subject 2> sways.'
+        self.assertTrue(any('part pauses' in p for p in dance.dance_problems('', bodies, segment(), passage, plan)))
+
+    def test_copying_without_body_action_is_not_independent_dancing(self):
+        plan = self.plan()
+        problems = dance.dance_problems('', ['<Subject 1> follows <Subject 2>.', '<Subject 1> holds a pose.'],
+                                        segment(), plan['passages']['seg000'], plan)
+        self.assertTrue(any('describe what' in p for p in problems))
+
+    def test_movement_families_stay_distinct_even_for_same_part_and_reordered_cast(self):
+        plan = self.plan(dance_parts={m['actor_id']: 'bass' for m in CAST})
+        first = plan['passages']['seg000']['dancers']
+        self.assertEqual(len({d['movement']['family'] for d in first}), 3)
+        self.assertEqual(plan['passages']['seg001']['dancers'][0]['movement'], first[2]['movement'])
+        self.assertEqual(dance.job(plan['passages']['seg000'], plan)['dancers'][0]['movement'], first[0]['movement'])
+        reordered = dance.plan_passages([segment()], casting({'seg000': list(reversed(CAST[:3]))}), SCORE,
+                                        {'dance_mode': 'independent', 'dancers': ['ann', 'bo', 'cy']})
+        self.assertEqual({d['actor_id']: d['movement'] for d in reordered['passages']['seg000']['dancers']},
+                         {d['actor_id']: d['movement'] for d in self.plan()['passages']['seg000']['dancers']})
+        self.assertEqual(plan['version'], 3)
+
+    def test_named_prose_and_identical_sways_cannot_bypass_independent_checks(self):
+        plan = self.plan()
+        passage = plan['passages']['seg000']
+        bodies = ['Ann bounces vertically. Bo sways rhythmically. Cy sways rhythmically.'] * 2
+        problems = dance.dance_problems('', bodies, segment(), passage, plan)
+        self.assertTrue(any('<Picture 2>' in p and 'lateral' in p for p in problems), problems)
+        self.assertTrue(any('<Picture 3>' in p and 'rotation' in p for p in problems), problems)
+        self.assertTrue(all(not dance.is_soft(p) for p in problems))
+        bodies = ['Ann bounces vertically. Bo steps sideways. Cy twists his torso.'] * 2
+        self.assertEqual(dance.dance_problems('', bodies, segment(), passage, plan), [])
+
+    def test_independent_lead_and_unison_are_hard_failures_but_shared_tempo_is_fine(self):
+        plan = self.plan()
+        body = '<Subject 1> bounces. <Subject 2> steps sideways. <Subject 3> twists his torso.'
+        for extra in ('<Subject 2> acts as the lead.', '<Subject 1> and <Subject 2> dance in unison.'):
+            problems = dance.dance_problems('', [body + extra] * 2, segment(), plan['passages']['seg000'], plan)
+            self.assertTrue(any('separate choreography' in p for p in problems), problems)
+            self.assertTrue(all(not dance.is_soft(p) for p in problems))
+        body += ' All share the same tempo. <Subject 3> twists while following the vocal rhythm.'
+        self.assertEqual(dance.dance_problems('', [body] * 2, segment(), plan['passages']['seg000'], plan), [])
+
+    def test_family_specific_paused_poses_and_absent_dancers(self):
+        score = {**SCORE, 'beat_energy': [0] * 5}
+        plan = dance.plan_passages([segment()], casting({'seg000': CAST[:3]}), SCORE,
+                                   {'dance_mode': 'independent'}, part_scores={part: score for part in ('drums', 'bass', 'vocals')})
+        body = 'Ann holds a crouched pose. Bo holds a side-lunge pose. Cy holds a twisted pose.'
+        self.assertEqual(dance.dance_problems('', [body] * 2, segment(), plan['passages']['seg000'], plan), [])
+        absent = 'Ann is off-screen. Bo is off-screen. Cy is not visible in this shot.'
+        self.assertEqual(dance.dance_problems('', [absent] * 2, segment(), plan['passages']['seg000'], plan), [])
+
+    def test_four_selected_actors_cannot_duplicate_families_in_a_three_dancer_passage(self):
+        plan = dance.plan_passages([segment()], casting({'seg000': [CAST[3], CAST[1], CAST[0]]}), SCORE,
+                                   {'dance_mode': 'independent'})
+        self.assertEqual(len({d['movement']['family'] for d in plan['passages']['seg000']['dancers']}), 3)
+
+    def test_mixed_identical_actions_are_rejected_but_contrasting_clauses_are_valid(self):
+        plan = self.plan()
+        passage = plan['passages']['seg000']
+        body = 'Ann bounces. Bo steps sideways and twists. Cy steps sideways and twists.'
+        problems = dance.dance_problems('', [body] * 2, segment(), passage, plan)
+        self.assertTrue(any('identical movement' in p for p in problems), problems)
+        body = 'Ann bounces while Bo steps sideways, Cy twists his torso.'
+        self.assertEqual(dance.dance_problems('', [body] * 2, segment(), passage, plan), [])
+
+    def test_music_references_mirror_props_and_nonstop_actions_are_not_copying(self):
+        plan = self.plan()
+        body = ('Ann bounces together with the drums. Bo steps sideways in front of a mirror without stopping. '
+                'Cy twists in step with the beat, without pause.')
+        self.assertEqual(dance.dance_problems('', [body] * 2, segment(), plan['passages']['seg000'], plan), [])
+        body += ' Bo follows Cy.'
+        problems = dance.dance_problems('', [body] * 2, segment(), plan['passages']['seg000'], plan)
+        self.assertTrue(any('separate choreography' in p for p in problems), problems)
+
+    def test_body_action_in_a_mouth_sentence_is_not_silently_skipped(self):
+        plan = self.plan()
+        bad = 'Ann steps with her lips sealed. Bo steps sideways. Cy twists his torso.'
+        problems = dance.dance_problems('', [bad] * 2, segment(), plan['passages']['seg000'], plan)
+        self.assertTrue(any('<Picture 1>' in p and 'vertical' in p for p in problems), problems)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -203,3 +203,35 @@ def driven_score(score, stem_path):
     for section, label in zip(sections, _label_sections(np.array([s.energy for s in sections]))):
         section.label = label
     return replace(score, beat_energy=energy, sections=sections)
+
+
+def cached_dance_part(store, digest, score_path, model, part):
+    """Load one existing part, analyzing cached audio on CPU when necessary."""
+    from .engine.analyze import ScoreMap
+    audio = _root(store) / f'{digest}-{model}' / f'{part}.wav'
+    cache = _root(store) / f'driven-{digest}-{model}-{part}.json'
+    if not cache.is_file() and audio.is_file():
+        with tempfile.TemporaryDirectory(dir=_root(store)) as temp:
+            target = Path(temp) / 'score.json'
+            analyzed = subprocess.run([sys.executable, '-m', 'mmv.worker', 'drive', str(score_path),
+                                       str(audio), str(target)], capture_output=True, text=True, timeout=1800)
+            if analyzed.returncode:
+                return None
+            target.replace(cache)
+    return ScoreMap.from_json(cache) if cache.is_file() else None
+
+
+def cached_dance_scores(store, digest, score_path, quality='standard', edits=None):
+    """Use existing stems only, apply grid edits to copies, and fall back on unreadable analysis."""
+    from dataclasses import asdict
+    from .score_edit import apply_score_edits
+    model = model_for('drums', quality)
+    result = {}
+    for part in ('drums', 'bass', 'vocals'):
+        try:
+            score = cached_dance_part(store, digest, score_path, model, part)
+        except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+            score = None
+        if score is not None:
+            result[part] = asdict(apply_score_edits(score, edits))
+    return result

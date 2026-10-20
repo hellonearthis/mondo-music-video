@@ -118,3 +118,5 @@ For an interrupted render or failed download, call `preview_resume(run_id)`
 and obtain consent before passing its ID to `start_production`. Recovery reuses
 validated prompts and known generation IDs. It never resubmits an ambiguous,
 failed, canceled or expired job. Do not delete receipts to force a retry.
+
+Independent dancing: `dance_mode: "independent"`, `dance_parts: {"actor_id": "bass"}`. Parts: auto, beat, drums, bass, vocals. Preview includes stable part/movement-family assignments, per-shot cues and explicit overall-beat fallbacks. No lead, separation or downloads. Version-3 plans add contrasting bounce/step/rotation actions; a fresh preview is required to use the repair, while old productions resume their saved plan. Existing group/off behavior is preserved. Prompt checks do not prove distinct rendered movement.

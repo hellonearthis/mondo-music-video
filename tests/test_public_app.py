@@ -261,6 +261,7 @@ class PublicAppTests(unittest.TestCase):
             self.assertIn(asset_ref['info']['id'], self.server.v2_assets)
         self.assertEqual(len(self.server.v2_assets), 2)
         run = self.home / 'runs' / status['id']
+        self.assertRegex(status['id'], r'^test_\d{4}-\d{2}-\d{2}_\d{6}(?:-\d+)?$')
         self.assertTrue((run / 'music-video.mp4').is_file())
         self.assertAlmostEqual(media.duration(run / 'music-video.mp4'), 1.1, delta=.08)
         self.assertFalse((run / 'untrusted.mp4').exists())
@@ -400,9 +401,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.2")
+        self.assertEqual(api_version()["version"], "1.8.5")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.2", (root / "README.md").read_text())
+        self.assertIn("1.8.5", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1000,6 +1001,23 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(comfy_sdk.media_suffix(make('audio/flac', 'x'), '.wav'), '.flac')
         self.assertEqual(comfy_sdk.media_suffix(make('application/octet-stream', 'clip.webm'), '.mp4'), '.webm')
         self.assertEqual(comfy_sdk.media_suffix(make('', ''), '.mp4'), '.mp4')
+
+    def test_independent_preview_parts_fallback_and_validation(self):
+        from mmv import actors
+        actors.create_actor(self.store, 'dance_actor', 'Dance Actor', 'Overview', picture())
+        song = self.song_upload()
+        request = {'song': song, 'actors': ['dance_actor'], 'dance_mode': 'independent',
+                   'dance_parts': {'dance_actor': 'bass'}}
+        response = self.client.post('/api/quote', json=request)
+        response.raise_for_status()
+        plan = response.json()['dance']
+        self.assertEqual(plan['parts'], {'dance_actor': 'bass'})
+        self.assertIsNone(plan['lead'])
+        dancers = [d for passage in plan['passages'].values() for d in passage['dancers']]
+        self.assertTrue(dancers)
+        self.assertTrue(all(d['source'] == 'mix' and d['fallback'] for d in dancers))
+        self.assertEqual(self.client.post('/api/quote', json={**request, 'dance_parts': {'dance_actor': 'invalid'}}).status_code, 422)
+        self.assertEqual(self.client.post('/api/quote', json={**request, 'dance_parts': {'missing': 'bass'}}).status_code, 400)
 
     def test_dance_is_planned_in_the_preview_and_requests_without_dancing_are_unchanged(self):
         song = self.song_upload()

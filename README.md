@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.8.2** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.8.5** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -41,6 +41,8 @@ passage to its planned frames, joins the picture, and restores your original son
 ## What you can make
 
 - Music videos with beat-driven cuts and energy-aware montage grammar.
+- Optional group dancing or independent dancing with per-actor beat/drums/bass/vocals assignments.
+- Output folders named for the uploaded song plus date and time; existing runs retain their IDs.
 - Consistent reference-image actors with Open Actor Protocol built in.
 - Your own visual styles, including styles harvested from reference images, plus
   six optional [style presets](examples/style-presets/README.md).
@@ -226,7 +228,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.8.2 MCP server has 33 tools, including API profile add/select/remove,
+The v1.8.5 MCP server has 33 tools, including API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 

@@ -31,6 +31,42 @@ def _cached_chromium():
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_independent_dance_parts_follow_actor_and_restore(self):
+        from mmv import actors
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        actors.create_actor(self.fixture.store, 'dance_a', 'Dancer A', 'Overview', picture())
+        actors.create_actor(self.fixture.store, 'dance_b', 'Dancer B', 'Overview', picture())
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                form = page.locator('#video-form')
+                expect(form.locator('.dance-parts')).to_be_hidden()
+                form.locator('.actor-select').select_option(['dance_a', 'dance_b'])
+                form.locator('[name=dance_mode]').select_option('independent')
+                form.get_by_label('Dancer B part', exact=True).select_option('bass')
+                form.locator('.actor-select').select_option(['dance_b'])
+                expect(form.get_by_label('Dancer B part', exact=True)).to_have_value('bass')
+                page.wait_for_timeout(1200)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                expect(form.locator('[name=dance_mode]')).to_have_value('independent')
+                expect(form.get_by_label('Dancer B part', exact=True)).to_have_value('bass')
+                result = page.evaluate("""async () => {
+                    const { dancePartsFromForm } = await import('/js/dance.js');
+                    const request = {actors: ['dance_b'], dance_mode: 'independent', dance_part_0: 'bass', dance_parts_json: '{}'};
+                    dancePartsFromForm(document.querySelector('#video-form'), request);
+                    return request;
+                }""")
+                self.assertEqual(result['dance_parts'], {'dance_b': 'bass'})
+                self.assertNotIn('dance_parts_json', result)
+                self.assertNotIn('dance_part_0', result)
+            finally:
+                browser.close()
+
     def test_delete_local_actor_and_style_with_confirmation(self):
         from mmv import actors
         from test_public_app import picture
@@ -222,7 +258,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.2')
+                expect(page.locator('#version')).to_have_text('1.8.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -754,7 +790,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.2')
+                expect(page.locator('#version')).to_have_text('1.8.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

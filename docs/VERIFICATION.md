@@ -1,5 +1,84 @@
 # Verification — 1.6.1
 
+## 1.8.5 independent dance differentiation repair (2026-10-19)
+
+Final full `.venv/bin/python -m pytest -q`: **447 tests and 119 subtests passed**,
+no skips, 96.58 s, temporary mock services. Focused pure/worker-boundary coverage:
+**52 passed**, including distinct families with repeated parts/reordered casting,
+larger-roster collision handling, actor-name attribution, identical mixed-family
+actions, independent leadership/copying, valid music/prop references, pauses and
+body actions sharing a mouth-policy sentence. Group/off golden fixtures and
+protected integrity checks remain passing.
+
+Fresh imported `/api/version`: **1.8.5**; protected check `[]`; diff and local
+documentation link checks passed. The initial full run had one stale expected
+choreography version (2 rather than 3); corrected before the final full pass.
+Socket-restricted sandbox runs stalled in Starlette TestClient and were cancelled;
+the completed suite ran outside that sandbox. No test used production data or GPU.
+
+A separate read-only replay of the prior operator run's first prompt against
+the revised independent checker reports five failures, including its named actor
+being declared lead and missing lateral/rotation actions. This confirms that the
+old prompt no longer bypasses checks; it does not prove the renderer will follow
+new prompts. Saved run files were not modified.
+
+Claude Code reviewed and the concrete findings were addressed; see the review
+record. No new render, service restart, live-version claim, commit or push.
+Same-song/same-seed visual validation of this repair remains pending. The repeated
+camera-move issue is only on the roadmap, as the owner requested.
+
+## 1.8.4 live-test adapter fixes (2026-10-19)
+
+Full `.venv/bin/python -m pytest -q`: **439 tests and 119 subtests passed**,
+no skips, 87.76 s, temporary mock services. New regression exercises the original
+local Comfy polling adapter across simulated elapsed times beyond two hours and
+confirms numeric infinity avoids the None comparison failure. Agent transport
+checks the uploaded song basename is retained; other media remain generically named.
+
+Fresh imported and live `/api/version` report **1.8.4**; protected check is `[]`.
+The worker boundary changes without editing the protected engine. The initial
+operator-authorized local test passed prompt review but exposed the adapter error
+after submission; its saved request was reconciled and stopped before retry.
+Corrected real test completed all three clips without pixel-check retries or warnings;
+video/audio streams and final frame count were inspected. Visual sampling showed
+stronger motion in the first passage than the middle passage; precise synchronization
+is unverified. A separate planner coverage gap was observed and left unchanged
+because the planner is protected. Exact media details are retained only in ignored
+local collaboration reports; do not infer dance quality from whole-frame checks. No paid submissions, publication,
+commit or push. New fork head and scoped adaptation are recorded in the review log.
+
+
+## 1.8.3 independent dancing and readable run folders (2026-10-19)
+
+Final full `.venv/bin/python -m pytest -q`: **438 tests and 119 subtests passed**,
+no skips, 85.06 s, with temporary mock services outside the socket-restricted sandbox.
+
+Focused function/worker-boundary checks: **46 passed**. Chromium independent
+actor overrides survive cast changes and saved-project restoration; existing fold
+restoration also passes. Agent client and MCP transport previews accept independent
+mode and preserve consent guards. New mock production run IDs use the uploaded
+song basename and timestamp; existing resume tests preserve their original IDs.
+
+Coverage includes stable automatic/manual assignments, invalid actor/part rejection,
+explicit missing/empty/broken stem fallback, no separation/download/GPU calls,
+per-part pauses/accents and half-open shot boundaries, edited beat-grid projection
+without cache mutation, singing/mouth-policy combinations, off-mode golden worker
+fixtures, prompt-plan bindings, filename sanitization and collisions.
+
+Fresh-process `api_version()` reports **1.8.3**; pyproject and README agree.
+Protected check returns `[]`: base/group/singing/mouth/quality originals and pins
+remain unchanged. Independent instructions are a separate owner-approved opt-in
+block. No real before/after render comparison, paid/GPU work, live-version claim,
+service restart, stage, commit or push. Visual synchronization remains unverified.
+
+Claude Code review completed and findings were triaged in COLLABORATOR_REVIEW.md.
+Antigravity independent review is received and triaged: no blocking defect, optional
+layout polish deferred, retained deselected-actor overrides confirmed intentional.
+The report ran no tests; this documentation-only handoff does not rerun the suite.
+Shared AGENTS.md now requires functional style with measured performance claims.
+The existing uncommitted collaboration instructions remain preserved.
+
+
 ## 1.8.2 Antigravity review follow-up (2026-10-19)
 
 Final full `.venv/bin/python -m pytest -q`: **423 tests and 119 subtests passed**,

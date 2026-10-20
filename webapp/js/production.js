@@ -6,6 +6,8 @@ import { loadActors, loadStyles } from "./library.js";
 import { loadOutputs } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
 
+import { syncDanceControls, dancePartsFromForm } from "./dance.js";
+
 let sseSource = null;
 let sseConnected = false;
 export const isSseConnected = () => sseConnected;
@@ -81,6 +83,7 @@ export async function preview(form) {
     for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) {
       request[name] = Number(request[name]);
     }
+    dancePartsFromForm(form, request);
     subliminalFromForm(request);
     request.mouth_mode = request.mouth_mode || "sealed";
     request.silent_mouths = request.mouth_mode !== "natural";   // older agents read this flag
@@ -155,6 +158,13 @@ export function showQuote(request, quote) {
   if (quote.dance) {
     const dancing = Object.values(quote.dance.passages).filter(item => item.dancing).length;
     const left = [...new Set(Object.values(quote.dance.passages).flatMap(item => item.not_choreographed || []))];
+    if (quote.dance.mode === "independent") {
+      for (const [actor, part] of Object.entries(quote.dance.parts || {})) {
+        summary.append(text("p", `${quote.dance.actors[actor] || actor}: ${part}`, "muted"));
+      }
+      const fallbacks = [...new Set(Object.values(quote.dance.passages).flatMap(item => (item.dancers || []).map(d => d.fallback).filter(Boolean)))];
+      for (const fallback of fallbacks) summary.append(text("p", fallback, "muted"));
+    }
     summary.append(text("p", `Dancing: ${dancing} of ${Object.keys(quote.dance.passages).length} passages, "${quote.dance.direction}".` +
       (left.length ? ` Only the first 3 dancers in a passage are choreographed; not choreographed: ${left.join(", ")}.` : ""), "muted"));
   }
@@ -371,6 +381,8 @@ export async function loadUpdateStatus() {
 
 export function initProductionForms() {
   $$(".production-form").forEach(form => {
+    syncDanceControls(form);
+    form.addEventListener("change", event => syncDanceControls(form, event.target));
     state.formFiles.set(form, { references: [], pending: 0 });
     form.onsubmit = handle(() => preview(form));
     const song = form.querySelector(".song-input");

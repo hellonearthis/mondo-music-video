@@ -80,7 +80,9 @@ needs the user's authorization (`confirm`).
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
 
-Dancing: `dance_mode` "group" (default "off"), optional `dancers` (actor ids; empty = whole cast, at most 3 per passage are choreographed),
+Independent mode gives each actor their own movement and musical part. `dance_parts` maps actor ids to `auto`, `beat`, `drums`, `bass` or `vocals`; auto cycles drums/bass/vocals/beat in selected-dancer order. Version-3 previews include contrasting movement families as well as part cues; fresh previews use the repair and resumes keep their saved choreography. No lead applies. Existing stem audio/analysis supplies per-part cues; unavailable parts explicitly fall back to the overall beat. This mode never downloads models or starts separation. Distinct rendered movement and precise visual timing need operator validation.
+
+Dancing: `dance_mode` "group" or "independent" (default "off"), optional `dancers` (actor ids; empty = whole cast, at most 3 per passage are choreographed),
 `dance_direction` (style only, default "Dancing") and `dance_lead` (actor id or "none"; ignored where the lead is off screen). Mouths keep
 following `mouth_mode`; a singer may also dance. The preview returns `dance`. Dancing is free to plan; it adds no cost.
 

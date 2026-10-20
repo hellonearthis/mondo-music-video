@@ -1,5 +1,88 @@
 # Collaborator review record
 
+## October 19, 2026 — independent dance differentiation (1.8.5)
+
+At the owner's request Claude Code reviewed the repair read-only (CLI-reported
+`claude-haiku-5-5`; receipt in the ignored local collaboration report). The first
+sandbox attempt failed DNS; the network-enabled attempt completed. No fork work
+was included: the owner explicitly directed focus on dancing.
+
+Confirmed from the operator test's saved jobs/prompts: separate stem cues shared
+generic move-per-beat hints, a prompt called a dancer the lead, and names instead
+of tags bypassed action attribution. Added independent-only movement families
+and checks without altering protected originals or group/off rules.
+
+Adopted Claude findings: reject identical mixed-family signatures; resolve
+collisions among three choreographed actors even with a larger selected roster;
+distinguish copying another dancer from following music or a mirror prop;
+handle affirmative nonstop actions and body actions in mouth-policy sentences;
+run both dance test classes under direct unittest execution. Added regression
+coverage. Name attribution uses saved cast display names; it remains lexical.
+
+Claude questioned approval for the additive independent rule block. Existing
+owner approval is recorded in BONK_DESIGN.md and the prior task handoff; this
+repair stays within that opt-in mode, leaving protected prompts/pins untouched.
+No automatic paid retry was added. Camera repetition is confirmed but recorded
+only on the roadmap, per the owner's deferral. Real same-song/seed validation of
+the revised choreography remains outstanding.
+
+## October 19, 2026 — live-test timeout repair (1.8.4)
+
+Task-start check found new fork head `eeab8c0b729650d41fa8f2b0093750129c543f9b`.
+Fetched into isolated `/tmp/mmv-fork-review-20261019`, without changing the main
+checkout or sharing object stores. Focused review of the timeout repair confirms
+hellonearthis independently identified the `None`/numeric comparison failure seen
+in our real local render test. Adapted at the worker boundary with numeric infinity
+so the owner's unlimited-wait default remains; protected engine files stay intact.
+The fork's finite 7200-second default is not silently substituted for that default.
+The numeric-adapter mock regression simulates history arriving after 9000 seconds.
+
+Other new fork commits (`63f4826`, `8b70f0a`, `bff3b9e`, `183eeb8`, `312b0c3`)
+include incomplete-run management/deletion, functional vocabulary/library/output UI,
+service-offline handling and concurrent service probes, plus upstream review fixes.
+Initial scope inspection confirms substantial unrelated UI/service changes (25 files,
+including the timeout commit). Full correctness/privacy/defaults/consent review and
+mock integration of those contributions is deferred to a separate integration batch,
+rather than expanding this explicitly requested real dance test. They are not rejected
+or claimed fully reviewed; latest fully completed broad review remains `1704454`.
+
+
+## October 19, 2026 — independent dancing (1.8.3)
+
+Task-start fork check: `1704454c4d3f538866b1cb3eed72af5dfb74f0e5`,
+unchanged from the completed review below. No new fork contributions to integrate.
+Claude Code reviewed current integration read-only through the guarded launcher;
+CLI-reported model and receipt are recorded in the ignored local task board.
+Antigravity's independent UI/API review has now been received and checked against
+the implementation. Its model/effort are self-reported as Gemini 3.8 Flash / High,
+not independently verified. The reviewer ran no tests or renders and made no tracked
+edits. Both requested reviews are received; visual render validation remains pending.
+
+| Claude finding | Disposition |
+| --- | --- |
+| Stem cues ignore score edits | Fixed: apply the same edits to copies of stem analysis; regression checks nudge, muted beats and bar phase without modifying caches. |
+| Parse failure can retain stale soft-advice draft | Fixed: clear prompt after parsing/assembly failure and require an assembled prompt before retaining a fallback. |
+| Empty stem energy mislabeled measured | Fixed: explicit mix fallback for empty-energy parts. |
+| Failed cached analysis aborts preview | Fixed: unreadable/failed part analysis falls back independently. |
+| Part override names a non-dancer | Intentional API validation, not a defect: reject inconsistent selections rather than silently ignore them. UI currently selects the whole cast. |
+| Auto cycle includes explicit overrides | Intentional stable slot assignment: an override must not shift other actors' automatic parts. Documented and tested. |
+| Mouth/body sentence can be excluded from lexical dance check | Existing conservative check retained: changing shared mouth-sentence treatment risks group-mode regression. Independent instructions request each visible dancer's body action. A targeted future validator change needs separate fixtures. |
+| Soft-advice prompts revalidated on cache reuse | Existing safety behavior retained. Relaxing cache validation needs separate review; no paid submission retries added. |
+
+
+| Antigravity observation | Verified disposition |
+| --- | --- |
+| Stable assignments, actor-ID persistence, explicit fallback, semantic controls and unchanged mouth rules | Confirmed against implementation and existing browser/API/worker tests. No blocking defect reported. |
+| Optional grid layout for many actors | Deferred cosmetic suggestion; the current native controls remain usable. No measured layout failure was reported, so this review handoff adds no product changes. |
+| Deselected actors retain manual overrides | Intentional: reselecting an actor restores their choice, while request serialization filters to currently selected actors. Existing browser test covers binding preservation. |
+| Existing stem analysis only | Clarification: existing stem WAVs can also be analyzed on CPU with a worker subprocess. This does not download models, separate audio or submit network/paid work. |
+
+The report's statement that the implementation "strictly satisfies all project
+constraints" is a read-only review assessment, not proof of generated video quality
+or precise synchronization. The recorded mock-suite results remain the verification
+evidence; same-song/same-seed real comparison is still outstanding.
+
+
 ## October 19, 2026 — Antigravity review follow-up (release 1.8.2)
 
 Antigravity delivered its read-only review of fork `1704454`; model/effort were

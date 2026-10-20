@@ -307,8 +307,12 @@ def prepare(store, request, *, saved_prepared=None):
     dance_plan = saved_prepared.get('dance') if replay_plans else None
     if not replay_plans and kind == 'video' and request.get('dance_mode', 'off') != 'off':
         from . import dance
+        part_scores = {}
+        if request.get('dance_mode') == 'independent':
+            from .stems import cached_dance_scores
+            part_scores = cached_dance_scores(store, digest, score_path, request.get('stem_quality') or 'standard', request.get('score_edits'))
         dance_plan = dance.plan_passages(p.segments, casting, asdict(score), request, singer=(lip_sync or {}).get('singer'),
-                                        source={'analysis_driver': request.get('analysis_driver') or 'mix', 'score_edited': any(bool(v) for v in (request.get('score_edits') or {}).values())})
+                                        part_scores=part_scores, source={'analysis_driver': request.get('analysis_driver') or 'mix', 'score_edited': any(bool(v) for v in (request.get('score_edits') or {}).values())})
     render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None,
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0

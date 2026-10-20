@@ -67,7 +67,12 @@ class LiveAppFixture:
 
 class AgentTests(LiveAppFixture, unittest.TestCase):
     def test_preview_start_and_download(self):
-        song = self.agent.upload("song", str(self.song))["file"]
+        uploaded = self.agent.upload("song", str(self.song))
+        self.assertEqual(uploaded["name"], self.song.name)
+        song = uploaded["file"]
+        independent = self.agent.preview({"song": song, "dance_mode": "independent", "dance_parts": {}})
+        self.assertEqual(independent["dance"]["mode"], "independent")
+        self.assertEqual(independent["dance"]["version"], 3)
         preview = self.agent.preview({"song": song, "title": "Agent Coast", "direction": "A sunlit coast"})
         with self.assertRaisesRegex(ValueError, "authorization"):
             self.agent.start(preview["id"])
@@ -127,7 +132,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.8.2")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.8.5")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -135,7 +140,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.8.2")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.8.5")
 
     def test_create_style_and_upload_reference(self):
         style = self.agent.create_style("cool", "Cool", "Cool blue light")
@@ -196,7 +201,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.8.2")
+                self.assertEqual(result.structured_content["data"]["version"], "1.8.5")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)
@@ -283,6 +288,9 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 upload = await client.call_tool("upload_media", {"kind": "song", "path": str(self.song)})
                 self.assertFalse(upload.is_error)
                 song = upload.structured_content["file"]
+                independent = await client.call_tool("preview_production", {"request": {"song": song, "dance_mode": "independent", "dance_parts": {}}})
+                self.assertFalse(independent.is_error)
+                self.assertEqual(independent.structured_content["dance"]["mode"], "independent")
                 preview = await client.call_tool("preview_production", {"request": {"song": song, "direction": "Waves"}})
                 self.assertFalse(preview.is_error)
                 started = await client.call_tool("start_production", {"quote_id": preview.structured_content["id"], "consent": True})

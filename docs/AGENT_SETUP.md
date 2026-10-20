@@ -48,6 +48,15 @@ The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
 
 
+## Independent dance
+
+Independent dance previews (`dance_mode: "independent"`) also return each dancer's
+movement family alongside musical-part cues. Choreography version 3 adds distinct
+bounce/step/rotation actions and prompt checks; start a fresh preview to use the
+repair. Resuming an existing production preserves its saved choreography. No new
+MCP tool or paid consent exception is introduced; rendered distinctness still
+needs operator verification.
+
 ## Compact prompts
 
 `compact_prompts: true` in a video or ident preview request switches to shorter

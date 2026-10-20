@@ -2,13 +2,34 @@
 from __future__ import annotations
 
 import os
+import re
+import unicodedata
 import signal
 import subprocess
 import threading
 import time
 import uuid
+from pathlib import Path
 
 from .storage import identifier, read_json, write_json
+
+
+def output_run_id(store, request, now=None):
+    """Readable production folder with a bounded safe name and collision suffix."""
+    song = request.get('song') or ''
+    upload = read_json(store.home / 'uploads' / (Path(song).name + '.metadata.json'), {}) if song else {}
+    title = upload.get('name') or request.get('title') or request.get('kind') or 'video'
+    title = Path(str(title).replace('\\', '/')).stem
+    ascii_title = unicodedata.normalize('NFKD', title).encode('ascii', 'ignore').decode().lower()
+    slug = re.sub(r'[^a-z0-9]+', '_', ascii_title).strip('_')[:36] or 'video'
+    stamp = time.strftime('%Y-%m-%d_%H%M%S', time.localtime(time.time() if now is None else now))
+    base = f'{slug}_{stamp}'
+    candidate, count = base, 2
+    while (store.home / 'runs' / candidate).exists():
+        suffix = f'-{count}'
+        candidate = base[:64 - len(suffix)] + suffix
+        count += 1
+    return identifier(candidate)
 
 
 class BusyError(ValueError):

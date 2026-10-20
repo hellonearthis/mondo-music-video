@@ -143,3 +143,17 @@ def test_singing_cache_failure_returns_to_validated_writer_path(tmp_path, monkey
     result, *_ = capture(tmp_path, monkeypatch, 'lip_sync', reject_cached=validator)
     assert len(result['calls']) == 1
     assert [c['name'] for c in result['validation']][-4:] == ['schema', 'quality', 'singing', 'laya']
+
+
+@pytest.mark.parametrize('mode', ['sealed', 'natural', 'lip_sync'])
+def test_independent_writer_rules_and_job(tmp_path, monkeypatch, mode):
+    from mmv import dance
+    actual, *_ = capture(tmp_path, monkeypatch, mode, dance_settings={'dance_mode': 'independent'},
+                         body='<Subject 1> sings "hello world" while bouncing and holding a crouched pose.')
+    call = actual['calls'][0]
+    assert dance.INDEPENDENT_RULES in call['system']
+    assert dance.DANCE_RULES not in call['system']
+    assert call['job']['dance']['lead'] is None
+    assert call['job']['dance']['dancers'][0]['part'] == 'drums'
+    assert call['job']['dance']['dancers'][0]['source'] == 'mix'
+    assert call['job']['dance']['dancers'][0]['movement']['family'] == 'vertical'

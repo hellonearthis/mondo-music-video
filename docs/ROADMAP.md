@@ -28,11 +28,19 @@ Feature requests should stay within the music-video scope.
 
 ## Ideas (not started)
 
+- Fix consecutive repeated camera moves in the shot planner. The independent-dance
+  operator test showed two adjacent identical pull-out shots near the end; the
+  owner also observed a longer-looking sequence of zoom repetition. The current
+  camera sampler does not track its previous choice. Review repetition across
+  shot and passage boundaries, preserve deterministic seeds and handle restricted
+  camera pools. Owner requested a proper future fix, not an opt-in workaround in
+  the dance repair. Follow the protected-scheme review/approval procedure and
+  compare real same-song/same-seed renders before delivery. No camera change made.
 - Subliminal message mode (built, release 1.7.2, owner-requested): flash a chosen picture or a few words for a handful of frames in the
   finished video, at times the user picks or on bar starts. FFmpeg overlay by frame number after assembly; length, frame count and audio are
   unchanged and the untouched video is kept. Open: a way to preview the flash before rendering, a library of flash pictures, and
   per-flash pictures.
-- BONK (built, release 1.8.0; design in `docs/BONK_DESIGN.md`, reviewed by Codex; group mode first, independent per-part dancing later): let selected actors dance to the song, with movement guided by
+- BONK (built, release 1.8.0; design in `docs/BONK_DESIGN.md`, reviewed by Codex; group and independent per-part dancing implemented in 1.8.3): let selected actors dance to the song, with movement guided by
   its beat and passage energy. Let users choose who dances and optionally enter
   free-text "Dance direction"; default to simply "Dancing" without requiring
   knowledge of dance styles. Example directions: gentle swaying, energetic
@@ -48,7 +56,7 @@ Feature requests should stay within the music-video scope.
   Stem analysis can guide per-actor passage instructions; precise beat following
   and matching choreography between actors remain unverified and need operator
   video tests before being promised. Feature requested by the owner;
-  implementation has not started.
+  independent implementation is available; real visual timing validation remains pending.
 - Instrument-playing actors: assign each actor an instrument (drums, bass, guitar, piano, keys, vocals) and
   show them playing it. The stem separation already behind the instrument driver could decide, per passage,
   which assigned instruments are audibly playing (a drummer idles through a drum-free break) and tie a

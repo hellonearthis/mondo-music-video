@@ -61,7 +61,9 @@ def create_server(base_url=None):
         one-time model download that only the user approves in the app (see
         inspect_studio kind "stems"). The first separation of a song takes minutes.
 
-        Dancing: `dance_mode` "group" makes the cast dance to the song's beat (default "off"); `dancers` lists actor ids (empty =
+        Independent mode gives each actor their own movement and musical part. `dance_parts` maps actor ids to `auto`, `beat`, `drums`, `bass` or `vocals`; auto cycles drums/bass/vocals/beat in cast order. No lead applies. Existing stem audio/analysis supplies per-part cues; unavailable parts explicitly fall back to the overall beat. This mode never downloads models or starts separation. Precise visual timing needs operator validation.
+
+        Dancing: `dance_mode` "group" or "independent" makes the cast dance to the song's beat (default "off"); `dancers` lists actor ids (empty =
         everyone cast), `dance_direction` is a short style such as "gentle swaying" (default "Dancing"; it can only choose the
         movement style, never mouths or lyrics), `dance_lead` is an actor id or "none" (defaults to the main singer when lip sync
         is on; ignored in shots where the lead is off screen). At most 3 dancers per passage are choreographed. Mouths follow

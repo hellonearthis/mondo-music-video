@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.2"
+MGL_APP_VERSION = "1.8.5"
 WEB = Path(__file__).parent
 
 
@@ -266,10 +266,11 @@ class ProductionRequest(StrictModel):
     mouth_mode: Literal["sealed", "natural", "lip_sync"] | None = None
     lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
     singers: list[str] = Field(default_factory=list, max_length=9)
-    dance_mode: Literal["off", "group"] = "off"
+    dance_mode: Literal["off", "group", "independent"] = "off"
     dancers: list[str] = Field(default_factory=list, max_length=9)
     dance_direction: str = Field("", max_length=200)
     dance_lead: str | None = None
+    dance_parts: dict[str, Literal["auto", "beat", "drums", "bass", "vocals"]] = Field(default_factory=dict, max_length=9)
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -309,7 +310,7 @@ class ProductionRequest(StrictModel):
         return value
 
 
-DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead")
+DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead", "dance_parts")
 
 
 def request_dict(value):
@@ -804,6 +805,8 @@ def create_app(home=None, *, test_hosts=False):
                 except Exception:
                     target.unlink(missing_ok=True)
                     raise
+        if kind == "song":
+            write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or "song").replace("\\", "/")).name})
         return {"file": name, "name": file.filename}
 
     @app.get("/api/uploads/song/{filename}")
@@ -1163,9 +1166,10 @@ def create_app(home=None, *, test_hosts=False):
                 except Exception:
                     pass
             log_studio(store, f"Starting production for kind='{request.get('kind', 'video')}'")
+            from mmv.jobs import output_run_id
             return jobs.start(request["kind"], lambda context: production.produce(
                 store, request, prepared, context, resume=bool(quoted.get("resume_run"))),
-                run_id=quoted.get("resume_run"))
+                run_id=quoted.get("resume_run") or output_run_id(store, request))
 
     @app.get("/api/outputs")
     def outputs():

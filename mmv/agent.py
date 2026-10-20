@@ -110,7 +110,8 @@ class AgentClient:
             path = Path(path).expanduser().resolve()
             if not path.is_file() or path.stat().st_size > 256 * 1024 * 1024:
                 raise ValueError("Select an existing media file under 256 MB")
-            filename = "media" + path.suffix
+            filename = path.name if route == '/api/upload/song' else 'media' + path.suffix
+            filename = filename.replace('"', '_').replace('\r', '_').replace('\n', '_').replace('\\', '_')
             head += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{file_field}\"; "
                      f"filename=\"{filename}\"\r\nContent-Type: "
                      f"{mimetypes.guess_type(filename)[0] or 'application/octet-stream'}\r\n\r\n").encode()

@@ -1,5 +1,33 @@
 # Releases
 
+## 1.8.5 — Distinct independent dance movements
+
+- Independent mode assigns contrasting bounce, lateral-step and torso-rotation
+  movements, including distinct pause poses, rather than relying on instrument
+  names and generic beat hints alone. New plans use choreography version 3.
+- Prompt checks recognize actor names, reject copied movement-family signatures
+  and dance leadership, and preserve references to a shared musical rhythm.
+  Claude Code reviewed the repair; mock checks do not prove rendered distinctness.
+- Existing group/off modes, protected prompts and pins remain unchanged. Start a
+  new preview to use the repair; existing productions resume their saved plan.
+- Repeated camera moves are recorded for a future planner fix at the owner's
+  request; no camera behavior changed in this release.
+
+## 1.8.4 — Local render timeout and agent song names
+
+- Fixes a live-test failure: the original local H3 polling adapter requires a numeric timeout. The worker now passes infinity for unlimited local waits, without changing protected engine code. hellonearthis independently identified the same defect in fork revision `eeab8c0`; our adaptation preserves the owner’s unlimited-wait default.
+- Agent song uploads preserve a safe basename, so song-name/date-time run folders work from agents as well as the browser. Other upload kinds retain generic filenames.
+- Mock polling regression covers delayed history results after more than two hours; agent transport checks the retained song basename.
+
+## 1.8.3 — Independent dancing
+
+- Optional independent mode assigns each actor overall beat, drums, bass or vocals, automatically or by override. Each dances individually; group mode and defaults remain unchanged.
+- Existing stem audio/analysis guides per-shot accents, pauses and intensity. Missing parts explicitly fall back to the overall beat; no separation or model download starts automatically.
+- New production folders use the uploaded song name plus local date/time (with collision suffixes); old folders and resumed run IDs remain intact. Existing export-package naming was already present.
+- Preview, API, MCP and agent skill expose assignments and fallback sources. Saved choreography remains bound to prompts on resume. New instructions are additive; protected originals and pins remain unchanged.
+- Claude Code and Antigravity reviews are received and triaged in the [review record](COLLABORATOR_REVIEW.md); no blocking findings remain from either review.
+- Owner approved the optional instructions. Mock verification is recorded separately; real same-song/same-seed render comparison remains pending.
+
 ## 1.8.2 — Vocabulary guide and accessibility review fixes
 
 - Addresses Antigravity’s UI review: restores the missing vocabulary guide dialog and connects its navigation to the workspace.

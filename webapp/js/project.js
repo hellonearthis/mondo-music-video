@@ -1,6 +1,8 @@
 import { $, $$, api, json, notice, option, state, updateLogDisplay } from "./core.js";
 import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 
+import { syncDanceControls } from "./dance.js";
+
 let saveDebounceTimer = null;
 
 export function panel(name) {
@@ -162,6 +164,7 @@ export async function restoreProject() {
         el.value = val;
       }
     });
+    syncDanceControls(form);
   });
 
   const filesData = saved.files || {};

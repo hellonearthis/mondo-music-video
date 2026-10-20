@@ -64,6 +64,19 @@ verify the assets appear in the app. Never import other local/private assets.
   included skill and agent documentation for coverage. Keep version/tool discovery
   and mock transport tests current; preserve confirmation and paid-consent guards.
 
+## Functional programming style
+
+- Prefer functional programming for new and changed code: small, composable functions,
+  explicit inputs and return values, and pure data transformations where practical.
+- Keep filesystem, network, subprocess, UI and other side effects at clear boundaries;
+  avoid hidden mutable state and unnecessary classes, wrappers or abstraction layers.
+- Reuse existing functions and keep implementations concise and readable. Avoid
+  repeated traversal, needless copying and intermediate allocations on hot paths.
+- Preserve established framework interfaces and useful existing classes; do not rewrite
+  unrelated code solely to change its style. Measure performance-sensitive changes:
+  functional style alone is not evidence of faster execution or lower memory use.
+- Apply the same style in helper assignments and review it before integration.
+
 ## Protected prompting scheme (read before editing; applies to forks too)
 
 Mondo's writer and ident prompts, the sealed-lips scheme (rule text, closing phrase, validators), the planning and schema code,
@@ -128,9 +141,6 @@ exists (it is local session state and is not published). Read `README.md` and th
 Use the shared collaboration protocol for Codex, Claude Code and any other agent the owner adds. Preserve
 existing uncommitted work. Do not infer that another open terminal is idle.
 Before committing or pushing, follow the shared-checkout commit rules in `docs/COLLABORATION.md`.
-Do not start product changes until the user assigns a task. Never stage or
-publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
-are documentation and never trigger a version bump.
 Antigravity and Hermes are junior team members; Hermes normally takes light worker tasks. Their first session is read-only: read,
 search, review and report, but do not edit, stage, commit, push, or run renders or tests that touch real data. Put findings in
 `.collaboration/` reports or in your reply, never in tracked files. After that first session an agent may take assigned work as a
@@ -142,3 +152,6 @@ other agents review without edits or implement explicitly assigned tasks in sepa
 Record each assignment, allowed files, worktree and handoff in the shared local status file as described
 in `docs/COLLABORATION.md`. Hermes must also read `HERMES.md`. An open terminal is not an assignment,
 and these instructions do not automatically launch or connect any agents.
+Do not start product changes until the user assigns a task. Never stage or
+publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
+are documentation and never trigger a version bump.
