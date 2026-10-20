@@ -29,6 +29,7 @@ include examples/style-presets/crt_1990s.json
 # Private updater state can contain local source paths and installation logs.
 global-exclude update-status.json update-install.log
 global-exclude api-profiles.json
+global-exclude *.opp
 global-exclude removed-assets.json
 
 # Shared agent protocol is published; per-session state is not.

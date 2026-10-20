@@ -64,6 +64,14 @@ Music-video generation requires the configured writer and Laya model. Do not
 bypass a failed Laya review or promise a completed production before rendering
 and automatic frame-exact assembly have succeeded.
 
+To use an imported OPP prop for an actor's instrument, first inspect/import the
+package and preview sheet selection. Then add `instrument_mode: "perform"`,
+`instrument_assignments: {"actor_id": "guitar"}`,
+`instrument_props: {"guitar": "prop-id"}` and optionally
+`instrument_prop_uses: {"guitar": "strumming strings"}`. Prop IDs and use tags
+are free-form. Omit `instrument_props` to keep the existing instrument sheet.
+The quote shows the selected sheet and slot count; start still needs consent.
+
 ## Ident
 
 ```json

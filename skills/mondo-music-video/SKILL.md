@@ -36,6 +36,11 @@ configuration, see the app's `docs/AGENT_SETUP.md`.
 
 Inspect status, catalog, styles and actors before choosing capabilities. Settings
 inspection reports configured services and key presence without secret values.
+For OPP props, inspect `props`, upload a user-selected `.opp`, call `inspect_opp`
+and review its signer, clearance and license before `import_opp`. Accept a
+verified signer explicitly or opt into an unsigned local draft. Use
+`select_opp_sheet(prop_id, use)` to preview a base or interaction sheet. Imported
+props stay private; current production use is limited to musical instruments.
 If the app is stopped, use the user's app environment to run
 `bash start.sh --background` from the project folder (`bash stop.sh` stops it; it refuses while a production runs), or `mondo-music-video serve`. Missing models/keys need configuration; do not silently
 switch providers or install/download model weights.

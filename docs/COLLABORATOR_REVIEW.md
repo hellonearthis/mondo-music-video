@@ -1,5 +1,23 @@
 # Collaborator review record
 
+## OPP task-start fork check — `5e2bba4` (2026-10-20)
+
+The fork was checked at exact head `5e2bba4f945d02f7c825e2002d83c2d084819c2e`
+and cloned independently into `/tmp/mmv-fork-opp-20261020`. Relative to the
+previously reviewed `e6ef03e`, the only new commit adds component-labeling
+mode: stable `data-component-*` attributes across the existing GUI, a header
+toggle/keyboard shortcut, an overlay in `webapp/js/component_labeling.js`, CSS,
+an interface guide, and a version bump to the fork's 1.9.8. This is a useful
+pair-programming aid, and its static labels would also help locate the new OPP
+card after an adapted integration. It makes no OPP import, actor, model,
+payment, renderer or resume changes. The OPP work modifies the same HTML and
+app files; copying the fork patch wholesale would omit new OPP elements and
+collide with this task's 1.9.7 version. The feature is deferred to its own
+interface batch so the labels can cover the final OPP UI and receive focused
+keyboard, accessibility and agent-surface review. This is a scope/version
+conflict, not a demonstrated defect in the collaborator's contribution. No
+fork files, private assets or Git object stores were imported into this tree.
+
 ## October 20, 2026 — fork head e6ef03e (release 1.9.6)
 
 Reviewed isolated clone `/tmp/mmv-fork-review-20261020-new` at exact revision `e6ef03e28f1cde7018be1710d0b8c89cad1480f4` against our `55671c4` (1.9.5). The fork first merged that upstream release in `26dba46`; new contributions are `5b026e5` and `e6ef03e`, authored by [hellonearthis](https://github.com/hellonearthis). This review compares the two new commits, not the already adopted upstream history. The isolated clone shares no Git object store with this checkout.

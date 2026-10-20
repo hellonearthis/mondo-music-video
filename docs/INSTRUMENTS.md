@@ -1,4 +1,4 @@
-# Instrument-playing actors (1.9.0)
+# Instrument-playing actors and OPP props
 
 Choose **Instrument performance → Actors play assigned instruments** in the video
 form and assign drums, bass, guitar or keyboards to selected actors. The mode is
@@ -77,6 +77,40 @@ private import paths or provenance. Demo-package receipts omit instrument paths,
 and original-source hashes; instrument sheet/original files are not copied into those packages.
 Public source/wheel packages include only the explicitly bundled public sheets.
 
+## Open Prop Protocol packages (1.9.7)
+
+MMV accepts Open Prop Protocol v0.1 `.opp` bundles. Open **Cast & OAP → Open
+Prop Protocol library**, inspect a package, review its owner, sheets, clearance,
+hash and signature report, then import it. Signed packages require an explicit
+signer acceptance using the inspected public key; unsigned local drafts require the separate unsigned choice.
+The original package and cleaned visual sheets stay in the private application
+`props/` folder. Existing IDs are never overwritten. OPP imports do not become
+actors or change OAP rider checks. The protocol itself has no fixed prop or
+action vocabulary; MMV stores any prop, while this first production workflow
+uses imported props as optional references for the four musical roles.
+
+In **Instrument performance**, choose an imported prop under the corresponding
+instrument role. The optional free-form **use** text selects a matching OPP
+interaction sheet by the protocol's tag/label matcher, with a base-sheet
+fallback. Preview names the chosen sheet, counts it in the same reference slot
+budget as existing instrument sheets, and binds its cleaned bytes and original
+package hash into the quote and saved replay plan. The selected role remains
+drums, bass, guitar or keyboards for stem activity and physical-action checks;
+the OPP prop ID and interaction tags are never restricted to those four names.
+Leaving the selector blank keeps the existing bundled/local instrument sheet.
+Only one sheet per musical role is selected for a production. The source
+`prompt_modifier` stays in the preserved OPP bundle and is not sent to the
+writer; package-authored text does not override Mondo's instrument directions.
+Per-shot switching and use of OPP props outside instrument performance are
+future host workflows.
+
+The importer caps a bundle at 128 MB, expanded members at 256 MB, and each
+included image sheet at 25 MB before protocol verification. It rejects unsafe
+ZIP paths and symlinks, verifies all listed hashes and any signature using the
+pinned OPP verifier, and cleans renderable images without changing the preserved
+source bundle. A verified signature proves key control, not a license grant;
+review the package's license and clearance before using it.
+
 ## API and agent use
 
 `GET /api/instruments` lists all four designs and availability;
@@ -86,7 +120,12 @@ while the app is idle. This imports locally and never publishes anything.
 
 Use `AgentClient.import_instrument(id, path, license, provenance)` or the MCP
 `import_instrument` tool, and `inspect_studio(kind="instruments")` for discovery.
-MCP exposes 39 tools. The shell supports `mondo-music-video-agent instruments`.
+MCP exposes 42 tools. The shell supports `mondo-music-video-agent instruments`
+and `props`, plus `upload opp`, `inspect-opp`, `import-opp`, and
+`select-opp-sheet`. `inspect_studio(kind="props")`, `inspect_opp`, `import_opp`,
+and `select_opp_sheet` cover the same workflow over MCP. API equivalents are
+`GET /api/props`, `POST /api/upload/opp`, `GET /api/opp/inspect/{upload}`,
+`POST /api/opp/import`, and `GET /api/props/{id}/selection?use=...`.
 For a failed prompt-only production, status offers `can_retry_prompts`; the GUI
 and agents can request a fresh preview from that run, then approve a new start.
 During writing, a narrowly identified vague guitar action may be corrected to
@@ -115,10 +154,5 @@ IDs, per-shot activity and source/fallback notes. Review the
 quote before starting once with existing consent. No paid retry or extra active
 operation is authorized by instrument selection.
 
-## Forthcoming Open Prop Protocol
-
-The owner is defining OPP (Open Prop Protocol) to govern how instruments and other
-props are imported and used. The current `mmv.instrument` record is an interim
-application format, not OPP. Preserve source/reference hashes and provenance for
-migration once the OPP specification is available; do not invent an OPP schema or
-pretend current packages already conform to it.
+Existing `mmv.instrument` v1 sheets remain an independent local format. They
+are not silently relabeled or exported as OPP packages.

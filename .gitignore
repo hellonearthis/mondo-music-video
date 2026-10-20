@@ -35,6 +35,7 @@ exports/
 styles/
 actors/
 /instruments/
+/props/
 runs/
 models/
 downloads/
@@ -42,6 +43,7 @@ logs/
 oap_inbox/
 oap_outbox/
 *.oap
+*.opp
 
 # Editor and OS files
 .idea/

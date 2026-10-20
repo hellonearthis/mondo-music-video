@@ -1,4 +1,4 @@
-import { $, api, handle, notice, text } from './core.js';
+import { $, api, handle, notice, text, upload } from './core.js';
 
 const kinds = ['drums', 'bass', 'guitar', 'keyboards'];
 
@@ -33,6 +33,14 @@ export function syncInstrumentControls(form, changed = null) {
     select.dataset.instrumentActor = actor?.value || '';
     select.value = assignments[actor?.value] || '';
   });
+  const propFields = form.querySelector('.instrument-props');
+  if (propFields) {
+    const assigned = new Set(Object.values(assignments));
+    propFields.hidden = !enabled || !assigned.size;
+    propFields.querySelectorAll('[data-prop-kind]').forEach(row => {
+      row.hidden = !enabled || !assigned.has(row.dataset.propKind);
+    });
+  }
 }
 
 export function instrumentsFromForm(form, request) {
@@ -41,6 +49,18 @@ export function instrumentsFromForm(form, request) {
     .filter(actor => request.instrument_mode === 'perform' && assignments[actor])
     .map(actor => [actor, assignments[actor]]));
   request.instrument_references = Boolean(form.elements.instrument_references.checked);
+  request.instrument_props = {};
+  request.instrument_prop_uses = {};
+  for (const kind of kinds) {
+    const prop = form.elements[`instrument_prop_${kind}`]?.value;
+    const use = form.elements[`instrument_use_${kind}`]?.value.trim();
+    if (request.instrument_mode === 'perform' && Object.values(request.instrument_assignments).includes(kind) && prop) {
+      request.instrument_props[kind] = prop;
+      if (use) request.instrument_prop_uses[kind] = use;
+    }
+    delete request[`instrument_prop_${kind}`];
+    delete request[`instrument_use_${kind}`];
+  }
   delete request.instrument_assignments_json;
   for (const key of Object.keys(request)) if (key.startsWith('instrument_actor_')) delete request[key];
 }
@@ -65,6 +85,30 @@ export async function loadInstruments() {
   }));
 }
 
+export async function loadProps() {
+  const records = await (await api('/api/props')).json();
+  const list = $('#opp-library');
+  if (list) list.replaceChildren(...records.map(record => {
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.append(text('h3', record.name), text('p', `${record.id} · ${record.sheets.length} sheet(s) · ${record.license || 'License unspecified'}`));
+    const image = document.createElement('img');
+    image.src = `/api/props/${encodeURIComponent(record.id)}/reference`;
+    image.alt = `${record.name} base reference`;
+    image.loading = 'lazy';
+    image.style.cssText = 'max-width:100%;max-height:260px;object-fit:contain';
+    card.append(image);
+    return card;
+  }));
+  for (const kind of kinds) {
+    const select = $('#video-form')?.elements[`instrument_prop_${kind}`];
+    if (!select) continue;
+    const previous = select.value;
+    select.replaceChildren(new Option('Existing sheet', ''), ...records.map(record => new Option(`${record.name} (${record.id})`, record.id)));
+    select.value = previous;
+  }
+}
+
 export function initInstrumentLibrary() {
   const form = $('#instrument-import-form');
   if (!form) return;
@@ -82,5 +126,52 @@ export function initInstrumentLibrary() {
       notice('Instrument reference imported into this studio.');
     } finally { button.disabled = false; }
   });
-  loadInstruments().catch(error => notice(error.message));
+  const oppForm = $('#opp-import-form');
+  let inspected = null;
+  let signerKey = '';
+  const clearInspection = () => {
+    inspected = null;
+    signerKey = '';
+    oppForm.hidden = true;
+    $('#opp-report').hidden = true;
+    $('#opp-report').textContent = '';
+    $('#opp-signer').hidden = true;
+    $('#opp-signer').textContent = '';
+    oppForm.elements.accept_signer.checked = false;
+  };
+  $('#opp-file').addEventListener('change', clearInspection);
+  $('#opp-allow-unsigned').addEventListener('change', clearInspection);
+  $('#inspect-opp').onclick = handle(async () => {
+    const file = $('#opp-file').files[0];
+    if (!file) throw new Error('Choose an OPP package first');
+    clearInspection();
+    inspected = await upload(file, 'opp');
+    const allowUnsigned = $('#opp-allow-unsigned').checked;
+    const report = await (await api(`/api/opp/inspect/${encodeURIComponent(inspected)}?allow_unsigned=${allowUnsigned}`)).json();
+    signerKey = report.verification.signature_valid ? report.manifest.prop.owner.public_key : '';
+    if (signerKey) {
+      $('#opp-signer').textContent = `Verified signer: ${report.manifest.prop.owner.name || 'Unnamed'} · ${signerKey}`;
+      $('#opp-signer').hidden = false;
+    }
+    const summary = {prop: report.manifest.prop, sheets: report.manifest.sheets,
+      verification: report.verification};
+    $('#opp-report').textContent = JSON.stringify(summary, null, 2);
+    $('#opp-report').hidden = false;
+    oppForm.hidden = false;
+    oppForm.elements.accept_signer.parentElement.hidden = !report.verification.signature_valid;
+  });
+  oppForm.onsubmit = handle(async event => {
+    event.preventDefault();
+    if (!inspected) throw new Error('Inspect an OPP package first');
+    const body = new FormData();
+    body.set('filename', inspected);
+    body.set('allow_unsigned', String($('#opp-allow-unsigned').checked));
+    body.set('accept_signer', oppForm.elements.accept_signer.checked ? signerKey : '');
+    await api('/api/opp/import', {method: 'POST', body});
+    clearInspection();
+    await loadProps();
+    notice('OPP prop imported into this studio.');
+  });
+  return Promise.all([loadInstruments().catch(error => notice(error.message)),
+                      loadProps().catch(error => notice(error.message))]);
 }

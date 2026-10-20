@@ -1,4 +1,39 @@
-# Verification — 1.9.6
+# Verification — 1.9.7
+
+## 1.9.7 — Open Prop Protocol compatibility
+
+Final complete mock-service, temporary-data and browser suite: **632 tests +
+141 subtests passed**, 108.28s. A first full pass found one stale MCP tool-count
+assertion (39 instead of 42); it was updated before the passing rerun. Focused
+OPP checks cover signed and unsigned imports, exact signer acceptance, archive
+path rejection, base/interaction matching, private bundle preservation, changed
+bundle rejection, API/agent preview selection, GUI inspect/import and form
+serialization, and redaction of private OPP paths and IDs from demo receipts.
+No paid, GPU or real generation was run.
+
+The pinned OPP dependency (`1e1bc6c`, protocol 0.1.0) and MMV editable package
+are installed in the local environment. `node --check` on changed JavaScript,
+Python compile, `git diff --check`, fresh version-handler import, installed
+metadata and protected-scheme check all passed; the protected result is `[]`.
+The 1.9.7 wheel and source archive in `/tmp/mmv-v197-packages` contain the
+new adapter, exactly four authorized starter OAPs, six public styles and two
+bundled instrument PNGs, with no `.opp` bundles, local `props/`, private actor
+data, credentials or collaboration state.
+
+The local app was started on its usual data directory and port with automatic
+update installation disabled. Live `/api/version` reported 1.9.7, `/api/catalog`
+reported `opp_version: 0.1.0` and prop import/selection support, `/api/props`
+returned an empty catalog, and `/api/status` showed the saved operation complete.
+No real prop was imported into the user's library and no production was started.
+The background launch did not survive its command session; a persistent server
+session was started and `data/server.pid` corrected to its confirmed PID.
+
+Claude Code Sonnet 5.5 provided read-only MMV-side review. Its sandbox denied
+access to `/home/user/opp`, so protocol internals were checked by Codex against
+the local source and pinned revision. The review found untrusted package text
+reaching the writer and boolean signer acceptance; both were fixed before the
+final suite. Visual quality and instrument-contact consistency with a real OPP
+sheet remain unverified until a deliberate same-song/seed operator render.
 
 ## 1.9.6 — Fork performance integration
 

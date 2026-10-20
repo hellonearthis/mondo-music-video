@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -136,8 +136,8 @@ class AgentClient:
             return json.load(response)
 
     def upload(self, kind, path):
-        if kind not in ("song", "reference", "oap", "agreement"):
-            raise ValueError("Choose song, reference, oap or agreement")
+        if kind not in ("song", "reference", "oap", "opp", "agreement"):
+            raise ValueError("Choose song, reference, oap, opp or agreement")
         return self._multipart("/api/upload/" + kind, {}, "file", path)
 
     def import_instrument(self, instrument_id, reference_path, license, provenance):
@@ -145,6 +145,19 @@ class AgentClient:
         valid_kind(instrument_id)
         return self._multipart("/api/instruments/" + instrument_id, {"license": license, "provenance": provenance},
                                "reference", reference_path)
+
+    def inspect_opp(self, filename, allow_unsigned=False):
+        return self._json("GET", "/api/opp/inspect/" + urllib.parse.quote(filename, safe="") +
+                          "?allow_unsigned=" + str(bool(allow_unsigned)).lower())
+
+    def import_opp(self, filename, allow_unsigned=False, accept_signer=""):
+        return self._multipart("/api/opp/import", {"filename": filename,
+                               "allow_unsigned": str(bool(allow_unsigned)).lower(),
+                               "accept_signer": accept_signer})
+
+    def select_opp_sheet(self, prop_id, use=""):
+        return self._json("GET", "/api/props/" + urllib.parse.quote(prop_id, safe="") +
+                          "/selection?use=" + urllib.parse.quote(use, safe=""))
 
     def create_actor(self, actor_id, name, description, reference_path):
         return self._multipart("/api/actors", {"actor_id": actor_id, "name": name, "description": description},
@@ -312,10 +325,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "instruments", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
-    upload.add_argument("kind", choices=("song", "reference", "oap", "agreement"))
+    upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement"))
     upload.add_argument("path")
     preview = sub.add_parser("preview")
     preview.add_argument("request_file", help="JSON production request file")
@@ -343,6 +356,16 @@ def main(argv=None):
     import_style = sub.add_parser("import-style")
     import_style.add_argument("file", help="Path to style JSON file")
     import_style.add_argument("--overwrite", action="store_true")
+    inspect_opp = sub.add_parser("inspect-opp")
+    inspect_opp.add_argument("filename")
+    inspect_opp.add_argument("--allow-unsigned", action="store_true")
+    import_opp = sub.add_parser("import-opp")
+    import_opp.add_argument("filename")
+    import_opp.add_argument("--allow-unsigned", action="store_true")
+    import_opp.add_argument("--accept-signer", default="", metavar="PUBLIC_KEY")
+    select_opp = sub.add_parser("select-opp-sheet")
+    select_opp.add_argument("prop_id")
+    select_opp.add_argument("--use", default="")
     args = parser.parse_args(argv)
     try:
         client = AgentClient(args.url)
@@ -381,6 +404,12 @@ def main(argv=None):
                 style_card=data.get("style_card"),
                 overwrite=args.overwrite,
             )
+        elif args.command == "inspect-opp":
+            result = client.inspect_opp(args.filename, args.allow_unsigned)
+        elif args.command == "import-opp":
+            result = client.import_opp(args.filename, args.allow_unsigned, args.accept_signer)
+        elif args.command == "select-opp-sheet":
+            result = client.select_opp_sheet(args.prop_id, args.use)
         else:
             result = client.inspect(args.command)
         print(json.dumps(result, indent=2, allow_nan=False))

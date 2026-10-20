@@ -198,6 +198,9 @@ export function showQuote(request, quote) {
     for (const [actor, instrument] of Object.entries(quote.instruments.assignments)) {
       summary.append(text("p", `${actor}: ${instrument}`, "muted"));
     }
+    for (const [kind, asset] of Object.entries(quote.instruments.assets || {})) {
+      if (asset.prop_id) summary.append(text("p", `${kind}: OPP prop ${asset.name} (${asset.prop_id}), ${asset.sheet_kind} sheet “${asset.sheet_label}” · ${asset.clearance} clearance`, "muted"));
+    }
     const fallbacks = [...new Set(Object.values(quote.instruments.passages).flatMap(p => p.performers.map(player => player.fallback).filter(Boolean)))];
     for (const fallback of fallbacks) summary.append(text("p", fallback, "muted"));
     for (const [id, passage] of Object.entries(quote.instruments.passages)) {

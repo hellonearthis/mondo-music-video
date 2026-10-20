@@ -17,6 +17,7 @@ import uvicorn
 
 from mmv.agent import AgentClient
 import test_public_app as public_fixtures
+from tests.test_opp_props import package as make_opp_package
 
 
 class LiveAppFixture:
@@ -66,6 +67,31 @@ class LiveAppFixture:
 
 
 class AgentTests(LiveAppFixture, unittest.TestCase):
+    def test_opp_import_and_instrument_preview(self):
+        source = make_opp_package(self.home, signed=True)
+        uploaded = self.agent.upload("opp", str(source))["file"]
+        inspected = self.agent.inspect_opp(uploaded)
+        self.assertTrue(inspected["verification"]["signature_valid"])
+        with self.assertRaisesRegex(ValueError, "accept this signer"):
+            self.agent.import_opp(uploaded)
+        imported = self.agent.import_opp(uploaded, accept_signer=inspected['manifest']['prop']['owner']['public_key'])
+        self.assertEqual(imported["id"], "blue-guitar")
+        self.assertEqual(self.agent.inspect("props")[0]["id"], "blue-guitar")
+        self.assertEqual(self.agent.select_opp_sheet('blue-guitar', 'strumming strings')['sheet_kind'], 'interaction')
+        self.agent.create_actor("blue", "Blue", "A blue jacket", str(self.reference))
+        song = self.agent.upload("song", str(self.song))["file"]
+        quote = self.agent.preview({"song": song, "actors": ["blue"], "instrument_mode": "perform",
+            "instrument_assignments": {"blue": "guitar"}, "instrument_props": {"guitar": "blue-guitar"},
+            "instrument_prop_uses": {"guitar": "strumming strings"}})
+        asset = quote["instruments"]["assets"]["guitar"]
+        self.assertEqual(asset["prop_id"], "blue-guitar")
+        self.assertEqual(asset["sheet_kind"], "interaction")
+        self.assertNotIn('path', asset)
+        self.assertNotIn('bundle_path', asset)
+        self.assertNotEqual(quote['instruments']['passages'][next(iter(quote['instruments']['passages']))]['performers'][0]['description'],
+                            imported['description'])
+        self.assertEqual(quote["instruments"]["passages"][next(iter(quote["instruments"]["passages"]))]["references"], ["guitar"])
+
     def test_preview_start_and_download(self):
         uploaded = self.agent.upload("song", str(self.song))
         self.assertEqual(uploaded["name"], self.song.name)
@@ -132,7 +158,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.9.6")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.9.7")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -140,7 +166,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.9.6")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.9.7")
 
     def test_create_style_and_upload_reference(self):
         style = self.agent.create_style("cool", "Cool", "Cool blue light", style_card="Forensic test card")
@@ -208,7 +234,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 39)
+                self.assertEqual(len(names), 42)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score'} <= names)
                 self.assertTrue({'detect_lyrics', 'align_lyrics', 'export_production_package'} <= names)
@@ -216,6 +242,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertIn("preview_retry_prompts", names)
                 self.assertTrue({"caption_video", "list_caption_fonts"} <= names)
                 self.assertIn('import_instrument', names)
+                self.assertTrue({'inspect_opp', 'import_opp', 'select_opp_sheet'} <= names)
                 imported = await client.call_tool('import_instrument', {'instrument_id': 'bass', 'reference_path': str(self.reference),
                     'license': 'test only', 'provenance': 'synthetic test fixture'})
                 self.assertFalse(imported.is_error)
@@ -230,7 +257,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.9.6")
+                self.assertEqual(result.structured_content["data"]["version"], "1.9.7")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)

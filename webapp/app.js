@@ -86,7 +86,7 @@ async function initialize() {
   initSubliminalControls();
   initOperationControls();
   initLibraryForms();
-  initInstrumentLibrary();
+  await initInstrumentLibrary();
   initSettingsAndPicker();
   initUpscaleForm();
 

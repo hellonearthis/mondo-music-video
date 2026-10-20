@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, agreements, instrument_assets, production, score_view
+from mmv import actors, agreements, instrument_assets, production, props, score_view
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.9.6"
+MGL_APP_VERSION = "1.9.7"
 WEB = Path(__file__).parent
 
 
@@ -285,6 +285,8 @@ class ProductionRequest(StrictModel):
     instrument_mode: Literal["off", "perform"] = "off"
     instrument_assignments: dict[str, Literal["drums", "bass", "guitar", "keyboards"]] = Field(default_factory=dict, max_length=9)
     instrument_references: bool = True
+    instrument_props: dict[str, str] = Field(default_factory=dict, max_length=4)
+    instrument_prop_uses: dict[str, str] = Field(default_factory=dict, max_length=4)
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -337,11 +339,20 @@ def request_dict(value):
         for key in DANCE_FIELDS:
             request.pop(key, None)
     if request.get("instrument_mode", "off") == "off":
-        for key in ("instrument_mode", "instrument_assignments", "instrument_references"):
+        for key in ("instrument_mode", "instrument_assignments", "instrument_references", "instrument_props", "instrument_prop_uses"):
             request.pop(key, None)
     elif request["kind"] != "video":
         raise ValueError("Instrument performance is available for music videos only")
     return request
+
+
+def instrument_preview(plan):
+    if not plan:
+        return plan
+    shown = ('id', 'name', 'description', 'sha256', 'width', 'height', 'license', 'clearance',
+             'prop_id', 'sheet_kind', 'sheet_label', 'sheet_tags', 'use')
+    return {**plan, 'assets': {kind: {key: asset[key] for key in shown if key in asset}
+                               for kind, asset in plan.get('assets', {}).items()}}
 
 
 class StartRequest(StrictModel):
@@ -674,7 +685,8 @@ def create_app(home=None, *, test_hosts=False):
     def catalog():
         return {"backends": CATALOG, "ratings": oap.CONTENT_ENUMS, "price_checked": "2026-10-15",
                 "oap_version": oap.OAP_VERSION,
-                "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]}}
+                "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]},
+                "opp_version": props.protocol_version(), "props": {"import": True, "instrument_selection": True}}
 
     @app.get("/api/project")
     def get_project():
@@ -839,13 +851,15 @@ def create_app(home=None, *, test_hosts=False):
         return {"configured": bool(store.key(value.name))}
 
     @app.post("/api/upload/{kind}")
-    def upload(kind: Literal["song", "reference", "oap", "agreement"], file: UploadFile = File(...)):
-        limit = {"song": 256, "reference": 25, "oap": 128, "agreement": 2}[kind] * 1024 * 1024
+    def upload(kind: Literal["song", "reference", "oap", "opp", "agreement"], file: UploadFile = File(...)):
+        limit = {"song": 256, "reference": 25, "oap": 128, "opp": 128, "agreement": 2}[kind] * 1024 * 1024
         suffix = Path(file.filename or "").suffix.lower()
         if kind == "song" and suffix not in (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".aiff"):
             raise ValueError("Choose a supported audio file")
+        if kind == "opp" and suffix != ".opp":
+            raise ValueError("Choose an .opp package")
         name = uuid.uuid4().hex + (suffix if kind == "song" else ".png" if kind == "reference"
-                                   else ".json" if kind == "agreement" else ".oap")
+                                   else ".json" if kind == "agreement" else ".opp" if kind == "opp" else ".oap")
         target = store.home / "uploads" / name
         # Serialize mutations with operation startup so quoted inputs remain stable.
         with jobs.lock:
@@ -891,6 +905,38 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/instruments")
     def list_instruments():
         return instrument_assets.catalog(store)
+
+    @app.get("/api/props")
+    def list_props():
+        return props.catalog(store)
+
+    @app.get("/api/props/{prop_id}/reference")
+    def prop_reference(prop_id: str, use: str = ""):
+        return FileResponse(props.select(store, prop_id, use)["path"], media_type="image/png")
+
+    @app.get("/api/props/{prop_id}/selection")
+    def prop_selection(prop_id: str, use: str = ""):
+        selected = props.select(store, prop_id, use)
+        return {key: selected[key] for key in ('prop_id', 'name', 'description', 'license', 'clearance', 'sheet_kind',
+                                                'sheet_label', 'sheet_tags', 'use', 'sha256', 'source_sha256')}
+
+    @app.get("/api/opp/inspect/{filename}")
+    def inspect_opp(filename: str, allow_unsigned: bool = False):
+        path = inside(store.home / "uploads", filename)
+        if path.suffix != ".opp" or not path.is_file():
+            raise ValueError("OPP upload not found")
+        manifest, verification = props.package_info(path, allow_unsigned=allow_unsigned)
+        return {"manifest": manifest, "verification": verification}
+
+    @app.post("/api/opp/import")
+    def import_opp(filename: str = Form(...), allow_unsigned: bool = Form(False),
+                   accept_signer: str = Form("")):
+        path = inside(store.home / "uploads", filename)
+        if path.suffix != ".opp" or not path.is_file():
+            raise ValueError("OPP upload not found")
+        with jobs.lock:
+            jobs.require_idle()
+            return props.import_package(store, path, allow_unsigned=allow_unsigned, accept_signer=accept_signer)
 
     @app.post("/api/instruments/{instrument_id}")
     def import_instrument(instrument_id: str, license: str = Form(...), provenance: str = Form(...),
@@ -1147,7 +1193,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": prepared.get("instruments"), "voice": prepared.get("voice"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,

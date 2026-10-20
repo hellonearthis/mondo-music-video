@@ -31,6 +31,48 @@ def _cached_chromium():
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_opp_inspection_import_and_instrument_choice(self):
+        from mmv import actors
+        from tests.test_opp_props import package as make_opp_package
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        source = make_opp_package(self.home, signed=True)
+        actors.create_actor(self.fixture.store, 'guitarist', 'Guitarist', 'Test actor', picture())
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('[data-panel="actors"]').click()
+                page.locator('#opp-library-fold summary').click()
+                page.locator('#opp-file').set_input_files(str(source))
+                page.locator('#inspect-opp').click()
+                expect(page.locator('#opp-report')).to_contain_text('blue-guitar')
+                expect(page.locator('#opp-report')).to_contain_text('signature_valid')
+                page.locator('#opp-import-form [name=accept_signer]').check()
+                page.locator('#opp-import-form button').click()
+                expect(page.locator('#opp-library')).to_contain_text('Blue Guitar')
+                page.locator('[data-panel="video"]').click()
+                form = page.locator('#video-form')
+                form.locator('.actor-select').select_option(['guitarist'])
+                form.locator('[name=instrument_mode]').select_option('perform')
+                form.get_by_label('Guitarist instrument', exact=True).select_option('guitar')
+                expect(form.locator('.instrument-props')).to_be_visible()
+                form.locator('[name=instrument_prop_guitar]').select_option('blue-guitar')
+                form.locator('[name=instrument_use_guitar]').fill('strumming strings')
+                result = page.evaluate('''async () => {
+                    const {instrumentsFromForm} = await import('/js/instruments.js');
+                    const request = {actors: ['guitarist'], instrument_mode: 'perform'};
+                    instrumentsFromForm(document.querySelector('#video-form'), request);
+                    return request;
+                }''')
+                self.assertEqual(result['instrument_props'], {'guitar': 'blue-guitar'})
+                self.assertEqual(result['instrument_prop_uses'], {'guitar': 'strumming strings'})
+                self.assertNotIn('instrument_prop_guitar', result)
+            finally:
+                browser.close()
+
     def test_instrument_assignments_restore_by_actor_and_flat_fields_are_removed(self):
         from mmv import actors
         from test_public_app import picture
@@ -296,7 +338,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.9.6')
+                expect(page.locator('#version')).to_have_text('1.9.7')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1025,7 +1067,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.9.6')
+                expect(page.locator('#version')).to_have_text('1.9.7')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

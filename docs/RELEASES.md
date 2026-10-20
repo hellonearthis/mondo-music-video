@@ -1,5 +1,31 @@
 # Releases
 
+## 1.9.7 — Open Prop Protocol instrument references
+
+Added a private, general Open Prop Protocol v0.1 library. Users can upload,
+inspect and import signed `.opp` packages after explicitly accepting the
+inspected signer key, or separately allow an unsigned local draft. The app
+checks archive bounds, paths, hashes and signatures, preserves the original
+bundle, and creates clean image references. Its first production adapter lets
+an assigned musical role use a selected OPP base or interaction sheet; free-form
+use text picks an interaction match with a base fallback. The quote shows the
+selected sheet and reference-slot cost, and saved plans/fingerprints bind the
+chosen sheet and package bytes. Existing instrument sheets remain available,
+and the original prompt scheme stays unchanged. GUI, API, CLI, MCP and the
+included operation skill cover import, selection and preview. General prop use
+outside musical instruments is a later host workflow; OPP itself keeps arbitrary
+prop IDs and tags. No private props are included in source or release packages.
+Package-authored prompt modifiers and descriptions are kept as data and do not
+enter the writer prompt.
+
+Claude Code Sonnet 5.5 reviewed the MMV adapter read-only. Its sandbox could
+not read the sibling OPP checkout, so Codex compared the pinned protocol source
+and tests directly. The review prompted exact-key signer acceptance, package
+text isolation from writer prompts, and stronger import/replay checks. The
+collaborator fork's new component-labeling feature at `5e2bba4` was reviewed
+for compatibility and deferred to a separate interface task; see
+[collaborator review](COLLABORATOR_REVIEW.md).
+
 ## 1.9.6 — Collaborator performance improvements
 
 Integrated compatible work from [hellonearthis](https://github.com/hellonearthis)'s fork commits `5b026e5` and `e6ef03e`: Windows model/projector discovery now scans GGUF files once, production child processes started by `JobContext` use UTF-8 mode, service probes reuse workers and validated launch commands, the color wheel reuses its rendered image, and unfinished-run listing uses directory entries for faster traversal. The run-size cache expires after five seconds because writes in nested folders do not update the run folder's mtime. The writer working-directory label now mentions llama.cpp while retaining its generic meaning for other local writers. Existing preview, start, paid consent, deletion confirmation and agent actions are unchanged.

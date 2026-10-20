@@ -321,11 +321,17 @@ def prepare(store, request, *, saved_prepared=None):
         from . import instruments, instrument_assets
         assignments = instruments.clean(request)
         if not replay_plans:
+            prop_ids, prop_uses = instruments.prop_options(request, assignments)
+            selected_props = {kind: instrument_assets.locate(store, kind, prop_id=prop_id,
+                              use=prop_uses.get(kind, '')) for kind, prop_id in prop_ids.items()}
             part_scores = instruments.cached_scores(store, digest, score_path, assignments,
                                                     request.get('stem_quality') or 'standard', request.get('score_edits'))
             instrument_plan = instruments.plan_passages(p.segments, casting, asdict(score), request, part_scores=part_scores)
             needed = dict.fromkeys(kind for passage in instrument_plan['passages'].values() for kind in passage['references'])
-            instrument_plan['assets'] = {kind: instrument_assets.locate(store, kind) for kind in needed}
+            if set(selected_props) - set(needed):
+                raise ValueError('Selected OPP prop has no active instrument reference in this plan')
+            instrument_plan['assets'] = {kind: selected_props.get(kind) or instrument_assets.locate(store, kind)
+                                         for kind in needed}
         if instrument_plan is None:
             raise ValueError('Saved run has no instrument plan; start a new preview')
         instruments.verify_assets(instrument_plan)
@@ -374,6 +380,8 @@ def fingerprint(store, request, prepared):
     digest = hashlib.sha256(json.dumps({'request': request, 'prepared': payload}, sort_keys=True).encode())
     files = list(prepared['references'])
     files.extend(Path(asset['path']) for asset in (prepared.get('instruments') or {}).get('assets', {}).values())
+    files.extend(Path(asset['bundle_path']) for asset in (prepared.get('instruments') or {}).get('assets', {}).values()
+                 if asset.get('bundle_path'))
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))
     for key in ('start_ident', 'end_ident'):
         if request.get(key): files.append(inside(store.home / 'runs', request[key]))

@@ -69,6 +69,11 @@ verify the assets appear in the app. Never import other local/private assets.
   discovery and mock transport tests current; preserve confirmation and
   paid-consent guards. Record any intentional agent-interface limitation in
   release documentation instead of silently leaving a GUI-only path.
+- Keep OPP package storage general to props. Its current production adapter may
+  select props for musical instruments, but do not constrain OPP IDs, tags or
+  package semantics to the four current instrument roles. Inspect, explicit
+  signer acceptance, local import, sheet selection, preview and replay checks
+  must remain available to agents as well as the GUI.
 - Keep contributor GitHub handles out of application labels, tooltips, notices
   and help text. Preserve contribution credit in contributor/review/release documentation.
 

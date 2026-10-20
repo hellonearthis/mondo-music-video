@@ -41,7 +41,7 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.9.6 exposes **39 tools** and advertises the
+v1.9.7 exposes **42 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -60,6 +60,21 @@ which shots changed. Wrong-instrument actions still require writer correction.
 ## Instrument-playing actors
 
 See [instrument performance](INSTRUMENTS.md). `inspect_studio(kind="instruments")` lists available sheets; `import_instrument` imports a user-selected sheet with license/provenance locally. Preview `instrument_mode: "perform"`, `instrument_assignments: {actor_id: "guitar"}` and optional `instrument_references` (true by default). Mode off preserves original prompts/fingerprints. Review passage activity and reference counts before consent. Private provenance never enters the writer job or demo receipts. Guitar/keyboard sheets are bundled; drums/bass sheets and operator render validation are pending.
+
+OPP v0.1 props are a separate, general local library. Upload a user-selected
+`.opp` with `upload_media(kind="opp")`, call `inspect_opp(filename)` to review
+the manifest and verification report, then call `import_opp(filename,
+accept_signer="PUBLIC_KEY_FROM_INSPECT")` for a signed package whose signer the user accepts. For
+an unsigned local draft, explicitly pass `allow_unsigned=true` to inspection
+and import. `inspect_studio(kind="props")` lists imported props, and
+`select_opp_sheet(prop_id, use)` previews the base or interaction sheet chosen
+for free-form use text. The CLI exposes `upload opp`, `inspect-opp`,
+`import-opp`, `props`, and `select-opp-sheet` equivalents. The current video
+request can use an imported prop for an assigned musical role with
+`instrument_props: {"guitar": "prop-id"}` and optional
+`instrument_prop_uses: {"guitar": "strumming strings"}`. OPP prop IDs and tags
+remain free-form; other prop uses are not wired into production yet. Review
+the chosen sheet and slot count in the quote, then use the usual start consent.
 
 ## Independent dance
 

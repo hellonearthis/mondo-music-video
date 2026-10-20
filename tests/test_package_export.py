@@ -26,6 +26,24 @@ def test_instrument_import_provenance_and_paths_stay_out_of_demo_receipts(tmp_pa
     assert 'private origin notes' in source.read_text()
 
 
+def test_private_opp_identity_and_bundle_paths_stay_out_of_demo_receipts(tmp_path):
+    pack = exporter.Package(tmp_path / 'out')
+    request = tmp_path / 'request.json'
+    request.write_text(json.dumps({'title': 'Demo', 'instrument_props': {'guitar': 'private-prop'},
+                                   'instrument_prop_uses': {'guitar': 'private technique'}}))
+    prepared = tmp_path / 'prepared.json'
+    prepared.write_text(json.dumps({'instruments': {'prop_ids': {'guitar': 'private-prop'},
+        'prop_uses': {'guitar': 'private technique'}, 'assets': {'guitar': {
+            'id': 'guitar', 'prop_id': 'private-prop', 'name': 'Private guitar',
+            'bundle_path': '/private/original.opp', 'bundle_sha256': 'bundle-hash',
+            'path': '/private/sheet.png', 'sha256': 'clean-hash'}}}}))
+    exported_request = pack.put(request, 'request.json').read_text()
+    exported_prepared = pack.put(prepared, 'prepared.json').read_text()
+    assert 'private-prop' not in exported_request + exported_prepared
+    assert '/private/' not in exported_prepared and 'private technique' not in exported_prepared
+    assert json.loads(exported_prepared)['instruments']['assets']['guitar']['sha256'] == 'clean-hash'
+
+
 def media(path, kind):
     path.parent.mkdir(parents=True, exist_ok=True)
     if FFMPEG and kind == 'mp4':
