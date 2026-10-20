@@ -1,5 +1,14 @@
 # Releases
 
+## 1.8.11 — Live prompt writer token usage and context tracking
+
+- Real-time token usage telemetry in Studio Operation Output:
+  - Added live prompt and generation token tracking in `mmv/worker.py` during musical passage and ident generation.
+  - Automatically captures HTTP completion payload metrics (`prompt_tokens`, `completion_tokens`, `total_tokens`, and generation speed `t/s`).
+  - Displays context window percentage utilization against the configured context allocation limit (e.g. `16,384`).
+  - Implemented non-intrusive stream interception in `worker.py` without touching the pinned files in `mmv/protected_scheme.py`.
+- Bumped application version to `1.8.11`.
+
 ## 1.8.10 — 16k context preservation and batch tuning in launcher
 
 - Launcher context and batch preservation (`start.ps1`):

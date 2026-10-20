@@ -136,12 +136,55 @@ def run(home, directory, *, resume=False):
     from .render import get_backend
     from .pipeline import ENGINE
     from .render import request_json
+    import urllib.request
+
+    ctx_size = 16384
+    if settings.get('writer_launch'):
+        try:
+            launch_args = json.loads(settings['writer_launch'])
+            for i in range(len(launch_args) - 1):
+                if launch_args[i] in ('-c', '--ctx-size'):
+                    parsed_ctx = int(launch_args[i + 1])
+                    if parsed_ctx >= 512:
+                        ctx_size = parsed_ctx
+                    break
+        except Exception:
+            pass
+
     def progress(message, value):
         print(message, flush=True)
         write_json(directory / 'progress.json', {'message': message, 'progress': value})
-    def llm(system, user):
-        ok, text, error = call_llm(None, system, user, .7, 4096, 900,
-                                   profile=(settings, store.key('MMV_WRITER_API_KEY')))
+    def llm(system, user, label=None):
+        captured = {}
+        orig_urlopen = urllib.request.urlopen
+
+        class _CaptureWrapper:
+            def __init__(self, resp):
+                self._r = resp
+            def read(self, *a, **kw):
+                data = self._r.read(*a, **kw)
+                try:
+                    d = json.loads(data.decode('utf-8'))
+                    if isinstance(d, dict):
+                        captured['usage'] = d.get('usage')
+                        captured['timings'] = d.get('timings')
+                except Exception:
+                    pass
+                return data
+            def __getattr__(self, name):
+                return getattr(self._r, name)
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return self._r.__exit__(*a)
+
+        try:
+            urllib.request.urlopen = lambda *a, **kw: _CaptureWrapper(orig_urlopen(*a, **kw))
+            ok, text, error = call_llm(None, system, user, .7, 4096, 900,
+                                       profile=(settings, store.key('MMV_WRITER_API_KEY')))
+        finally:
+            urllib.request.urlopen = orig_urlopen
+
         if not ok:
             mode = "local llama.cpp" if settings.get('writer_mode') == 'local' else "API writer"
             endpoint = runtime.safe_endpoint(settings.get('writer_url', ''))
@@ -151,6 +194,20 @@ def run(home, directory, *, resume=False):
             raise ValueError(f"Writer ({mode} at {endpoint}) failed: {error or 'Writer returned no output'}")
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"Writer ({settings.get('writer_model') or 'llama.cpp'}) returned empty text")
+
+        if captured.get('usage'):
+            usage = captured['usage']
+            p_tok = usage.get('prompt_tokens', 0)
+            c_tok = usage.get('completion_tokens', 0)
+            t_tok = usage.get('total_tokens', p_tok + c_tok)
+            timings = captured.get('timings') or {}
+            speed_str = ""
+            if timings.get('predicted_per_second'):
+                speed_str = f", {timings['predicted_per_second']:.0f} t/s"
+            pct_str = f" — {round((t_tok / ctx_size) * 100)}% context used" if ctx_size else ""
+            tag = f" {label}" if label else ""
+            print(f"   [tokens]{tag}: {p_tok:,} prompt + {c_tok:,} generated = {t_tok:,} total{pct_str}{speed_str}", flush=True)
+
         return text
     if request['kind'] == 'harvest':
         progress('Harvesting visual style with the original style contract', 10)
@@ -247,7 +304,7 @@ def run(home, directory, *, resume=False):
                     pass
             if plan.segments[0].segment_id not in prompts:
                 progress('Writing ident with the original ident prompt', 10)
-                raw = llm(system, message).strip()
+                raw = llm(system, message, label='ident').strip()
                 if raw.startswith('```'): raw = '\n'.join(raw.splitlines()[1:-1]).strip()
                 if request['title'] not in raw: raise ValueError('Ident writer omitted the exact requested title')
                 prompts[plan.segments[0].segment_id] = raw
@@ -339,10 +396,11 @@ def run(home, directory, *, resume=False):
                 compact = bool(request.get('compact_prompts'))
                 attempts = (4 if singing or dancing else 3) if settings['writer_mode'] == 'local' else 1
                 for attempt in range(attempts):
+                    tag = f"{seg.segment_id} (attempt {attempt + 1})" if attempt > 0 else seg.segment_id
                     if compact:
-                        raw = llm(seg_system, _compact_writer_job(job) + feedback)
+                        raw = llm(seg_system, _compact_writer_job(job) + feedback, label=tag)
                     else:
-                        raw = llm(seg_system + feedback, json.dumps(job, indent=2))
+                        raw = llm(seg_system + feedback, json.dumps(job, indent=2), label=tag)
                     (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
                     try:
                         response = WriterResponse.parse(raw, seg.segment_id)
