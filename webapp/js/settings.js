@@ -14,7 +14,7 @@ export const settingLabels = {
   comfy_input: "ComfyUI input folder (shared local path)",
   comfy_output: "ComfyUI output folder (shared local path)",
   writer_launch: "Local writer launch command (JSON arguments)",
-  writer_cwd: "Writer working folder",
+  writer_cwd: "LLama Directory",
   comfy_launch: "ComfyUI launch command (JSON arguments)",
   comfy_cwd: "ComfyUI working folder",
   render_timeout_minutes: "Wait per local clip, minutes (0 = no limit)",

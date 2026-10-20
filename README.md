@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.9.5** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.9.6** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -246,7 +246,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.9.5 MCP server has 39 tools, including prompt-retry previews, instrument-sheet import, API profile add/select/remove,
+The v1.9.6 MCP server has 39 tools, including prompt-retry previews, instrument-sheet import, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 

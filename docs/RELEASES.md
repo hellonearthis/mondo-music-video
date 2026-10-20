@@ -1,5 +1,10 @@
 # Releases
 
+## 1.9.6 — LLama directory settings label
+
+- Renamed the `writer_cwd` setting label in the Studio Settings interface from "Writer working folder" to "LLama Directory", matching launcher and operator conventions for configuring `llama-server.exe` working directories.
+- Bumped application version to 1.9.6 across package manifests, README, agent endpoints, and test suites.
+
 ## 1.9.5 — Bounded instrument action repair
 
 For opted-in instrument performances, a clearly attributed but vague guitar action such as “strikes the guitar” can be corrected to explicit string and fret contact before the normal prompt, motion and Laya checks. The original writer response remains in the run record, and a small repair receipt lists the edited shots. Wrong-instrument gestures, lyrics and ambiguous attribution stay with the writer for correction. Retry feedback names the failing actor and shot, gives a physically specific example, and asks the writer to preserve the other shots. Passage lengths, protected core prompting and paid retry limits remain unchanged.
