@@ -22,8 +22,9 @@ TEXT = ('.json', '.txt', '.md', '.log')
 SKIP_NAMES = ('api-profiles.json', 'settings.json')
 SECRET_NAME = re.compile(r'key|token|secret', re.I)
 KEYWORD = r'(?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token|token|secret|password|authorization)'
-HOME = re.compile(r'(?:/home|/Users)/[^/\s"\'\\:,;)\]]+')
+HOME = re.compile(r'(?:[A-Za-z]:[\\/]|/)?(?:home|Users)[\\/][^/\s"\'\\:,;)\]]+')
 JSON_SECRET = re.compile(r'("[^"\n]*' + KEYWORD + r'[^"\n]*"\s*:\s*")([^"\n]{8,})(")', re.I)
+
 ASSIGN_SECRET = re.compile(r'(\b[\w-]*' + KEYWORD + r'[\w-]*\s*[=:]\s*[\'"]?)([A-Za-z0-9._~+/=-]{12,})', re.I)
 NEAR_TOKEN = re.compile(r'(' + KEYWORD + r'.{0,20}?)([A-Fa-f0-9]{32,}|[A-Za-z0-9+/_-]{40,}={0,2})', re.I)
 PLAIN_SECRET = (re.compile(r'\bsk-[A-Za-z0-9_-]{16,}'), re.compile(r'\bBearer\s+[A-Za-z0-9._~+/=-]{12,}', re.I))

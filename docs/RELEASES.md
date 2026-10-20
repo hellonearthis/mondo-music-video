@@ -1,5 +1,17 @@
 # Releases
 
+## 1.8.9 — Fork integration: style portability, offline-engine guard, run manager
+
+- Version 1.8.9 deliberately skips past the fork's own 1.8.6–1.8.8 tags so the same number never names different code.
+- Integrates hellonearthis's fork contributions `63f4826` through `73cbd4b` (reviewed in the [review record](COLLABORATOR_REVIEW.md)).
+- **Styles:** export a style as JSON, import one (overwrite only when explicitly requested), duplicate a style, and preview the 11-axis style card. New `export_style` and `import_style` agent client methods, CLI commands and MCP tools (35 tools).
+- **Offline-engine guard:** quoting and starting a production report a missing prompt writer, renderer, Laya reviewer or vision service in plain words before any work starts; the web app disables Start while one is offline. A configured launch command still counts as startable.
+- **Run manager:** unfinished drafts and interrupted runs can be listed, resumed (local or Comfy SDK productions) or purged; finished videos can be deleted after a confirmation dialog. Added by us: runs that hold rendered clips are never removed by "purge all", and a single purge of such a run needs explicit confirmation, because those clips may already be paid for.
+- **Faster, simpler UI:** service probes run in parallel; the vocabulary, library, outputs and settings modules use pure template functions; the vocabulary summary cards render when the summary is opened.
+- Package export also redacts Windows-style home paths.
+- **Local render wait:** a hung ComfyUI no longer freezes a run silently. The wait per local clip is now a setting (`render_timeout_minutes`, default 120, shown in Settings); 0 keeps the old unlimited wait for testing. This replaces the unlimited default from 1.8.4 and adopts the fork's two-hour default from `eeab8c0`.
+- Protected prompts and pins are unchanged.
+
 ## 1.8.5 — Distinct independent dance movements
 
 - Independent mode assigns contrasting bounce, lateral-step and torso-rotation

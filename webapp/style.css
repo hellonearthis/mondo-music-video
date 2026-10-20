@@ -86,6 +86,15 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 /* Card Activity States */
 .service-card.card-processing{border-color:#86efac;background:#fcfffa}
 .service-card.card-missing{border-color:#fcd34d}
+.service-card.card-offline-needed{border-color:#f43f5e!important;background:#fff1f2!important;animation:pulse-offline 2s infinite ease-in-out}
+
+/* Service Alert Banner in Dialogs */
+.service-alert-banner{background:#fff1f2;border:1px solid #fecdd3;border-left:4px solid #e11d48;border-radius:4px;padding:12px 14px;margin-bottom:14px;color:#9f1239}
+.service-alert-header{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;margin-bottom:6px;color:#be123c}
+.service-alert-icon{font-size:15px;line-height:1}
+.service-alert-list{margin:4px 0 8px 18px;padding:0;font-size:11.5px;line-height:1.6}
+.service-alert-list li{margin-bottom:4px}
+.service-alert-foot{font-size:11px;line-height:1.5;margin:4px 0 0;color:#881337}
 
 /* Dark Mode Overrides for Service Dock */
 [data-theme=dark] .service-dock{background:#17221c;border-color:var(--line)}
@@ -94,6 +103,11 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 [data-theme=dark] .service-card{background:#1b2620;border-color:var(--line)}
 [data-theme=dark] .service-card.card-processing{border-color:#3d7052;background:#18281f}
 [data-theme=dark] .service-card.card-missing{border-color:#70592b}
+[data-theme=dark] .service-card.card-offline-needed{border-color:#e11d48!important;background:#2a1215!important}
+[data-theme=dark] .service-alert-banner{background:#2a1215;border-color:#4c1d24;border-left-color:#f43f5e;color:#fecdd3}
+[data-theme=dark] .service-alert-header{color:#fda4af}
+[data-theme=dark] .service-alert-foot{color:#fca5a5}
+@keyframes pulse-offline{0%,100%{box-shadow:0 0 0 0 rgba(225,29,72,.4)}50%{box-shadow:0 0 0 6px rgba(225,29,72,0)}}
 [data-theme=dark] .badge-processing{background:#1b3823;color:#86efac;border-color:#2a5736}
 [data-theme=dark] .badge-sleeping{background:#223328;color:#b2cdbb;border-color:#354d3e}
 [data-theme=dark] .badge-missing{background:#3d2f14;color:#fcd34d;border-color:#6c5424}
@@ -131,8 +145,9 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 .vocab-filter-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .vocab-filter-toolbar input{margin-top:0!important;flex:1;min-width:200px;padding:8px 10px}
 .vocab-filter-buttons{display:flex;gap:10px}
-.vocab-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 10px;max-height:200px;overflow-y:auto;padding:8px;background:#f9faf6;border:1px solid var(--line);border-radius:4px}
-.vocab-item-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:400;margin-bottom:0;user-select:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vocab-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 10px;max-height:260px;overflow-y:auto;padding:8px;background:#f9faf6;border:1px solid var(--line);border-radius:4px;contain:paint layout}
+.vocab-item-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:400;margin-bottom:0;user-select:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;contain:paint}
+
 .vocab-item-label input{margin-top:0;accent-color:var(--green);flex-shrink:0}
 .vocab-custom-section{margin-top:4px}
 .vocab-custom-section label{margin-bottom:0}
@@ -428,6 +443,7 @@ button[aria-busy="true"], button.processing {
 [data-theme=dark] .vocab-chip-more {
   background: rgba(255, 255, 255, 0.05);
 }
+[data-theme=dark] .vocab-chip-more:hover { background: #354e3e; color: var(--lime); }
 [data-theme=dark] .vocab-random-quick-bar {
   background: #1f2e25;
   border-color: #354e3e;
@@ -551,3 +567,65 @@ button[aria-busy="true"], button.processing {
 }
 
 [data-theme=dark] .vocab-chip-more:hover { background: #354e3e; color: var(--lime); }
+/* Output Card Actions Row */
+.output-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.output-actions .secondary {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 4px;
+  border: 1px solid #c8d4b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.output-actions .secondary:hover {
+  background: #d8e4c7;
+  border-color: #b2c29e;
+}
+[data-theme=dark] .output-actions .secondary {
+  border-color: #506b4b;
+}
+[data-theme=dark] .output-actions .secondary:hover {
+  background: #38533f;
+  border-color: #729568;
+}
+.output-actions .delete-btn {
+  margin-left: auto;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: #b91c1c;
+  border: 1px solid #f87171;
+  transition: all 0.15s ease;
+}
+.output-actions .delete-btn:hover {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #ef4444;
+}
+[data-theme=dark] .output-actions .delete-btn {
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+[data-theme=dark] .output-actions .delete-btn:hover {
+  background: #450a0a;
+  color: #fecaca;
+  border-color: #b91c1c;
+}
+
+

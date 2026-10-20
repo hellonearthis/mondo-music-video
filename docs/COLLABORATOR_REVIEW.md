@@ -1,5 +1,23 @@
 # Collaborator review record
 
+## October 20, 2026 — fork integration, head 73cbd4b (release 1.8.9)
+
+Reviewed an isolated clone of `hellonearthis/mondo-music-video` at exact revision `73cbd4b`, following last reviewed
+head `1704454` (1.8.1). New contribution commits: `63f4826`, `8b70f0a`, `bff3b9e`, `183eeb8`, `312b0c3`, `eeab8c0`, `73cbd4b`.
+Their changes were three-way merged (base `1704454`, ours 1.8.5, theirs `73cbd4b`); conflicts were version strings, markup and the vocabulary module.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Style export/import/duplicate (`73cbd4b`) | Adopted. Id pattern, size bounds and overwrite opt-in are enforced by the request models; agent client, CLI, MCP and skill coverage included. The release note's "four-layer validation" is a description of those checks, not a separate validator. |
+| Offline-engine guard (`bff3b9e`) | Adopted. It probes at quote and start and blocks only when the service is down and has no launch command. Resumes skip the writer and Laya checks. |
+| Unfinished-run manager, output deletion (`63f4826`, `8b70f0a`) | Adopted with a fix: "purge all" could delete interrupted runs that hold already-rendered, possibly paid clips. Those are now kept and need a one-at-a-time confirmation. Regression tests in `tests/test_unfinished_runs.py`. Local productions can now be resumed from the manager. |
+| Parallel probes, memoized UI, functional modules (`312b0c3`, `8b70f0a`) | Adopted. The stated "up to 65%" latency figure was not measured here. One of our browser tests assumed eagerly rendered vocabulary cards; it now opens the summary first. |
+| Render timeout (`eeab8c0`) | Already fixed independently in 1.8.4. At the owner's decision the unlimited default was replaced by the fork's two-hour default, exposed as the `render_timeout_minutes` setting (0 = unlimited). |
+| Home-path redaction in package export | Adopted. The pattern has no word boundary, so it may redact slightly more than a real path; that errs toward privacy. |
+| Upstream merge `183eeb8` | Nothing to adopt; it re-applies our 1.8.2. |
+
+No paid, GPU or Topaz work was run; no private assets were imported; no commit, push or message to the collaborator.
+
 ## October 19, 2026 — independent dance differentiation (1.8.5)
 
 At the owner's request Claude Code reviewed the repair read-only (CLI-reported

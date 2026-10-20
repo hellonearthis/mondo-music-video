@@ -125,9 +125,19 @@ def create_server(base_url=None):
         return invoke(client.create_actor, actor_id, name, description, reference_path)
 
     @server.tool()
-    def create_style(style_id: str, name: str, direction: str) -> dict[str, Any]:
+    def create_style(style_id: str, name: str, direction: str, style_card: str = "") -> dict[str, Any]:
         """Save a new visual style; use preview_production for vision-based style harvesting."""
-        return invoke(client.create_style, style_id, name, direction)
+        return invoke(client.create_style, style_id, name, direction, style_card or None)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def export_style(style_id: str) -> dict[str, Any]:
+        """Download or read a visual style card as JSON."""
+        return invoke(client.export_style, style_id)
+
+    @server.tool()
+    def import_style(style_id: str, name: str, direction: str, style_card: str = "", overwrite: bool = False) -> dict[str, Any]:
+        """Import a visual style card into local styles. ID must be alphanumeric/dashes/underscores. Overwrite requires explicit opt-in."""
+        return invoke(client.import_style, style_id, name, direction, style_card or None, overwrite)
 
     @server.tool()
     def save_vocabulary_preset(vocab_id: str, name: str, tables: dict, description: str = "",

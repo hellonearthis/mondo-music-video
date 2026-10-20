@@ -258,7 +258,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.5')
+                expect(page.locator('#version')).to_have_text('1.8.9')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -349,6 +349,8 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.goto(self.url)
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 expect(page.locator('#panel-vocab')).to_be_visible()
+                # Summary cards render lazily, when the collapsed summary is first opened.
+                page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 card = page.locator('.vocab-summary-cat-card[data-category=settings]')
                 expect(card).to_contain_text('Workspace fixture')
                 # Edits to one card preserve the other cards and remain stable after opening.
@@ -366,6 +368,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, True, False])
                 page.locator('.nav[data-panel=vocab]').click()
+                page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
                 self.assertEqual(errors, [])
             finally:
@@ -790,7 +793,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.5')
+                expect(page.locator('#version')).to_have_text('1.8.9')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

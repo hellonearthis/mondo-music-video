@@ -380,6 +380,18 @@ class PublicAppTests(unittest.TestCase):
         finally:
             backend.close_render()
 
+    def test_local_h3_timeout_none_defaults_to_float(self):
+        backend = render.get_backend('local_h3')
+        from mmv.pipeline import ENGINE
+        from mmv.engine.comfy import ComfyClient
+        with tempfile.TemporaryDirectory() as tmp, patch.object(ComfyClient, 'is_up', return_value=True):
+            backend.open_render(slug='slug', out_dir=Path(tmp) / 'renders',
+                                map_path=ENGINE / 'config/injection_map.json', root=ENGINE,
+                                timeout_s=None, comfy_host='127.0.0.1', comfy_port=8188,
+                                comfy_input=Path(tmp) / 'in', comfy_output=Path(tmp) / 'out')
+            self.assertEqual(backend._timeout, 7200.0)
+            self.assertIsInstance(backend._timeout, float)
+
     @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
     def test_sdk_rejects_followup_links_to_another_origin(self):
         from mmv.comfy_sdk import SdkSession
@@ -401,16 +413,16 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.5")
+        self.assertEqual(api_version()["version"], "1.8.9")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.5", (root / "README.md").read_text())
+        self.assertIn("1.8.9", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
         app_res = self.client.get("/app.js")
         self.assertEqual(app_res.status_code, 200)
         self.assertIn("text/javascript", app_res.headers["content-type"])
-        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocabulary.js"):
+        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocab-model.js", "vocabulary.js"):
             res = self.client.get(f"/js/{mod}")
             self.assertEqual(res.status_code, 200, mod)
             self.assertIn("text/javascript", res.headers["content-type"])
@@ -483,6 +495,48 @@ class PublicAppTests(unittest.TestCase):
         laya_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Laya reviewing passage 2"})
         self.assertEqual(laya_eval["laya"]["activity"], "processing")
         self.assertEqual(laya_eval["comfy"]["activity"], "sleeping")
+
+    def test_offline_engines_guard_and_quote_reporting(self):
+        original_settings = self.store.settings()
+        # 1. Video request with offline writer
+        bad_settings = {**original_settings, "writer_url": "http://127.0.0.1:9999", "writer_launch": ""}
+        save_settings(self.store, bad_settings)
+        req = {"kind": "video", "backend": "local_h3", "song": self.song_upload()}
+        quote_res = self.client.post("/api/quote", json=req)
+        self.assertEqual(quote_res.status_code, 200)
+        quote_data = quote_res.json()
+        self.assertIn("offline_engines", quote_data)
+        self.assertTrue(any("Prompt Writer" in err for err in quote_data["offline_engines"]))
+
+        # Attempting to start with offline writer must be blocked with HTTP 400
+        start_res = self.client.post("/api/start", json={"quote_id": quote_data["id"], "consent": True})
+        self.assertEqual(start_res.status_code, 400)
+        self.assertIn("Prompt Writer", start_res.json()["detail"])
+
+        # 2. Offline ComfyUI
+        bad_comfy = {**original_settings, "comfy_url": "http://127.0.0.1:9998", "comfy_launch": ""}
+        save_settings(self.store, bad_comfy)
+        quote_res2 = self.client.post("/api/quote", json=req)
+        quote_data2 = quote_res2.json()
+        self.assertTrue(any("ComfyUI" in err for err in quote_data2["offline_engines"]))
+        start_res2 = self.client.post("/api/start", json={"quote_id": quote_data2["id"], "consent": True})
+        self.assertEqual(start_res2.status_code, 400)
+        self.assertIn("ComfyUI", start_res2.json()["detail"])
+
+        # 3. Harvest with offline Vision
+        bad_vision = {**original_settings, "vision_url": "http://127.0.0.1:9997"}
+        save_settings(self.store, bad_vision)
+        ref_res = self.client.post("/api/upload/reference", files={"file": ("test.png", picture(), "image/png")})
+        harvest_req = {"kind": "harvest", "style_id": "test_style", "references": [ref_res.json()["file"]]}
+        quote_h = self.client.post("/api/quote", json=harvest_req)
+        quote_h_data = quote_h.json()
+        self.assertTrue(any("Vision" in err for err in quote_h_data["offline_engines"]))
+        start_h = self.client.post("/api/start", json={"quote_id": quote_h_data["id"], "consent": True})
+        self.assertEqual(start_h.status_code, 400)
+        self.assertIn("Vision", start_h.json()["detail"])
+
+        # Restore original settings
+        save_settings(self.store, original_settings)
 
     def test_project_persistence_api(self):
         project = {
@@ -884,8 +938,8 @@ class PublicAppTests(unittest.TestCase):
         status = self.wait()
         self.assertEqual(status['state'], 'complete', status)
         run = self.home / 'runs' / started.json()['id']
-        self.assertIn('This passage contains singing', (run / 'writer_system_singing.md').read_text())
-        self.assertNotIn('This passage contains singing', (run / 'writer_system.md').read_text())
+        self.assertIn('This passage contains singing', (run / 'writer_system_singing.md').read_text(encoding="utf-8"))
+        self.assertNotIn('This passage contains singing', (run / 'writer_system.md').read_text(encoding="utf-8"))
         job = read_json(run / 'writer_jobs' / 'seg000.json')
         self.assertEqual(job['cast'][0]['lines'], ['Interdimensional lover'])
         self.assertEqual(job['singing']['actor_id'], 'blue')
@@ -921,7 +975,8 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(status['state'], 'complete', status)
         result = status['result']
         package = Path(result['path'])
-        self.assertEqual(package.parent, self.home / 'exports')
+        self.assertEqual(package.parent.resolve(), (self.home / 'exports').resolve())
+
         self.assertRegex(package.name, r'^[A-Za-z0-9_]+_\d{4}-\d\d-\d\d_\d{4}$')           # title and date-time, not a random id
         self.assertEqual(result['private_actors'], ['blue'])
         self.assertTrue(Path(result['zip']).is_file())
@@ -1601,6 +1656,100 @@ class UtilityTests(unittest.TestCase):
             self.assertEqual(data.get("vocab_random_key"), "482910:5")
             self.assertEqual(data.get("forms", {}).get("video", {}).get("title"), "Neon Dreams")
             self.assertIn("lighting", data.get("custom_vocabulary", {}))
+
+    def test_style_export_import_and_validation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            app = create_app(store.home, test_hosts=True)
+            client = TestClient(app)
+
+            # Create an initial style with an 11-axis style card
+            create_payload = {
+                "id": "cyberpunk_neon",
+                "name": "Cyberpunk Neon",
+                "direction": "High contrast neon cyan and magenta lighting with heavy film grain.",
+                "style_card": "Color Palette: Neon cyan, magenta\nLighting: Hard directional neon\nCamera: Anamorphic lens flare",
+            }
+            res = client.post("/api/styles", json=create_payload)
+            self.assertEqual(res.status_code, 200)
+            created = res.json()
+            self.assertEqual(created["id"], "cyberpunk_neon")
+            self.assertEqual(created["style_card"], create_payload["style_card"])
+
+            # Export style
+            export_res = client.get("/api/styles/cyberpunk_neon/export")
+            self.assertEqual(export_res.status_code, 200)
+            self.assertIn("application/json", export_res.headers["content-type"])
+            self.assertIn("cyberpunk_neon.json", export_res.headers.get("content-disposition", ""))
+            exported_data = export_res.json()
+            self.assertEqual(exported_data["id"], "cyberpunk_neon")
+            self.assertEqual(exported_data["name"], "Cyberpunk Neon")
+            self.assertEqual(exported_data["style_card"], create_payload["style_card"])
+
+            # Export nonexistent style
+            self.assertEqual(client.get("/api/styles/missing_style/export").status_code, 400)
+
+            # Import existing style without overwrite -> should fail 400
+            import_collision = {
+                "id": "cyberpunk_neon",
+                "name": "Cyberpunk Collision",
+                "direction": "Attempting overwrite without flag.",
+                "overwrite": False,
+            }
+            res_coll = client.post("/api/styles/import", json=import_collision)
+            self.assertEqual(res_coll.status_code, 400)
+            self.assertIn("already exists", res_coll.json()["detail"])
+
+            # Import existing style with overwrite=True -> succeeds and updates
+            import_overwrite = {
+                "id": "cyberpunk_neon",
+                "name": "Cyberpunk 2099",
+                "direction": "Updated rain-slicked concrete aesthetic.",
+                "style_card": "Axis 1: Rain-slicked reflections",
+                "overwrite": True,
+            }
+            res_over = client.post("/api/styles/import", json=import_overwrite)
+            self.assertEqual(res_over.status_code, 200)
+            self.assertEqual(res_over.json()["name"], "Cyberpunk 2099")
+
+            # Verify exported version matches updated data
+            updated_export = client.get("/api/styles/cyberpunk_neon/export").json()
+            self.assertEqual(updated_export["name"], "Cyberpunk 2099")
+            self.assertEqual(updated_export["style_card"], "Axis 1: Rain-slicked reflections")
+            self.assertNotIn("overwrite", updated_export)
+
+            # Import new style
+            import_new = {
+                "id": "vintage_sepia",
+                "name": "Vintage Sepia",
+                "direction": "1920s orthochromatic film look with warm sepia toning.",
+                "overwrite": False,
+            }
+            res_new = client.post("/api/styles/import", json=import_new)
+            self.assertEqual(res_new.status_code, 200)
+
+            # Style list contains both
+            styles_list = client.get("/api/styles").json()
+            ids = [s["id"] for s in styles_list]
+            self.assertIn("cyberpunk_neon", ids)
+            self.assertIn("vintage_sepia", ids)
+
+            # Validation failures:
+            # 1. Invalid ID pattern
+            bad_id = {"id": "Invalid ID!", "name": "Bad", "direction": "Some text"}
+            self.assertEqual(client.post("/api/styles/import", json=bad_id).status_code, 422)
+
+            # 2. Path traversal attempt in ID
+            traversal_id = {"id": "../traversal", "name": "Bad", "direction": "Some text"}
+            self.assertEqual(client.post("/api/styles/import", json=traversal_id).status_code, 422)
+
+            # 3. Empty direction
+            empty_dir = {"id": "valid_id", "name": "Valid", "direction": ""}
+            self.assertEqual(client.post("/api/styles/import", json=empty_dir).status_code, 422)
+
+            # 4. Undeclared fields (StrictModel enforcement)
+            extra_field = {"id": "valid_id_2", "name": "Valid", "direction": "Look", "hack": 123}
+            self.assertEqual(client.post("/api/styles/import", json=extra_field).status_code, 422)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """Live service health, availability and processing activity probe for Mondo."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import time
 import urllib.error
@@ -26,12 +27,7 @@ def check_services(store, active_job=None, force: bool = False) -> dict:
     return _evaluate_service_activity(store, _cached_probe_results, active_job)
 
 
-def _probe_raw_services(store) -> dict:
-    settings = store.settings()
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    results = {}
-
-    # 1. ComfyUI
+def _probe_comfy(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     comfy_url = (settings.get("comfy_url") or "").rstrip("/")
     comfy = {
         "url": comfy_url,
@@ -40,6 +36,7 @@ def _probe_raw_services(store) -> dict:
         "queue_running": 0,
         "queue_pending": 0,
         "backend": settings.get("backend", "local_h3"),
+        "has_launch": bool(settings.get("comfy_launch")),
         "error": None,
     }
     if comfy_url:
@@ -67,9 +64,10 @@ def _probe_raw_services(store) -> dict:
         except Exception as exc:
             comfy["available"] = False
             comfy["error"] = str(exc)
-    results["comfy"] = comfy
+    return comfy
 
-    # 2. llama.cpp / Writer
+
+def _probe_writer(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     writer_mode = settings.get("writer_mode", "local")
     writer_url = (settings.get("writer_url") or "").rstrip("/")
     writer_model = settings.get("writer_model") or ""
@@ -79,6 +77,7 @@ def _probe_raw_services(store) -> dict:
         "model": writer_model,
         "available": False,
         "slots_processing": 0,
+        "has_launch": bool(settings.get("writer_launch")),
         "error": None,
     }
     if writer_mode == "api":
@@ -100,9 +99,10 @@ def _probe_raw_services(store) -> dict:
         except Exception as exc:
             writer["available"] = False
             writer["error"] = str(exc)
-    results["writer"] = writer
+    return writer
 
-    # 3. Laya Semantic Validator
+
+def _probe_laya(settings: dict) -> dict:
     laya_dir_str = settings.get("laya_model_dir") or ""
     laya_dir = Path(laya_dir_str).expanduser() if laya_dir_str else None
     laya_device = settings.get("laya_device", "cuda")
@@ -112,13 +112,14 @@ def _probe_raw_services(store) -> dict:
             (laya_dir / name).exists()
             for name in ("model.safetensors", "rl_agent_config.json", "tokenizer", "encoder/config.json")
         )
-    results["laya"] = {
+    return {
         "model_dir": str(laya_dir) if laya_dir else "",
         "device": laya_device,
         "available": laya_staged,
     }
 
-    # 4. Vision Service
+
+def _probe_vision(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     vision_url = (settings.get("vision_url") or "").rstrip("/")
     vision_model = settings.get("vision_model") or ""
     vision = {
@@ -128,21 +129,50 @@ def _probe_raw_services(store) -> dict:
         "error": None,
     }
     if vision_url:
-        if vision_url == writer_url and writer_mode == "local":
-            vision["available"] = writer["available"]
-            vision["error"] = writer["error"]
-        else:
-            try:
-                req = urllib.request.Request(f"{vision_url}/models", headers={"Accept": "application/json"})
-                with opener.open(req, timeout=0.3) as resp:
-                    if resp.status == 200:
-                        vision["available"] = True
-            except Exception as exc:
-                vision["available"] = False
-                vision["error"] = str(exc)
-    results["vision"] = vision
+        try:
+            req = urllib.request.Request(f"{vision_url}/models", headers={"Accept": "application/json"})
+            with opener.open(req, timeout=0.3) as resp:
+                if resp.status == 200:
+                    vision["available"] = True
+        except Exception as exc:
+            vision["available"] = False
+            vision["error"] = str(exc)
+    return vision
 
-    return results
+
+def _probe_raw_services(store) -> dict:
+    settings = store.settings()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    writer_url = (settings.get("writer_url") or "").rstrip("/")
+    vision_url = (settings.get("vision_url") or "").rstrip("/")
+    writer_mode = settings.get("writer_mode", "local")
+    shared_vision = bool(vision_url and vision_url == writer_url and writer_mode == "local")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        f_comfy = executor.submit(_probe_comfy, settings, opener)
+        f_writer = executor.submit(_probe_writer, settings, opener)
+        f_vision = None if shared_vision else executor.submit(_probe_vision, settings, opener)
+
+        comfy = f_comfy.result()
+        writer = f_writer.result()
+        if shared_vision:
+            vision = {
+                "url": vision_url,
+                "model": settings.get("vision_model") or "",
+                "available": writer["available"],
+                "error": writer["error"],
+            }
+        else:
+            vision = f_vision.result()
+
+    laya = _probe_laya(settings)
+    return {
+        "comfy": comfy,
+        "writer": writer,
+        "laya": laya,
+        "vision": vision,
+    }
 
 
 def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
@@ -174,6 +204,7 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "role": "Video Renderer",
         "url": comfy_raw.get("url", ""),
         "available": comfy_avail,
+        "has_launch": bool(comfy_raw.get("has_launch")),
         "activity": comfy_activity,
         "detail": comfy_detail,
         "device": comfy_raw.get("device", ""),
@@ -211,6 +242,7 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "role": "Prompt Writer",
         "url": writer_raw.get("url", ""),
         "available": writer_avail,
+        "has_launch": bool(writer_raw.get("has_launch")),
         "activity": writer_activity,
         "detail": writer_detail,
         "model": writer_model,
@@ -276,3 +308,79 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "laya": laya_status,
         "vision": vision_status,
     }
+
+
+def check_required_services(store, request: dict, resume: bool = False) -> list[str]:
+    """Verify that all engines required for the requested production are available.
+
+    Returns a list of human-readable error messages explaining which engine is offline
+    and how to start or configure it. Returns empty list if all required engines are ready.
+    """
+    services = check_services(store, force=True)
+    kind = request.get("kind", "video")
+    backend = request.get("backend", "local_h3")
+    errors = []
+
+    if kind == "harvest":
+        vision = services.get("vision", {})
+        if not vision.get("available"):
+            endpoint = vision.get("url") or "unconfigured"
+            errors.append(
+                f"Vision engine is offline or unreachable ({endpoint}). "
+                "Multimodal style harvesting requires a running vision model or API configuration in Settings."
+            )
+        return errors
+
+    # Video and ident need Prompt Writer (unless resuming)
+    if not resume:
+        writer = services.get("writer", {})
+        if not writer.get("available") and not writer.get("has_launch"):
+            mode = writer.get("mode", "local")
+            endpoint = writer.get("url") or "unconfigured"
+            if mode == "local":
+                errors.append(
+                    f"Prompt Writer (llama.cpp) is offline at {endpoint}. "
+                    "Production cannot generate passage prompts without it. "
+                    "Please start llama-server or configure writer_launch in Settings."
+                )
+            else:
+                errors.append(
+                    f"Prompt Writer API is offline or unconfigured at {endpoint}. "
+                    "Production cannot generate passage prompts without it. "
+                    "Please configure a valid API key and model in Settings."
+                )
+
+    # Video needs Laya prompt reviewer (unless resuming)
+    if kind == "video" and not resume:
+        laya = services.get("laya", {})
+        if not laya.get("available"):
+            errors.append(
+                "Laya prompt reviewer models are missing or incomplete. "
+                "Stage the required model files (model.safetensors, rl_agent_config.json, tokenizer, encoder/config.json) "
+                "or configure laya_model_dir in Settings before starting production."
+            )
+
+    # ComfyUI is needed for local_h3 backend
+    if backend == "local_h3":
+        comfy = services.get("comfy", {})
+        if not comfy.get("available") and not comfy.get("has_launch"):
+            endpoint = comfy.get("url") or "unconfigured"
+            errors.append(
+                f"ComfyUI video renderer is offline at {endpoint}. "
+                "Production cannot render clips without it. "
+                "Please start ComfyUI or configure comfy_launch in Settings."
+            )
+
+    # Multimodal Vision quality check if requested
+    if request.get("vision_quality_check"):
+        vision = services.get("vision", {})
+        if not vision.get("available"):
+            endpoint = vision.get("url") or "unconfigured"
+            errors.append(
+                f"Vision engine is offline at {endpoint}. "
+                "Vision quality checking is enabled but the multimodal vision model is offline. "
+                "Please start your vision model or disable Vision quality check."
+            )
+
+    return errors
+
