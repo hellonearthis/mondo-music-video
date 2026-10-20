@@ -14,7 +14,7 @@ def run(script, home, *args):
 
 class StartScriptTests(unittest.TestCase):
     def test_scripts_parse(self):
-        for name in ('start.sh', 'stop.sh'):
+        for name in ('start.sh', 'stop.sh', 'start.command', 'stop.command'):
             self.assertEqual(subprocess.run(['bash', '-n', str(ROOT / name)]).returncode, 0, name)
 
     def test_stop_without_a_pid_file_says_how_to_stop_and_fails(self):
@@ -49,3 +49,16 @@ class StartScriptTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PortabilityTests(unittest.TestCase):
+    def test_scripts_avoid_linux_only_and_bash4_only_constructs(self):
+        text = (ROOT / 'start.sh').read_text() + (ROOT / 'stop.sh').read_text()
+        self.assertNotIn('/proc/', text)                          # macOS has no /proc
+        import re
+        for array in ('MMV_ARGS', 'MMV_DATA'):                     # bash 3.2 treats a bare empty array as unset under set -u
+            self.assertIsNone(re.search(r'(?<!\+)"\$\{' + array + r'\[@\]\}"', text), array)
+            self.assertIn('${' + array + '[@]+"${' + array + '[@]}"}', text)
+        self.assertIn('Library/Application Support', text)       # the app's data folder on a Mac
+        for name in ('start.command', 'stop.command'):
+            self.assertTrue(os.access(ROOT / name, os.X_OK), name)

@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.8.13"
+MGL_APP_VERSION = "1.8.14"
 WEB = Path(__file__).parent
 
 
@@ -250,6 +250,9 @@ class CaptionSettings(StrictModel):
     style: Literal["classic", "bold", "neon", "box"] = "classic"
     position: Literal["bottom", "middle", "top"] = "bottom"
     size: Literal["small", "medium", "large"] = "medium"
+    color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    outline_color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    font: str = Field(default="", max_length=40, pattern=r"^([A-Za-z0-9][A-Za-z0-9 ._+-]*)?$")
 
 
 class ProductionRequest(StrictModel):
@@ -476,6 +479,9 @@ class CaptionVideoRequest(StrictModel):
     style: Literal["classic", "bold", "neon", "box"] = "classic"
     position: Literal["bottom", "middle", "top"] = "bottom"
     size: Literal["small", "medium", "large"] = "medium"
+    color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    outline_color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    font: str = Field(default="", max_length=40, pattern=r"^([A-Za-z0-9][A-Za-z0-9 ._+-]*)?$")
     lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
 
 
@@ -1487,12 +1493,17 @@ def create_app(home=None, *, test_hosts=False):
             return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context),
                               run_id=job_run_id(store, "upscale", title))
 
+    @app.get("/api/captions/fonts")
+    def caption_fonts():
+        from mmv import captions
+        return {"fonts": list(captions.installed_fonts())}
+
     @app.post("/api/captions")
     def caption_video(value: CaptionVideoRequest):
         from mmv import captions
         with jobs.lock:
             jobs.require_idle()
-            looks = value.model_dump(include={"style", "position", "size"})
+            looks = value.model_dump(include={"style", "position", "size", "color", "outline_color", "font"})
             return jobs.start("captions", lambda context: captions.caption_finished(
                 store, value.source, [line.model_dump(exclude_none=True) for line in value.lyric_lines], context, looks),
                 run_id=captions.run_name(store, value.source, looks))

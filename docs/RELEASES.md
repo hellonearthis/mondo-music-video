@@ -1,5 +1,16 @@
 # Releases
 
+## 1.8.14 — Custom caption colours and fonts
+
+Joint Claude Code and Codex work: the backend was written and tested by Claude Code, the browser controls by Codex in an isolated worktree, and the diff was reviewed and integrated by Claude Code.
+
+- Burned captions can use your own **text colour** and **outline / glow colour** (`#rrggbb`) and any **installed font**. Blank keeps the chosen style's own colours and the default font, so nothing changes unless you ask. A box style keeps its see-through panel when you recolour it, and neon's glow follows the outline colour.
+- Fonts must really be installed where the app runs (`fc-list`): a missing font is refused with a clear message, because FFmpeg would otherwise silently draw another one. Font names and colours are validated strictly, so nothing from them can reach the subtitle script as a command.
+- Colours are chosen on inline **colour wheels** (hue around the circle, saturation toward the centre, a brightness slider, a swatch and an editable hex box; `webapp/js/colorwheel.js`, no library) instead of the browser's own colour picker. Mouse, touch and pen work, one pointer at a time; the keyboard moves hue and saturation with the arrow keys; screen readers get the hue, saturation and hex colour read out. Typing `abc` becomes `#aabbcc` and junk reverts to the last good colour. Codex reviewed the wheel (read-only) and its accessibility findings were fixed.
+- Surfaces: the production form and the "Add lyric captions" dialog (a Custom colours checkbox with two colour wheels, and a font box with an installed-fonts list that fills from `GET /api/captions/fonts`), the agent client (`caption_video` options and `caption_fonts`), the MCP server (`caption_video` options and the new read-only `list_caption_fonts`, 37 tools) and the skill. Saved projects remember the choices.
+- `start.sh` / `stop.sh` made portable for macOS (bash 3.2 empty-array handling, `ps` instead of `/proc`, the Mac data folder) with double-click `start.command` / `stop.command` wrappers. Verified on Linux only; not yet run on a Mac.
+- Not done: word-by-word highlighting (only line timing is stored), and a live preview of the look before rendering.
+
 ## 1.8.13 — Readable folder names for every job, and start.sh / stop.sh
 
 - Every new job folder now has a human-readable name like productions already did (`<what>_<what for>_<date>_<time>`): Topaz upscale outputs, lyrics detection and model setup, stem-model setup and package-export jobs no longer get random strings (`mmv/jobs.py`: `job_run_id`). Existing folders are not renamed, so saved references and resumes keep working. The package folders themselves were already readable.

@@ -37,6 +37,15 @@ export function subliminalFromForm(request) {
   return request.subliminal;
 }
 
+export function captionsFromForm(request) {
+  request.captions = { mode: request.captions_mode || "off", style: request.captions_style || "classic",
+    position: request.captions_position || "bottom", size: request.captions_size || "medium",
+    color: request.captions_custom ? request.captions_color : "",
+    outline_color: request.captions_custom ? request.captions_outline : "", font: request.captions_font || "" };
+  for (const key of Object.keys(request)) if (key.startsWith("captions_")) delete request[key];
+  return request.captions;
+}
+
 // Only the most recently chosen file may set the flash picture: slower, older uploads must never overwrite it.
 export function latestSelection() {
   let current = 0;
@@ -98,9 +107,7 @@ export async function preview(form) {
     }
     dancePartsFromForm(form, request);
     subliminalFromForm(request);
-    request.captions = { mode: request.captions_mode || "off", style: request.captions_style || "classic",
-      position: request.captions_position || "bottom", size: request.captions_size || "medium" };
-    for (const key of ["captions_mode", "captions_style", "captions_position", "captions_size"]) delete request[key];
+    captionsFromForm(request);
     request.mouth_mode = request.mouth_mode || "sealed";
     request.silent_mouths = request.mouth_mode !== "natural";   // older agents read this flag
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;

@@ -6,6 +6,8 @@ The burned video keeps its exact frame count, duration and audio (copied); the v
 """
 from __future__ import annotations
 
+import functools
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -75,26 +77,74 @@ SIZES = {'small': 0.04, 'medium': 0.055, 'large': 0.075}    # of the frame heigh
 FADE_MS = 180
 
 
+HEX_COLOUR = re.compile(r'#[0-9a-fA-F]{6}')
+FONT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9 ._+-]{0,39}')       # no commas or tags: the name goes into an ASS style line
+DEFAULT_FONT = 'Sans'
+
+
+@functools.lru_cache(maxsize=1)
+def installed_fonts():
+    """Sorted font families FFmpeg's text renderer can use (empty when fontconfig is not available)."""
+    try:
+        done = subprocess.run(['fc-list', ':', 'family'], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    names = {name.strip() for line in done.stdout.splitlines() for name in line.split(',') if name.strip()}
+    return tuple(sorted(names, key=str.lower))
+
+
 def look(settings):
-    """Validated style, position and size from the settings, with defaults."""
-    chosen = {'style': (settings or {}).get('style') or 'classic', 'position': (settings or {}).get('position') or 'bottom',
-              'size': (settings or {}).get('size') or 'medium'}
+    """Validated style, position, size and optional colours and font from the settings, with defaults.
+
+    The result carries `color`, `outline_color` (#rrggbb) and `font` only when they were set, so a plain look stays small."""
+    given = settings or {}
+    chosen = {'style': given.get('style') or 'classic', 'position': given.get('position') or 'bottom', 'size': given.get('size') or 'medium'}
     for key, table in (('style', STYLES), ('position', POSITIONS), ('size', SIZES)):
         if chosen[key] not in table:
             raise ValueError(f'Caption {key} must be one of ' + ', '.join(table))
+    for key in ('color', 'outline_color'):
+        if given.get(key):
+            if not (isinstance(given[key], str) and HEX_COLOUR.fullmatch(given[key])):
+                raise ValueError(f'Caption {key.replace("_", " ")} must look like #ff8800')
+            chosen[key] = given[key].lower()
+    if given.get('font'):
+        font = ' '.join(str(given['font']).split())
+        if not FONT_NAME.fullmatch(font):
+            raise ValueError('Caption font must be a font family name: letters, numbers, spaces and . _ + -')
+        families = {name.lower(): name for name in installed_fonts()}
+        if families and font.lower() not in families:
+            raise ValueError(f'The font "{font}" is not installed here, so FFmpeg would silently use another one; see the list of installed fonts')
+        chosen['font'] = families.get(font.lower(), font)
     return chosen
+
+
+def _ass_colour(hex_colour, alpha='00'):
+    """#rrggbb as the ASS colour &HAABBGGRR."""
+    return f'&H{alpha}{hex_colour[5:7]}{hex_colour[3:5]}{hex_colour[1:3]}'.upper()
+
+
+def _coloured(style, chosen):
+    """The style with the user's text and outline colours applied (a box keeps its own opacity)."""
+    custom = {}
+    if 'color' in chosen:
+        custom['colour'] = _ass_colour(chosen['color'])
+    if 'outline_color' in chosen:
+        custom['outline'] = _ass_colour(chosen['outline_color'], style['outline'][2:4])
+        if style['back'][2:4] != '80':                  # the box and the glow follow the outline colour; the classic soft shadow stays
+            custom['back'] = _ass_colour(chosen['outline_color'], style['back'][2:4])
+    return {**style, **custom}
 
 
 def to_ass(items, width, height, chosen=None):
     """An ASS script sized to the video: the chosen style, centred at the chosen height, fading in and out softly."""
     chosen = look(chosen)
-    style = STYLES[chosen['style']]
+    style = _coloured(STYLES[chosen['style']], chosen)
     size, margin = max(round(height * SIZES[chosen['size']]), 14), max(round(height * 0.07), 10)
     outline = max(round(size / 14 * style['weight']), 2)
     header = ('[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\n'
               f'PlayResX: {width}\nPlayResY: {height}\n\n[V4+ Styles]\n'
               'Format: Name,Fontname,Fontsize,PrimaryColour,OutlineColour,BackColour,Bold,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV\n'
-              f"Style: Lyric,Sans,{size},{style['colour']},{style['outline']},{style['back']},{style['bold']},{style['box'] or 1},"
+              f"Style: Lyric,{chosen.get('font', DEFAULT_FONT)},{size},{style['colour']},{style['outline']},{style['back']},{style['bold']},{style['box'] or 1},"
               f"{outline if not style['box'] else max(size // 5, 4)},0,{POSITIONS[chosen['position']]},{margin},{margin},{margin}\n\n"
               '[Events]\nFormat: Layer,Start,End,Style,Text\n')
     fade = f"{{\\fad({FADE_MS},{FADE_MS}){style['tag']}}}"

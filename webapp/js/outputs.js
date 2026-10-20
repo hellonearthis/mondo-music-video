@@ -1,6 +1,7 @@
 // Finished Videos, Musical Score Canvas visualization, and Topaz upscale dialog.
 
 import { $, $$, api, handle, json, notice, option, state, text } from "./core.js";
+import { initColourWheels } from "./colorwheel.js";
 import { showQuote } from "./production.js";
 
 // One theme observer for all score views; loadOutputs disposes views before replacing cards.
@@ -507,10 +508,31 @@ function setupOutputsDelegatedHandlers() {
   }
 }
 
+export async function initCaptionControls() {
+  initColourWheels();                       // inline colour wheels replace the browser's own colour pickers
+  $$('[data-caption-custom]').forEach(checkbox => {
+    const form = checkbox.closest("form");
+    const sync = () => { form.querySelector('[data-caption-colours]').hidden = !checkbox.checked; };
+    checkbox.addEventListener("change", sync);
+    sync();
+  });
+  const form = $("#video-form");
+  form.querySelector(".captions-fields").hidden = form.elements.captions_mode.value !== "burned";
+  try {
+    const response = await fetch("/api/captions/fonts");
+    const { fonts } = response.ok ? await response.json() : { fonts: [] };
+    $("#caption-fonts").replaceChildren(...fonts.map(font => option(font, font)));
+  } catch { /* Installed font suggestions are optional. */ }
+}
+
 export function initUpscaleForm() {
   setupOutputsDelegatedHandlers();
   $("#caption-form").onsubmit = handle(async event => {
-    await json("/api/captions", { ...Object.fromEntries(new FormData(event.target)), source: state.captionSource });
+    const form = event.target;
+    await json("/api/captions", { position: form.elements.position.value, style: form.elements.style.value,
+      size: form.elements.size.value, color: form.elements.custom.checked ? form.elements.color.value : "",
+      outline_color: form.elements.custom.checked ? form.elements.outline.value : "",
+      font: form.elements.font.value, source: state.captionSource });
     $("#caption-dialog").close();
   });
   $("#upscale-form").onsubmit = handle(async event => {

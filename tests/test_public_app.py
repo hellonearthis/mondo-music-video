@@ -413,9 +413,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.13")
+        self.assertEqual(api_version()["version"], "1.8.14")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.13", (root / "README.md").read_text())
+        self.assertIn("1.8.14", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1103,6 +1103,15 @@ class PublicAppTests(unittest.TestCase):
         for bad, code in (({'captions': {'mode': 'neon'}, 'lyric_lines': lines}, 422), ({'lyric_lines': [{'start': 3, 'end': 1, 'text': 'x'}], 'captions': {'mode': 'sidecar'}}, 400)):
             with self.subTest(bad=bad):
                 self.assertEqual(self.client.post('/api/quote', json={'song': song, **bad}).status_code, code)
+        fonts = self.client.get('/api/captions/fonts')
+        self.assertEqual(fonts.status_code, 200)
+        self.assertIsInstance(fonts.json()['fonts'], list)
+        for bad in ({'color': 'red'}, {'outline_color': '#12'}, {'font': 'Comic, Sans'}, {'font': 'x' * 41}):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned', **bad}}).status_code, 422)
+                self.assertEqual(self.client.post('/api/captions', json={'source': 'x/music-video.mp4', **bad}).status_code, 422)
+        plan = self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned', 'color': '#FF8800', 'font': ''}})
+        self.assertEqual((plan.status_code, plan.json()['captions']['color']), (200, '#ff8800'))
         quote, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'},
                                      'subliminal': {'mode': 'text', 'text': 'GOOSE', 'times': [0.5], 'frames': 2}})
         started.raise_for_status()

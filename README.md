@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.8.13** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.8.14** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -180,6 +180,10 @@ checkout's `data/` folder when it has one, refuses to start a second copy, and i
 and `server-url.txt` into the data folder. `stop.sh` waits for the app to exit and refuses while a production is running unless
 you pass `--force`. The plain command `.venv/bin/mondo-music-video serve` still works.
 
+**macOS** uses the same `start.sh` and `stop.sh` (they run on the bash 3.2 that macOS ships, and use the Mac's own data folder). In Finder you
+can also double-click **`start.command`** (opens a Terminal window; closing it or pressing Ctrl+C stops the app) and **`stop.command`**
+(for a copy started with `--background`). These Mac paths were written to be portable but have only been run on Linux so far.
+
 Windows PowerShell:
 
 ```powershell
@@ -235,7 +239,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.8.13 MCP server has 36 tools, including API profile add/select/remove,
+The v1.8.14 MCP server has 37 tools, including API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 

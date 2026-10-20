@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start Mondo Music Video on Linux, macOS or Windows through WSL.
+# Start Mondo Music Video on Linux, macOS or Windows through WSL (works with the old bash 3.2 that macOS ships).
 #   bash start.sh                 run in this terminal (stop with Ctrl+C)
 #   bash start.sh --background    run in the background; stop it with: bash stop.sh
 #   bash start.sh --port 8092     any other option is passed to `mondo-music-video serve`
@@ -32,15 +32,17 @@ if curl -s -m 2 "$MMV_URL/api/version" 2>/dev/null | grep -q "Mondo Music Video"
 fi
 # Run this checkout's code: the .venv may hold an older installed copy of the package.
 export PYTHONPATH="$MMV_PROJECT_DIR${PYTHONPATH:+:$PYTHONPATH}"
-MMV_DATA=(); [ -n "${MMV_HOME:-}" ] && MMV_DATA=(--data-dir "$MMV_HOME")
-MMV_STATE="${MMV_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/mondo-music-video}"
+MMV_DATA=(); if [ -n "${MMV_HOME:-}" ]; then MMV_DATA=(--data-dir "$MMV_HOME"); fi
+if [ "$(uname -s)" = "Darwin" ]; then MMV_DEFAULT_HOME="$HOME/Library/Application Support/mondo-music-video"
+else MMV_DEFAULT_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/mondo-music-video"; fi      # where the app keeps its data by default
+MMV_STATE="${MMV_HOME:-$MMV_DEFAULT_HOME}"
 mkdir -p "$MMV_STATE"
 cd "$MMV_PROJECT_DIR"
 if [ "$MMV_BACKGROUND" != true ]; then
   echo "Starting Mondo at $MMV_URL  (Ctrl+C to stop)"
-  exec "$MMV_BIN" "${MMV_DATA[@]}" serve --port "$MMV_PORT" "${MMV_ARGS[@]}"
+  exec "$MMV_BIN" ${MMV_DATA[@]+"${MMV_DATA[@]}"} serve --port "$MMV_PORT" ${MMV_ARGS[@]+"${MMV_ARGS[@]}"}
 fi
-nohup "$MMV_BIN" "${MMV_DATA[@]}" serve --port "$MMV_PORT" "${MMV_ARGS[@]}" > "$MMV_STATE/server.log" 2>&1 < /dev/null &
+nohup "$MMV_BIN" ${MMV_DATA[@]+"${MMV_DATA[@]}"} serve --port "$MMV_PORT" ${MMV_ARGS[@]+"${MMV_ARGS[@]}"} > "$MMV_STATE/server.log" 2>&1 < /dev/null &
 echo $! > "$MMV_STATE/server.pid"
 echo "$MMV_URL" > "$MMV_STATE/server-url.txt"
 for _ in $(seq 1 40); do

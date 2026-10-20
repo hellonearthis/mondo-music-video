@@ -90,7 +90,7 @@ Subliminal flash: `subliminal` (mode off/image/text, `text` or an uploaded `imag
 seconds on the finished video's clock, or `downbeats` with `count`) flashes a few frames; flashes stay 1 s apart, the clean video is kept as
 `music-video-clean.mp4`, and the user should be warned that flashing can affect photosensitive viewers.
 
-Lyric captions: `captions` (mode off/sidecar/burned; `style` classic/bold/neon/box, `position` bottom/middle/top, `size` small/medium/large, burned only) uses the timed `lyric_lines` to write `lyrics.srt` (sidecar) or also burn the words into
+Lyric captions: `captions` (mode off/sidecar/burned; `style` classic/bold/neon/box, `position` bottom/middle/top, `size` small/medium/large, optional `color`/`outline_color` as `#rrggbb` and a `font` from `list_caption_fonts`, burned only) uses the timed `lyric_lines` to write `lyrics.srt` (sidecar) or also burn the words into
 the video, keeping `music-video-uncaptioned.mp4`. It needs timed lines (detect or align lyrics first), does not turn on lip sync, sends
 nothing to the writer and is free. Lines whose timing was only guessed are skipped. A failed burn leaves the video untouched with a warning.
 To caption a video that is already finished, use `caption_video` (agent client `caption_video(source, lyric_lines=None)`): it burns the saved lines (or the `lyric_lines` you pass) into a NEW output and leaves the original alone; it is a job under the single-operation guard.

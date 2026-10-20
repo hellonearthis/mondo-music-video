@@ -6,14 +6,16 @@ MMV_PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [ -z "${MMV_HOME:-}" ] && [ -f "$MMV_PROJECT_DIR/data/settings.json" ]; then
   MMV_HOME="$MMV_PROJECT_DIR/data"
 fi
-MMV_STATE="${MMV_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/mondo-music-video}"
+if [ "$(uname -s)" = "Darwin" ]; then MMV_DEFAULT_HOME="$HOME/Library/Application Support/mondo-music-video"
+else MMV_DEFAULT_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/mondo-music-video"; fi      # where the app keeps its data by default
+MMV_STATE="${MMV_HOME:-$MMV_DEFAULT_HOME}"
 MMV_PIDFILE="$MMV_STATE/server.pid"
 if [ ! -f "$MMV_PIDFILE" ]; then
   echo "No server.pid in $MMV_STATE. If Mondo is running in a terminal, press Ctrl+C there." >&2
   exit 1
 fi
 MMV_PID="$(cat "$MMV_PIDFILE")"
-if ! kill -0 "$MMV_PID" 2>/dev/null || ! tr '\0' ' ' < "/proc/$MMV_PID/cmdline" 2>/dev/null | grep -q "mondo-music-video"; then
+if ! kill -0 "$MMV_PID" 2>/dev/null || ! ps -p "$MMV_PID" -o command= 2>/dev/null | grep -q "mondo-music-video"; then
   echo "Mondo is not running (the recorded process $MMV_PID is gone)."
   rm -f "$MMV_PIDFILE"
   exit 0

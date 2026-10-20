@@ -66,6 +66,42 @@ class CueTests(unittest.TestCase):
         self.assertIn(',8,', top.split('Style: Lyric,')[1].split('\n')[0])
         self.assertNotEqual(classic.split('[Events]')[0], top.split('[Events]')[0])
 
+    def test_custom_colours_and_fonts_are_validated_and_reach_the_script(self):
+        self.assertEqual(captions.look({'color': '#FF8800', 'outline_color': '#001122'}),
+                         {'style': 'classic', 'position': 'bottom', 'size': 'medium', 'color': '#ff8800', 'outline_color': '#001122'})
+        self.assertEqual(captions.look({'color': '', 'outline_color': '', 'font': ''}), captions.look(None))      # blank means the style's own
+        for bad in ({'color': 'red'}, {'color': '#12345'}, {'outline_color': '#gg0000'}, {'font': 'Comic, Sans'}, {'font': 'x\nStyle: y'},
+                    {'font': 'A' * 41}, {'color': 5}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                captions.look(bad)
+        line = lambda look: [l for l in captions.to_ass([(0, 1, 'x')], 640, 360, look).splitlines() if l.startswith('Style: Lyric')][0].split(',')
+        classic = line({'color': '#00ff00', 'outline_color': '#0000ff'})
+        self.assertEqual((classic[3], classic[4], classic[5]), ('&H0000FF00', '&H00FF0000', '&H80000000'))   # RGB becomes ASS BGR; soft shadow kept
+        box = line({'style': 'box', 'outline_color': '#ff0000'})
+        self.assertEqual((box[4], box[5]), ('&H990000FF', '&H990000FF'))                                      # the panel keeps its opacity
+        neon = line({'style': 'neon', 'outline_color': '#00ff00'})
+        self.assertEqual((neon[3], neon[4], neon[5]), ('&H00FFFFFF', '&H0000FF00', '&H0000FF00'))            # the glow follows the outline colour
+        self.assertEqual(line(None)[1], 'Sans')
+
+    def test_fonts_must_be_installed_and_match_case_insensitively(self):
+        with mock.patch.object(captions, 'installed_fonts', return_value=('DejaVu Sans', 'Liberation Serif')):
+            self.assertEqual(captions.look({'font': 'dejavu   sans'})['font'], 'DejaVu Sans')
+            with self.assertRaisesRegex(ValueError, 'not installed'):
+                captions.look({'font': 'Papyrus'})
+            self.assertIn('DejaVu Sans,', captions.to_ass([(0, 1, 'x')], 640, 360, {'font': 'liberation serif'}).replace('Liberation Serif', 'DejaVu Sans,'))
+        with mock.patch.object(captions, 'installed_fonts', return_value=()):                # no fontconfig: accept a clean name
+            self.assertEqual(captions.look({'font': 'Papyrus'})['font'], 'Papyrus')
+
+    def test_installed_fonts_lists_families_once_each(self):
+        captions.installed_fonts.cache_clear()
+        fake = mock.Mock(stdout='DejaVu Sans,DejaVu Sans Condensed\nDejaVu Serif\nDejaVu Sans\n')
+        with mock.patch.object(captions.subprocess, 'run', return_value=fake):
+            self.assertEqual(captions.installed_fonts(), ('DejaVu Sans', 'DejaVu Sans Condensed', 'DejaVu Serif'))
+        captions.installed_fonts.cache_clear()
+        with mock.patch.object(captions.subprocess, 'run', side_effect=OSError):
+            self.assertEqual(captions.installed_fonts(), ())
+        captions.installed_fonts.cache_clear()
+
     def test_plan_run_validates_lines_on_its_own_and_needs_some(self):
         self.assertIsNone(captions.plan_run({'mode': 'off'}, None, 0, 10, 10))
         empty = captions.plan_run({'mode': 'sidecar'}, [], 0, 10, 10)

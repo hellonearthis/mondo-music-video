@@ -285,9 +285,14 @@ class AgentClient:
         return self._json("POST", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/package",
                           {"zip": bool(zip_it), "allow_private_actors": bool(allow_private_actors)})
 
-    def caption_video(self, source, lyric_lines=None, style="classic", position="bottom", size="medium"):
-        return self._json("POST", "/api/captions", {"source": source, "lyric_lines": lyric_lines or [],
-                                                    "style": style, "position": position, "size": size})
+    def caption_fonts(self):
+        return self._json("GET", "/api/captions/fonts")
+
+    def caption_video(self, source, lyric_lines=None, style="classic", position="bottom", size="medium",
+                      color="", outline_color="", font=""):
+        return self._json("POST", "/api/captions", {"source": source, "lyric_lines": lyric_lines or [], "style": style,
+                                                    "position": position, "size": size, "color": color,
+                                                    "outline_color": outline_color, "font": font})
 
     def upscale(self, source, model="ahq-12", scale=2):
         return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})

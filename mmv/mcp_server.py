@@ -76,7 +76,8 @@ def create_server(base_url=None):
         untouched and the untouched video is kept as music-video-clean.mp4. Warn the user that flashing can affect
         photosensitive viewers.
 
-        Lyric captions: `captions` {mode: off|sidecar|burned, style classic|bold|neon|box, position bottom|middle|top, size small|medium|large} turns the timed `lyric_lines` into lyrics.srt (sidecar) and, for
+        Lyric captions: `captions` {mode: off|sidecar|burned, style classic|bold|neon|box, position bottom|middle|top, size small|medium|large,
+        optional color/outline_color "#rrggbb" and font (see list_caption_fonts)} turns the timed `lyric_lines` into lyrics.srt (sidecar) and, for
         burned, draws them on the video, keeping music-video-uncaptioned.mp4; it does not enable lip sync and nothing reaches
         the writer. With no timed lines the preview carries a note and the video gets no captions. Download the files with the output file names listed in
         output.json (`captions.srt`, `captions.uncaptioned_copy`). Lines with guessed timing are not captioned.
@@ -270,15 +271,22 @@ def create_server(base_url=None):
     def caption_video(source: str, lyric_lines: list[dict[str, Any]] | None = None,
                       style: Literal["classic", "bold", "neon", "box"] = "classic",
                       position: Literal["bottom", "middle", "top"] = "bottom",
-                      size: Literal["small", "medium", "large"] = "medium") -> dict[str, Any]:
+                      size: Literal["small", "medium", "large"] = "medium", color: str = "", outline_color: str = "",
+                      font: str = "") -> dict[str, Any]:
         """Burn lyric captions into a finished music video as a NEW output; the original is never changed. Free.
 
         `source` is the output file ("<run id>/music-video.mp4"). Uses the timed lines saved with that video unless
         `lyric_lines` [{start, end, text, timing}] (seconds on the song clock; see detect_lyrics/align_lyrics) are given.
         Lines with guessed timing are skipped. A video already captioned when made is redone from its uncaptioned copy.
         `style` classic (white, black outline), bold (yellow capitals), neon (glowing magenta edge) or box (on a dark
-        panel); `position` and `size` as named. The result is a job: poll inspect_studio status. The new output also offers lyrics.srt."""
-        return invoke(client.caption_video, source, lyric_lines, style, position, size)
+        panel); `position` and `size` as named. `color` (text) and `outline_color` (outline, glow or box) are "#rrggbb" or ""
+        for the style's own; `font` is an installed family from list_caption_fonts or "" for the default (others are refused). The result is a job: poll inspect_studio status. The new output also offers lyrics.srt."""
+        return invoke(client.caption_video, source, lyric_lines, style, position, size, color, outline_color, font)
+
+    @server.tool()
+    def list_caption_fonts() -> dict[str, Any]:
+        """Font families installed where the app runs, usable as the caption `font`. Read-only."""
+        return invoke(client.caption_fonts)
 
     @server.tool()
     def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:
