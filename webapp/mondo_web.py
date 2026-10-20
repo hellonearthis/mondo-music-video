@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.8.11"
+MGL_APP_VERSION = "1.8.12"
 WEB = Path(__file__).parent
 
 
@@ -245,6 +245,13 @@ class SubliminalSettings(StrictModel):
     count: int = Field(default=3, ge=1, le=20)
 
 
+class CaptionSettings(StrictModel):
+    mode: Literal["off", "sidecar", "burned"] = "off"
+    style: Literal["classic", "bold", "neon", "box"] = "classic"
+    position: Literal["bottom", "middle", "top"] = "bottom"
+    size: Literal["small", "medium", "large"] = "medium"
+
+
 class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
@@ -284,6 +291,7 @@ class ProductionRequest(StrictModel):
     vision_quality_check: bool = False
     clip_quality: Literal["standard", "prores", "lossless"] = "standard"
     subliminal: SubliminalSettings = Field(default_factory=SubliminalSettings)
+    captions: CaptionSettings = Field(default_factory=CaptionSettings)
     compact_prompts: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
@@ -315,8 +323,10 @@ DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead", "dance
 
 
 def request_dict(value):
-    """The stored production request. A request without dancing is stored exactly as it was before dancing existed."""
+    """The stored production request. A request without dancing or captions is stored exactly as it was before they existed."""
     request = value.model_dump()
+    if request.get("captions", {}).get("mode", "off") == "off":
+        request.pop("captions", None)
     if request.get("dance_mode", "off") == "off":
         for key in DANCE_FIELDS:
             request.pop(key, None)
@@ -459,6 +469,14 @@ class UpscaleRequest(StrictModel):
     source: str
     model: str = Field(default="ahq-12", pattern=r"^[a-z][a-z0-9]*-\d+$")
     scale: Literal[2, 4] = 2
+
+
+class CaptionVideoRequest(StrictModel):
+    source: str
+    style: Literal["classic", "bold", "neon", "box"] = "classic"
+    position: Literal["bottom", "middle", "top"] = "bottom"
+    size: Literal["small", "medium", "large"] = "medium"
+    lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
 
 
 class ProjectState(StrictModel):
@@ -1080,7 +1098,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "dance": prepared.get("dance"), "voice": prepared.get("voice"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "voice": prepared.get("voice"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
@@ -1342,9 +1360,11 @@ def create_app(home=None, *, test_hosts=False):
     def media_file(run_id: str, filename: str, download: bool = False):
         directory = store.home / "runs" / identifier(run_id)
         record = read_json(directory / "output.json", {})
-        if filename != record.get("file") or Path(filename).suffix != ".mp4":
+        from mmv import captions
+        if filename not in [record.get("file"), *captions.downloads(record)] or Path(filename).suffix not in (".mp4", ".srt"):
             raise ValueError("Output not found")
-        return FileResponse(inside(directory, filename), media_type="video/mp4", filename=filename if download else None)
+        kind = "application/x-subrip" if filename.endswith(".srt") else "video/mp4"
+        return FileResponse(inside(directory, filename), media_type=kind, filename=filename if download or filename.endswith(".srt") else None)
 
     @app.post("/api/log/clear")
     def clear_log():
@@ -1461,5 +1481,15 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context))
+
+    @app.post("/api/captions")
+    def caption_video(value: CaptionVideoRequest):
+        from mmv import captions
+        with jobs.lock:
+            jobs.require_idle()
+            looks = value.model_dump(include={"style", "position", "size"})
+            return jobs.start("captions", lambda context: captions.caption_finished(
+                store, value.source, [line.model_dump(exclude_none=True) for line in value.lyric_lines], context, looks),
+                run_id=captions.run_name(store, value.source, looks))
 
     return app

@@ -65,14 +65,14 @@ class JobContext:
         if self.cancelled.wait(seconds):
             self.check()
 
-    def command(self, argv, *, env=None, progress_path=None):
+    def command(self, argv, *, env=None, progress_path=None, cwd=None):
         self.check()
         kwargs = {"start_new_session": True} if os.name != "nt" else {
             "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         proc_env = {**os.environ, **(env or {}), "PYTHONIOENCODING": "utf-8"}
         with self.log_path.open("ab") as log:
             process = subprocess.Popen([str(x) for x in argv], stdout=log,
-                                       stderr=log, env=proc_env, **kwargs)
+                                       stderr=log, env=proc_env, cwd=cwd, **kwargs)
             try:
                 last_progress = None
                 while process.poll() is None:

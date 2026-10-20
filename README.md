@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.8.11** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.8.12** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -47,6 +47,7 @@ passage to its planned frames, joins the picture, and restores your original son
 - Your own visual styles, including styles harvested from reference images, plus
   six optional [style presets](examples/style-presets/README.md).
 - Animated production idents and opening or closing credits.
+- Lyric captions: a `lyrics.srt` file, or the words burned into the video, from your timed lyric lines; also addable to a finished video later as a new copy.
 - Finished videos to play, download, or upscale with your installed Topaz tools.
 
 Use local models or supported API providers. One production runs at a time,
@@ -228,9 +229,9 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.8.11 MCP server has 35 tools, including API profile add/select/remove,
+The v1.8.12 MCP server has 36 tools, including API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
-deletion, audition exports, OAP role agreements, musical score reading and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
+deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 
 The included skill and optional MCP server let an agent operate the same app,
 including its OAP, review and production workflow:

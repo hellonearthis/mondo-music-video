@@ -297,17 +297,23 @@ def prepare(store, request, *, saved_prepared=None):
     if lip_sync and kind == 'video':
         from . import voice
         voice_note = voice.voice_check(store, digest, request, lip_sync)
-    sub_plan = None
-    if kind == 'video' and (request.get('subliminal') or {}).get('mode', 'off') != 'off':
-        from . import subliminal
+    sub_plan = caption_plan = None
+    wants_sub = (request.get('subliminal') or {}).get('mode', 'off') != 'off'
+    wants_captions = (request.get('captions') or {}).get('mode', 'off') != 'off'
+    if kind == 'video' and (wants_sub or wants_captions):
+        from . import captions, subliminal
         from .score_view import _opening_offset
         fps = p.fps or 24
         opening = _opening_offset(store, request)
         closing = 0.0
         if request.get('end_ident'):
             closing = float((read_json(inside(store.home / 'runs', request['end_ident']).parent / 'output.json', {}) or {}).get('duration') or 0.0)
-        sub_plan = subliminal.plan_run(request['subliminal'], fps, p.total_frames + round((opening + closing) * fps),
-                                       score.downbeat_frames, round(opening * fps), store.home / 'uploads')
+        song_seconds = min(p.total_frames, sum(s.trim_frames for s in p.segments)) / fps      # what assembly actually joins
+        total_seconds = song_seconds + opening + closing
+        if wants_sub:
+            sub_plan = subliminal.plan_run(request['subliminal'], fps, p.total_frames + round((opening + closing) * fps),
+                                           score.downbeat_frames, round(opening * fps), store.home / 'uploads')
+        caption_plan = captions.plan_run(request.get('captions'), request.get('lyric_lines'), opening, song_seconds, total_seconds)
     dance_plan = saved_prepared.get('dance') if replay_plans else None
     if not replay_plans and kind == 'video' and request.get('dance_mode', 'off') != 'off':
         from . import dance
@@ -327,6 +333,8 @@ def prepare(store, request, *, saved_prepared=None):
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),
                          'downbeats': len(score.downbeat_frames), 'sections': len(score.sections),
                          'shots': sum(len(s.shots) for s in p.segments), 'width': width, 'height': height}}
+    if caption_plan:
+        prepared['captions'] = caption_plan          # absent when off, so earlier consent fingerprints stay valid
     if voice_note is not None:
         prepared['voice'] = voice_note             # advisory only: kept out of fingerprints and saved plans
     if dance_plan is not None:

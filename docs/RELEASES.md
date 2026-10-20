@@ -1,5 +1,16 @@
 # Releases
 
+## 1.8.12 — Lyric captions
+
+New, free and post-assembly (a joint Claude Code and Codex free-time project; Codex reviewed the design before the code was written).
+
+- Setting **Lyric captions** (off by default): the timed lyric lines already used for lip sync become `lyrics.srt` (subtitle file only) or are also burned into the video with FFmpeg's libass (`mmv/captions.py`). Burning keeps the exact frame count and audio, verifies the result before replacing the video, and keeps the video without captions as `music-video-uncaptioned.mp4`. If burning fails the video is untouched, `lyrics.srt` stays, and a warning is shown.
+- Captions use the lines on their own: they do not turn on lip sync, the captions feature adds no path to the writer or any prompt (the existing lyrics and lip-sync inputs behave as before), and no protected file changed. Lines whose timing was only guessed are skipped; captions are shifted past an opening ident and stop where the assembled song ends (the joined passage lengths), so they should not run over a closing ident; this is checked in tests with synthetic videos, not yet on a real render with idents.
+- With captions on but no timed lines yet, the preview says so and the video is made without captions; the score editor's lyric box (detect, paste, edit) now also opens for captions, not just lip sync. Old saved runs keep their consent fingerprints because the captions field is absent when off. The media route now serves `lyrics.srt` and the backup videos recorded in `output.json` (previously only the main video), so the agent client's `download` can fetch them; project exports include `lyrics.srt` and the uncaptioned copy.
+- **Looks**: burned captions have four styles (classic white with outline, bold yellow capitals, neon glow, box on a dark panel), three positions (bottom, middle, top) and three sizes, with a short fade in and out; sizes scale with the video height. The selectors appear in the form when burning is chosen, and the same options exist for the agent client and MCP. Not done: custom colours or fonts, and word-by-word highlighting (only line timing is stored).
+- **Caption a finished video**: `POST /api/captions`, the agent client's `caption_video`, the MCP tool `caption_video` (36 tools) and an "Add lyric captions" button on finished videos (it opens a small dialog: where, bottom by default or middle or top, look and size) burn the saved lyric lines (or lines you pass) into a NEW output, `captioned.mp4` with `lyrics.srt`; the original is never changed. It runs under the single-operation guard, starts from the uncaptioned copy when the video was captioned when made, and is free.
+- Surfaces: Render Engine settings, preview summary, MCP tool text, skill, README. Not done: custom colours or fonts, a font check for non-Latin lyrics, and a preview of the caption look before rendering.
+
 ## 1.8.11 — Fork integration: token telemetry, single-slot writer, log clearing, video clips as idents
 
 Integrates hellonearthis' fork revisions `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d` (fork versions 1.8.9–1.8.13). Credit: hellonearthis.

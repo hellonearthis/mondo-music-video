@@ -528,6 +528,14 @@ def run(home, directory, *, resume=False):
             sub_result = subliminal.apply_to_run(store, directory, prepared['subliminal'])
         except Exception as exc:                  # a bonus effect never fails the production: the clean video stays
             sub_error = str(exc)
+    caption_result = caption_error = None
+    if request['kind'] == 'video' and (prepared.get('captions') or {}).get('cues'):
+        progress('Adding the lyric captions', 97)
+        from . import captions
+        try:
+            caption_result = captions.apply_to_run(directory, prepared['captions'])
+        except Exception as exc:                  # captions never fail the production: the finished video stays as it was
+            caption_error = str(exc)
     from .media import duration
     warnings = [entry['warning'] for entry in read_json(directory / 'quality.json', {}).values() if entry.get('warning')]
     vision_note = read_json(directory / 'vision.json', {}).get('note')
@@ -535,6 +543,9 @@ def run(home, directory, *, resume=False):
         warnings.insert(0, vision_note)
     if sub_error:
         warnings.insert(0, 'The subliminal flashes could not be added, so the finished video is the clean one: ' + sub_error[:200])
+    caption_error = caption_error or (caption_result or {}).get('burn_error')
+    if caption_error:
+        warnings.insert(0, 'The lyric captions could not be burned in, so the finished video has none: ' + caption_error[:200])
     # Studio-quality clips: say plainly when the requested master was not delivered (never resubmitted automatically).
     lost = sorted(sid for sid, got in rendered.items() if isinstance(got, dict) and got.get('clip_quality_note'))
     if lost:
@@ -547,6 +558,7 @@ def run(home, directory, *, resume=False):
                                        **({'clip_quality': delivered, 'clip_quality_requested': request.get('clip_quality')}
                                           if (request.get('clip_quality') or 'standard') != 'standard' else {}),
                                        **({'subliminal': sub_result} if sub_result else {}),
+                                       **({'captions': caption_result} if caption_result else {}),
                                        **({'quality_warnings': warnings} if warnings else {})})
     progress('Complete',100)
 

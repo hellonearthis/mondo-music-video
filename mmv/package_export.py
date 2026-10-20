@@ -254,7 +254,7 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
     label = {p['id']: f'{p["id"]}_{stamp(p["start"])}-{stamp(p["end"])}s' for p in pas}
 
     # 01_final
-    for file in sorted(run.glob('*.mp4')) + sorted(run.glob('*.mov')):
+    for file in sorted(run.glob('*.mp4')) + sorted(run.glob('*.mov')) + sorted(run.glob('lyrics.srt')):
         pack.put(file, f'01_final/{file.name}')
     for file in sorted((run / 'assembly').glob('*.mp4')):
         pack.put(file, f'01_final/assembly_{file.name}')
@@ -427,6 +427,8 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
               f'- Production time: {clock(run_seconds(run))} (from operation.json / operation.log)',
               *(['- Subliminal flashes: %d frame(s) each at %s s (the untouched video is `music-video-clean.mp4` in 01_final)' % (
                   output['subliminal']['frames'], ', '.join(str(t) for t in output['subliminal']['times']))] if output.get('subliminal') else []),
+              *(['- Lyric captions: %d line(s), %s (`lyrics.srt`%s)' % (output['captions']['cues'], output['captions']['mode'],
+                  ' in 01_final; the video without captions is `music-video-uncaptioned.mp4`' if output['captions'].get('uncaptioned_copy') else '')] if output.get('captions') else []),
               '- Prompting scheme: ' + (protected_scheme.notice() or 'unmodified (the protected prompts, sealed-lips scheme and checks match the released Mondo scheme)'), '',
               '## Passages (times are on the song clock)', '',
               '| # | Start-end (s) | Shots | Montage grammar | Cast | Sings | Clip | Prompt |', '|---|---|---|---|---|---|---|---|']

@@ -413,9 +413,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.11")
+        self.assertEqual(api_version()["version"], "1.8.12")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.11", (root / "README.md").read_text())
+        self.assertIn("1.8.12", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1089,6 +1089,88 @@ class PublicAppTests(unittest.TestCase):
                           ({'dance_mode': 'group', 'dancers': ['nobody_here']}, 400), ({'dance_mode': 'group', 'dance_lead': 'nobody_here'}, 400)):
             with self.subTest(bad=bad):
                 self.assertEqual(self.client.post('/api/quote', json={'song': song, **bad}).status_code, code)
+
+    def test_lyric_captions_are_planned_burned_after_the_flash_and_downloadable(self):
+        song = self.song_upload()
+        lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk {honk}', 'timing': 'matched'}, {'start': 1.0, 'end': 1.5, 'text': 'guess', 'timing': 'interpolated'}]
+        plan = self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'}})
+        plan.raise_for_status()
+        self.assertEqual(plan.json()['captions']['cues'], [[0.2, 0.9, 'Honk {honk}']])
+        self.assertEqual(plan.json()['lipsync'], None)                                       # captions never switch lip sync on
+        self.assertIsNone(self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines}).json()['captions'])
+        nothing = self.client.post('/api/quote', json={'song': song, 'captions': {'mode': 'burned'}}).json()['captions']
+        self.assertEqual((nothing['cues'], bool(nothing['note'])), ([], True))                  # previewable, so lines can be added in the editor
+        for bad, code in (({'captions': {'mode': 'neon'}, 'lyric_lines': lines}, 422), ({'lyric_lines': [{'start': 3, 'end': 1, 'text': 'x'}], 'captions': {'mode': 'sidecar'}}, 400)):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post('/api/quote', json={'song': song, **bad}).status_code, code)
+        quote, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'},
+                                     'subliminal': {'mode': 'text', 'text': 'GOOSE', 'times': [0.5], 'frames': 2}})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        run = self.home / 'runs' / started.json()['id']
+        output = read_json(run / 'output.json')
+        self.assertEqual(output['captions'], {'mode': 'burned', 'cues': 1, 'srt': 'lyrics.srt', 'style': 'classic', 'position': 'bottom', 'size': 'medium',
+                                              'uncaptioned_copy': 'music-video-uncaptioned.mp4'})
+        self.assertEqual(output['subliminal']['clean_copy'], 'music-video-clean.mp4')
+        self.assertNotIn('quality_warnings', output)
+        from mmv import captions as caption_module
+        self.assertEqual(caption_module._probe_size(run / 'music-video.mp4')[2], caption_module._probe_size(run / 'music-video-uncaptioned.mp4')[2])
+        for name, kind in (('lyrics.srt', 'application/x-subrip'), ('music-video-uncaptioned.mp4', 'video/mp4'), ('music-video-clean.mp4', 'video/mp4')):
+            served = self.client.get(f'/api/media/{run.name}/{name}')
+            self.assertEqual((served.status_code, served.headers['content-type']), (200, kind), name)
+        self.assertIn('Honk {honk}', self.client.get(f'/api/media/{run.name}/lyrics.srt').text)
+        self.assertNotEqual(self.client.get(f'/api/media/{run.name}/operation.log').status_code, 200)     # only recorded files are served
+
+    def test_a_finished_video_can_be_captioned_later_as_a_new_output_leaving_the_original_alone(self):
+        song = self.song_upload()
+        lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk honk', 'timing': 'matched'}]
+        _, started = self.start({'song': song, 'lyric_lines': lines})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        run = self.home / 'runs' / started.json()['id']
+        original = (run / 'music-video.mp4').read_bytes()
+        self.assertNotIn('captions', read_json(run / 'output.json'))
+        from mmv import captions as caption_module
+        done = self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'})
+        done.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        new = self.home / 'runs' / done.json()['id']
+        self.assertRegex(new.name, r'^.+_captions_classic_\d{4}-\d{2}-\d{2}_\d{6}$')            # readable like productions, not random
+        record = read_json(new / 'output.json')
+        self.assertEqual((record['kind'], record['file'], record['captions']['cues']), ('captioned', 'captioned.mp4', 1))
+        self.assertEqual((run / 'music-video.mp4').read_bytes(), original)                    # the original is untouched
+        self.assertEqual(caption_module._probe_size(new / 'captioned.mp4')[2], caption_module._probe_size(run / 'music-video.mp4')[2])
+        self.assertNotEqual((new / 'captioned.mp4').read_bytes(), original)
+        self.assertEqual(self.client.get(f'/api/media/{new.name}/lyrics.srt').status_code, 200)
+        self.assertIn(new.name + '/captioned.mp4', [item['file'] for item in self.client.get('/api/outputs').json()])
+        # things that are not completed music videos are refused (the busy guard is the shared jobs.require_idle)
+        for source in (new.name + '/captioned.mp4', 'nobody/music-video.mp4'):
+            with self.subTest(source=source):
+                self.client.post('/api/captions', json={'source': source})
+                self.assertEqual(self.wait()['state'], 'failed')
+
+    def test_captioning_a_video_made_with_captions_starts_from_its_uncaptioned_copy_and_needs_lines(self):
+        song = self.song_upload()
+        lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk honk', 'timing': 'matched'}]
+        _, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'}})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        run = self.home / 'runs' / started.json()['id']
+        from unittest import mock
+        from mmv import captions as caption_module
+        with mock.patch.object(caption_module, 'render', wraps=caption_module.render) as spy:
+            self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'}).raise_for_status()
+            self.assertEqual(self.wait()['state'], 'complete')
+        self.assertEqual(spy.call_args.args[0].name, 'music-video-uncaptioned.mp4')
+        _, bare = self.start({'song': song})
+        bare.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        self.client.post('/api/captions', json={'source': bare.json()['id'] + '/music-video.mp4'}).raise_for_status()
+        failed = self.wait()
+        self.assertEqual(failed['state'], 'failed')
+        self.assertIn('no timed lyric lines', failed['message'])
 
     def test_subliminal_flashes_are_planned_in_the_preview_and_applied_to_the_finished_video_keeping_a_clean_copy(self):
         song = self.song_upload()

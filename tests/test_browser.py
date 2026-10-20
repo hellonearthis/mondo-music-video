@@ -258,7 +258,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.11')
+                expect(page.locator('#version')).to_have_text('1.8.12')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
@@ -670,6 +670,39 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_the_caption_dialog_defaults_to_the_bottom_and_sends_the_chosen_look(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors, sent = [], []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            video = {'file': 'run1/music-video.mp4', 'kind': 'video', 'title': 'Test video', 'duration': 5}
+            page.route('**/api/outputs', lambda route: route.fulfill(json=[video]))
+            page.route('**/api/captions', lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={'id': 'x'}))[1])
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.locator('button.nav[data-panel=outputs]').click()
+                page.get_by_role('button', name='Add lyric captions').click()
+                dialog = page.locator('#caption-dialog')
+                expect(dialog).to_be_visible()
+                self.assertEqual(page.locator('#caption-form select[name=position]').input_value(), 'bottom')   # the default
+                self.assertEqual([o.get_attribute('value') for o in page.locator('#caption-form select[name=position] option').all()], ['bottom', 'middle', 'top'])
+                dialog.get_by_role('button', name='Add captions').click()
+                expect(dialog).to_be_hidden()
+                page.get_by_role('button', name='Add lyric captions').click()
+                page.locator('#caption-form select[name=position]').select_option('top')
+                page.locator('#caption-form select[name=style]').select_option('neon')
+                dialog.get_by_role('button', name='Add captions').click()
+                expect(dialog).to_be_hidden()
+                self.assertEqual(sent, [{'position': 'bottom', 'style': 'classic', 'size': 'medium', 'source': 'run1/music-video.mp4'},
+                                        {'position': 'top', 'style': 'neon', 'size': 'medium', 'source': 'run1/music-video.mp4'}])
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_the_flash_picture_upload_cannot_race_fail_silently_or_go_stale(self):
         from playwright.sync_api import sync_playwright, expect
         png = self.home / 'flash.png'
@@ -793,7 +826,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.11')
+                expect(page.locator('#version')).to_have_text('1.8.12')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

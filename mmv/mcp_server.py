@@ -76,6 +76,11 @@ def create_server(base_url=None):
         untouched and the untouched video is kept as music-video-clean.mp4. Warn the user that flashing can affect
         photosensitive viewers.
 
+        Lyric captions: `captions` {mode: off|sidecar|burned, style classic|bold|neon|box, position bottom|middle|top, size small|medium|large} turns the timed `lyric_lines` into lyrics.srt (sidecar) and, for
+        burned, draws them on the video, keeping music-video-uncaptioned.mp4; it does not enable lip sync and nothing reaches
+        the writer. With no timed lines the preview carries a note and the video gets no captions. Download the files with the output file names listed in
+        output.json (`captions.srt`, `captions.uncaptioned_copy`). Lines with guessed timing are not captioned.
+
         Lip sync: `mouth_mode` "lip_sync" keeps every passage sealed except those covered by `lyric_lines`
         [{start, end, text}] (seconds on the song clock; use detect_lyrics or align_lyrics); `singers` lists actor
         ids (the first is the main singer; empty means a seeded pick). The preview's `lipsync` shows which passages
@@ -260,6 +265,20 @@ def create_server(base_url=None):
         outside the four public starters, set allow_private_actors only after the user confirms (their reference
         images are still not copied). The result is a job: poll inspect_studio status for the package path."""
         return invoke(client.export_package, run_id, zip, allow_private_actors)
+
+    @server.tool()
+    def caption_video(source: str, lyric_lines: list[dict[str, Any]] | None = None,
+                      style: Literal["classic", "bold", "neon", "box"] = "classic",
+                      position: Literal["bottom", "middle", "top"] = "bottom",
+                      size: Literal["small", "medium", "large"] = "medium") -> dict[str, Any]:
+        """Burn lyric captions into a finished music video as a NEW output; the original is never changed. Free.
+
+        `source` is the output file ("<run id>/music-video.mp4"). Uses the timed lines saved with that video unless
+        `lyric_lines` [{start, end, text, timing}] (seconds on the song clock; see detect_lyrics/align_lyrics) are given.
+        Lines with guessed timing are skipped. A video already captioned when made is redone from its uncaptioned copy.
+        `style` classic (white, black outline), bold (yellow capitals), neon (glowing magenta edge) or box (on a dark
+        panel); `position` and `size` as named. The result is a job: poll inspect_studio status. The new output also offers lyrics.srt."""
+        return invoke(client.caption_video, source, lyric_lines, style, position, size)
 
     @server.tool()
     def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:

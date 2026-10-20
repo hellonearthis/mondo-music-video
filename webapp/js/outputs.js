@@ -347,6 +347,12 @@ export async function loadOutputs() {
       $("#upscale-dialog").showModal();
     };
 
+    const caption = text("button", "Add lyric captions", "secondary", `Burn ${output.title}'s lyric lines into a new copy; the original is kept`);
+    caption.onclick = () => {
+      state.captionSource = output.file;
+      $("#caption-dialog").showModal();
+    };
+
     const deleteBtn = text("button", "Delete", "delete-btn", `Delete ${output.title} from studio`);
     deleteBtn.onclick = () => showDeleteDialog(output);
 
@@ -363,6 +369,7 @@ export async function loadOutputs() {
     const actions = document.createElement("div");
     actions.className = "output-actions";
     actions.append(download, upscale);
+    if (output.kind === "video") actions.append(caption);
     if (output.kind === "video") actions.append(exportButton(output));
     actions.append(deleteBtn);
     card.append(actions);
@@ -502,6 +509,10 @@ function setupOutputsDelegatedHandlers() {
 
 export function initUpscaleForm() {
   setupOutputsDelegatedHandlers();
+  $("#caption-form").onsubmit = handle(async event => {
+    await json("/api/captions", { ...Object.fromEntries(new FormData(event.target)), source: state.captionSource });
+    $("#caption-dialog").close();
+  });
   $("#upscale-form").onsubmit = handle(async event => {
     const body = Object.fromEntries(new FormData(event.target));
     body.scale = Number(body.scale);

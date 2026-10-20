@@ -45,6 +45,12 @@ export function latestSelection() {
 
 export function initSubliminalControls() {
   const form = $("#video-form");
+  const captionMode = form?.elements.captions_mode;           // the look controls matter only when the words are burned in
+  if (captionMode) {
+    const syncCaptions = () => { form.querySelector(".captions-fields").hidden = captionMode.value !== "burned"; };
+    captionMode.addEventListener("change", syncCaptions);
+    syncCaptions();
+  }
   const mode = form?.elements.subliminal_mode;
   if (!mode) return;
   const fields = form.querySelector(".subliminal-fields");
@@ -92,6 +98,9 @@ export async function preview(form) {
     }
     dancePartsFromForm(form, request);
     subliminalFromForm(request);
+    request.captions = { mode: request.captions_mode || "off", style: request.captions_style || "classic",
+      position: request.captions_position || "bottom", size: request.captions_size || "medium" };
+    for (const key of ["captions_mode", "captions_style", "captions_position", "captions_size"]) delete request[key];
     request.mouth_mode = request.mouth_mode || "sealed";
     request.silent_mouths = request.mouth_mode !== "natural";   // older agents read this flag
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;
@@ -177,6 +186,10 @@ export function showQuote(request, quote) {
   }
   if (quote.subliminal) {
     summary.append(text("p", `Subliminal flashes: ${quote.subliminal.times.length} × ${quote.subliminal.frames} frame(s) at ${quote.subliminal.times.join(", ")} s. ${quote.subliminal.notice}`, "muted"));
+  }
+  if (quote.captions) {
+    if (quote.captions.note) summary.append(text("p", quote.captions.note, "se-warn"));
+    else summary.append(text("p", `Lyric captions: ${quote.captions.cues.length} line(s) ${quote.captions.mode === "burned" ? "burned into the video (a copy without captions is kept) and saved" : "saved"} as lyrics.srt.`, "muted"));
   }
   if (request.clip_quality && request.clip_quality !== "standard") {
     summary.append(text("p", `Studio-quality raw clips (${request.clip_quality === "prores" ? "ProRes 4444" : "FFV1 lossless"}): each passage clip is saved near-lossless for editing. `
