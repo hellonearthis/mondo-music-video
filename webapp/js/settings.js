@@ -17,6 +17,7 @@ export const settingLabels = {
   writer_cwd: "Writer working folder",
   comfy_launch: "ComfyUI launch command (JSON arguments)",
   comfy_cwd: "ComfyUI working folder",
+  render_timeout_minutes: "Wait per local clip, minutes (0 = no limit)",
   laya_model_dir: "Laya model folder",
   laya_device: "Laya device (cpu, cuda, mps)",
   writer_url: "Writer service URL (OpenAI-compatible /v1)",
@@ -47,6 +48,7 @@ export const settingTooltips = {
   writer_cwd: "Working directory for the local writer process",
   comfy_launch: "Optional JSON argument list to automatically launch ComfyUI for local rendering",
   comfy_cwd: "Working directory for launching ComfyUI",
+  render_timeout_minutes: "How long to wait for ComfyUI to finish one clip before the run stops with an error. 0 waits forever, which can hide a hung renderer",
   laya_model_dir: "Path to folder containing Laya model.safetensors and config files",
   laya_device: "Hardware execution device for local Laya prompt review (cuda, cpu, mps)",
   writer_url: "OpenAI-compatible /v1 endpoint URL for the music-video writer LLM",
@@ -256,8 +258,9 @@ export async function loadSettings() {
       );
     } else {
       input = document.createElement("input");
-      input.type = name.endsWith("call_estimate") ? "number" : "text";
-      if (input.type === "number") { input.min = "0"; input.max = "100"; input.step = "0.001"; }
+      input.type = name.endsWith("call_estimate") || name === "render_timeout_minutes" ? "number" : "text";
+      if (name === "render_timeout_minutes") { input.min = "0"; input.max = "1440"; input.step = "1"; }
+      else if (input.type === "number") { input.min = "0"; input.max = "100"; input.step = "0.001"; }
     }
     input.name = name;
     input.value = value;
@@ -377,6 +380,7 @@ export function initSettingsAndPicker() {
     raw.auto_updates = event.target.elements.auto_updates.checked;
     raw.vision_call_estimate = Number(raw.vision_call_estimate);
     raw.writer_call_estimate = Number(raw.writer_call_estimate);
+    raw.render_timeout_minutes = Math.max(0, Math.round(Number(raw.render_timeout_minutes) || 0));
     if (Object.keys(h3_models).length) raw.h3_models = h3_models;
     await json("/api/settings", raw, "PUT");
     await loadSettings();

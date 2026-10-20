@@ -2,13 +2,44 @@
 from __future__ import annotations
 
 import os
+import re
+import unicodedata
 import signal
 import subprocess
 import threading
 import time
 import uuid
+from pathlib import Path
 
 from .storage import identifier, read_json, write_json
+
+
+def output_run_id(store, request, now=None):
+    """Readable production folder with a bounded safe name and collision suffix."""
+    song = request.get('song') or ''
+    upload = read_json(store.home / 'uploads' / (Path(song).name + '.metadata.json'), {}) if song else {}
+    title = upload.get('name') or request.get('title') or request.get('kind') or 'video'
+    title = Path(str(title).replace('\\', '/')).stem
+    ascii_title = unicodedata.normalize('NFKD', title).encode('ascii', 'ignore').decode().lower()
+    slug = re.sub(r'[^a-z0-9]+', '_', ascii_title).strip('_')[:36] or 'video'
+    stamp = time.strftime('%Y-%m-%d_%H%M%S', time.localtime(time.time() if now is None else now))
+    base = f'{slug}_{stamp}'
+    candidate, count = base, 2
+    while (store.home / 'runs' / candidate).exists():
+        suffix = f'-{count}'
+        candidate = base[:64 - len(suffix)] + suffix
+        count += 1
+    return identifier(candidate)
+
+
+def job_run_id(store, kind, label='', now=None):
+    """Readable folder for a job's own record (log, result): what it is, then what it was for, then the date and time."""
+    return output_run_id(store, {'title': f'{kind} {Path(str(label).replace(chr(92), "/")).stem}'.strip()}, now=now)
+
+
+def upload_name(store, song):
+    """The original file name of an uploaded song, for readable job folders (empty when unknown)."""
+    return read_json(store.home / 'uploads' / (Path(song).name + '.metadata.json'), {}).get('name') or '' if song else ''
 
 
 class BusyError(ValueError):
@@ -44,14 +75,14 @@ class JobContext:
         if self.cancelled.wait(seconds):
             self.check()
 
-    def command(self, argv, *, env=None, progress_path=None):
+    def command(self, argv, *, env=None, progress_path=None, cwd=None):
         self.check()
         kwargs = {"start_new_session": True} if os.name != "nt" else {
             "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-        proc_env = {**os.environ, **(env or {}), "PYTHONIOENCODING": "utf-8"}
+        proc_env = {**os.environ, **(env or {}), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
         with self.log_path.open("ab") as log:
             process = subprocess.Popen([str(x) for x in argv], stdout=log,
-                                       stderr=log, env=proc_env, **kwargs)
+                                       stderr=log, env=proc_env, cwd=cwd, **kwargs)
             try:
                 last_progress = None
                 while process.poll() is None:

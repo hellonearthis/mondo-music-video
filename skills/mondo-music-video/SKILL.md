@@ -37,7 +37,7 @@ configuration, see the app's `docs/AGENT_SETUP.md`.
 Inspect status, catalog, styles and actors before choosing capabilities. Settings
 inspection reports configured services and key presence without secret values.
 If the app is stopped, use the user's app environment to run
-`mondo-music-video serve`. Missing models/keys need configuration; do not silently
+`bash start.sh --background` from the project folder (`bash stop.sh` stops it; it refuses while a production runs), or `mondo-music-video serve`. Missing models/keys need configuration; do not silently
 switch providers or install/download model weights.
 
 ## Produce
@@ -80,13 +80,20 @@ needs the user's authorization (`confirm`).
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
 
-Dancing: `dance_mode` "group" (default "off"), optional `dancers` (actor ids; empty = whole cast, at most 3 per passage are choreographed),
+Independent mode gives each actor their own movement and musical part. `dance_parts` maps actor ids to `auto`, `beat`, `drums`, `bass` or `vocals`; auto cycles drums/bass/vocals/beat in selected-dancer order. Version-3 previews include contrasting movement families as well as part cues; fresh previews use the repair and resumes keep their saved choreography. No lead applies. Existing stem audio/analysis supplies per-part cues; unavailable parts explicitly fall back to the overall beat. This mode never downloads models or starts separation. Distinct rendered movement and precise visual timing need operator validation.
+
+Dancing: `dance_mode` "group" or "independent" (default "off"), optional `dancers` (actor ids; empty = whole cast, at most 3 per passage are choreographed),
 `dance_direction` (style only, default "Dancing") and `dance_lead` (actor id or "none"; ignored where the lead is off screen). Mouths keep
 following `mouth_mode`; a singer may also dance. The preview returns `dance`. Dancing is free to plan; it adds no cost.
 
 Subliminal flash: `subliminal` (mode off/image/text, `text` or an uploaded `image`, `frames` 1-12, `placement` manual with `times` in
 seconds on the finished video's clock, or `downbeats` with `count`) flashes a few frames; flashes stay 1 s apart, the clean video is kept as
 `music-video-clean.mp4`, and the user should be warned that flashing can affect photosensitive viewers.
+
+Lyric captions: `captions` (mode off/sidecar/burned; `style` classic/bold/neon/box, `position` bottom/middle/top, `size` small/medium/large, optional `color`/`outline_color` as `#rrggbb` and a `font` from `list_caption_fonts`, burned only) uses the timed `lyric_lines` to write `lyrics.srt` (sidecar) or also burn the words into
+the video, keeping `music-video-uncaptioned.mp4`. It needs timed lines (detect or align lyrics first), does not turn on lip sync, sends
+nothing to the writer and is free. Lines whose timing was only guessed are skipped. A failed burn leaves the video untouched with a warning.
+To caption a video that is already finished, use `caption_video` (agent client `caption_video(source, lyric_lines=None)`): it burns the saved lines (or the `lyric_lines` you pass) into a NEW output and leaves the original alone; it is a job under the single-operation guard.
 
 Lip sync: `mouth_mode` `lip_sync` with `lyric_lines` ([{start, end, text}] seconds) and optional `singers`
 makes only the passages with sung lines sing; the others stay sealed. Use `detect_lyrics` / `align_lyrics`
@@ -114,11 +121,19 @@ Tell the user these options exist and recommend one for their machine before the
 For the optional slower batched vision check, set `vision_quality_check: true`
 in the video preview request (default `false`). Explain the extra model loading
 and judging time. It needs a local vision-capable `writer_launch` with mmproj;
-this is separate from API vision for style harvesting. On direct H3 and SDK H3,
-configure `comfy_launch` and ask the operator to close ComfyUI before preview so
-Mondo can manage its own service. The SDK proxy can remain running. Mondo only
-stops/restarts ComfyUI it launched. External ComfyUI causes a skip note if it
-appears after preview. Inspect and report `quality_warnings`, including vision
+this is separate from API vision for style harvesting. Mondo launches it on
+port 8083 itself; do not ask the user to start it. `inspect_studio` `status` lists
+`services.vision_quality` (`available` = running now, `has_launch` = Mondo can start
+it); offline but launchable is fine. Mondo hands the GPU between models one at a
+time and uses the CPU for Laya when free GPU memory is short or unknown; report
+a resource error from a failed hand-off verbatim and do not stop processes Mondo
+did not start. If `offline_engines` names a
+launch setting, fix that setting. On direct H3 and SDK H3,
+an existing ComfyUI can stay running. After rendering, Mondo releases its model
+cache through `/free` only with an idle queue, confirms memory release, then
+loads vision. It never stops external ComfyUI or interrupts queued/running work.
+Configure `comfy_launch` if ComfyUI is offline; only Mondo-owned processes use
+stop/restart. The SDK proxy can remain running. Inspect and report `quality_warnings`, including vision
 startup failures/skips; those do not mean vision passed. Vision mostly warns;
 repeated unrequested framing devices can use the passage's single free local
 retry budget, shared with pixel checks. Pixels decide motion. Never start paid
@@ -127,6 +142,11 @@ re-renders without user consent.
 A preview expires after ten minutes and becomes invalid if relevant inputs or
 settings change. Request a new preview and reassess any paid authorization rather
 than forging a quote or treating an expired one as a retry instruction.
+When `inspect_studio` status says `can_retry_prompts`, use
+`preview_retry_prompts(run_id)` to obtain a fresh quote from the saved failed
+request. Review it and obtain explicit start consent again. This is for prompt
+validation failures before rendering; it never starts work on its own. See
+`references/requests.md` for the CLI form.
 
 ## Actors and OAP
 
@@ -177,3 +197,12 @@ or closing credits. Topaz export uses the user's installed compatible Topaz and
 preserves the source. Cancel an operation when the user requests it; already
 submitted remote jobs may continue and incur charges. No film, Micro Drama,
 Vault, cutting-room, Hodge TV, clip redo or manual reassembly tools exist here.
+
+## Instrument performance (1.9.0)
+
+Use `instrument_mode: "perform"` only when requested (default off), with `instrument_assignments` mapping selected actor IDs to `drums`, `bass`, `guitar` or `keyboards`. `instrument_references: true` uses the instrument library; inspect `instruments` first. Guitar/keyboard sheets are bundled; import missing sheets with `import_instrument(instrument_id, reference_path, license, provenance)` or use `instrument_references: false` for text guidance. Local imports never overwrite or publish.
+
+Inspect preview `instruments` for per-shot cues, mix/unknown fallbacks and per-passage reference counts. Players do not dance; other actors may. Approved singers may sing while playing. Only existing stem caches/audio are used (CPU analysis may run); no separation or downloads start. Keyboards use piano as a proxy. Slot overflow stops preview. Saved plans and sheet hashes are checked on resume. Same-song/seed operator comparison is still pending; do not promise precise finger/note sync or verified visual consistency. Existing OAP, single-operation, quote consent and no paid retry rules apply.
+The writer may make a narrow guitar-contact correction before the normal checks;
+inspect the private operation log for edited shot numbers. A wrong-instrument
+gesture still fails and must be corrected by the writer.

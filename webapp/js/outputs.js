@@ -1,6 +1,7 @@
 // Finished Videos, Musical Score Canvas visualization, and Topaz upscale dialog.
 
 import { $, $$, api, handle, json, notice, option, state, text } from "./core.js";
+import { initColourWheels } from "./colorwheel.js";
 import { showQuote } from "./production.js";
 
 // One theme observer for all score views; loadOutputs disposes views before replacing cards.
@@ -347,6 +348,12 @@ export async function loadOutputs() {
       $("#upscale-dialog").showModal();
     };
 
+    const caption = text("button", "Add lyric captions", "secondary", `Burn ${output.title}'s lyric lines into a new copy; the original is kept`);
+    caption.onclick = () => {
+      state.captionSource = output.file;
+      $("#caption-dialog").showModal();
+    };
+
     const deleteBtn = text("button", "Delete", "delete-btn", `Delete ${output.title} from studio`);
     deleteBtn.onclick = () => showDeleteDialog(output);
 
@@ -363,6 +370,7 @@ export async function loadOutputs() {
     const actions = document.createElement("div");
     actions.className = "output-actions";
     actions.append(download, upscale);
+    if (output.kind === "video") actions.append(caption);
     if (output.kind === "video") actions.append(exportButton(output));
     actions.append(deleteBtn);
     card.append(actions);
@@ -416,7 +424,7 @@ const unfinishedRunRowHtml = (run) => {
     : "";
 
   return `
-    <tr data-id="${escId}" data-title="${escTitle}" data-size="${run.size_mb}" style="border-bottom:1px solid var(--line);">
+    <tr data-id="${escId}" data-title="${escTitle}" data-size="${run.size_mb}" data-clips="${run.rendered_clips || 0}" style="border-bottom:1px solid var(--line);">
       <td style="padding:8px;font-weight:600;">${escTitle}</td>
       <td style="padding:8px;" class="muted">${escapeHtml(run.created_str)}</td>
       <td style="padding:8px;">${passages}</td>
@@ -459,7 +467,7 @@ function setupOutputsDelegatedHandlers() {
       if (!btn) return;
       const row = btn.closest("tr[data-id]");
       if (!row) return;
-      const { id, title, size } = row.dataset;
+      const { id, title, size, clips } = row.dataset;
       const action = btn.dataset.action;
 
       if (action === "finish-run") {
@@ -468,10 +476,11 @@ function setupOutputsDelegatedHandlers() {
         notice("");
         showQuote({ kind: quote.kind }, quote);
       } else if (action === "purge-run") {
-        if (!window.confirm(`Purge draft "${title}" (${size} MB)? This cannot be undone.`)) return;
+        const rendered = Number(clips) > 0;
+        if (!window.confirm(`Purge draft "${title}" (${size} MB)? This cannot be undone.` + (rendered ? ` It holds ${clips} rendered clip(s) that may already be paid for.` : ""))) return;
         btn.disabled = true;
         try {
-          await api(`/api/runs/unfinished/${encodeURIComponent(id)}`, { method: "DELETE" });
+          await api(`/api/runs/unfinished/${encodeURIComponent(id)}?confirm_rendered=true`, { method: "DELETE" });
           notice(`Purged draft "${title}".`);
           await loadUnfinishedRuns();
         } finally {
@@ -486,11 +495,11 @@ function setupOutputsDelegatedHandlers() {
     purgeAllBtn._hasClickAction = true;
     purgeAllBtn.onclick = handle(async (e) => {
       e.stopPropagation();
-      if (!window.confirm("Purge ALL unfinished drafts and interrupted runs? Completed music videos will NOT be touched.")) return;
+      if (!window.confirm("Purge unfinished drafts? Completed videos and interrupted runs that hold rendered clips will NOT be touched.")) return;
       purgeAllBtn.disabled = true;
       try {
         const res = await (await api("/api/runs/unfinished/purge", { method: "POST" })).json();
-        notice(`Purged ${res.purged_count} unfinished draft folders.`);
+        notice(`Purged ${res.purged_count} unfinished draft folders.` + (res.kept_with_clips ? ` Kept ${res.kept_with_clips} with rendered clips; purge those one at a time.` : ""));
         await loadUnfinishedRuns();
       } finally {
         purgeAllBtn.disabled = false;
@@ -499,8 +508,33 @@ function setupOutputsDelegatedHandlers() {
   }
 }
 
+export async function initCaptionControls() {
+  initColourWheels();                       // inline colour wheels replace the browser's own colour pickers
+  $$('[data-caption-custom]').forEach(checkbox => {
+    const form = checkbox.closest("form");
+    const sync = () => { form.querySelector('[data-caption-colours]').hidden = !checkbox.checked; };
+    checkbox.addEventListener("change", sync);
+    sync();
+  });
+  const form = $("#video-form");
+  form.querySelector(".captions-fields").hidden = form.elements.captions_mode.value !== "burned";
+  try {
+    const response = await fetch("/api/captions/fonts");
+    const { fonts } = response.ok ? await response.json() : { fonts: [] };
+    $("#caption-fonts").replaceChildren(...fonts.map(font => option(font, font)));
+  } catch { /* Installed font suggestions are optional. */ }
+}
+
 export function initUpscaleForm() {
   setupOutputsDelegatedHandlers();
+  $("#caption-form").onsubmit = handle(async event => {
+    const form = event.target;
+    await json("/api/captions", { position: form.elements.position.value, style: form.elements.style.value,
+      size: form.elements.size.value, color: form.elements.custom.checked ? form.elements.color.value : "",
+      outline_color: form.elements.custom.checked ? form.elements.outline.value : "",
+      font: form.elements.font.value, source: state.captionSource });
+    $("#caption-dialog").close();
+  });
   $("#upscale-form").onsubmit = handle(async event => {
     const body = Object.fromEntries(new FormData(event.target));
     body.scale = Number(body.scale);

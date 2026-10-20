@@ -158,21 +158,25 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   driverRow.append(driverLabel, qualityLabel, driverNote, driverSetup);
 
   const lipOn = request.mouth_mode === "lip_sync";
-  let lines = (request.lyric_lines || []).map(item => ({ start: item.start, end: item.end, text: item.text }));
+  const captionsOn = ["sidecar", "burned"].includes(request.captions?.mode);
+  const linesOn = lipOn || captionsOn;           // the lyric lines serve lip sync and captions; the singer and passage parts are lip sync only
+  let lines = (request.lyric_lines || []).map(item => ({ start: item.start, end: item.end, text: item.text, ...(item.timing ? { timing: item.timing } : {}), ...(item.section ? { section: item.section } : {}) }));
   let singers = [...(request.singers || [])];
   const appliedLines = JSON.stringify(lines), appliedSingers = JSON.stringify(singers);
   const lipBox = text("div", "", "se-lip");
-  lipBox.hidden = !lipOn;
+  lipBox.hidden = !linesOn;
   const singerSelect = document.createElement("select");
   singerSelect.setAttribute("aria-label", "Main singer");
   const singerLabel = text("label", "Main singer ", "se-driver-label",
     "The actor who sings the lyric lines. Left on 'choose for me', the program picks one with your seed.");
   singerLabel.append(singerSelect);
+  singerLabel.hidden = !lipOn;
+  const voiceNote = text("p", "", "muted se-lip-note");
   const lineList = text("div", "", "se-lines");
   const lineBar = text("div", "", "se-section-bar");
   const addLine = text("button", "Add line at cursor", "secondary", "Add a lyric line starting where the playback cursor is");
   addLine.type = "button";
-  lineBar.append(addLine, text("span", "Give each sung line its start, end and words. Passages with at least about three quarters of a second of singing will sing; the others stay sealed.", "muted"));
+  lineBar.append(addLine, text("span", "Give each sung line its start, end and words." + (lipOn ? " Passages with at least about three quarters of a second of singing will sing; the others stay sealed." : " Press Re-plan to caption these lines."), "muted"));
   const lipSummary = text("div", "", "se-lip-summary");
   const detectBar = text("div", "", "se-section-bar");
   const speechSelect = document.createElement("select");
@@ -188,7 +192,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   pasteBox.setAttribute("aria-label", "Pasted lyrics");
   const pasteBtn = text("button", "Time pasted lyrics", "secondary", "Match your words to the song to find when each line is sung (run Detect lyrics first)");
   pasteBtn.type = "button";
-  lipBox.append(text("h3", "Lyrics and singing"), singerLabel, detectBar, detectNote, speechSetup, pasteBox, pasteBtn,
+  lipBox.append(text("h3", lipOn ? "Lyrics and singing" : "Lyrics for captions"), singerLabel, voiceNote, detectBar, detectNote, speechSetup, pasteBox, pasteBtn,
     lineList, lineBar, lipSummary);
 
   const sectionHead = text("h3", "Sections");
@@ -225,14 +229,14 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
 
   function refreshStatus() {
     const current = collectEdits();
-    const lipDirty = lipOn && (JSON.stringify(lines) !== appliedLines || JSON.stringify(singers) !== appliedSingers);
+    const lipDirty = linesOn && (JSON.stringify(lines) !== appliedLines || JSON.stringify(singers) !== appliedSingers);
     const dirty = !same(current, applied) || driver !== appliedDriver || (usesQuality(driver) && quality !== appliedQuality) || lipDirty;
-    const valid = sectionsValid() && (!lipOn || linesValid());
+    const valid = sectionsValid() && (!linesOn || linesValid());
     barOne.disabled = selected === null;
     muteBtn.disabled = selected === null;
     replanBtn.disabled = !dirty || !valid;
     replanBtn.classList.toggle("attention", dirty && valid);
-    status.textContent = !valid ? (lipOn && !linesValid() ? "Each lyric line needs words and an end after its start." : "Each section must be at least 1 second long.")
+    status.textContent = !valid ? (linesOn && !linesValid() ? "Each lyric line needs words and an end after its start." : "Each section must be at least 1 second long.")
       : dirty ? "You have edits that are not planned yet. Press Re-plan to update the cuts and the cost before you start."
         : "The plan matches what you see.";
     nudgeLabel.textContent = ` ${edits.beat_nudge_ms > 0 ? "+" : ""}${edits.beat_nudge_ms} ms`;
@@ -490,7 +494,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     status.textContent = "Planning…";
     try {
       await onReplan(collectEdits(), driver, usesQuality(driver) ? quality : "standard",
-        lipOn ? { lyric_lines: lines.map(item => ({ start: item.start, end: item.end, text: item.text.trim(), timing: item.timing || "manual", ...(item.section ? { section: item.section } : {}) })), singers } : null);
+        linesOn ? { lyric_lines: lines.map(item => ({ start: item.start, end: item.end, text: item.text.trim(), timing: item.timing || "manual", ...(item.section ? { section: item.section } : {}) })), ...(lipOn ? { singers } : {}) } : null);
     } catch (error) {
       status.textContent = error.message;
       replanBtn.removeAttribute("aria-busy");
@@ -573,12 +577,28 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
 
   const confirmed = item => { if (item.timing === "interpolated" || item.timing === "uncertain") item.timing = "manual"; };
 
+  // Advisory only: a clear voice/singer gender mismatch gets a note and a one-click best match, never a block.
+  function renderVoice(plan) {
+    const info = quote.voice, voiceKind = info && info.voice, genders = (info && info.genders) || {};
+    const singer = singers[0] || plan.singer;
+    voiceNote.replaceChildren();
+    if (!voiceKind || !genders[singer] || genders[singer] === voiceKind) return;
+    const match = (request.actors || []).find(id => genders[id] === voiceKind);
+    voiceNote.append(`The vocals sound ${voiceKind}, but ${plan.actors[singer] || singer} reads as ${genders[singer]}. You can keep this choice. `);
+    if (!match) return;
+    const useMatch = text("button", `Use ${plan.actors[match] || match}`, "secondary", "Make the best-matching actor the main singer");
+    useMatch.type = "button";
+    useMatch.onclick = () => { singers = [match]; singerSelect.value = match; refreshStatus(); renderVoice(plan); };
+    voiceNote.append(useMatch);
+  }
+
   function renderLip() {
-    if (!lipOn) return;
+    if (!linesOn) return;
     const plan = quote.lipsync || { actors: {}, passages: {} };
     singerSelect.replaceChildren(option("", "Choose for me (seeded)", "Pick one of the cast with the production seed"),
       ...(request.actors || []).map(id => option(id, plan.actors[id] || id)));
     singerSelect.value = singers[0] || "";
+    if (lipOn) renderVoice(plan);
     lineList.replaceChildren();
     lines.forEach((item, i) => {
       const row = text("div", "", "se-line-row");
@@ -624,9 +644,9 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
     }
     const passages = quote.score ? quote.score.passages : [];
     if (!lines.length) {
-      lipSummary.append(text("p", "No lyric lines yet, so every passage stays sealed. Add the sung lines above, then press Re-plan.", "muted"));
+      lipSummary.append(text("p", lipOn ? "No lyric lines yet, so every passage stays sealed. Add the sung lines above, then press Re-plan." : "No lyric lines yet, so there is nothing to caption. Detect or paste the lyrics above, then press Re-plan.", "muted"));
     }
-    passages.forEach(passage => {
+    if (lipOn) passages.forEach(passage => {
       const entry = plan.passages[`seg${String(passage.index).padStart(3, "0")}`];
       if (!entry) return;
       const who = entry.singing ? `${plan.actors[entry.actor_id] || entry.actor_id} sings (${entry.reason})` : `sealed (${entry.reason})`;
@@ -636,7 +656,7 @@ export async function mountScoreEditor(host, request, quote, { onReplan, onDirty
   let speech = null;
   const SPEECH = { tiny: "tiny", base: "base", small: "small", medium: "medium", "large-v3": "large-v3 (most accurate)" };
   function renderSpeech() {
-    if (!lipOn) return;
+    if (!linesOn) return;
     speechSetup.replaceChildren();
     if (!speech) { detectNote.textContent = "Checking whether lyrics detection is available…"; return; }
     const keep = speechSelect.value;

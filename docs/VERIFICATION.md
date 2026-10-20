@@ -1,4 +1,170 @@
-# Verification — 1.6.1
+# Verification — 1.9.5
+
+## 1.9.5 — Instrument action correction
+
+Final complete mock-service suite: **625 tests +141 subtests passed**,109.06s,no skips. Focused instrument, worker boundary and protected-scheme checks52 tests+20subtests passed before the final narrow negation guard; all tests then passed in the full suite. The worker mock verifies one writer call, a separate repair receipt, full prompt validation and original JSON retention. Wrong keyboard gestures, quoted lyrics and negated non-playing text are left unchanged. Off/default golden tests remain passing. Protected scheme check returns[]; no protected source, pins or planning changed.
+
+Read-only evaluation of the owner's second failed run found complete writer JSON and a65k context allocation. Applying the new pure repair to the saved fourth draft changes shots2,3,5,6 and reduces instrument problems4→0; assembled prompt schema and motion checks also return[]. This does not establish that Laya or a real renderer will accept the revised prompt: no live model or GPU work was run. Passage length stayed at the saved plan's eight shots/215 frames.
+
+Fresh handler, installed package metadata and live `/api/version` report1.9.5. The idle GUI was restarted with its original data/port and shows the latest failed run as `can_retry_prompts=true`; no retry was started. Wheel/sdist under `/tmp/mmv-v195-packages` include exactly the four authorized starter OAPs, six public style JSON files and two owner-supplied instrument PNGs, with no private data or collaboration files. No stage, commit, push or publication.
+
+## 1.9.4 — Instrument prompt retry and agent coverage
+
+Final complete mock-service suite: **621 tests +141 subtests passed**,103.44s, no skips, after the saved-status display correction. Focused instrument/public-agent checks25 tests +8 subtests passed; the final status regression passed separately. The failed-writer test confirms three mock writer calls, zero render submissions, a visible retry-eligible status, a fresh quote from the saved request, renewed consent enforcement and rejection once a render receipt exists. MCP stdio discovery reports39 tools including `preview_retry_prompts`; dancing/BONK and lyric-caption options were already covered. JavaScript syntax, diff whitespace and protected scheme checks passed.
+
+Read-only evaluation of the four saved writer drafts against the revised opt-in instrument guard shows attempts2 and3 now have zero instrument problems. Attempt2 still has a separate static-shot motion problem; the saved run was not modified and no real writer, Laya, renderer or GPU work was invoked. The new GUI action creates a fresh preview; no production was retried automatically.
+
+Fresh handler and installed metadata both report1.9.4; the restarted idle app's `/api/version` also reports1.9.4. Live status of the owner's failed run reports `can_retry_prompts=true`, `can_resume=false` and omits the stale generic context-size hint. The served HTML includes the Try again button. Current wheel/sdist in `/tmp/mmv-v194-packages` pass the private-file and public-asset allowlist audit: four starter OAPs, six public styles and two owner-supplied instrument PNGs only. No stage, commit, push or publication.
+
+## 1.9.3 — Engine lifecycle, GPU headroom and daylight preset
+
+Final complete suite after the sidebar copy edit: **619 tests +141 subtests passed**, no skips,107.39s. Chromium verifies the separate quality-vision card and automatic-start badge; mock transport production reaches jobs.start with vision enabled and style harvesting offline. Synthetic model files, fake HTTP services and process handles exercise insufficient/ample/unknown memory, Laya CPU fallback before load, CPU/projector distinctions, bad launch settings, busy/unmeasurable renderer handoffs, failed exits, returned memory, external ownership, resume and retry budgets. Test worker subprocesses explicitly mock GPU measurements; the shared HTTP writer fixture is CPU-only. The first broadened run exposed that missing fixture declaration under the new external-model guard; it was corrected and complete subsequent runs passed.
+
+Fresh handler, installed package metadata, project metadata and live /api/version all report1.9.3. The idle GUI was restarted preserving environment/data/port and --no-auto-update. With existing ComfyUI running, a temporary saved-song/cast preview with vision=true returnedHTTP200,2passages,paid=false and **offline_engines=[]**. Instrument references were disabled only in that temporary request because the saved bass assignment still has no supplied sheet; the saved project was not edited. Quality vision reports port8083, available=false, has_launch=true; no manual vision launch is required. The earlier1.9.2 HTTP200-only preview check did not assert offline_engines and missed the stale style-harvest guard; this check does. No production, live /free, model launch, paid generation or real GPU handoff was performed by verification.
+
+A fresh Claude Code Sonnet5.5 medium session expanded daylight in an isolated worktree. Coordinator integration follows all eleven harvest axes plus free axes/borrowable motifs, removes copied legacy mouth/audio directives, preserves supplied shot scale and ensemble staging, and keeps the original content bounds. Exact legacy factory files upgrade; customized, unreadable and deliberately removed defaults are preserved. New migration/API-bounds tests pass; the live daylight file matches the new factory value and has all11 axes. Live HTML serves “You can do anything” above MGL.
+
+Protected scheme check returns[]; protected source/pins/extraction hashes and protection tests have no diff. Wheel and source archive under /tmp/mmv-v193-packages pass private-file and public-asset allowlist audits. Only the authorized four starter actors, six public style presets and owner-provided guitar/keyboard references are bundled. No staging, commit, push or publication. Real GPU memory reserves remain estimates tested with mocks; deliberate physical GPU orchestration and instrument visual validation remain operator work.
+
+## 1.9.2 — Existing ComfyUI handoff (mock and preview verified)
+
+Mocks cover accepted running-service previews without launch commands, one empty-response `/free` submission, asynchronous memory polling, busy/unknown queues and races, failed-release startup suppression, ownership handling and reuse across retry batches. Fresh vision-enabled productions also release an idle renderer's models before writer/Laya preparation, so a stale render cache cannot crowd them out; busy work stops preparation before any writer call. Original default/off behavior and paid-retry guards remain covered.
+
+The installed ComfyUI reports its allocator in device names. PyTorch documents that some reservation counters are not meaningful with `cudaMallocAsync`; that backend therefore additionally requires driver-reported free VRAM of at least90% before the next model starts. Ordinary reservation accounting allows at most256MiB of residual context/custom-node allocations. CPU devices need no GPU handoff. MPS/direct-memory devices whose ComfyUI stats expose system RAM rather than model allocations report an unsupported memory handoff rather than claiming success. `/free` is requested once, then bounded polling confirms headroom; an empty200 response alone is not success. Source checked: installed ComfyUI `server.py`, `main.py`, `comfy/model_management.py`, upstream https://github.com/Comfy-Org/ComfyUI/blob/master/server.py and https://docs.pytorch.org/docs/2.14/notes/cuda.html .
+
+Final full Python suite:528 tests +137 subtests passed,97.80s,no skips. Focused handoff/vision tests44 passed. Native Windows/PowerShell execution of the descriptive tuning alias was not available; its legacy-compatible argument normalization was reviewed statically. No real GPU or paid generation is part of these automated tests. Idle app activated with its original environment/data and --no-auto-update; live version1.9.2 verified. Saved-song/cast preview with vision=true and ComfyUI already running passed HTTP200 (2 passages, paid=false) with instrument references disabled only in that temporary test request. The unmodified saved request reaches a separate missing-bass-sheet check: only guitar/keyboards are installed. The user project was not edited and no production or live memory release was started. Live HTML and vocabulary API labels contain no contributor handle. The real GPU cache/vision swap remains an operator verification step; mocks establish orchestration, not GPU model compatibility.
+
+## 1.9.1 — Instrument product copy correction
+
+Removed the instrument notice from the form, preview, API catalog/plan and export text, including old saved notices in demo receipts. Normal instrument controls remain. Agent instructions no longer require relaying the notice. Validation notes stay in developer documentation; protected prompting sources, integrity banner and export integrity note are unchanged. Existing browser assertions now require no instrument notice in either mode; existing API/export tests check that the notice is absent. Final full suite: 511 tests + 137 subtests passed, no skips, 94.75 s. Fresh version handler reports 1.9.1 and protected_scheme.check()==[]. Idle app restarted with its existing configuration; live /api/version verified 1.9.1. The redundant sandbox-only focused run stalled on its TestClient boundary and was cancelled; the complete suite with local mock ports covered those checks successfully.
+
+## 1.9.0 instrument performance — code verified, visual comparison pending
+
+- Final full suite: **511 tests + 137 subtests passed**, no skips, 91.57 s. Relevant synthetic/mock checks cover defaults/golden fingerprints, stem/mix/unknown activity, shared-design deduplication and slot overflow, asset hashes, saved settings/cue replay, changed-sheet refusal, pronouns/negative wording, cache rejection and approved singing coexistence.
+- API-to-worker mock production completed with two actors and two instrument references. Verified four distinct H3 image filenames with no Windows-invalid colon, bound saved prompts, no private provenance in writer jobs, resume replays cues, and a changed sheet blocks start/recovery. No GPU/render provider was used; returned mock video is synthetic ffmpeg footage.
+- Chromium temporary-app test verifies assignment follows actor identity and survives project restore, warning visibility and boolean/form serialization. MCP stdio discovery advertises 38 tools; mock import/inspection succeeds. Existing consent/OAP tests pass.
+- Fresh version handler and package metadata: 1.9.0. `protected_scheme.check()` returns `[]`; protected originals, pins, extraction hashes and protection tests have no diff. Existing default worker golden/fingerprint tests pass.
+- Built wheel and source archive in a temporary directory; both public-asset/privacy audits passed. They include only guitar/keyboard PNGs + metadata/README and the four authorized OAP starter packages; no local imports/originals, credentials, team state, Claude worktrees or temporary prompts.
+- Restarted the idle web app preserving its launch environment, data directory and port, with runtime automatic updating disabled. Live `/api/version` independently verified 1.9.0 and `/api/instruments` confirms guitar/keyboards available, drums/bass missing. No model/render services started and saved user project was not edited.
+- Owner-supplied sheets visually inspected and bundled at their created dimensions: guitar 1360×2048, keyboards 1664×2496. Native resolution accepted by the owner; no upscaling. Some cross-panel hardware differences are recorded in instrument documentation. Drums/bass sheets and deliberate same-song/seed real before/after comparison remain pending. Do not claim rendered consistency, contact or note/finger synchronization validated.
+
+## 1.8.5 independent dance differentiation repair (2026-10-19)
+
+Final full `.venv/bin/python -m pytest -q`: **447 tests and 119 subtests passed**,
+no skips, 96.58 s, temporary mock services. Focused pure/worker-boundary coverage:
+**52 passed**, including distinct families with repeated parts/reordered casting,
+larger-roster collision handling, actor-name attribution, identical mixed-family
+actions, independent leadership/copying, valid music/prop references, pauses and
+body actions sharing a mouth-policy sentence. Group/off golden fixtures and
+protected integrity checks remain passing.
+
+Fresh imported `/api/version`: **1.8.5**; protected check `[]`; diff and local
+documentation link checks passed. The initial full run had one stale expected
+choreography version (2 rather than 3); corrected before the final full pass.
+Socket-restricted sandbox runs stalled in Starlette TestClient and were cancelled;
+the completed suite ran outside that sandbox. No test used production data or GPU.
+
+A separate read-only replay of the prior operator run's first prompt against
+the revised independent checker reports five failures, including its named actor
+being declared lead and missing lateral/rotation actions. This confirms that the
+old prompt no longer bypasses checks; it does not prove the renderer will follow
+new prompts. Saved run files were not modified.
+
+Claude Code reviewed and the concrete findings were addressed; see the review
+record. No new render, service restart, live-version claim, commit or push.
+Same-song/same-seed visual validation of this repair remains pending. The repeated
+camera-move issue is only on the roadmap, as the owner requested.
+
+## 1.8.4 live-test adapter fixes (2026-10-19)
+
+Full `.venv/bin/python -m pytest -q`: **439 tests and 119 subtests passed**,
+no skips, 87.76 s, temporary mock services. New regression exercises the original
+local Comfy polling adapter across simulated elapsed times beyond two hours and
+confirms numeric infinity avoids the None comparison failure. Agent transport
+checks the uploaded song basename is retained; other media remain generically named.
+
+Fresh imported and live `/api/version` report **1.8.4**; protected check is `[]`.
+The worker boundary changes without editing the protected engine. The initial
+operator-authorized local test passed prompt review but exposed the adapter error
+after submission; its saved request was reconciled and stopped before retry.
+Corrected real test completed all three clips without pixel-check retries or warnings;
+video/audio streams and final frame count were inspected. Visual sampling showed
+stronger motion in the first passage than the middle passage; precise synchronization
+is unverified. A separate planner coverage gap was observed and left unchanged
+because the planner is protected. Exact media details are retained only in ignored
+local collaboration reports; do not infer dance quality from whole-frame checks. No paid submissions, publication,
+commit or push. New fork head and scoped adaptation are recorded in the review log.
+
+
+## 1.8.3 independent dancing and readable run folders (2026-10-19)
+
+Final full `.venv/bin/python -m pytest -q`: **438 tests and 119 subtests passed**,
+no skips, 85.06 s, with temporary mock services outside the socket-restricted sandbox.
+
+Focused function/worker-boundary checks: **46 passed**. Chromium independent
+actor overrides survive cast changes and saved-project restoration; existing fold
+restoration also passes. Agent client and MCP transport previews accept independent
+mode and preserve consent guards. New mock production run IDs use the uploaded
+song basename and timestamp; existing resume tests preserve their original IDs.
+
+Coverage includes stable automatic/manual assignments, invalid actor/part rejection,
+explicit missing/empty/broken stem fallback, no separation/download/GPU calls,
+per-part pauses/accents and half-open shot boundaries, edited beat-grid projection
+without cache mutation, singing/mouth-policy combinations, off-mode golden worker
+fixtures, prompt-plan bindings, filename sanitization and collisions.
+
+Fresh-process `api_version()` reports **1.8.3**; pyproject and README agree.
+Protected check returns `[]`: base/group/singing/mouth/quality originals and pins
+remain unchanged. Independent instructions are a separate owner-approved opt-in
+block. No real before/after render comparison, paid/GPU work, live-version claim,
+service restart, stage, commit or push. Visual synchronization remains unverified.
+
+Claude Code review completed and findings were triaged in COLLABORATOR_REVIEW.md.
+Antigravity independent review is received and triaged: no blocking defect, optional
+layout polish deferred, retained deselected-actor overrides confirmed intentional.
+The report ran no tests; this documentation-only handoff does not rerun the suite.
+Shared AGENTS.md now requires functional style with measured performance claims.
+The existing uncommitted collaboration instructions remain preserved.
+
+
+## 1.8.2 Antigravity review follow-up (2026-10-19)
+
+Final full `.venv/bin/python -m pytest -q`: **423 tests and 119 subtests passed**,
+no skips, 94.71 s, outside the socket-restricted sandbox. Focused Chromium suite:
+**17 passed** (26.49 s). Temporary services/media only. New browser coverage opens
+the guide from the form and workspace, follows its workspace link, verifies the
+category-specific overflow accessible name and computes dark hover contrast from
+rendered CSS colors (at least 4.5:1).
+
+Fresh-process version handler reports **1.8.2**; pyproject and README agree.
+Protected-scheme check returns `[]`; `git diff --check` passes. Antigravity's
+read-only review is received and all findings have recorded dispositions in
+[COLLABORATOR_REVIEW.md](COLLABORATOR_REVIEW.md). No new helper calls, real
+renders, GPU/paid work, live process version claim, restart, commit or push.
+
+
+## 1.8.1 collaborator integration (2026-10-19)
+
+Final `.venv/bin/python -m pytest -q` outside the socket-restricted sandbox:
+**422 tests and 119 subtests passed**, no skips, 90.38 s. Tests use temporary
+media and mock services, including Chromium workspace navigation/restoration,
+category-card updates, independent fold persistence, and agent/MCP version discovery.
+The previous complete run also passed (90.65 s), before the final navigation error notice.
+
+A fresh-process import of `api_version()` returned **1.8.1**; pyproject and README
+agree. `mmv.protected_scheme.check()` returned `[]`; no protected prompts, pins or
+protection tests changed. `git diff --check` passed. A parsed comparison of all form
+controls against 1.8.0 found only lyrics textarea height changing from five to four
+rows; field defaults/options are preserved. Windows UTF-8 launcher execution was
+reviewed but not run on this Linux host.
+
+Reviewed fork head: `1704454c4d3f538866b1cb3eed72af5dfb74f0e5` in an isolated
+checkout. Claude Code completed a read-only review; findings and dispositions are
+in [the review record](COLLABORATOR_REVIEW.md). Antigravity's requested UI review
+was pending at that delivery; its completed follow-up is recorded above.
+No real generation, GPU/paid work, service restart, commit, push or publication.
+No claim that an existing running process serves 1.8.1.
+
 
 ## 1.8.2 Antigravity review follow-up (2026-10-19)
 

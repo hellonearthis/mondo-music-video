@@ -28,14 +28,15 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, agreements, production, score_view
-from mmv.jobs import BusyError, Jobs
+from mmv import actors, agreements, instrument_assets, production, score_view
+from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.13"
+LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
+MGL_APP_VERSION = "1.9.5"
 WEB = Path(__file__).parent
 
 
@@ -244,6 +245,16 @@ class SubliminalSettings(StrictModel):
     count: int = Field(default=3, ge=1, le=20)
 
 
+class CaptionSettings(StrictModel):
+    mode: Literal["off", "sidecar", "burned"] = "off"
+    style: Literal["classic", "bold", "neon", "box"] = "classic"
+    position: Literal["bottom", "middle", "top"] = "bottom"
+    size: Literal["small", "medium", "large"] = "medium"
+    color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    outline_color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    font: str = Field(default="", max_length=40, pattern=r"^([A-Za-z0-9][A-Za-z0-9 ._+-]*)?$")
+
+
 class ProductionRequest(StrictModel):
     kind: Literal["video", "ident", "harvest"] = "video"
     title: str = Field(default="", max_length=160)
@@ -266,10 +277,14 @@ class ProductionRequest(StrictModel):
     mouth_mode: Literal["sealed", "natural", "lip_sync"] | None = None
     lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
     singers: list[str] = Field(default_factory=list, max_length=9)
-    dance_mode: Literal["off", "group"] = "off"
+    dance_mode: Literal["off", "group", "independent"] = "off"
     dancers: list[str] = Field(default_factory=list, max_length=9)
     dance_direction: str = Field("", max_length=200)
     dance_lead: str | None = None
+    dance_parts: dict[str, Literal["auto", "beat", "drums", "bass", "vocals"]] = Field(default_factory=dict, max_length=9)
+    instrument_mode: Literal["off", "perform"] = "off"
+    instrument_assignments: dict[str, Literal["drums", "bass", "guitar", "keyboards"]] = Field(default_factory=dict, max_length=9)
+    instrument_references: bool = True
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -282,6 +297,7 @@ class ProductionRequest(StrictModel):
     vision_quality_check: bool = False
     clip_quality: Literal["standard", "prores", "lossless"] = "standard"
     subliminal: SubliminalSettings = Field(default_factory=SubliminalSettings)
+    captions: CaptionSettings = Field(default_factory=CaptionSettings)
     compact_prompts: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
@@ -309,15 +325,22 @@ class ProductionRequest(StrictModel):
         return value
 
 
-DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead")
+DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead", "dance_parts")
 
 
 def request_dict(value):
-    """The stored production request. A request without dancing is stored exactly as it was before dancing existed."""
+    """The stored production request. A request without dancing or captions is stored exactly as it was before they existed."""
     request = value.model_dump()
+    if request.get("captions", {}).get("mode", "off") == "off":
+        request.pop("captions", None)
     if request.get("dance_mode", "off") == "off":
         for key in DANCE_FIELDS:
             request.pop(key, None)
+    if request.get("instrument_mode", "off") == "off":
+        for key in ("instrument_mode", "instrument_assignments", "instrument_references"):
+            request.pop(key, None)
+    elif request["kind"] != "video":
+        raise ValueError("Instrument performance is available for music videos only")
     return request
 
 
@@ -335,6 +358,7 @@ class Settings(StrictModel):
     vision_api_profile: str = ""
     video_api_profile: str = ""
     auto_updates: bool = False
+    render_timeout_minutes: int = Field(default=120, ge=0, le=1440)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
     comfy_sdk_url: str = "http://127.0.0.1:8189"
@@ -458,6 +482,17 @@ class UpscaleRequest(StrictModel):
     scale: Literal[2, 4] = 2
 
 
+class CaptionVideoRequest(StrictModel):
+    source: str
+    style: Literal["classic", "bold", "neon", "box"] = "classic"
+    position: Literal["bottom", "middle", "top"] = "bottom"
+    size: Literal["small", "medium", "large"] = "medium"
+    color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    outline_color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
+    font: str = Field(default="", max_length=40, pattern=r"^([A-Za-z0-9][A-Za-z0-9 ._+-]*)?$")
+    lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
+
+
 class ProjectState(StrictModel):
     panel: Literal["video", "vocab", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
     forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
@@ -543,10 +578,28 @@ def create_app(home=None, *, test_hosts=False):
     def get_full_status(snapshot=None):
         result = dict(snapshot) if snapshot is not None else jobs.status()
         previous = read_json(store.home / 'runs' / identifier(result['id']) / 'request.json', {}) if result.get('id') else {}
+        result['can_retry_prompts'] = retryable_prompt_run(result, previous)
+        if result['can_retry_prompts'] and ' Note: Incomplete responses, JSON formatting errors,' in result.get('message', ''):
+            result['message'] = (result['message'].split(' Note: Incomplete responses, JSON formatting errors,', 1)[0]
+                                 + ' Nothing rendered.')
         result['can_resume'] = (result.get('state') in ('failed', 'cancelled', 'interrupted')
-                                and previous.get('backend') == 'comfy_sdk_h3')
+                                and previous.get('backend') == 'comfy_sdk_h3'
+                                and not result['can_retry_prompts'])
         result['services'] = check_services(store, result)
         return result
+
+    def retryable_prompt_run(snapshot, previous):
+        """Only an unrendered, failed prompt attempt may offer a fresh quote."""
+        if (snapshot.get('state') != 'failed' or snapshot.get('kind') != 'video'
+                or 'prompt validation failed after' not in snapshot.get('message', '')
+                or previous.get('kind') != 'video' or not snapshot.get('id')):
+            return False
+        directory = store.home / 'runs' / identifier(snapshot['id'])
+        return (read_json(directory / 'consent.json', {}).get('accepted') is True
+                and (directory / 'prepared.json').is_file()
+                and not (directory / 'output.json').exists()
+                and not any((directory / 'renders').glob('*'))
+                and any(directory.glob('seg*.validation-*.json')))
 
     @app.get("/api/status")
     def status():
@@ -620,7 +673,8 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/catalog")
     def catalog():
         return {"backends": CATALOG, "ratings": oap.CONTENT_ENUMS, "price_checked": "2026-10-15",
-                "oap_version": oap.OAP_VERSION}
+                "oap_version": oap.OAP_VERSION,
+                "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]}}
 
     @app.get("/api/project")
     def get_project():
@@ -813,6 +867,8 @@ def create_app(home=None, *, test_hosts=False):
                 except Exception:
                     target.unlink(missing_ok=True)
                     raise
+        if kind == "song":
+            write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or "song").replace("\\", "/")).name})
         return {"file": name, "name": file.filename}
 
     @app.get("/api/uploads/song/{filename}")
@@ -831,6 +887,22 @@ def create_app(home=None, *, test_hosts=False):
             ".aiff": "audio/aiff",
         }
         return FileResponse(path, media_type=media_types.get(suffix, "application/octet-stream"))
+
+    @app.get("/api/instruments")
+    def list_instruments():
+        return instrument_assets.catalog(store)
+
+    @app.post("/api/instruments/{instrument_id}")
+    def import_instrument(instrument_id: str, license: str = Form(...), provenance: str = Form(...),
+                          reference: UploadFile = File(...)):
+        with jobs.lock:
+            jobs.require_idle()
+            return instrument_assets.import_sheet(store, instrument_id, reference.file.read(25 * 1024 * 1024 + 1),
+                                                  license=license, provenance=provenance)
+
+    @app.get("/api/instruments/{instrument_id}/reference")
+    def instrument_reference(instrument_id: str):
+        return FileResponse(instrument_assets.locate(store, instrument_id)["path"], media_type="image/png")
 
     @app.get("/api/actors")
     def list_actors():
@@ -1075,7 +1147,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "dance": prepared.get("dance"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": prepared.get("instruments"), "voice": prepared.get("voice"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
@@ -1085,6 +1157,22 @@ def create_app(home=None, *, test_hosts=False):
     @app.post("/api/quote")
     def quote(value: ProductionRequest):
         return build_quote(value)
+
+    @app.post("/api/retry-prompts/quote")
+    def retry_prompts_quote(value: ResumeRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            run_id = identifier(value.run_id)
+            snapshot = jobs.status()
+            if snapshot.get('id') != run_id:
+                raise ValueError('Choose the latest failed prompt run')
+            directory = store.home / 'runs' / run_id
+            request = read_json(directory / 'request.json', {})
+            if not retryable_prompt_run(snapshot, request):
+                raise ValueError('Only an unrendered production stopped by prompt validation can be tried again')
+            result = build_quote(ProductionRequest(**request))
+            result.update(kind='video', request=request)
+            return result
 
     @app.get("/api/lyrics")
     def lyrics_status():
@@ -1096,7 +1184,8 @@ def create_app(home=None, *, test_hosts=False):
         from mmv import lyrics
         if value.consent is not True:
             raise ValueError("Approve the one-time speech model download first")
-        return jobs.start("lyrics", lambda context: lyrics.prepare_model(store, value.model, context))
+        return jobs.start("lyrics", lambda context: lyrics.prepare_model(store, value.model, context),
+                          run_id=job_run_id(store, "lyrics model", value.model))
 
     @app.post("/api/lyrics/detect")
     def lyrics_detect(value: LyricsRequest):
@@ -1110,7 +1199,7 @@ def create_app(home=None, *, test_hosts=False):
         def detect(context):
             found = lyrics.transcribe(store, song, digest, value.model, context, value.use_vocals)
             return {"lines": found["lines"], "source": found["source"], "language": found.get("language"), "model": value.model}
-        return jobs.start("lyrics", detect)
+        return jobs.start("lyrics", detect, run_id=job_run_id(store, "lyrics", upload_name(store, value.song)))
 
     @app.post("/api/lyrics/align")
     def lyrics_align(value: LyricsRequest):
@@ -1133,7 +1222,8 @@ def create_app(home=None, *, test_hosts=False):
         from mmv import stems
         if value.consent is not True:
             raise ValueError("Approve the one-time stem model download first")
-        return jobs.start("stems", lambda context: stems.prepare_model(store, value.model, context))
+        return jobs.start("stems", lambda context: stems.prepare_model(store, value.model, context),
+                          run_id=job_run_id(store, "stems model", value.model))
 
     @app.get("/api/waveform")
     def waveform(song: str):
@@ -1215,9 +1305,10 @@ def create_app(home=None, *, test_hosts=False):
                 except Exception:
                     pass
             log_studio(store, f"Starting production for kind='{request.get('kind', 'video')}'")
+            from mmv.jobs import output_run_id
             return jobs.start(request["kind"], lambda context: production.produce(
                 store, request, prepared, context, resume=bool(quoted.get("resume_run"))),
-                run_id=quoted.get("resume_run"))
+                run_id=quoted.get("resume_run") or output_run_id(store, request))
 
     @app.get("/api/outputs")
     def outputs():
@@ -1232,7 +1323,8 @@ def create_app(home=None, *, test_hosts=False):
         from mmv import package_export
         package_export.check_package(store, run_id, value.allow_private_actors)
         return jobs.start("export", lambda context: package_export.export_package(
-            store, run_id, zip_it=value.zip, allow_private=value.allow_private_actors, context=context))
+            store, run_id, zip_it=value.zip, allow_private=value.allow_private_actors, context=context),
+            run_id=job_run_id(store, "export", run_id))
 
     @app.get("/api/integrity")
     def integrity():
@@ -1251,6 +1343,9 @@ def create_app(home=None, *, test_hosts=False):
             shutil.rmtree(target, ignore_errors=True)
             quotes.clear()
         return {"deleted": run_id}
+
+    def rendered_clips(path):
+        return sum(1 for _ in (path / "renders").glob("*.mp4"))
 
     @app.get("/api/runs/unfinished")
     def list_unfinished_runs():
@@ -1288,12 +1383,13 @@ def create_app(home=None, *, test_hosts=False):
                 "segments": total_segments,
                 "validated_prompts": validated_prompts,
                 "can_finish": can_finish,
+                "rendered_clips": rendered_clips(path),
                 "size_mb": round(folder_size / (1024 * 1024), 2)
             })
         return results
 
     @app.delete("/api/runs/unfinished/{run_id}")
-    def delete_unfinished_run(run_id: str):
+    def delete_unfinished_run(run_id: str, confirm_rendered: bool = False):
         with jobs.lock:
             jobs.require_idle()
             run_id = identifier(run_id)
@@ -1302,6 +1398,8 @@ def create_app(home=None, *, test_hosts=False):
                 raise ValueError("Run directory not found")
             if (target / "output.json").is_file():
                 raise ValueError("Cannot purge a finished production with this endpoint")
+            if rendered_clips(target) and not confirm_rendered:
+                raise ValueError("This run holds rendered clips that may have been paid for; confirm to delete them")
             shutil.rmtree(target, ignore_errors=True)
             quotes.clear()
         return {"deleted": run_id}
@@ -1312,14 +1410,14 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             runs_dir = store.home / "runs"
             if not runs_dir.is_dir():
-                return {"purged_count": 0}
-            purged = 0
-            for path in list(runs_dir.iterdir()):
-                if path.is_dir() and not (path / "output.json").is_file():
+                return {"purged_count": 0, "kept_with_clips": 0}
+            purgeable = [path for path in runs_dir.iterdir() if path.is_dir() and not (path / "output.json").is_file()]
+            kept = [path for path in purgeable if rendered_clips(path)]
+            for path in purgeable:
+                if path not in kept:
                     shutil.rmtree(path, ignore_errors=True)
-                    purged += 1
             quotes.clear()
-        return {"purged_count": purged}
+        return {"purged_count": len(purgeable) - len(kept), "kept_with_clips": len(kept)}
 
     @app.get("/api/outputs/{run_id}/score")
     def output_score(run_id: str):
@@ -1330,28 +1428,26 @@ def create_app(home=None, *, test_hosts=False):
     def media_file(run_id: str, filename: str, download: bool = False):
         directory = store.home / "runs" / identifier(run_id)
         record = read_json(directory / "output.json", {})
-        if filename != record.get("file") or Path(filename).suffix != ".mp4":
+        from mmv import captions
+        if filename not in [record.get("file"), *captions.downloads(record)] or Path(filename).suffix not in (".mp4", ".srt"):
             raise ValueError("Output not found")
-        return FileResponse(inside(directory, filename), media_type="video/mp4", filename=filename if download else None)
+        kind = "application/x-subrip" if filename.endswith(".srt") else "video/mp4"
+        return FileResponse(inside(directory, filename), media_type=kind, filename=filename if download or filename.endswith(".srt") else None)
 
     @app.post("/api/log/clear")
     def clear_log():
-        now = time.time()
-        active_id = None
         cleared_offsets = {}
         try:
             status = jobs.status()
-            if status.get("state") in ("running", "cancelling"):
-                active_id = status.get("id")
-                if active_id:
-                    active_dir = store.home / "runs" / identifier(active_id)
-                    op_log = active_dir / "operation.log"
-                    if op_log.exists():
-                        cleared_offsets[active_id] = op_log.stat().st_size
+            active_id = status.get("id") if status.get("state") in ("running", "cancelling") else None
+            if active_id:
+                active_dir = store.home / "runs" / identifier(active_id)
+                cleared_offsets = {f"{active_dir.name}/{name}": (active_dir / name).stat().st_size
+                                   for name in LOG_FILES if (active_dir / name).exists()}
         except Exception:
             pass
 
-        write_json(store.home / "log_cleared.json", {"cleared_at": now, "offsets": cleared_offsets})
+        write_json(store.home / "log_cleared.json", {"cleared_at": time.time(), "offsets": cleared_offsets})
         studio_log = store.home / "studio.log"
         if studio_log.exists():
             try:
@@ -1392,7 +1488,7 @@ def create_app(home=None, *, test_hosts=False):
         sections = []
         if run_id == "latest" or not run_id:
             runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                    if (active_id and p.name == active_id) or p.stat().st_mtime >= cleared_at]
+                    if p.name == active_id or p.stat().st_mtime >= cleared_at]
             directory = runs[0] if runs else None
         else:
             directory = store.home / "runs" / identifier(run_id)
@@ -1400,38 +1496,35 @@ def create_app(home=None, *, test_hosts=False):
                 directory = None
 
         if directory and directory.is_dir():
-            path = directory / "operation.log"
-            offset = int(cleared_offsets.get(directory.name, 0)) if (active_id and directory.name == active_id) else 0
-            if path.exists():
-                file_size = path.stat().st_size
-                if file_size > offset:
-                    with path.open("rb") as stream:
-                        start_pos = max(offset, file_size - 64000)
-                        stream.seek(start_pos)
-                        content_chunk = stream.read().decode(errors="replace")
-                        if content_chunk.strip():
-                            sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + content_chunk)
+            def tail(name, limit):
+                """The last `limit` bytes of a run log, never reaching back before the last clear."""
+                path = directory / name
+                if not path.exists():
+                    return ""
+                offset, size = int(cleared_offsets.get(f"{directory.name}/{name}", 0)), path.stat().st_size
+                if size <= offset:
+                    return ""
+                with path.open("rb") as stream:
+                    stream.seek(max(offset, size - limit))
+                    return stream.read().decode(errors="replace")
+            content_chunk = tail("operation.log", 64000)
+            if content_chunk.strip():
+                sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + content_chunk)
             # Include any validation failure reports
             validations = sorted(directory.glob("*.validation-*.json"))
             for v in validations:
-                if v.stat().st_mtime >= cleared_at or (active_id and directory.name == active_id and not offset):
+                if v.stat().st_mtime >= cleared_at:
                     try:
                         data = json.loads(v.read_text(encoding="utf-8"))
                         sections.append(f"\n--- Validation Details ({v.name}) ---\n" + json.dumps(data, indent=2))
                     except Exception:
                         pass
             # Include writer service output if present
-            writer_log = directory / "writer-service.log"
-            if writer_log.exists() and writer_log.stat().st_size > 0:
-                with writer_log.open("rb") as stream:
-                    stream.seek(max(0, writer_log.stat().st_size - 16000))
-                    sections.append("\n--- Writer Service Output (llama.cpp) ---\n" + stream.read().decode(errors="replace"))
+            if writer_text := tail("writer-service.log", 16000):
+                sections.append("\n--- Writer Service Output (llama.cpp) ---\n" + writer_text)
             # Include ComfyUI service output if present
-            comfy_log = directory / "comfy-service.log"
-            if comfy_log.exists() and comfy_log.stat().st_size > 0:
-                with comfy_log.open("rb") as stream:
-                    stream.seek(max(0, comfy_log.stat().st_size - 16000))
-                    sections.append("\n--- ComfyUI Service Output ---\n" + stream.read().decode(errors="replace"))
+            if comfy_text := tail("comfy-service.log", 16000):
+                sections.append("\n--- ComfyUI Service Output ---\n" + comfy_text)
             # Include final operation status
             op_info = read_json(directory / "operation.json", {})
             if op_info.get("state") == "failed" and op_info.get("message"):
@@ -1455,6 +1548,23 @@ def create_app(home=None, *, test_hosts=False):
     def upscale(value: UpscaleRequest):
         with jobs.lock:
             jobs.require_idle()
-            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context))
+            title = read_json(inside(store.home / "runs", value.source).parent / "output.json", {}).get("title") or ""
+            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context),
+                              run_id=job_run_id(store, "upscale", title))
+
+    @app.get("/api/captions/fonts")
+    def caption_fonts():
+        from mmv import captions
+        return {"fonts": list(captions.installed_fonts())}
+
+    @app.post("/api/captions")
+    def caption_video(value: CaptionVideoRequest):
+        from mmv import captions
+        with jobs.lock:
+            jobs.require_idle()
+            looks = value.model_dump(include={"style", "position", "size", "color", "outline_color", "font"})
+            return jobs.start("captions", lambda context: captions.caption_finished(
+                store, value.source, [line.model_dump(exclude_none=True) for line in value.lyric_lines], context, looks),
+                run_id=captions.run_name(store, value.source, looks))
 
     return app

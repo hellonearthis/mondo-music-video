@@ -6,6 +6,10 @@ import { loadActors, loadStyles } from "./library.js";
 import { loadOutputs } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
 
+import { syncInstrumentControls, instrumentsFromForm } from "./instruments.js";
+
+import { syncDanceControls, dancePartsFromForm } from "./dance.js";
+
 let sseSource = null;
 let sseConnected = false;
 export const isSseConnected = () => sseConnected;
@@ -35,6 +39,15 @@ export function subliminalFromForm(request) {
   return request.subliminal;
 }
 
+export function captionsFromForm(request) {
+  request.captions = { mode: request.captions_mode || "off", style: request.captions_style || "classic",
+    position: request.captions_position || "bottom", size: request.captions_size || "medium",
+    color: request.captions_custom ? request.captions_color : "",
+    outline_color: request.captions_custom ? request.captions_outline : "", font: request.captions_font || "" };
+  for (const key of Object.keys(request)) if (key.startsWith("captions_")) delete request[key];
+  return request.captions;
+}
+
 // Only the most recently chosen file may set the flash picture: slower, older uploads must never overwrite it.
 export function latestSelection() {
   let current = 0;
@@ -43,6 +56,12 @@ export function latestSelection() {
 
 export function initSubliminalControls() {
   const form = $("#video-form");
+  const captionMode = form?.elements.captions_mode;           // the look controls matter only when the words are burned in
+  if (captionMode) {
+    const syncCaptions = () => { form.querySelector(".captions-fields").hidden = captionMode.value !== "burned"; };
+    captionMode.addEventListener("change", syncCaptions);
+    syncCaptions();
+  }
   const mode = form?.elements.subliminal_mode;
   if (!mode) return;
   const fields = form.querySelector(".subliminal-fields");
@@ -88,7 +107,10 @@ export async function preview(form) {
     for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) {
       request[name] = Number(request[name]);
     }
+    dancePartsFromForm(form, request);
+    instrumentsFromForm(form, request);
     subliminalFromForm(request);
+    captionsFromForm(request);
     request.mouth_mode = request.mouth_mode || "sealed";
     request.silent_mouths = request.mouth_mode !== "natural";   // older agents read this flag
     request.reuse_prompts = form.elements.reuse_prompts ? form.elements.reuse_prompts.checked : true;
@@ -162,11 +184,32 @@ export function showQuote(request, quote) {
   if (quote.dance) {
     const dancing = Object.values(quote.dance.passages).filter(item => item.dancing).length;
     const left = [...new Set(Object.values(quote.dance.passages).flatMap(item => item.not_choreographed || []))];
+    if (quote.dance.mode === "independent") {
+      for (const [actor, part] of Object.entries(quote.dance.parts || {})) {
+        summary.append(text("p", `${quote.dance.actors[actor] || actor}: ${part}`, "muted"));
+      }
+      const fallbacks = [...new Set(Object.values(quote.dance.passages).flatMap(item => (item.dancers || []).map(d => d.fallback).filter(Boolean)))];
+      for (const fallback of fallbacks) summary.append(text("p", fallback, "muted"));
+    }
     summary.append(text("p", `Dancing: ${dancing} of ${Object.keys(quote.dance.passages).length} passages, "${quote.dance.direction}".` +
       (left.length ? ` Only the first 3 dancers in a passage are choreographed; not choreographed: ${left.join(", ")}.` : ""), "muted"));
   }
+  if (quote.instruments) {
+    for (const [actor, instrument] of Object.entries(quote.instruments.assignments)) {
+      summary.append(text("p", `${actor}: ${instrument}`, "muted"));
+    }
+    const fallbacks = [...new Set(Object.values(quote.instruments.passages).flatMap(p => p.performers.map(player => player.fallback).filter(Boolean)))];
+    for (const fallback of fallbacks) summary.append(text("p", fallback, "muted"));
+    for (const [id, passage] of Object.entries(quote.instruments.passages)) {
+      if (passage.performers.length) summary.append(text("p", `${id}: ${passage.actor_slots} actor references + ${passage.references.length} instrument references; ${passage.performers.map(p => `${p.display_name}: ${p.active ? 'playing' : 'paused'}`).join(', ')}`, "muted"));
+    }
+  }
   if (quote.subliminal) {
     summary.append(text("p", `Subliminal flashes: ${quote.subliminal.times.length} × ${quote.subliminal.frames} frame(s) at ${quote.subliminal.times.join(", ")} s. ${quote.subliminal.notice}`, "muted"));
+  }
+  if (quote.captions) {
+    if (quote.captions.note) summary.append(text("p", quote.captions.note, "se-warn"));
+    else summary.append(text("p", `Lyric captions: ${quote.captions.cues.length} line(s) ${quote.captions.mode === "burned" ? "burned into the video (a copy without captions is kept) and saved" : "saved"} as lyrics.srt.`, "muted"));
   }
   if (request.clip_quality && request.clip_quality !== "standard") {
     summary.append(text("p", `Studio-quality raw clips (${request.clip_quality === "prores" ? "ProRes 4444" : "FFV1 lossless"}): each passage clip is saved near-lossless for editing. `
@@ -174,7 +217,7 @@ export function showQuote(request, quote) {
   }
   if (request.vision_quality_check) {
     summary.append(text("p", "Vision quality check on: after rendering, your local vision model inspects sampled frames. "
-      + "This adds several minutes and restarts ComfyUI; free local passages may be re-rendered once.", "muted"));
+      + "This adds model-loading and checking time. ComfyUI can remain open; free local passages may be re-rendered once.", "muted"));
   }
   if (quote.analysis && request.kind === "video") {
     const a = quote.analysis;
@@ -196,7 +239,7 @@ export function showQuote(request, quote) {
       <ul class="service-alert-list">
         ${offlineList.map(err => `<li>${escapeHtml(err)}</li>`).join("")}
       </ul>
-      <p class="service-alert-foot">Production cannot start until required engines are online. Please start the service or update your settings, then request a new preview.</p>
+      <p class="service-alert-foot">Production cannot start until the problems above are fixed. Engines with a valid launch setting start automatically when needed; correct the setting or free the resource named above, then request a new preview.</p>
     `;
     summary.prepend(banner);
 
@@ -205,7 +248,7 @@ export function showQuote(request, quote) {
     const startBtn = $("#start-production");
     if (startBtn) {
       startBtn.disabled = true;
-      startBtn.title = "A required engine is offline. Start the service or fix settings to proceed.";
+      startBtn.title = "A required engine cannot start. Fix the problem named in the preview to proceed.";
     }
   } else {
     $("#consent").disabled = false;
@@ -248,13 +291,16 @@ export function renderServices(services) {
     { id: "laya", data: services.laya },
     { id: "writer", data: services.writer },
     { id: "comfy", data: services.comfy },
-    { id: "vision", data: services.vision }
+    { id: "vision", data: services.vision },
+    { id: "vision_quality", data: services.vision_quality }
   ];
   for (const { id, data } of entries) {
     if (!data) continue;
     const activity = data.activity || (data.available ? "sleeping" : "offline");
+    const onDemand = activity === "offline" && data.has_launch;
+    const tone = activity === "configured" || onDemand ? "missing" : activity;
     const detailText = data.detail || (data.available ? "Ready" : "Offline");
-    const cacheKey = `${activity}|${detailText}|${Boolean(data.available)}`;
+    const cacheKey = `${activity}|${detailText}|${Boolean(data.available)}|${Boolean(onDemand)}`;
     if (serviceStateCache.get(id) === cacheKey) continue;
     serviceStateCache.set(id, cacheKey);
 
@@ -264,15 +310,19 @@ export function renderServices(services) {
     const card = $(`#service-card-${id}`);
 
     if (dot) {
-      dot.className = `service-pulse-dot dot-${activity}`;
+      dot.className = `service-pulse-dot dot-${tone}`;
     }
 
     if (badge) {
-      badge.className = `service-badge badge-${activity}`;
+      badge.className = `service-badge badge-${tone}`;
       if (activity === "processing") {
         badge.textContent = "PROCESSING";
       } else if (activity === "sleeping") {
         badge.textContent = "SLEEPING (READY)";
+      } else if (activity === "configured") {
+        badge.textContent = "CONFIGURED";
+      } else if (onDemand) {
+        badge.textContent = "STARTS AUTOMATICALLY";
       } else if (activity === "missing") {
         badge.textContent = "NEEDS SETUP";
       } else {
@@ -317,6 +367,7 @@ export async function applyStatus(status) {
   $("#progress").value = status.progress || 0;
   $("#cancel").hidden = !busy;
   $("#resume-production").hidden = !status.can_resume;
+  $("#retry-prompts").hidden = !status.can_retry_prompts;
   $("#show-log").hidden = false;
   $$(".operation-action").forEach(button => button.disabled = busy);
   if (status.services) {
@@ -333,7 +384,8 @@ export async function applyStatus(status) {
         $("#service-card-comfy")?.classList.add("card-offline-needed");
       }
       if (msg.includes("vision")) {
-        $("#service-card-vision")?.classList.add("card-offline-needed");
+        const checker = msg.includes("quality") || msg.includes("vision model") || msg.includes("vision check");
+        $(checker ? "#service-card-vision_quality" : "#service-card-vision")?.classList.add("card-offline-needed");
       }
       if (msg.includes("laya")) {
         $("#service-card-laya")?.classList.add("card-offline-needed");
@@ -434,6 +486,12 @@ export async function loadUpdateStatus() {
 
 export function initProductionForms() {
   $$(".production-form").forEach(form => {
+    syncDanceControls(form);
+    syncInstrumentControls(form);
+    form.addEventListener("change", event => {
+      syncDanceControls(form, event.target);
+      syncInstrumentControls(form, event.target);
+    });
     state.formFiles.set(form, { references: [], pending: 0 });
     form.onsubmit = handle(() => preview(form));
     const song = form.querySelector(".song-input");
@@ -538,6 +596,25 @@ export function initOperationControls() {
         btn.removeAttribute("aria-busy");
         if (orig !== null) btn.innerHTML = orig;
       }
+    }
+  });
+
+  $("#retry-prompts").onclick = handle(async () => {
+    const btn = $("#retry-prompts");
+    const original = btn.innerHTML;
+    try {
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.innerHTML = 'Reviewing new preview… <span class="spinner" aria-hidden="true"></span>';
+      notice("Loading a new preview from the failed production…");
+      const quote = await json("/api/retry-prompts/quote", { run_id: state.currentRun });
+      state.lastRequest = quote.request;
+      notice("");
+      showQuote(quote.request, quote);
+    } finally {
+      btn.disabled = false;
+      btn.removeAttribute("aria-busy");
+      btn.innerHTML = original;
     }
   });
 

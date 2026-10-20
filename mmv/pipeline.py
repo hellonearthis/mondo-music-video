@@ -203,21 +203,20 @@ def prepare(store, request, *, saved_prepared=None):
                                  'the active workflow has none. Choose Standard.')
         check_proxy(settings['comfy_sdk_url'], store.key('MMV_COMFY_API_KEY'))
     if kind == 'video' and request.get('vision_quality_check'):
-        from .runtime import http_ok
+        from .runtime import http_ok, serves_model
         from .vision_check import vision_command
         from .vision_stage import VISION_PORT
-        try:
-            vision_command(settings['writer_launch'], VISION_PORT)
-        except ValueError as exc:
-            raise ValueError(f'Vision quality check unavailable: {exc} Turn the check off or configure a local '
-                             'vision-capable writer model.') from None
+        # A matching server that is already running needs no launch command (read-only probe, same as the status card).
+        if not (http_ok(f'http://127.0.0.1:{VISION_PORT}/health')
+                and serves_model(f'http://127.0.0.1:{VISION_PORT}/v1', 'mmv-vision')):
+            try:
+                vision_command(settings['writer_launch'], VISION_PORT)
+            except ValueError as exc:
+                raise ValueError(f'Vision quality check unavailable: {exc} Turn the check off or configure a local '
+                                 'vision-capable writer model.') from None
         if request['backend'] in ('local_h3', 'comfy_sdk_h3'):
-            if not settings.get('comfy_launch'):
-                raise ValueError('Vision quality check needs a ComfyUI launch command in Settings so Mondo can '
-                                 'restart ComfyUI around the vision model. Configure it or turn the check off.')
-            if http_ok(settings['comfy_url'].rstrip('/') + '/system_stats'):
-                raise ValueError('Vision quality check needs Mondo to start ComfyUI itself so it can free the GPU '
-                                 'for the vision model, but ComfyUI is already running. Close ComfyUI, or turn the check off.')
+            if not settings.get('comfy_launch') and not http_ok(settings['comfy_url'].rstrip('/') + '/system_stats'):
+                raise ValueError('Start ComfyUI or configure its launch command in Settings for the vision quality check.')
     style = store.style(request['style_id'])
     if kind == 'video':
         if not request.get('song'):
@@ -256,8 +255,8 @@ def prepare(store, request, *, saved_prepared=None):
                 except ValueError:
                     raise ValueError(f"Ident path '{request[key]}' is invalid")
                 record = read_json(p.parent / 'output.json', {})
-                if not p.is_file() or record.get('kind') != 'ident' or record.get('file') != p.name:
-                    raise ValueError('Choose a completed ident')
+                if not p.is_file() or record.get('kind') not in ('ident', 'video') or record.get('file') != p.name:
+                    raise ValueError('Choose a completed ident or video clip')
     else:
         detected = None
         seconds = request['ident_seconds']
@@ -293,22 +292,62 @@ def prepare(store, request, *, saved_prepared=None):
         from . import lipsync
         lip_sync = lipsync.plan_passages(p.segments, casting, lipsync.clean_lines(request.get('lyric_lines')),
                                          request.get('singers') or [], request['seed'])
-    sub_plan = None
-    if kind == 'video' and (request.get('subliminal') or {}).get('mode', 'off') != 'off':
-        from . import subliminal
+    voice_note = None
+    if lip_sync and kind == 'video':
+        from . import voice
+        voice_note = voice.voice_check(store, digest, request, lip_sync)
+    sub_plan = caption_plan = None
+    wants_sub = (request.get('subliminal') or {}).get('mode', 'off') != 'off'
+    wants_captions = (request.get('captions') or {}).get('mode', 'off') != 'off'
+    if kind == 'video' and (wants_sub or wants_captions):
+        from . import captions, subliminal
         from .score_view import _opening_offset
         fps = p.fps or 24
         opening = _opening_offset(store, request)
         closing = 0.0
         if request.get('end_ident'):
             closing = float((read_json(inside(store.home / 'runs', request['end_ident']).parent / 'output.json', {}) or {}).get('duration') or 0.0)
-        sub_plan = subliminal.plan_run(request['subliminal'], fps, p.total_frames + round((opening + closing) * fps),
-                                       score.downbeat_frames, round(opening * fps), store.home / 'uploads')
+        song_seconds = min(p.total_frames, sum(s.trim_frames for s in p.segments)) / fps      # what assembly actually joins
+        total_seconds = song_seconds + opening + closing
+        if wants_sub:
+            sub_plan = subliminal.plan_run(request['subliminal'], fps, p.total_frames + round((opening + closing) * fps),
+                                           score.downbeat_frames, round(opening * fps), store.home / 'uploads')
+        caption_plan = captions.plan_run(request.get('captions'), request.get('lyric_lines'), opening, song_seconds, total_seconds)
+    instrument_plan = saved_prepared.get('instruments') if replay_plans else None
+    if instrument_plan:
+        from . import instruments
+        instruments.check_replay(request, instrument_plan)
+    if kind == 'video' and request.get('instrument_mode', 'off') != 'off':
+        from . import instruments, instrument_assets
+        assignments = instruments.clean(request)
+        if not replay_plans:
+            part_scores = instruments.cached_scores(store, digest, score_path, assignments,
+                                                    request.get('stem_quality') or 'standard', request.get('score_edits'))
+            instrument_plan = instruments.plan_passages(p.segments, casting, asdict(score), request, part_scores=part_scores)
+            needed = dict.fromkeys(kind for passage in instrument_plan['passages'].values() for kind in passage['references'])
+            instrument_plan['assets'] = {kind: instrument_assets.locate(store, kind) for kind in needed}
+        if instrument_plan is None:
+            raise ValueError('Saved run has no instrument plan; start a new preview')
+        instruments.verify_assets(instrument_plan)
+        p = instruments.apply_slots(p, instrument_plan, backend.capabilities()['max_reference_images'])
     dance_plan = saved_prepared.get('dance') if replay_plans else None
     if not replay_plans and kind == 'video' and request.get('dance_mode', 'off') != 'off':
         from . import dance
-        dance_plan = dance.plan_passages(p.segments, casting, asdict(score), request, singer=(lip_sync or {}).get('singer'),
-                                        source={'analysis_driver': request.get('analysis_driver') or 'mix', 'score_edited': any(bool(v) for v in (request.get('score_edits') or {}).values())})
+        part_scores = {}
+        if request.get('dance_mode') == 'independent':
+            from .stems import cached_dance_scores
+            part_scores = cached_dance_scores(store, digest, score_path, request.get('stem_quality') or 'standard', request.get('score_edits'))
+        dance_request = request
+        if instrument_plan:
+            # A player's hands are busy. Other selected actors may still dance.
+            chosen = request.get('dancers') or [member['actor_id'] for member in (casting or {}).get('roster', [])]
+            dancers = [actor for actor in chosen if actor not in instrument_plan['assignments']]
+            dance_request = {**request, 'dancers': dancers, 'dance_mode': request['dance_mode'] if dancers else 'off'}
+            if request.get('dance_lead') in instrument_plan['assignments']:
+                raise ValueError('An instrument player cannot also be the dance lead')
+            dance_request['dance_parts'] = {actor: part for actor, part in request.get('dance_parts', {}).items() if actor in dancers}
+        dance_plan = dance.plan_passages(p.segments, casting, asdict(score), dance_request, singer=(lip_sync or {}).get('singer'),
+                                        part_scores=part_scores, source={'analysis_driver': request.get('analysis_driver') or 'mix', 'score_edited': any(bool(v) for v in (request.get('score_edits') or {}).values())})
     render_cost = sum(backend.cost_for(s.duration_input, request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None,
                                       s.ref_image_slots) for s in p.segments)
     writer_cost = len(p.segments) * settings['writer_call_estimate'] if settings['writer_mode'] == 'api' else 0
@@ -319,15 +358,22 @@ def prepare(store, request, *, saved_prepared=None):
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),
                          'downbeats': len(score.downbeat_frames), 'sections': len(score.sections),
                          'shots': sum(len(s.shots) for s in p.segments), 'width': width, 'height': height}}
+    if caption_plan:
+        prepared['captions'] = caption_plan          # absent when off, so earlier consent fingerprints stay valid
+    if voice_note is not None:
+        prepared['voice'] = voice_note             # advisory only: kept out of fingerprints and saved plans
+    if instrument_plan is not None:
+        prepared['instruments'] = instrument_plan
     if dance_plan is not None:
         prepared['dance'] = dance_plan             # absent when off, so existing fingerprints are unchanged
     return passage_plans.restore(prepared, saved_prepared) if replay_plans else prepared
 
 
 def fingerprint(store, request, prepared):
-    payload = {k:v for k,v in prepared.items() if k not in ('references', 'passage_plan_binding')}
+    payload = {k:v for k,v in prepared.items() if k not in ('references', 'passage_plan_binding', 'voice')}
     digest = hashlib.sha256(json.dumps({'request': request, 'prepared': payload}, sort_keys=True).encode())
     files = list(prepared['references'])
+    files.extend(Path(asset['path']) for asset in (prepared.get('instruments') or {}).get('assets', {}).values())
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))
     for key in ('start_ident', 'end_ident'):
         if request.get(key): files.append(inside(store.home / 'runs', request[key]))

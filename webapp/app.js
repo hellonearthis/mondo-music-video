@@ -2,8 +2,9 @@
 
 import { $, $$, api, initThemeToggle, notice, option, state, text } from "./js/core.js";
 import { setupLlamaGuide, setupOapGuide, setupVocabGuide } from "./js/guides.js";
+import { initInstrumentLibrary } from "./js/instruments.js";
 import { initLibraryForms, loadActors, loadAgreements, loadStyles } from "./js/library.js";
-import { initUpscaleForm, loadOutputs } from "./js/outputs.js";
+import { initCaptionControls, initUpscaleForm, loadOutputs } from "./js/outputs.js";
 import {
   initOperationControls,
   initProductionForms,
@@ -85,12 +86,14 @@ async function initialize() {
   initSubliminalControls();
   initOperationControls();
   initLibraryForms();
+  initInstrumentLibrary();
   initSettingsAndPicker();
   initUpscaleForm();
 
   // Custom presets must be in the profile select before a saved choice is restored.
   await loadVocabularyCatalog().catch(() => {});
   await restoreProject();
+  initCaptionControls();
   setupEventStream();
   await refreshServices();
   setupVocabularyCustomizer();

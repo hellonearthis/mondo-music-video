@@ -12,9 +12,11 @@
    change the model first. A coordinator should be a medium-tier or better model;
    say so if you are a low-tier one. If no
    product task is assigned, report readiness and wait for the task.
-4. Claim coordinator and main-checkout writer in TEAM_STATUS.md before edits.
-   If either is claimed by another session, coordinate with the user or use an
-   explicitly assigned separate worktree; never overwrite the claim.
+4. Identify the coordinator and record your assigned writer/reviewer role in
+   TEAM_STATUS.md before edits. Claim coordinator or main-checkout writer only
+   when assigned that role. If a role is claimed by another session, coordinate
+   with the user or use an explicitly assigned separate worktree; never overwrite
+   the claim. Read-only helpers can return handoffs for the coordinator to record.
 
 ## Project guardrails (apply to every agent and helper)
 
@@ -60,9 +62,87 @@ not. None of this changes either open terminal. "Medium reasoning effort" and
 "medium model" are separate settings; a reasoning slider does not select a
 cheaper model.
 
-Either provider may coordinate. Do not recursively delegate from a helper or
+Codex or Claude Code may coordinate. Do not recursively delegate from a helper or
 run unbounded review/retry loops. Escalate to the coordinator after one failed
 attempt. Record actual model, result, and limitations in the task handoff.
+
+## Four concurrent interactive agents
+
+The user can run Codex, Claude Code, Antigravity and Hermes at the same time.
+Keep one named coordinator across the project. A typical assignment is:
+
+| Agent | Default role | Scope |
+| --- | --- | --- |
+| Codex | Coordinator or implementation worker | Plan, integrate and validate when coordinating; otherwise assigned files/worktree |
+| Claude Code | Implementation worker or coordinator | Independent assigned worktree, or main-checkout writer when assigned |
+| Antigravity | Junior reviewer or worker | Read-only onboarding, then a bounded review or isolated assigned task |
+| Hermes | Junior light worker | Read-only onboarding, then searches, documentation audits, focused reviews or small isolated fixes |
+
+Roles are assignments, not automatic privileges of a model or provider. Four
+concurrent sessions do not mean four writers in the same checkout, four production
+operations, or permission to launch additional agents. Keep the app's single
+active operation and all paid/GPU consent rules. Start with separate read-only
+reviews if suitable worktree tasks are not available.
+
+### Starting Hermes
+
+From a new terminal, enter the project and start the installed CLI:
+
+```bash
+cd /path/to/mondo-music-video
+hermes
+```
+
+Hermes 0.22.2 supports root `HERMES.md`; when present it takes precedence over
+the AGENTS.md context. Our [HERMES.md](../HERMES.md) therefore explicitly requires
+Hermes to read [AGENTS.md](../AGENTS.md) and this protocol. Do not assume Claude's
+`@AGENTS.md` import syntax works in Hermes. Do not use `--ignore-rules` or
+`--safe-mode` for project work: those modes skip project instructions. Normal
+approval prompts must remain enabled; do not use `--yolo`.
+
+For the first session, give Hermes this onboarding task:
+
+```text
+Read HERMES.md, AGENTS.md, docs/COLLABORATION.md, README.md and the local
+docs/TEAM_STATUS.md. You are the light worker; this first session is read-only.
+Report your configured model/provider, the current coordinator and writer,
+and any missing context. Wait for one named task. Do not edit tracked files,
+launch other agents, run renders or access credentials/private assets.
+```
+
+Choose the provider/model in the user's Hermes setup, not in tracked project
+files. A free model name is not proof that every auxiliary model or hosted tool
+is free. Check the account tier, helper/tool settings and fallback routes before
+using them; stop on billing/quota failures instead of changing providers or
+retrying automatically. Keep account tokens, local memory and user configuration
+out of the repository. No live Hermes inference is needed to edit these docs.
+
+### Assignments and handoffs
+
+The coordinator records one task per worker in the main checkout's ignored
+`docs/TEAM_STATUS.md`, with a unique task ID, owner/session, exact worktree and
+base commit, allowed files, acceptance checks, status, report path and next owner.
+Name the canonical main-checkout status path in each worktree handoff: a worktree
+does not inherit this ignored file, and its own copy must not become a conflicting
+assignment board. The coordinator maintains that board; workers return reports
+rather than concurrently rewriting it. Do not copy its private history into
+tracked files or remote chats; supply only the minimum task context needed.
+
+Use a distinct report such as `.collaboration/reports/hermes-<task-id>.md` in the
+assigned checkout, or return the report in the agent's reply. Include file/line
+evidence, changes, checks actually run, blockers and next owner. These reports
+are ignored and must never be staged. No agent polls or invokes the others merely
+because a report exists; the user or coordinator delivers each explicit handoff.
+Only assign independent edits concurrently; dependent work waits for the relevant
+reviewed result. The coordinator integrates and validates results sequentially.
+
+`tools/ask_peer.py` still supports only Codex and Claude and intentionally permits
+one launched helper at a time. Its lock and billing guards are unchanged. Hermes
+and Antigravity use interactive sessions under this protocol; they are not added
+to that launcher, and its isolation guarantees do not apply to them. Instruction
+files provide coordination, not technical read-only enforcement or automatic
+messaging. Four-agent simultaneous operation has not been exercised by this
+documentation change.
 
 ## Asking the other provider
 
@@ -168,7 +248,7 @@ secrets in it.
 
 ## Implementing changes
 
-Only one agent edits the main checkout at a time. The other can perform a
+Only one agent edits the main checkout at a time. The others can perform a
 read-only review. For genuinely independent implementation tasks, create a
 named branch/worktree with `git worktree add -b <branch> <path> HEAD` and launch
 an interactive agent there with the intended model. Record the owner, base

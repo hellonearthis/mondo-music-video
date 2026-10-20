@@ -15,5 +15,7 @@ class Agent:
         return {'answers':answers}
 
 if __name__ == '__main__':
-    with patch('mmv.engine.validators.laya_semantic.LayaSemanticValidator._load_agent',return_value=Agent()):
+    with (patch('mmv.engine.validators.laya_semantic.LayaSemanticValidator._load_agent',return_value=Agent()),
+          patch('mmv.gpu_memory.gpu_memory', return_value=None),
+          patch('mmv.runtime.serves_model', return_value=False)):
         main()

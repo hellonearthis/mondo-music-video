@@ -1,91 +1,133 @@
 # Releases
 
-## 1.8.13 — Enable completed video selection and clear guidance for idents
+## 1.9.5 — Bounded instrument action repair
 
-- Ident and credits attachment improvements:
-  - Updated `ident-select` in `webapp/js/outputs.js` to group available outputs by `optgroup` (Idents & Title Cards vs. Completed Video Clips), allowing both dedicated idents and existing video clips to be attached as opening or closing cards.
-  - Added helpful status fallback text ("None (render one in 06. Credits & idents)") when no dedicated idents exist yet in the studio library.
-- Bumped application version to `1.8.13`.
+For opted-in instrument performances, a clearly attributed but vague guitar action such as “strikes the guitar” can be corrected to explicit string and fret contact before the normal prompt, motion and Laya checks. The original writer response remains in the run record, and a small repair receipt lists the edited shots. Wrong-instrument gestures, lyrics and ambiguous attribution stay with the writer for correction. Retry feedback names the failing actor and shot, gives a physically specific example, and asks the writer to preserve the other shots. Passage lengths, protected core prompting and paid retry limits remain unchanged.
 
-## 1.8.12 — Eliminate prompt KV cache accumulation across passages
+Claude Code Sonnet 5.5 at medium effort improved the opt-in feedback; Codex added the bounded correction and verified it against the saved failed draft without running a model.
 
-- Context flush and dedicated single-slot tuning:
-  - Configured `llama-server` to launch with single-slot execution (`--parallel 1`) so 100% of the 16,384 context allocation is dedicated to the active prompt rather than fragmented across 4 unified slots.
-  - Disabled prompt prefix caching (`--no-cache-prompt`) and slot similarity matching (`-sps 0`) in `start.ps1` and `settings.json`, preventing lingering KV tokens from earlier passages from accumulating in VRAM.
-  - Added request-level `cache_prompt: false` enforcement in `mmv/worker.py` on all writer completion calls to guarantee clean, zeroed KV cache for every musical passage.
-- Bumped application version to `1.8.12`.
+## 1.9.4 — Instrument prompt retry
 
-## 1.8.11 — Live prompt writer token usage and context tracking
+Natural hand actions such as striking guitar strings now pass the opt-in instrument guard. One clear reference binding can carry through later shots that continue to name the assigned instrument. A failed, unrendered prompt run offers **Try again** in the GUI: it creates a fresh preview from the saved request and still requires the operator to review and approve a new start. The agent client, CLI and MCP expose the same retry-preview path. The misleading context-size hint is no longer appended to unrelated validation failures. The protected core prompting scheme is unchanged.
 
-- Real-time token usage telemetry in Studio Operation Output:
-  - Added live prompt and generation token tracking in `mmv/worker.py` during musical passage and ident generation.
-  - Automatically captures HTTP completion payload metrics (`prompt_tokens`, `completion_tokens`, `total_tokens`, and generation speed `t/s`).
-  - Displays context window percentage utilization against the configured context allocation limit (e.g. `16,384`).
-  - Implemented non-intrusive stream interception in `worker.py` without touching the pinned files in `mmv/protected_scheme.py`.
-- Bumped application version to `1.8.11`.
+Claude Code Sonnet 5.5 at medium effort implemented the instrument guard change; Codex reviewed it against saved writer drafts, added GUI/agent retry and verified the release with mock services. No production was automatically retried.
 
-## 1.8.10 — 16k context preservation and batch tuning in launcher
+## 1.9.3 — Automatic model startup and GPU handoffs
 
-- Launcher context and batch preservation (`start.ps1`):
-  - Upgraded the default writer context allocation (`$ContextSize`) from 8,192 to 16,384 tokens to prevent prompt truncation on long multi-shot musical passages.
-  - Resolved an issue where running `start.ps1` without CLI arguments stomped existing `-c`, `-b`, `-ub`, and `--image-min-tokens` settings in `settings.json` back to default 8,192.
-  - Eliminated duplicate `--image-min-tokens` argument injection when vision-capable models are configured with custom token minimums.
-- Bumped application version to `1.8.10`.
+Quality vision now checks its own service on port 8083, independently of style harvesting on vision_url. Previews and starts accept a configured model that Mondo can launch when its stage needs it. Separate quality-vision status and automatic-start badges distinguish launch capability from a running model. Invalid launch settings name the configuration problem.
 
-## 1.8.9 — Fix operation log clearing and active session log reset
+Mondo releases idle ComfyUI caches before local prompt preparation, confirms its writer has stopped before rendering, and swaps renderer/vision models between stages. Laya uses the GPU only when measured headroom covers its staged weights plus a reserve; otherwise that production uses CPU without rewriting Settings. Unknown memory does not authorize Laya overlap. Known insufficient writer/vision headroom, busy queues, unverified external renderer release and failed process exits prevent competing loads. Known external GPU writer/vision services are preserved and block local renderer startup; external vision also prevents automatic re-render overlap. Existing paid-consent and retry limits remain unchanged.
 
-- Resolved an issue where clicking "Clear log" failed to clear the diagnostic log view:
-  - Corrected `active_id` detection in `GET /api/log/{run_id}` to only treat actively running or cancelling operations as active, properly honoring `cleared_at` timestamps for historical runs.
-  - Implemented active run log offset tracking in `POST /api/log/clear`, ensuring that clearing the log during an active production resets the view and only displays lines generated after the clear action.
-  - Fixed client-side notice feedback in `webapp/js/core.js` and `webapp/js/production.js` so "Diagnostic log cleared" flashes without inserting a notice record back into the newly cleared session log array or triggering a premature redraw.
-  - Reset `state.currentRun` to `null` on clear log click to prevent immediate refetching of completed or interrupted runs.
-- Bumped application version to `1.8.9`.
+The lower-left sidebar tagline now reads “You can do anything”.
 
-## 1.8.8 — Style export, import, duplication and validation
+Daylight Cinema now includes a complete 11-axis harvest-style card, free axes, borrowable motifs and detailed aesthetic direction. Untouched factory daylight files upgrade automatically; customized or deliberately removed defaults are preserved.
 
-- Full portability for harvested and custom visual styles: download style cards as clean JSON and import styles into any Mondo Music Video studio library.
-- Four-layer import validation:
-  1. Strict structural schema checking via Pydantic `StrictModel` (`StyleImportRequest`) rejecting unknown keys.
-  2. ID and path sanitization via regex `^[a-z0-9][a-z0-9_-]{0,63}$` preventing path traversal.
-  3. Collision protection: rejects existing style IDs by default unless explicit `overwrite=true` is set.
-  4. Content and boundary constraints: non-empty directions (up to 8,000 chars), display name bounds (up to 160 chars), and preservation of 11-axis forensic breakdown cards (`style_card` up to 16,000 chars).
-- Visual Styles UI additions:
-  - Download JSON and Duplicate action buttons on every style card.
-  - Collapsible 11-Axis Forensic Card preview on styles harvested with the Multimodal Vision agent.
-  - Dedicated Import Style JSON card with file picker and overwrite checkbox.
-- Agent client and MCP tools extended:
-  - Added `export_style` and `import_style` methods to `AgentClient`, along with `export-style` and `import-style` CLI subcommands.
-  - Added `export_style` and `import_style` tools to the MCP server (bringing the suite to 35 tools).
+Claude Code Sonnet 5.5 at medium effort implemented the main lifecycle, memory policy, interface and regression tests, and a fresh session expanded daylight; Codex reviewed and tightened conservative cases and integrated the release. No protected prompting sources changed.
 
-## 1.8.7 — Fix LocalH3 backend timeout evaluation
+## 1.9.2 — Vision checks with ComfyUI already running
 
-- Fixed a `TypeError: '>' not supported between instances of 'float' and 'NoneType'` bug during segment rendering with the `local_h3` backend when `timeout_s` is omitted or `None`.
-- Ensured `LocalH3Backend` and `mmv/worker.py` default `timeout_s` safely to `7200.0` seconds instead of passing `None` to `ComfyClient.wait()`.
-- Added regression test `test_local_h3_timeout_none_defaults_to_float` verifying safe float default evaluation.
+Vision-enabled previews now accept an existing ComfyUI. After rendering, Mondo requests cache/model release while its queue is idle and waits for memory release before loading vision; it leaves external ComfyUI alive and preserves other queued/running work. Mondo-owned processes keep their existing stop/restart path. No automatic paid retry changes.
 
-## 1.8.6 — Service probing concurrency & functional component optimizations
+Removed contributor handles from the displayed visual-vocabulary and writer-tuning labels; the vocabulary profile ID, legacy tuning compatibility and contribution credit remain. OPP is acknowledged as the forthcoming prop import/use protocol; no speculative schema was added.
 
-- Parallelized service health checking in `mmv/services.py` across ComfyUI, Writer, and Multimodal Vision using concurrent thread pools, cutting probe latency by up to 65%.
-- Implemented state memoization in `webapp/js/production.js` to skip redundant DOM repaints during SSE status polling.
-- Refactored filesystem picker in `webapp/js/settings.js` to use pure template rendering (`pickerEntryHtml`) and delegated event handlers.
-- Decoupled tooltip geometry calculations into pure `computeTooltipPosition` in `webapp/js/tooltips.js` and eliminated attribute thrashing.
-- Extracted pure CLI flag parsing and tuning transformer `tuneLlamaCommand` in `webapp/js/guides.js`.
+## 1.9.1 — Instrument controls without internal validation warnings
 
-## 1.8.5 — Collaborator integration: upstream 1.8.2 review fixes
+Removed the instrument caution banner and its preview/export text. Instrument selection stays optional, with normal activity/reference information. Agent instructions no longer ask agents to repeat that caution. Validation tracking stays in developer documentation; the original protected-scheme integrity safeguards are unchanged.
 
-- Integrates hodgemann's upstream release 1.8.2 improvements: restores the vocabulary guide dialog (`#vocab-helper-dialog`) connected to the sidebar workspace, restores category-specific accessible names for overflow actions, dark-mode overflow button hover contrast, independent fold persistence (`details_sections`), and updated browser test coverage.
-- Maintains full compatibility with 1.8.4 offline engine guards and 1.8.3 functional architecture.
+## 1.9.0 — Opt-in instrument-playing actors (operator validation pending)
 
-## 1.8.4 — Required engine offline protection & operator warnings
+- Per-actor drums, bass, guitar and keyboard assignments; existing-stem energy/pauses with explicit unknown/mix fallback. No implicit separation or downloads.
+- Instrument references are wired per passage after actor references, only for cast players with playing/unknown activity, with shared-design deduplication, renderer budget/cost checks and backend labels. Saved plans, cache validators and consent fingerprints include instrument decisions and sheet identity.
+- BONK-style extension outside protected originals, off by default; form/preview/export warning. Players are excluded from dance choreography; approved singing and mouth rules are preserved.
+- Instrument library/import API, agent method, CLI discovery and MCP import tool (38 total), private-provenance export redaction. Props remain separate from OAP actors; OAP verification and consent guards are unchanged.
+- Owner-supplied guitar and keyboard sheets bundled at their created resolutions under Apache-2.0; drums/bass sheets pending.
+- Claude Code Haiku reviewed the architecture/implementation; staging, privacy and unknown-activity findings were addressed. See [instrument documentation](INSTRUMENTS.md) for asset limits and pending same-song/seed real-render validation.
 
-- Pre-flight engine availability checks in `POST /api/quote` and `POST /api/start`: halts production and warns the operator with actionable instructions when Prompt Writer (`llama.cpp`), Video Renderer (`ComfyUI`), Reviewer (`Laya`), or Multimodal (`Vision`) is offline and has no launch command configured.
-- UI service alert banners, disabled consent and start controls, and pulsing status card indicators on offline failure.
+## 1.8.14 — Custom caption colours and fonts
 
-## 1.8.3 — Functional UI refactoring & incomplete runs manager
+Joint Claude Code and Codex work: the backend was written and tested by Claude Code, the browser controls by Codex in an isolated worktree, and the diff was reviewed and integrated by Claude Code.
 
-- Refactored `vocabulary.js`, `library.js`, and `outputs.js` into modular functional template engines.
-- Added incomplete runs management table with resume/clean controls and confirmation modal for video deletion.
+- Burned captions can use your own **text colour** and **outline / glow colour** (`#rrggbb`) and any **installed font**. Blank keeps the chosen style's own colours and the default font, so nothing changes unless you ask. A box style keeps its see-through panel when you recolour it, and neon's glow follows the outline colour.
+- Fonts must really be installed where the app runs (`fc-list`): a missing font is refused with a clear message, because FFmpeg would otherwise silently draw another one. Font names and colours are validated strictly, so nothing from them can reach the subtitle script as a command.
+- Colours are chosen on inline **colour wheels** (hue around the circle, saturation toward the centre, a brightness slider, a swatch and an editable hex box; `webapp/js/colorwheel.js`, no library) instead of the browser's own colour picker. Mouse, touch and pen work, one pointer at a time; the keyboard moves hue and saturation with the arrow keys; screen readers get the hue, saturation and hex colour read out. Typing `abc` becomes `#aabbcc` and junk reverts to the last good colour. Codex reviewed the wheel (read-only) and its accessibility findings were fixed.
+- Surfaces: the production form and the "Add lyric captions" dialog (a Custom colours checkbox with two colour wheels, and a font box with an installed-fonts list that fills from `GET /api/captions/fonts`), the agent client (`caption_video` options and `caption_fonts`), the MCP server (`caption_video` options and the new read-only `list_caption_fonts`, 37 tools) and the skill. Saved projects remember the choices.
+- `start.sh` / `stop.sh` made portable for macOS (bash 3.2 empty-array handling, `ps` instead of `/proc`, the Mac data folder) with double-click `start.command` / `stop.command` wrappers. Verified on Linux only; not yet run on a Mac.
+- Not done: word-by-word highlighting (only line timing is stored), and a live preview of the look before rendering.
 
+## 1.8.13 — Readable folder names for every job, and start.sh / stop.sh
+
+- Every new job folder now has a human-readable name like productions already did (`<what>_<what for>_<date>_<time>`): Topaz upscale outputs, lyrics detection and model setup, stem-model setup and package-export jobs no longer get random strings (`mmv/jobs.py`: `job_run_id`). Existing folders are not renamed, so saved references and resumes keep working. The package folders themselves were already readable.
+- `start.sh` and `stop.sh` for Linux, macOS and WSL (Windows keeps `start.ps1`): start in the foreground or with `--background`, always run this checkout's code, refuse a second copy, keep an accurate `server.pid`, and stop waits for a clean exit and protects a running production.
+- Not changed: protected prompts and scheme, the app's own session lock, and the Windows launcher.
+
+## 1.8.12 — Lyric captions
+
+New, free and post-assembly (a joint Claude Code and Codex free-time project; Codex reviewed the design before the code was written).
+
+- Setting **Lyric captions** (off by default): the timed lyric lines already used for lip sync become `lyrics.srt` (subtitle file only) or are also burned into the video with FFmpeg's libass (`mmv/captions.py`). Burning keeps the exact frame count and audio, verifies the result before replacing the video, and keeps the video without captions as `music-video-uncaptioned.mp4`. If burning fails the video is untouched, `lyrics.srt` stays, and a warning is shown.
+- Captions use the lines on their own: they do not turn on lip sync, the captions feature adds no path to the writer or any prompt (the existing lyrics and lip-sync inputs behave as before), and no protected file changed. Lines whose timing was only guessed are skipped; captions are shifted past an opening ident and stop where the assembled song ends (the joined passage lengths), so they should not run over a closing ident; this is checked in tests with synthetic videos, not yet on a real render with idents.
+- With captions on but no timed lines yet, the preview says so and the video is made without captions; the score editor's lyric box (detect, paste, edit) now also opens for captions, not just lip sync. Old saved runs keep their consent fingerprints because the captions field is absent when off. The media route now serves `lyrics.srt` and the backup videos recorded in `output.json` (previously only the main video), so the agent client's `download` can fetch them; project exports include `lyrics.srt` and the uncaptioned copy.
+- **Looks**: burned captions have four styles (classic white with outline, bold yellow capitals, neon glow, box on a dark panel), three positions (bottom, middle, top) and three sizes, with a short fade in and out; sizes scale with the video height. The selectors appear in the form when burning is chosen, and the same options exist for the agent client and MCP. Not done: custom colours or fonts, and word-by-word highlighting (only line timing is stored).
+- **Caption a finished video**: `POST /api/captions`, the agent client's `caption_video`, the MCP tool `caption_video` (36 tools) and an "Add lyric captions" button on finished videos (it opens a small dialog: where, bottom by default or middle or top, look and size) burn the saved lyric lines (or lines you pass) into a NEW output, `captioned.mp4` with `lyrics.srt`; the original is never changed. It runs under the single-operation guard, starts from the uncaptioned copy when the video was captioned when made, and is free.
+- Surfaces: Render Engine settings, preview summary, MCP tool text, skill, README. Not done: custom colours or fonts, a font check for non-Latin lyrics, and a preview of the caption look before rendering.
+
+## 1.8.11 — Fork integration: token telemetry, single-slot writer, log clearing, video clips as idents
+
+Integrates hellonearthis' fork revisions `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d` (fork versions 1.8.9–1.8.13). Credit: hellonearthis.
+
+- Writer token telemetry: each writer call prints `[tokens] <passage>: prompt + generated = total — N% context used, t/s` to the operation log. It only observes the response (`mmv/writer_usage.py`); no request or response is changed. The context percentage appears only when the llama-server context size is known from the launch arguments.
+- Launcher: every preset now runs llama-server with `--parallel 1`. By default llama-server splits `-c` across four slots, so an 8192 context left each prompt about 2048 tokens — a truncation problem on lower-memory machines that larger-memory machines never see. The 16k-context, `--no-cache-prompt` and `-sps 0` settings remain opt-in with `-TuningPreset hellonearthis`. The launcher also keeps existing context/batch/image-token tuning from `settings.json` instead of resetting it, and no longer passes `--image-min-tokens` twice.
+- Clear log: clearing now actually clears. During a run the current size of the operation, writer-service and Comfy-service logs is recorded and only newer output is shown, also after the run finishes; older validation reports stay hidden.
+- Completed video clips can be attached as opening or closing cards (fork `59f820d`), grouped apart from idents in the picker. Preparation now accepts a completed video clip as well as an ident; the fork's picker alone would have been rejected with "Choose a completed ident".
+- Not changed: the protected prompt scheme and pins. Not adopted: the fork's per-request `cache_prompt:false` rewrite (see COLLABORATOR_REVIEW.md).
+
+## 1.8.10 — Voice/gender check for lip sync
+
+- New advisory check in the lip-sync preview: when the vocals stem sounds clearly male (median sung pitch under 165 Hz) or female (over 250 Hz) and the main singer reads as the other gender, the editor shows a note under "Main singer" with a one-click button for the best-matching actor. It never blocks a deliberate choice, and it stays silent when the voice or the singer is unclear.
+- Voice comes from the median pitch of the loud, voiced frames of an already cached vocals stem (it never starts a separation); at least 3 seconds of voiced audio are required. Quiet frames are ignored because stem bleed otherwise drags the median around. Actor gender is read from the actor's own description (pronouns and nouns must clearly favor one side).
+- The preview carries it as a separate `voice` key (also in the agent client, MCP preview and skill docs). It is excluded from fingerprints and saved passage plans, so existing runs and resumes are unaffected.
+- Real-song checks (htdemucs, CPU, mock-free): "In Heaven There Is No Beer (Hell) ++++" reads male at 126 Hz. "Let's Go Chill With Hodge(2)" has only about 3 seconds of female vocal; it yields too little clear voiced audio and is correctly left unsure (the ungated stem would have read male from bass bleed). A short female-only clip is therefore not yet verified positive; a longer female vocal is still to be tested.
+- Not changed: the protected prompt scheme, pins and sealed-lips wording.
+
+## 1.8.9 — Fork integration: style portability, offline-engine guard, run manager
+
+- Version 1.8.9 deliberately skips past the fork's own 1.8.6–1.8.8 tags so the same number never names different code.
+- Integrates hellonearthis's fork contributions `63f4826` through `73cbd4b` (reviewed in the [review record](COLLABORATOR_REVIEW.md)).
+- **Styles:** export a style as JSON, import one (overwrite only when explicitly requested), duplicate a style, and preview the 11-axis style card. New `export_style` and `import_style` agent client methods, CLI commands and MCP tools (35 tools).
+- **Offline-engine guard:** quoting and starting a production report a missing prompt writer, renderer, Laya reviewer or vision service in plain words before any work starts; the web app disables Start while one is offline. A configured launch command still counts as startable.
+- **Run manager:** unfinished drafts and interrupted runs can be listed, resumed (local or Comfy SDK productions) or purged; finished videos can be deleted after a confirmation dialog. Added by us: runs that hold rendered clips are never removed by "purge all", and a single purge of such a run needs explicit confirmation, because those clips may already be paid for.
+- **Faster, simpler UI:** service probes run in parallel; the vocabulary, library, outputs and settings modules use pure template functions; the vocabulary summary cards render when the summary is opened.
+- Package export also redacts Windows-style home paths.
+- **Local render wait:** a hung ComfyUI no longer freezes a run silently. The wait per local clip is now a setting (`render_timeout_minutes`, default 120, shown in Settings); 0 keeps the old unlimited wait for testing. This replaces the unlimited default from 1.8.4 and adopts the fork's two-hour default from `eeab8c0`.
+- Protected prompts and pins are unchanged.
+
+## 1.8.5 — Distinct independent dance movements
+
+- Independent mode assigns contrasting bounce, lateral-step and torso-rotation
+  movements, including distinct pause poses, rather than relying on instrument
+  names and generic beat hints alone. New plans use choreography version 3.
+- Prompt checks recognize actor names, reject copied movement-family signatures
+  and dance leadership, and preserve references to a shared musical rhythm.
+  Claude Code reviewed the repair; mock checks do not prove rendered distinctness.
+- Existing group/off modes, protected prompts and pins remain unchanged. Start a
+  new preview to use the repair; existing productions resume their saved plan.
+- Repeated camera moves are recorded for a future planner fix at the owner's
+  request; no camera behavior changed in this release.
+
+## 1.8.4 — Local render timeout and agent song names
+
+- Fixes a live-test failure: the original local H3 polling adapter requires a numeric timeout. The worker now passes infinity for unlimited local waits, without changing protected engine code. hellonearthis independently identified the same defect in fork revision `eeab8c0`; our adaptation preserves the owner’s unlimited-wait default.
+- Agent song uploads preserve a safe basename, so song-name/date-time run folders work from agents as well as the browser. Other upload kinds retain generic filenames.
+- Mock polling regression covers delayed history results after more than two hours; agent transport checks the retained song basename.
+
+## 1.8.3 — Independent dancing
+
+- Optional independent mode assigns each actor overall beat, drums, bass or vocals, automatically or by override. Each dances individually; group mode and defaults remain unchanged.
+- Existing stem audio/analysis guides per-shot accents, pauses and intensity. Missing parts explicitly fall back to the overall beat; no separation or model download starts automatically.
+- New production folders use the uploaded song name plus local date/time (with collision suffixes); old folders and resumed run IDs remain intact. Existing export-package naming was already present.
+- Preview, API, MCP and agent skill expose assignments and fallback sources. Saved choreography remains bound to prompts on resume. New instructions are additive; protected originals and pins remain unchanged.
+- Claude Code and Antigravity reviews are received and triaged in the [review record](COLLABORATOR_REVIEW.md); no blocking findings remain from either review.
+- Owner approved the optional instructions. Mock verification is recorded separately; real same-song/same-seed render comparison remains pending.
 
 ## 1.8.2 — Vocabulary guide and accessibility review fixes
 

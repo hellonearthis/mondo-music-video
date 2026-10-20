@@ -27,6 +27,19 @@ def check_services(store, active_job=None, force: bool = False) -> dict:
     return _evaluate_service_activity(store, _cached_probe_results, active_job)
 
 
+def _launch_problem(raw) -> str | None:
+    """None when raw is a usable JSON argv launch command, otherwise why it is not (empty means unset)."""
+    if not raw:
+        return "not set"
+    try:
+        argv = json.loads(raw)
+    except (ValueError, TypeError):
+        return "is not valid JSON"
+    if not isinstance(argv, list) or not argv or any(not isinstance(a, str) or not a for a in argv):
+        return "must be a JSON array of non-empty command arguments"
+    return None
+
+
 def _probe_comfy(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
     comfy_url = (settings.get("comfy_url") or "").rstrip("/")
     comfy = {
@@ -36,7 +49,8 @@ def _probe_comfy(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
         "queue_running": 0,
         "queue_pending": 0,
         "backend": settings.get("backend", "local_h3"),
-        "has_launch": bool(settings.get("comfy_launch")),
+        "has_launch": _launch_problem(settings.get("comfy_launch")) is None,
+        "launch_problem": _launch_problem(settings.get("comfy_launch")),
         "error": None,
     }
     if comfy_url:
@@ -77,7 +91,8 @@ def _probe_writer(settings: dict, opener: urllib.request.OpenerDirector) -> dict
         "model": writer_model,
         "available": False,
         "slots_processing": 0,
-        "has_launch": bool(settings.get("writer_launch")),
+        "has_launch": _launch_problem(settings.get("writer_launch")) is None,
+        "launch_problem": _launch_problem(settings.get("writer_launch")),
         "error": None,
     }
     if writer_mode == "api":
@@ -140,6 +155,30 @@ def _probe_vision(settings: dict, opener: urllib.request.OpenerDirector) -> dict
     return vision
 
 
+def _probe_vision_quality(settings: dict, opener: urllib.request.OpenerDirector) -> dict:
+    """The quality-check vision model: launched on its own port from writer_launch, separate from style harvest."""
+    from .vision_check import vision_command
+    from .vision_stage import VISION_PORT
+    url = f"http://127.0.0.1:{VISION_PORT}"
+    quality = {"url": url, "model": "mmv-vision", "available": False, "port_in_use": False,
+               "launchable": False, "error": None}
+    try:
+        vision_command(settings.get("writer_launch") or "", VISION_PORT)
+        quality["launchable"] = True
+    except ValueError as exc:
+        quality["error"] = str(exc)
+    try:
+        with opener.open(urllib.request.Request(f"{url}/health"), timeout=0.3) as resp:
+            quality["port_in_use"] = resp.status == 200
+        if quality["port_in_use"]:
+            with opener.open(urllib.request.Request(f"{url}/v1/models"), timeout=0.3) as resp:
+                quality["available"] = any(isinstance(m, dict) and m.get("id") == quality["model"]
+                                           for m in json.load(resp).get("data") or [])
+    except Exception:
+        pass
+    return quality
+
+
 def _probe_raw_services(store) -> dict:
     settings = store.settings()
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -149,7 +188,8 @@ def _probe_raw_services(store) -> dict:
     writer_mode = settings.get("writer_mode", "local")
     shared_vision = bool(vision_url and vision_url == writer_url and writer_mode == "local")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        f_quality = executor.submit(_probe_vision_quality, settings, opener)
         f_comfy = executor.submit(_probe_comfy, settings, opener)
         f_writer = executor.submit(_probe_writer, settings, opener)
         f_vision = None if shared_vision else executor.submit(_probe_vision, settings, opener)
@@ -172,6 +212,7 @@ def _probe_raw_services(store) -> dict:
         "writer": writer,
         "laya": laya,
         "vision": vision,
+        "vision_quality": f_quality.result(),
     }
 
 
@@ -186,7 +227,8 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
     comfy_avail = comfy_raw.get("available", False)
     if not comfy_avail:
         comfy_activity = "offline"
-        comfy_detail = f"Offline at {comfy_raw.get('url') or 'unconfigured'}"
+        comfy_detail = f"Offline at {comfy_raw.get('url') or 'unconfigured'}" + (
+            " · Mondo starts it when needed" if comfy_raw.get("has_launch") else "")
     else:
         q_run = comfy_raw.get("queue_running", 0)
         is_rendering = is_job_running and any(w in active_lower for w in ("render", "opening renderer", "comfy"))
@@ -205,6 +247,7 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "url": comfy_raw.get("url", ""),
         "available": comfy_avail,
         "has_launch": bool(comfy_raw.get("has_launch")),
+        "launch_problem": comfy_raw.get("launch_problem"),
         "activity": comfy_activity,
         "detail": comfy_detail,
         "device": comfy_raw.get("device", ""),
@@ -221,12 +264,14 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
             writer_activity = "processing"
             writer_detail = f"Actively generating prompts ({writer_model})"
         else:
-            writer_activity = "sleeping" if writer_avail else "offline"
-            writer_detail = f"External API ready ({writer_model})" if writer_avail else "API key or model unconfigured"
+            # An API profile is only configured; it is never probed here, so it is not announced as online.
+            writer_activity = "configured" if writer_avail else "offline"
+            writer_detail = f"External API configured, not probed ({writer_model})" if writer_avail else "API key or model unconfigured"
     else:
         if not writer_avail:
             writer_activity = "offline"
-            writer_detail = f"Offline at {writer_raw.get('url') or 'unconfigured'}"
+            writer_detail = f"Offline at {writer_raw.get('url') or 'unconfigured'}" + (
+                " · Mondo starts it when needed" if writer_raw.get("has_launch") else "")
         else:
             is_writing = is_job_running and any(w in active_lower for w in ("writer", "writing", "ident prompt"))
             if writer_raw.get("slots_processing", 0) > 0 or is_writing:
@@ -243,6 +288,7 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "url": writer_raw.get("url", ""),
         "available": writer_avail,
         "has_launch": bool(writer_raw.get("has_launch")),
+        "launch_problem": writer_raw.get("launch_problem"),
         "activity": writer_activity,
         "detail": writer_detail,
         "model": writer_model,
@@ -302,11 +348,40 @@ def _evaluate_service_activity(store, probed: dict, active_job=None) -> dict:
         "model": vision_model,
     }
 
+    # Quality vision runs on its own port from the writer launch; it is not the style-harvest endpoint above.
+    quality_raw = probed.get("vision_quality", {})
+    quality_avail = quality_raw.get("available", False)
+    if quality_avail:
+        quality_activity = "processing" if is_job_running and "vision check" in active_lower else "sleeping"
+        quality_detail = f"Running and ready at {quality_raw.get('url')}"
+    elif quality_raw.get("port_in_use"):
+        quality_activity, quality_detail = "offline", f"{quality_raw.get('url')} is used by another service"
+    elif quality_raw.get("launchable"):
+        quality_activity, quality_detail = "offline", "Offline · Mondo starts it when the vision check runs"
+    else:
+        quality_activity = "missing"
+        quality_detail = f"Cannot be launched: {quality_raw.get('error') or 'writer_launch not set'}"
+
+    quality_status = {
+        "id": "vision_quality",
+        "name": "Vision",
+        "role": "Quality Check",
+        "url": quality_raw.get("url", ""),
+        "available": quality_avail,
+        "has_launch": bool(quality_raw.get("launchable")),
+        "port_in_use": bool(quality_raw.get("port_in_use")) and not quality_avail,
+        "error": quality_raw.get("error"),
+        "activity": quality_activity,
+        "detail": quality_detail,
+        "model": quality_raw.get("model", ""),
+    }
+
     return {
         "comfy": comfy_status,
         "writer": writer_status,
         "laya": laya_status,
         "vision": vision_status,
+        "vision_quality": quality_status,
     }
 
 
@@ -339,9 +414,9 @@ def check_required_services(store, request: dict, resume: bool = False) -> list[
             endpoint = writer.get("url") or "unconfigured"
             if mode == "local":
                 errors.append(
-                    f"Prompt Writer (llama.cpp) is offline at {endpoint}. "
-                    "Production cannot generate passage prompts without it. "
-                    "Please start llama-server or configure writer_launch in Settings."
+                    f"Prompt Writer (llama.cpp) is offline at {endpoint} and cannot be started by Mondo: "
+                    f"writer_launch {writer.get('launch_problem') or 'is not usable'}. "
+                    "Set writer_launch in Settings to a JSON array that starts llama-server, or start the server yourself."
                 )
             else:
                 errors.append(
@@ -366,20 +441,23 @@ def check_required_services(store, request: dict, resume: bool = False) -> list[
         if not comfy.get("available") and not comfy.get("has_launch"):
             endpoint = comfy.get("url") or "unconfigured"
             errors.append(
-                f"ComfyUI video renderer is offline at {endpoint}. "
-                "Production cannot render clips without it. "
-                "Please start ComfyUI or configure comfy_launch in Settings."
+                f"ComfyUI video renderer is offline at {endpoint} and cannot be started by Mondo: "
+                f"comfy_launch {comfy.get('launch_problem') or 'is not usable'}. "
+                "Set comfy_launch in Settings to a JSON array that starts ComfyUI, or start it yourself."
             )
 
-    # Multimodal Vision quality check if requested
-    if request.get("vision_quality_check"):
-        vision = services.get("vision", {})
-        if not vision.get("available"):
-            endpoint = vision.get("url") or "unconfigured"
+    # Quality vision is launched by Mondo on its own port from writer_launch; style harvest uses another endpoint.
+    if kind == "video" and request.get("vision_quality_check"):
+        quality = services.get("vision_quality", {})
+        if not quality.get("available") and not quality.get("has_launch"):
             errors.append(
-                f"Vision engine is offline at {endpoint}. "
-                "Vision quality checking is enabled but the multimodal vision model is offline. "
-                "Please start your vision model or disable Vision quality check."
+                f"Vision quality check cannot start its model: {quality.get('error') or 'writer_launch is not set'}. "
+                "Fix writer_launch in Settings (local -m model with one matching mmproj*.gguf beside it) or turn the check off."
+            )
+        elif quality.get("port_in_use"):
+            errors.append(
+                f"Vision quality check needs {quality.get('url')} but another service is using it. "
+                "Close that service or turn the check off; Mondo never stops processes it did not start."
             )
 
     return errors

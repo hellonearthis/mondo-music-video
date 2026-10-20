@@ -28,11 +28,19 @@ Feature requests should stay within the music-video scope.
 
 ## Ideas (not started)
 
+- Fix consecutive repeated camera moves in the shot planner. The independent-dance
+  operator test showed two adjacent identical pull-out shots near the end; the
+  owner also observed a longer-looking sequence of zoom repetition. The current
+  camera sampler does not track its previous choice. Review repetition across
+  shot and passage boundaries, preserve deterministic seeds and handle restricted
+  camera pools. Owner requested a proper future fix, not an opt-in workaround in
+  the dance repair. Follow the protected-scheme review/approval procedure and
+  compare real same-song/same-seed renders before delivery. No camera change made.
 - Subliminal message mode (built, release 1.7.2, owner-requested): flash a chosen picture or a few words for a handful of frames in the
   finished video, at times the user picks or on bar starts. FFmpeg overlay by frame number after assembly; length, frame count and audio are
   unchanged and the untouched video is kept. Open: a way to preview the flash before rendering, a library of flash pictures, and
   per-flash pictures.
-- BONK (built, release 1.8.0; design in `docs/BONK_DESIGN.md`, reviewed by Codex; group mode first, independent per-part dancing later): let selected actors dance to the song, with movement guided by
+- BONK (built, release 1.8.0; design in `docs/BONK_DESIGN.md`, reviewed by Codex; group and independent per-part dancing implemented in 1.8.3): let selected actors dance to the song, with movement guided by
   its beat and passage energy. Let users choose who dances and optionally enter
   free-text "Dance direction"; default to simply "Dancing" without requiring
   knowledge of dance styles. Example directions: gentle swaying, energetic
@@ -48,30 +56,9 @@ Feature requests should stay within the music-video scope.
   Stem analysis can guide per-actor passage instructions; precise beat following
   and matching choreography between actors remain unverified and need operator
   video tests before being promised. Feature requested by the owner;
-  implementation has not started.
-- Instrument-playing actors: assign each actor an instrument (drums, bass, guitar, piano, keys, vocals) and
-  show them playing it. The stem separation already behind the instrument driver could decide, per passage,
-  which assigned instruments are audibly playing (a drummer idles through a drum-free break) and tie a
-  passage's energy to that actor's stem. Limits to design around: the models give four stems (drums, bass,
-  vocals, other) or six with guitar and piano (piano is the least reliable), so "other" lumps keys, strings
-  and synths and specific instruments such as violin versus saxophone cannot be told apart automatically;
-  the owner would assign the instrument. H3 hears the audio but has no notion of notes, so convincing hand
-  and finger sync is unproven and needs a real GPU test. The writer prompt would need an instrument rule
-  alongside the sealed-lips and singing rules (wording for the owner to approve), plus the same shot-level
-  deterministic check used for lip sync. Builds on the lip-sync singer assignment.
-- Instrument reference pictures (owner idea): let each actor's instrument carry a reference picture so the
-  guitar, drum kit or keyboard looks the same in every passage, the way actor sheets keep faces consistent.
-  The renderers accept up to 9 reference images per passage (30 for Seedance 2.5; local H3 and WaveSpeed
-  report 9), and each actor already uses one, so instruments compete for the same slots: a passage with three
-  actors and three instruments needs six. The planner and casting code (original engine sources) allocate
-  those slots, so a first version would have to either fit pictures inside the existing limit per passage
-  (drop the instruments of actors not on screen) or extend slot allocation outside the engine. Needs a
-  way to store instrument pictures (an actor-like asset, probably separate from OAP actor packages), the
-  prompt tags for them, and a real GPU test that the renderer keeps the instrument consistent.
-  Owner direction: load only the reference images each passage needs. That matches how actors already
-  work (every passage is its own generation with its own reference list), so the slot budget is per
-  passage: the actors on screen plus their instruments, and an instrument is only attached where its
-  player is cast and audibly playing.
+  independent implementation is available; real visual timing validation remains pending.
+- Instrument-playing actors: opt-in implementation in 1.9.0 assigns drums, bass, guitar or keyboards to selected actors, with concrete playing/rest instructions and shot checks. Existing stem energy guides passage cues; missing stems and gaps are explicitly unknown, with overall rhythm fallback. Keyboards follow the six-stem piano part only as a proxy, not automatic identification of all synths. Players can sing under the approved singing rules; other actors may dance. Original prompts/planner/pins stay intact. Real same-song/seed contact, note/finger timing and musical performance validation remain pending; see [instrument design and limits](INSTRUMENTS.md).
+- Instrument references: implemented per-passage allocation outside the protected engine. Append only sheets for cast players with playing/unknown activity, deduplicate shared instrument designs, and reject overflow of the selected renderer's reference budget. Props are separate from OAP actors and do not alter actor cast positions or OAP verification. The owner-supplied guitar/keyboard sheets are bundled at their created resolutions; drums/bass public sheets are still pending. Real-render visual identity validation remains pending.
 
 - Suggest the singer from the voice: estimate whether the vocals stem sounds male or female and
   match it to the cast (the owner would pick a male actor for male vocals). Needs a reliable pitch

@@ -39,6 +39,15 @@ from mock_comfy_v2 import ComfyV2Mixin, reset_v2
 
 def mock_singing_body(job, shot, text):
     """Like the real writer: actors are `<Subject N>` (cast position); singing shots quote the words the job assigns them."""
+    performance = job.get('instrument_performance') or {}
+    actions = []
+    for player in performance.get('performers', []):
+        cue = next(c for c in player['shots'] if c['n'] == shot['n'])
+        action = 'rests both hands without playing' if cue['paused'] else {
+            'drums': 'strikes the snare with sticks', 'bass': 'plucks bass strings while fretting',
+            'guitar': 'strums guitar strings while fretting', 'keyboards': 'presses keyboard keys with both hands'}[player['instrument']]
+        actions.append(f"{player['subject']} {action} {player.get('instrument_picture_tag') or ''}.")
+    text = ' '.join(actions) + ' ' + text if actions else text
     singing = job.get("singing")
     if not singing:
         return text * 3 + " Subject Rigging: lips firmly sealed shut, jaw completely relaxed, to prevent any facial babbling or lip-sync hallucinations."
@@ -123,6 +132,11 @@ class MockService(ComfyV2Mixin, BaseHTTPRequestHandler):
                         "outputs": {"2": {"videos": [{"filename": self.server.last_filename, "subfolder": "", "type": "output"}]}}}})
         elif self.path.startswith("/predictions/"):
             self.reply({"data": {"status": "completed", "outputs": [f"http://127.0.0.1:{self.server.server_port}/video.mp4"]}})
+        elif self.path == "/queue":
+            # An idle ComfyUI, as the pre-prompt model release requires; the device reports no GPU memory to wait for.
+            self.reply({"queue_running": [], "queue_pending": []})
+        elif self.path == "/system_stats":
+            self.reply({"devices": [{"name": "mock", "type": "cpu"}]})
         else:
             self.reply({})
 
@@ -181,7 +195,8 @@ class PublicAppTests(unittest.TestCase):
         settings = self.store.settings()
         settings.update(comfy_url=self.url, comfy_input=str(self.home / "comfy-input"), comfy_output=str(self.home / "comfy-output"),
                         laya_model_dir=os.environ.get("MMV_TEST_LAYA_MODEL_DIR", str(self.home / "models/laya")), laya_device="cuda",
-                        writer_url=self.url, writer_model="fixture-writer", vision_url=self.url, vision_model="fixture-vision")
+                        writer_url=self.url, writer_model="fixture-writer", vision_url=self.url, vision_model="fixture-vision",
+                        writer_launch='["fixture-writer", "-ngl", "0"]')  # The HTTP fixture uses no GPU.
         if not os.environ.get("MMV_TEST_LAYA_MODEL_DIR"):
             model = self.home / "models/laya"
             (model / "tokenizer").mkdir(parents=True)
@@ -261,6 +276,7 @@ class PublicAppTests(unittest.TestCase):
             self.assertIn(asset_ref['info']['id'], self.server.v2_assets)
         self.assertEqual(len(self.server.v2_assets), 2)
         run = self.home / 'runs' / status['id']
+        self.assertRegex(status['id'], r'^test_\d{4}-\d{2}-\d{2}_\d{6}(?:-\d+)?$')
         self.assertTrue((run / 'music-video.mp4').is_file())
         self.assertAlmostEqual(media.duration(run / 'music-video.mp4'), 1.1, delta=.08)
         self.assertFalse((run / 'untrusted.mp4').exists())
@@ -412,9 +428,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.13")
+        self.assertEqual(api_version()["version"], "1.9.5")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.13", (root / "README.md").read_text())
+        self.assertIn("1.9.5", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -537,6 +553,41 @@ class PublicAppTests(unittest.TestCase):
         # Restore original settings
         save_settings(self.store, original_settings)
 
+    def test_quality_vision_preview_and_start_do_not_need_the_style_harvest_endpoint(self):
+        import socket
+        from unittest.mock import Mock
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            free_port = probe.getsockname()[1]
+        models = self.home / "vision-models"
+        models.mkdir()
+        (models / "qwen-Q4.gguf").write_bytes(b"")
+        (models / "mmproj-qwen-f16.gguf").write_bytes(b"")
+        settings = {**self.store.settings(), "vision_url": "http://127.0.0.1:1/v1", "vision_model": "harvest",
+                    "writer_launch": json.dumps(["llama-server", "-m", str(models / "qwen-Q4.gguf"), "--port", "8081"])}
+        save_settings(self.store, settings)
+        request = {"kind": "video", "backend": "local_h3", "song": self.song_upload(), "vision_quality_check": True}
+        started = Mock(return_value={"state": "running"})
+        self.app.state.jobs.start = started
+        with patch("mmv.vision_stage.VISION_PORT", free_port):
+            quote = self.client.post("/api/quote", json=request)
+            self.assertEqual(quote.status_code, 200, quote.text)
+            self.assertEqual(quote.json()["offline_engines"], [])
+            start = self.client.post("/api/start", json={"quote_id": quote.json()["id"], "consent": True})
+            self.assertEqual(start.status_code, 200, start.text)
+            started.assert_called_once()
+            # The quality card is its own status entry; the harvester stays offline and separate.
+            services = self.client.get("/api/status").json()["services"]
+            self.assertEqual(services["vision_quality"]["role"], "Quality Check")
+            self.assertTrue(services["vision_quality"]["has_launch"])
+            self.assertFalse(services["vision"]["available"])
+            # Without a launch command the same preview names the setting rather than the harvester.
+            save_settings(self.store, {**settings, "writer_launch": ""})
+            blocked = self.client.post("/api/quote", json=request)
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn("Vision quality check unavailable", blocked.json()["detail"])
+        self.assertNotIn("8080", blocked.json()["detail"])
+
     def test_project_persistence_api(self):
         project = {
             "panel": "video",
@@ -558,19 +609,11 @@ class PublicAppTests(unittest.TestCase):
     def test_clear_log_endpoint(self):
         studio_log = self.home / "studio.log"
         studio_log.write_text("historical error line\n", encoding="utf-8")
-        run_dir = self.home / "runs" / "historical_run"
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "operation.log").write_text("historical operation output\n", encoding="utf-8")
-        time.sleep(0.01)
-
         self.assertIn("historical error", self.client.get("/api/log/latest").json()["log"])
-        self.assertIn("historical operation output", self.client.get("/api/log/latest").json()["log"])
-
         res = self.client.post("/api/log/clear")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json(), {"status": "cleared"})
         self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
-        self.assertEqual(self.client.get("/api/log/historical_run").json()["log"], "No operation or server log recorded yet.")
         self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
 
     def test_sse_events_and_jobs_subscription(self):
@@ -1064,6 +1107,77 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(comfy_sdk.media_suffix(make('application/octet-stream', 'clip.webm'), '.mp4'), '.webm')
         self.assertEqual(comfy_sdk.media_suffix(make('', ''), '.mp4'), '.mp4')
 
+    def test_instrument_import_preview_validation_and_mock_render_reference_order(self):
+        from mmv import instrument_assets
+        for actor_id, kind in (('guitar_actor', 'guitar'), ('keys_actor', 'keyboards')):
+            actors.create_actor(self.store, actor_id, actor_id, 'Overview', picture())
+            imported = self.client.post('/api/instruments/' + kind,
+                data={'license': 'synthetic test', 'provenance': 'private test provenance'},
+                files={'reference': ('test.png', picture(), 'image/png')})
+            imported.raise_for_status()
+        self.assertTrue(next(i for i in self.client.get('/api/instruments').json() if i['id'] == 'guitar')['available'])
+        self.assertEqual(self.client.get('/api/instruments/guitar/reference').status_code, 200)
+        song = self.song_upload()
+        request = {'song': song, 'actors': ['guitar_actor', 'keys_actor'], 'on_screen': 2, 'ensemble_mode': 'always',
+                   'instrument_mode': 'perform', 'instrument_assignments': {'guitar_actor': 'guitar', 'keys_actor': 'keyboards'}}
+        quote, started = self.start(request)
+        started.raise_for_status()
+        performance = quote.json()['instruments']
+        self.assertNotIn('notice', performance)
+        self.assertEqual(set(performance['assets']), {'guitar', 'keyboards'})
+        self.assertTrue(all(s['ref_image_slots'] == 4 for s in quote.json()['segments']))
+        self.assertTrue(all(p['source'] == 'mix' for v in performance['passages'].values() for p in v['performers']))
+        self.assertEqual(self.wait()['state'], 'complete')
+        directory = self.home / 'runs' / started.json()['id']
+        graph = read_json(directory / 'render-graph.json')
+        image_files = [v['inputs']['image'] for v in graph.values() if v.get('class_type') == 'LoadImage']
+        self.assertEqual(len(set(image_files)), 4)
+        self.assertTrue(all(':' not in filename for filename in image_files))
+        prompts = read_json(directory / 'prompts.json')
+        self.assertTrue(all('<Picture 3>' in p and '<Picture 4>' in p for p in prompts.values()))
+        jobs = [read_json(p) for p in (directory / 'writer_jobs').glob('*.json')]
+        self.assertNotIn('private test provenance', json.dumps(jobs))
+        self.assertTrue(read_json(directory / 'prepared.json')['passage_plan_binding'])
+        # The same requests remain fully guarded; off removes all instrument fields.
+        bad = self.client.post('/api/quote', json={**request, 'instrument_assignments': {'missing': 'guitar'}})
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(self.client.post('/api/quote', json={**request, 'instrument_assignments': {'guitar_actor': 'flute'}}).status_code, 422)
+        danced = self.client.post('/api/quote', json={**request, 'dance_mode': 'group'}).json()
+        self.assertIsNone(danced['dance'])  # Both actors' hands are busy.
+        self.assertIsNone(self.client.post('/api/quote', json={'song': song}).json()['instruments'])
+        # Resume replays the saved instrument decisions even if stem analysis would change now.
+        from mmv.pipeline import prepare_resume
+        saved_request = read_json(directory / 'request.json')
+        with patch('mmv.instruments.cached_scores', side_effect=AssertionError('must replay saved cues')):
+            resumed = prepare_resume(self.store, saved_request, directory)
+        self.assertEqual(resumed['instruments'], read_json(directory / 'prepared.json')['instruments'])
+        self.assertTrue(all(s['ref_image_slots'] == 4 for s in resumed['segments']))
+        fresh_quote = self.client.post('/api/quote', json=request).json()
+        asset_path = Path(resumed['instruments']['assets']['guitar']['path'])
+        asset_path.write_bytes(b'changed synthetic fixture')
+        with self.assertRaisesRegex(ValueError, 'reference changed'):
+            prepare_resume(self.store, saved_request, directory)
+        refused = self.client.post('/api/start', json={'quote_id': fresh_quote['id'], 'consent': True})
+        self.assertEqual(refused.status_code, 400)
+        self.assertIsNone(self.app.state.jobs.active)
+
+    def test_independent_preview_parts_fallback_and_validation(self):
+        from mmv import actors
+        actors.create_actor(self.store, 'dance_actor', 'Dance Actor', 'Overview', picture())
+        song = self.song_upload()
+        request = {'song': song, 'actors': ['dance_actor'], 'dance_mode': 'independent',
+                   'dance_parts': {'dance_actor': 'bass'}}
+        response = self.client.post('/api/quote', json=request)
+        response.raise_for_status()
+        plan = response.json()['dance']
+        self.assertEqual(plan['parts'], {'dance_actor': 'bass'})
+        self.assertIsNone(plan['lead'])
+        dancers = [d for passage in plan['passages'].values() for d in passage['dancers']]
+        self.assertTrue(dancers)
+        self.assertTrue(all(d['source'] == 'mix' and d['fallback'] for d in dancers))
+        self.assertEqual(self.client.post('/api/quote', json={**request, 'dance_parts': {'dance_actor': 'invalid'}}).status_code, 422)
+        self.assertEqual(self.client.post('/api/quote', json={**request, 'dance_parts': {'missing': 'bass'}}).status_code, 400)
+
     def test_dance_is_planned_in_the_preview_and_requests_without_dancing_are_unchanged(self):
         song = self.song_upload()
         plan = self.client.post('/api/quote', json={'song': song, 'dance_mode': 'group', 'dance_direction': ' gentle   swaying '})
@@ -1079,6 +1193,97 @@ class PublicAppTests(unittest.TestCase):
                           ({'dance_mode': 'group', 'dancers': ['nobody_here']}, 400), ({'dance_mode': 'group', 'dance_lead': 'nobody_here'}, 400)):
             with self.subTest(bad=bad):
                 self.assertEqual(self.client.post('/api/quote', json={'song': song, **bad}).status_code, code)
+
+    def test_lyric_captions_are_planned_burned_after_the_flash_and_downloadable(self):
+        song = self.song_upload()
+        lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk {honk}', 'timing': 'matched'}, {'start': 1.0, 'end': 1.5, 'text': 'guess', 'timing': 'interpolated'}]
+        plan = self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'}})
+        plan.raise_for_status()
+        self.assertEqual(plan.json()['captions']['cues'], [[0.2, 0.9, 'Honk {honk}']])
+        self.assertEqual(plan.json()['lipsync'], None)                                       # captions never switch lip sync on
+        self.assertIsNone(self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines}).json()['captions'])
+        nothing = self.client.post('/api/quote', json={'song': song, 'captions': {'mode': 'burned'}}).json()['captions']
+        self.assertEqual((nothing['cues'], bool(nothing['note'])), ([], True))                  # previewable, so lines can be added in the editor
+        for bad, code in (({'captions': {'mode': 'neon'}, 'lyric_lines': lines}, 422), ({'lyric_lines': [{'start': 3, 'end': 1, 'text': 'x'}], 'captions': {'mode': 'sidecar'}}, 400)):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post('/api/quote', json={'song': song, **bad}).status_code, code)
+        fonts = self.client.get('/api/captions/fonts')
+        self.assertEqual(fonts.status_code, 200)
+        self.assertIsInstance(fonts.json()['fonts'], list)
+        for bad in ({'color': 'red'}, {'outline_color': '#12'}, {'font': 'Comic, Sans'}, {'font': 'x' * 41}):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned', **bad}}).status_code, 422)
+                self.assertEqual(self.client.post('/api/captions', json={'source': 'x/music-video.mp4', **bad}).status_code, 422)
+        plan = self.client.post('/api/quote', json={'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned', 'color': '#FF8800', 'font': ''}})
+        self.assertEqual((plan.status_code, plan.json()['captions']['color']), (200, '#ff8800'))
+        quote, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'},
+                                     'subliminal': {'mode': 'text', 'text': 'GOOSE', 'times': [0.5], 'frames': 2}})
+        started.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        run = self.home / 'runs' / started.json()['id']
+        output = read_json(run / 'output.json')
+        self.assertEqual(output['captions'], {'mode': 'burned', 'cues': 1, 'srt': 'lyrics.srt', 'style': 'classic', 'position': 'bottom', 'size': 'medium',
+                                              'uncaptioned_copy': 'music-video-uncaptioned.mp4'})
+        self.assertEqual(output['subliminal']['clean_copy'], 'music-video-clean.mp4')
+        self.assertNotIn('quality_warnings', output)
+        from mmv import captions as caption_module
+        self.assertEqual(caption_module._probe_size(run / 'music-video.mp4')[2], caption_module._probe_size(run / 'music-video-uncaptioned.mp4')[2])
+        for name, kind in (('lyrics.srt', 'application/x-subrip'), ('music-video-uncaptioned.mp4', 'video/mp4'), ('music-video-clean.mp4', 'video/mp4')):
+            served = self.client.get(f'/api/media/{run.name}/{name}')
+            self.assertEqual((served.status_code, served.headers['content-type']), (200, kind), name)
+        self.assertIn('Honk {honk}', self.client.get(f'/api/media/{run.name}/lyrics.srt').text)
+        self.assertNotEqual(self.client.get(f'/api/media/{run.name}/operation.log').status_code, 200)     # only recorded files are served
+
+    def test_a_finished_video_can_be_captioned_later_as_a_new_output_leaving_the_original_alone(self):
+        song = self.song_upload()
+        lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk honk', 'timing': 'matched'}]
+        _, started = self.start({'song': song, 'lyric_lines': lines})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        run = self.home / 'runs' / started.json()['id']
+        original = (run / 'music-video.mp4').read_bytes()
+        self.assertNotIn('captions', read_json(run / 'output.json'))
+        from mmv import captions as caption_module
+        done = self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'})
+        done.raise_for_status()
+        status = self.wait()
+        self.assertEqual(status['state'], 'complete', status)
+        new = self.home / 'runs' / done.json()['id']
+        self.assertRegex(new.name, r'^.+_captions_classic_\d{4}-\d{2}-\d{2}_\d{6}$')            # readable like productions, not random
+        record = read_json(new / 'output.json')
+        self.assertEqual((record['kind'], record['file'], record['captions']['cues']), ('captioned', 'captioned.mp4', 1))
+        self.assertEqual((run / 'music-video.mp4').read_bytes(), original)                    # the original is untouched
+        self.assertEqual(caption_module._probe_size(new / 'captioned.mp4')[2], caption_module._probe_size(run / 'music-video.mp4')[2])
+        self.assertNotEqual((new / 'captioned.mp4').read_bytes(), original)
+        self.assertEqual(self.client.get(f'/api/media/{new.name}/lyrics.srt').status_code, 200)
+        self.assertIn(new.name + '/captioned.mp4', [item['file'] for item in self.client.get('/api/outputs').json()])
+        # things that are not completed music videos are refused (the busy guard is the shared jobs.require_idle)
+        for source in (new.name + '/captioned.mp4', 'nobody/music-video.mp4'):
+            with self.subTest(source=source):
+                self.client.post('/api/captions', json={'source': source})
+                self.assertEqual(self.wait()['state'], 'failed')
+
+    def test_captioning_a_video_made_with_captions_starts_from_its_uncaptioned_copy_and_needs_lines(self):
+        song = self.song_upload()
+        lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk honk', 'timing': 'matched'}]
+        _, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'}})
+        started.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        run = self.home / 'runs' / started.json()['id']
+        from unittest import mock
+        from mmv import captions as caption_module
+        with mock.patch.object(caption_module, 'render', wraps=caption_module.render) as spy:
+            self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'}).raise_for_status()
+            self.assertEqual(self.wait()['state'], 'complete')
+        self.assertEqual(spy.call_args.args[0].name, 'music-video-uncaptioned.mp4')
+        _, bare = self.start({'song': song})
+        bare.raise_for_status()
+        self.assertEqual(self.wait()['state'], 'complete')
+        self.client.post('/api/captions', json={'source': bare.json()['id'] + '/music-video.mp4'}).raise_for_status()
+        failed = self.wait()
+        self.assertEqual(failed['state'], 'failed')
+        self.assertIn('no timed lyric lines', failed['message'])
 
     def test_subliminal_flashes_are_planned_in_the_preview_and_applied_to_the_finished_video_keeping_a_clean_copy(self):
         song = self.song_upload()
@@ -1129,6 +1334,26 @@ class PublicAppTests(unittest.TestCase):
         status=self.wait();self.assertEqual(status["state"],"failed")
         self.assertFalse(any(path=="/prompt" for path,body in MockService.requests))
         self.assertEqual(sum(path=="/chat/completions" for path,body in MockService.requests),3)
+        self.assertTrue(status['can_retry_prompts'])
+        self.assertFalse(status['can_resume'])
+        self.app.state.jobs.last['message'] = (self.app.state.jobs.last['message'].removesuffix(' Nothing rendered.')
+                                               + ' Note: Incomplete responses, JSON formatting errors, or shot-count mismatches'
+                                                 ' often indicate your local writer context allocation size is too small. Nothing rendered.')
+        self.assertNotIn('context allocation size', self.client.get('/api/status').json()['message'])
+        self.assertEqual(self.client.post('/api/retry-prompts/quote', json={'run_id': 'unknown'}).status_code, 400)
+        fresh = self.client.post('/api/retry-prompts/quote', json={'run_id': status['id']})
+        fresh.raise_for_status()
+        self.assertEqual(fresh.json()['kind'], 'video')
+        self.assertEqual(fresh.json()['request']['song'], read_json(self.home / 'runs' / status['id'] / 'request.json')['song'])
+        self.assertNotEqual(fresh.json()['id'], started.json()['id'])
+        self.assertEqual(self.client.post('/api/start', json={'quote_id': fresh.json()['id'], 'consent': False}).status_code, 400)
+        self.assertEqual(self.client.get('/api/status').json()['state'], 'failed')
+        self.assertEqual(sum(path=="/chat/completions" for path,body in MockService.requests),3)
+        renders = self.home / 'runs' / status['id'] / 'renders'
+        renders.mkdir()
+        (renders / 'already-submitted').mkdir()
+        self.assertFalse(self.client.get('/api/status').json()['can_retry_prompts'])
+        self.assertEqual(self.client.post('/api/retry-prompts/quote', json={'run_id': status['id']}).status_code, 400)
 
     def test_cancel_own_render_and_no_queue(self):
         MockService.hold=True

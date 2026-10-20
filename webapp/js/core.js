@@ -10,6 +10,7 @@ export const state = {
   lastState: null,
   currentRun: null,
   upscaleSource: null,
+  captionSource: null,
   currentCustomVocab: {},
   currentVocabRandomKey: "",
   formFiles: new WeakMap(),

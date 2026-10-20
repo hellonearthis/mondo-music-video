@@ -204,3 +204,58 @@ published or described as ready.
 ## Still open (owner)
 
 None for the design. The next step is build step 0, then step 1, then the local validation runs.
+
+## Independent mode (1.8.3)
+
+The owner approved the optional independent instructions on 2026-10-19. Original
+`DANCE_RULES`, singing, mouth, quality and engine text remain untouched. Independent
+mode selects its own additive rule block; off/group defaults remain unchanged.
+Implementation uses functions for assignment, cue projection and cached-analysis IO.
+
+`dance_mode: independent` accepts `dance_parts: {actor_id: auto|beat|drums|bass|vocals}`.
+Auto cycles drums, bass, vocals, beat in selected-dancer order, consistently across
+passages; explicit choices replace the actor's assigned slot without shifting other
+actors. Unknown or unselected dancer IDs are rejected. There is no lead. The existing
+three-dancer-per-passage cap and off-screen rules still apply.
+
+Existing stem audio or driven analysis is reused at the selected stem quality; cached
+audio can be analyzed on CPU. This path never installs/downloads models or separates
+a song. Users can explicitly prepare stems through the existing instrument-analysis
+controls. Unavailable, unreadable or empty-energy parts fall back visibly to the song
+beat. Each dancer receives shot-local beat counts, passage-relative times, energy,
+accent times and pause cues. All parts share the mix beat grid, including score edits;
+stem energy selects different emphases rather than inventing new instrument tempos.
+The unedited analysis caches remain unchanged. Saved independent plans use version 2,
+are digest-bound with prompts and replay on resume without analyzing stems again.
+
+Independent checks require a body action or deliberate hold for each visible dancer;
+following another dancer alone is insufficient. A measured pause requires a deliberate
+hold or slow movement. Calm wording advice follows the dancer's part intensity.
+These lexical checks do not establish visual synchronization. Real same-song/same-seed
+group/independent comparisons remain operator work, pending; no paid/GPU render was
+performed for this delivery.
+
+### Distinct movement repair (1.8.5)
+
+The operator found that the humanoid dancers converged visually. Saved writer jobs
+had separate part energies but the same generic move-per-beat hints. One saved
+prompt reintroduced a dance lead, and action checks missed prose using display
+names rather than tags. Part timing alone did not establish different choreography.
+
+New independent plans use version 3 and assign contrasting movement families in
+selected-dancer order, preferring vertical bounces for drums, lateral steps for
+bass, and torso rotation for vocals. Repeated part choices use unused families
+for the first three dancers. Assignments remain attached to actor IDs when casting
+order changes. When more than three actors are selected, a passage resolves any
+family collision among its actual three choreographed dancers, in selected-dancer
+order; an actor's family may then vary with the visible cohort. The writer job includes the concrete action and a family-specific
+pause pose. Independent-only checks recognize display names, require the assigned
+family when visible, compare movement-family signatures between dancers, and
+reject affirmative lead/unison/copying instructions as
+hard failures. These checks remain lexical, not visual proof.
+
+Original group/off instructions, mouth rules, protected pins and engine planning
+are unchanged. New jobs/system text/version avoid old prompt-cache matches; saved
+version-2 productions retain their original choreography on resume. Make a new
+preview/production to use the new assignments. Rendered distinctness still needs a
+same-song/same-seed operator comparison; mock tests cannot establish it.

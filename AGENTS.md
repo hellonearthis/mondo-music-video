@@ -60,9 +60,30 @@ verify the assets appear in the app. Never import other local/private assets.
 - The owner's internal lab nicknames, member titles and who-is-who are private. Never put them in published files,
   commit messages, release notes, credits, posts or demo text; credit collaborators only by their public handles.
   The private details live in the local, ignored `docs/TEAM_STATUS.md`.
-- When adding user-facing capabilities, audit the agent client, MCP tools,
-  included skill and agent documentation for coverage. Keep version/tool discovery
-  and mock transport tests current; preserve confirmation and paid-consent guards.
+- Keep every user-facing capability agent-friendly as a standing release rule. For
+  each new or changed GUI/API workflow, audit and update the agent client/CLI,
+  MCP tools, AGENTS.md, agent setup documentation, and every included project
+  skill or skill reference that teaches the workflow; add a focused skill only
+  when the existing project skill cannot explain it clearly. Cover preview,
+  action, recovery and result inspection where applicable. Keep version/tool
+  discovery and mock transport tests current; preserve confirmation and
+  paid-consent guards. Record any intentional agent-interface limitation in
+  release documentation instead of silently leaving a GUI-only path.
+- Keep contributor GitHub handles out of application labels, tooltips, notices
+  and help text. Preserve contribution credit in contributor/review/release documentation.
+
+## Functional programming style
+
+- Prefer functional programming for new and changed code: small, composable functions,
+  explicit inputs and return values, and pure data transformations where practical.
+- Keep filesystem, network, subprocess, UI and other side effects at clear boundaries;
+  avoid hidden mutable state and unnecessary classes, wrappers or abstraction layers.
+- Reuse existing functions and keep implementations concise and readable. Avoid
+  repeated traversal, needless copying and intermediate allocations on hot paths.
+- Preserve established framework interfaces and useful existing classes; do not rewrite
+  unrelated code solely to change its style. Measure performance-sensitive changes:
+  functional style alone is not evidence of faster execution or lower memory use.
+- Apply the same style in helper assignments and review it before integration.
 
 ## Protected prompting scheme (read before editing; applies to forks too)
 
@@ -120,14 +141,25 @@ scheme's approval. Validate real before/after renders (same song and seed) befor
   ones. Checking/downloading/analyzing the fork does not itself authorize paid
   or GPU work, publication, pushing, or importing private assets.
 
-## Working with Codex and Claude Code
+## Working with Codex, Claude Code, Antigravity and Hermes
 
 Read `docs/COLLABORATION.md` before starting work, and `docs/TEAM_STATUS.md` if it
 exists (it is local session state and is not published). Read `README.md` and the relevant implementation and tests for context.
 
-Use the shared collaboration protocol for both Codex and Claude Code. Preserve
+Use the shared collaboration protocol for Codex, Claude Code and any other agent the owner adds. Preserve
 existing uncommitted work. Do not infer that another open terminal is idle.
 Before committing or pushing, follow the shared-checkout commit rules in `docs/COLLABORATION.md`.
+Antigravity and Hermes are junior team members; Hermes normally takes light worker tasks. Their first session is read-only: read,
+search, review and report, but do not edit, stage, commit, push, or run renders or tests that touch real data. Put findings in
+`.collaboration/` reports or in your reply, never in tracked files. After that first session an agent may take assigned work as a
+junior helper: only the files and task the user or coordinator names, claimed in `docs/TEAM_STATUS.md`, with the coordinator
+reviewing the result before it is integrated. Helpers never bump the version, commit or push on their own. The protected prompting
+scheme, the public-asset allowlist and the privacy rules above apply to every agent without exception.
+Four agents may work concurrently under one named coordinator. Keep one writer in the main checkout;
+other agents review without edits or implement explicitly assigned tasks in separate worktrees.
+Record each assignment, allowed files, worktree and handoff in the shared local status file as described
+in `docs/COLLABORATION.md`. Hermes must also read `HERMES.md`. An open terminal is not an assignment,
+and these instructions do not automatically launch or connect any agents.
 Do not start product changes until the user assigns a task. Never stage or
 publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
 are documentation and never trigger a version bump.

@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -95,6 +95,10 @@ class AgentClient:
     def preview_resume(self, run_id):
         return self._json("POST", "/api/resume/quote", {"run_id": run_id})
 
+    def preview_retry_prompts(self, run_id):
+        """Get a new quote from an unrendered run that exhausted prompt validation."""
+        return self._json("POST", "/api/retry-prompts/quote", {"run_id": run_id})
+
     def cancel(self):
         return self._json("POST", "/api/cancel")
 
@@ -110,7 +114,8 @@ class AgentClient:
             path = Path(path).expanduser().resolve()
             if not path.is_file() or path.stat().st_size > 256 * 1024 * 1024:
                 raise ValueError("Select an existing media file under 256 MB")
-            filename = "media" + path.suffix
+            filename = path.name if route == '/api/upload/song' else 'media' + path.suffix
+            filename = filename.replace('"', '_').replace('\r', '_').replace('\n', '_').replace('\\', '_')
             head += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{file_field}\"; "
                      f"filename=\"{filename}\"\r\nContent-Type: "
                      f"{mimetypes.guess_type(filename)[0] or 'application/octet-stream'}\r\n\r\n").encode()
@@ -134,6 +139,12 @@ class AgentClient:
         if kind not in ("song", "reference", "oap", "agreement"):
             raise ValueError("Choose song, reference, oap or agreement")
         return self._multipart("/api/upload/" + kind, {}, "file", path)
+
+    def import_instrument(self, instrument_id, reference_path, license, provenance):
+        from .instrument_assets import valid_kind
+        valid_kind(instrument_id)
+        return self._multipart("/api/instruments/" + instrument_id, {"license": license, "provenance": provenance},
+                               "reference", reference_path)
 
     def create_actor(self, actor_id, name, description, reference_path):
         return self._multipart("/api/actors", {"actor_id": actor_id, "name": name, "description": description},
@@ -284,6 +295,15 @@ class AgentClient:
         return self._json("POST", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/package",
                           {"zip": bool(zip_it), "allow_private_actors": bool(allow_private_actors)})
 
+    def caption_fonts(self):
+        return self._json("GET", "/api/captions/fonts")
+
+    def caption_video(self, source, lyric_lines=None, style="classic", position="bottom", size="medium",
+                      color="", outline_color="", font=""):
+        return self._json("POST", "/api/captions", {"source": source, "lyric_lines": lyric_lines or [], "style": style,
+                                                    "position": position, "size": size, "color": color,
+                                                    "outline_color": outline_color, "font": font})
+
     def upscale(self, source, model="ahq-12", scale=2):
         return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})
 
@@ -292,7 +312,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
+    for name in ("status", "version", "catalog", "actors", "instruments", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "agreement"))
@@ -301,6 +321,8 @@ def main(argv=None):
     preview.add_argument("request_file", help="JSON production request file")
     resume = sub.add_parser("preview-resume")
     resume.add_argument("run_id")
+    retry_prompts = sub.add_parser("preview-retry-prompts")
+    retry_prompts.add_argument("run_id")
     start = sub.add_parser("start")
     start.add_argument("quote_id")
     start.add_argument("--consent", action="store_true")
@@ -330,6 +352,8 @@ def main(argv=None):
             result = client.preview(json.loads(Path(args.request_file).read_text(encoding="utf-8")))
         elif args.command == "preview-resume":
             result = client.preview_resume(args.run_id)
+        elif args.command == "preview-retry-prompts":
+            result = client.preview_retry_prompts(args.run_id)
         elif args.command == "start":
             result = client.start(args.quote_id, args.consent)
         elif args.command == "log":

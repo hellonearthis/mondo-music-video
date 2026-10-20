@@ -1,5 +1,6 @@
 """Cancellable process boundary for the extracted music-video pipeline."""
 from __future__ import annotations
+from dataclasses import replace
 import hashlib
 import json
 import os
@@ -9,7 +10,33 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+from . import writer_usage
 from .storage import Storage, inside, read_json, write_json
+
+
+def require_renderer_handoff(settings):
+    """Do not load the local renderer alongside a known external model we cannot unload."""
+    from . import gpu_memory, runtime
+    from .vision_stage import VISION_PORT
+    if runtime.serves_model(f'http://127.0.0.1:{VISION_PORT}/v1', 'mmv-vision'):
+        raise ValueError('A vision model started outside this production is still running. '
+                         'Local rendering was held to avoid overlapping GPU models. '
+                         'Let Mondo launch the vision model when its quality stage runs.')
+    if settings.get('writer_mode') == 'local' and runtime.http_ok(settings['writer_url'].rstrip('/') + '/models'):
+        try:
+            cpu_only = gpu_memory.gguf_need_bytes(json.loads(settings.get('writer_launch') or '[]')) == 0
+        except (ValueError, TypeError, AttributeError):
+            cpu_only = False
+        if not cpu_only:
+            raise ValueError('The local writer is still running outside this production. '
+                             'Local rendering was held to avoid overlapping GPU models. '
+                             'Mondo can start and stop the writer automatically using writer_launch in Settings.')
+
+
+def render_timeout(backend, minutes=120):
+    """Seconds to wait for one local clip; 0 minutes means no limit (the adapter needs a number, so infinity)."""
+    if backend != 'local_h3': return None
+    return minutes * 60.0 if minutes else float('inf')
 
 
 def passage_cache_key(system, job, validators_version=''):
@@ -136,66 +163,14 @@ def run(home, directory, *, resume=False):
     from .render import get_backend
     from .pipeline import ENGINE
     from .render import request_json
-    import urllib.request
-
-    ctx_size = 16384
-    if settings.get('writer_launch'):
-        try:
-            launch_args = json.loads(settings['writer_launch'])
-            for i in range(len(launch_args) - 1):
-                if launch_args[i] in ('-c', '--ctx-size'):
-                    parsed_ctx = int(launch_args[i + 1])
-                    if parsed_ctx >= 512:
-                        ctx_size = parsed_ctx
-                    break
-        except Exception:
-            pass
-
     def progress(message, value):
         print(message, flush=True)
         write_json(directory / 'progress.json', {'message': message, 'progress': value})
+    ctx_size = writer_usage.launch_context(settings)
     def llm(system, user, label=None):
         captured = {}
-        orig_urlopen = urllib.request.urlopen
-
-        class _CaptureWrapper:
-            def __init__(self, resp):
-                self._r = resp
-            def read(self, *a, **kw):
-                data = self._r.read(*a, **kw)
-                try:
-                    d = json.loads(data.decode('utf-8'))
-                    if isinstance(d, dict):
-                        captured['usage'] = d.get('usage')
-                        captured['timings'] = d.get('timings')
-                except Exception:
-                    pass
-                return data
-            def __getattr__(self, name):
-                return getattr(self._r, name)
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                return self._r.__exit__(*a)
-
-        def _send_flush_request(req, *a, **kw):
-            if hasattr(req, 'data') and req.data:
-                try:
-                    d = json.loads(req.data.decode('utf-8'))
-                    if d.get('cache_prompt') is not False:
-                        d['cache_prompt'] = False
-                        req.data = json.dumps(d).encode('utf-8')
-                except Exception:
-                    pass
-            return _CaptureWrapper(orig_urlopen(req, *a, **kw))
-
-        try:
-            urllib.request.urlopen = _send_flush_request
-            ok, text, error = call_llm(None, system, user, .7, 4096, 900,
-                                       profile=(settings, store.key('MMV_WRITER_API_KEY')))
-        finally:
-            urllib.request.urlopen = orig_urlopen
-
+        ok, text, error = writer_usage.observe(
+            lambda: call_llm(None, system, user, .7, 4096, 900, profile=(settings, store.key('MMV_WRITER_API_KEY'))), captured)
         if not ok:
             mode = "local llama.cpp" if settings.get('writer_mode') == 'local' else "API writer"
             endpoint = runtime.safe_endpoint(settings.get('writer_url', ''))
@@ -205,20 +180,8 @@ def run(home, directory, *, resume=False):
             raise ValueError(f"Writer ({mode} at {endpoint}) failed: {error or 'Writer returned no output'}")
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"Writer ({settings.get('writer_model') or 'llama.cpp'}) returned empty text")
-
-        if captured.get('usage'):
-            usage = captured['usage']
-            p_tok = usage.get('prompt_tokens', 0)
-            c_tok = usage.get('completion_tokens', 0)
-            t_tok = usage.get('total_tokens', p_tok + c_tok)
-            timings = captured.get('timings') or {}
-            speed_str = ""
-            if timings.get('predicted_per_second'):
-                speed_str = f", {timings['predicted_per_second']:.0f} t/s"
-            pct_str = f" — {round((t_tok / ctx_size) * 100)}% context used" if ctx_size else ""
-            tag = f" {label}" if label else ""
-            print(f"   [tokens]{tag}: {p_tok:,} prompt + {c_tok:,} generated = {t_tok:,} total{pct_str}{speed_str}", flush=True)
-
+        if line := writer_usage.usage_line(captured, ctx_size, label):
+            print(line, flush=True)
         return text
     if request['kind'] == 'harvest':
         progress('Harvesting visual style with the original style contract', 10)
@@ -264,6 +227,12 @@ def run(home, directory, *, resume=False):
     # Lip sync keeps every passage sealed except those the approved plan marks as singing.
     effective_silent_mouths = mouth_mode in ('sealed', 'lip_sync')
     singing_plan = ((prepared.get('lipsync') or {}).get('passages') or {}) if mouth_mode == 'lip_sync' else {}
+    from . import instruments
+    instrument_plan = prepared.get('instruments') or None
+    instrument_passages = (instrument_plan or {}).get('passages', {})
+    if instrument_plan:
+        instruments.check_replay(request, instrument_plan)
+        instruments.verify_assets(instrument_plan)
     dance_plan = prepared.get('dance') or None
     dance_passages = ((dance_plan or {}).get('passages') or {}) if request['kind'] == 'video' else {}
     cast_block = actor.cast_writer_block([a['actor_id'] for a in roster], silent_mouths=effective_silent_mouths)
@@ -271,9 +240,28 @@ def run(home, directory, *, resume=False):
     # OAP's own category names are enforced independently by check_cast.
     if all(value == 'none' for value in request['content'].values()): restrictions = ['nudity','blood','violence','sexual']
     from . import runtime
+    vision_wanted = request['kind'] == 'video' and request.get('vision_quality_check')
     if not resume:
+        # Confirm cached renderer models have left the GPU before loading prompt models.
+        if (request['backend'] in ('local_h3', 'comfy_sdk_h3') and (request['backend'] == 'local_h3' or vision_wanted)
+                and settings.get('comfy_url') and runtime.http_ok(settings['comfy_url'].rstrip('/') + '/system_stats')):
+            from .comfy_memory import release_cached_models
+            progress('Releasing ComfyUI model memory for prompt preparation', 1)
+            release_cached_models(settings['comfy_url'])
+        from . import gpu_memory
+        gpu_before_writer = gpu_memory.gpu_memory()
         writer_process = None
         if settings['writer_mode'] == 'local':
+            if not runtime.http_ok(settings['writer_url'].rstrip('/') + '/models'):
+                try:
+                    command = json.loads(settings['writer_launch'])
+                    need = gpu_memory.gguf_need_bytes(command) if isinstance(command, list) else None
+                except (ValueError, TypeError, AttributeError):
+                    need = None  # start_service supplies the configuration diagnostic.
+                if need and gpu_before_writer and gpu_before_writer[0] < need:
+                    raise ValueError(f'Not enough free GPU memory to start the writer: '
+                                     f'{gpu_memory.gib(gpu_before_writer[0])} free, about '
+                                     f'{gpu_memory.gib(need)} needed. Another model may still be using the GPU.')
             progress('Starting music-video writer', 2)
             writer_process = runtime.start_service(settings['writer_launch'],settings['writer_cwd'],
                              settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log',
@@ -283,6 +271,13 @@ def run(home, directory, *, resume=False):
         if request['kind'] == 'video':
             from .engine.validators import LayaSemanticValidator
             validator = LayaSemanticValidator()
+            # Measured after the writer is up, so what it holds is already subtracted. Never rewrites settings.
+            override, why = gpu_memory.laya_device_choice(
+                settings.get('laya_device', 'cuda'), gpu_memory.laya_need_bytes(settings.get('laya_model_dir') or ''),
+                gpu_memory.gpu_memory())
+            if override:
+                os.environ['MMV_LAYA_DEVICE_OVERRIDE'] = override
+            progress(why, 3)
             progress('Loading Laya prompt reviewer', 3)
             try:
                 validator._load_agent()
@@ -342,10 +337,10 @@ def run(home, directory, *, resume=False):
             if any(item.get('dancing') for item in dance_passages.values()):
                 from . import dance
                 tail = quality.WRITER_RULES            # the quality rules stay last: base, singing rules, dance rules, quality rules
-                system_dance = system[:-len(tail)] + '\n\n' + dance.DANCE_RULES + tail
+                system_dance = system[:-len(tail)] + '\n\n' + dance.writer_rules(dance_plan) + tail
                 (directory / 'writer_system_dance.md').write_text(system_dance, encoding='utf-8')
                 if system_singing is not None:
-                    system_singing_dance = system_singing[:-len(tail)] + '\n\n' + dance.DANCE_RULES + ' ' + dance.DANCE_SINGER_SENTENCE + tail
+                    system_singing_dance = system_singing[:-len(tail)] + '\n\n' + dance.writer_rules(dance_plan) + ' ' + dance.DANCE_SINGER_SENTENCE + tail
                     (directory / 'writer_system_singing_dance.md').write_text(system_singing_dance, encoding='utf-8')
             jobs_dir = directory / 'writer_jobs';jobs_dir.mkdir(exist_ok=True)
             cache_dir = store.home / 'cache' / 'prompts'
@@ -361,6 +356,12 @@ def run(home, directory, *, resume=False):
                 dpass = dance_passages.get(seg.segment_id) or {}
                 dancing = bool(dpass.get('dancing')) and system_dance is not None
                 seg_system = (system_singing_dance if dancing else system_singing) if singing else (system_dance if dancing else system)
+                ipass = instrument_passages.get(seg.segment_id) or {}
+                performing = bool(ipass.get('performers'))
+                if performing:
+                    tail = quality.WRITER_RULES
+                    seg_system = seg_system[:-len(tail)] + '\n\n' + instruments.RULES + tail
+                    (directory / f'writer_system_instruments_{seg.segment_id}.md').write_text(seg_system, encoding='utf-8')
                 seg_cast_block = cast_block_singing if singing else cast_block
                 cast_entries = casting.cast_for(prepared['casting'], seg.segment_id)
                 if singing:
@@ -372,6 +373,8 @@ def run(home, directory, *, resume=False):
                                       'shots': lipsync.shot_lyrics(seg, sing['lines'])}
                 if dancing:
                     job['dance'] = dance.job(dpass, dance_plan)
+                if performing:
+                    job['instrument_performance'] = instruments.job(ipass, instrument_plan, tags)
                 if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
                 write_json(jobs_dir / (seg.segment_id+'.json'), job)
 
@@ -385,8 +388,13 @@ def run(home, directory, *, resume=False):
                 if dancing:
                     if not singing:
                         cache_validators.append(lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent))
-                    dance_version = f'dance-v{dance.VERSION}'
+                    dance_version = f"dance-v{dance_plan.get('version', dance.VERSION)}"
                     cache_validators.append(lambda prompt: dance.dance_problems(prompt, cached_shot_bodies(prompt), seg, dpass, dance_plan))
+                if performing:
+                    if not singing and not dancing:
+                        cache_validators.append(lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent))
+                    dance_version += f'instruments-v{instrument_plan["version"]}'
+                    cache_validators.append(lambda prompt: instruments.problems(prompt, cached_shot_bodies(prompt), seg, ipass, instrument_plan, tags))
                 if reuse_prompts:
                     cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', seg_system, job, seg, tags,
                                                         cleared_at=cleared_at, extra_validators=cache_validators, validators_version=dance_version)
@@ -405,16 +413,26 @@ def run(home, directory, *, resume=False):
                 progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
                 feedback, soft_fallback = '', None
                 compact = bool(request.get('compact_prompts'))
-                attempts = (4 if singing or dancing else 3) if settings['writer_mode'] == 'local' else 1
+                attempts = (4 if singing or dancing or performing else 3) if settings['writer_mode'] == 'local' else 1
                 for attempt in range(attempts):
-                    tag = f"{seg.segment_id} (attempt {attempt + 1})" if attempt > 0 else seg.segment_id
+                    tag = f"{seg.segment_id} (attempt {attempt + 1})" if attempt else seg.segment_id
                     if compact:
                         raw = llm(seg_system, _compact_writer_job(job) + feedback, label=tag)
                     else:
                         raw = llm(seg_system + feedback, json.dumps(job, indent=2), label=tag)
                     (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
+                    instrument_problems = []
                     try:
                         response = WriterResponse.parse(raw, seg.segment_id)
+                        if performing:
+                            bodies, repaired_shots = instruments.repair_shot_bodies(
+                                response.shot_bodies, seg, ipass, instrument_plan, tags)
+                            if repaired_shots:
+                                response = replace(response, shot_bodies=bodies)
+                                write_json(directory / f'{seg.segment_id}.instrument-repair-{attempt+1}.json',
+                                           {'shots': repaired_shots, 'action': instruments.GUITAR_CONTACT})
+                                print(f'{seg.segment_id}: corrected guitar hand contact in shots '
+                                      + ', '.join(map(str, repaired_shots)) + '; checking the complete prompt', flush=True)
                         prompt = assemble_prompt(seg, response, tags)
                         if singing:
                             prompt = lipsync.swap_audio_sentence(prompt, tags.music_tag)
@@ -424,13 +442,16 @@ def run(home, directory, *, resume=False):
                                 prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
                             else:
                                 prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
+                        instrument_problems = instruments.problems(prompt, response.shot_bodies, seg, ipass, instrument_plan, tags) if performing else []
                         problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent)
                                     + quality.prompt_problems(prompt, seg, request['direction'])
                                     + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else [])
-                                    + (dance.dance_problems(prompt, response.shot_bodies, seg, dpass, dance_plan) if dancing else []))
+                                    + (dance.dance_problems(prompt, response.shot_bodies, seg, dpass, dance_plan) if dancing else [])
+                                    + instrument_problems)
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
+                        prompt = None
                         problems = [str(exc)]
-                    if dancing and problems and all(dance.is_soft(x) for x in problems) and soft_fallback is None:
+                    if dancing and prompt is not None and problems and all(dance.is_soft(x) for x in problems) and soft_fallback is None:
                         soft_fallback = (prompt, problems)          # only style advice left: keep the first such draft as the fallback
                     if dancing and problems and attempt == attempts - 1 and soft_fallback is not None:
                         prompt, kept = soft_fallback                # a later try got worse; use the best draft and record its advice
@@ -451,12 +472,14 @@ def run(home, directory, *, resume=False):
                         save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id, validators_version=dance_version)
                         break
                     write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
-                    feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
+                    if instrument_problems:
+                        others = [x for x in problems if x not in instrument_problems]
+                        feedback = (('\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(others)) if others else '') \
+                                   + instruments.retry_feedback(instrument_problems)
+                    else:
+                        feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
                 else:
-                    hint = ""
-                    if settings.get('writer_mode') == 'local':
-                        hint = " Note: Incomplete responses, JSON formatting errors, or shot-count mismatches often indicate your local writer's context allocation size (-c) or token limit is too small (see Settings > Local writer setup guide)."
-                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (evaluated by Laya and schema validator). See {directory / f"{seg.segment_id}.validation-{attempts}.json"}.{hint} Nothing rendered.')
+                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (evaluated by Laya and schema validator). See {directory / f"{seg.segment_id}.validation-{attempts}.json"}. Nothing rendered.')
             write_json(directory / 'prompts.json', prompts)
         if validator is not None:
             validator._agent = None
@@ -465,7 +488,12 @@ def run(home, directory, *, resume=False):
             gc.collect()
             torch = sys.modules.get("torch")
             if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
-        runtime.stop_process(writer_process)
+        if writer_process is not None:
+            progress('Stopping the music-video writer to free the GPU for rendering', 31)
+        runtime.stop_confirmed(writer_process, 'Music-video writer')
+        if gpu_memory.wait_released(gpu_before_writer) is False:
+            raise ValueError('GPU memory was not released after the writer and Laya stopped, so rendering was not started. '
+                             'Close other programs using the GPU, then resume this production.')
     else:
         prompts = read_json(directory / 'prompts.json', {})
         if any(not isinstance(prompts.get(seg.segment_id), str) or not prompts[seg.segment_id] for seg in plan.segments):
@@ -473,7 +501,6 @@ def run(home, directory, *, resume=False):
     if not resume:
         passage_plans.bind_prompts(directory, prepared, prompts)
     progress('All prompts validated; opening renderer', 32)
-    vision_wanted = request['kind'] == 'video' and request.get('vision_quality_check')
     def start_comfy():
         # Returns a handle only when this production launched ComfyUI; None means it was already running.
         return runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
@@ -481,9 +508,13 @@ def run(home, directory, *, resume=False):
                                      name='ComfyUI', launch_setting='comfy_launch')
     comfy_process = None
     if request['backend'] == 'local_h3' or (request['backend'] == 'comfy_sdk_h3' and vision_wanted):
+        require_renderer_handoff(settings)
         comfy_process = start_comfy()
     rendered = {}
     sheets = casting.sheet_paths(prepared['casting']) if prepared['casting'] else {}
+    if instrument_plan:
+        instruments.verify_assets(instrument_plan)
+        sheets = {**sheets, **{'__instrument_' + kind: asset['path'] for kind, asset in instrument_plan['assets'].items()}}
     url = urlparse(settings['comfy_url'])
     if request['backend'] == 'local_h3':
         from .engine.comfy import ComfyClient
@@ -495,7 +526,7 @@ def run(home, directory, *, resume=False):
             return prompt_id
         ComfyClient.queue = record_queue
     backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
-                        song=None, steps=20, timeout_s=request.get('timeout_s') or 7200.0, comfy_host=url.hostname, comfy_port=url.port or 8188,
+                        song=None, steps=20, timeout_s=render_timeout(request['backend'], settings.get('render_timeout_minutes', 120)), comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
                         map_path=settings['workflow_map_path'], root=ENGINE,
                         comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'),
@@ -506,6 +537,9 @@ def run(home, directory, *, resume=False):
             subprocess.run(['ffmpeg','-nostdin','-y','-v','error','-f','lavfi','-i','anullsrc=r=44100:cl=stereo','-t',str(plan.segments[0].gen_frames/24),str(song)],check=True)
         def render_passage(seg, segment_id, seed):
             images = [(member['actor_id'],sheets[member['actor_id']]) for member in casting.cast_for(prepared['casting'],seg.segment_id)]
+            if instrument_plan:
+                instruments.verify_assets(instrument_plan)
+                images += instruments.images(instrument_passages[seg.segment_id], instrument_plan)
             if len(images) != seg.ref_image_slots: raise ValueError('Original cast/reference-slot contract disagrees; refusing render')
             try:
                 result = backend.render_segment(segment_id=segment_id,index=seg.index,slug=plan.slug,
@@ -532,13 +566,9 @@ def run(home, directory, *, resume=False):
                 from . import quality
                 from .vision_stage import VisionStage
                 uses_comfy = request['backend'] in ('local_h3', 'comfy_sdk_h3')
-                if uses_comfy and comfy_process is None:
-                    vision_note = ('Vision check skipped: ComfyUI was already running outside Mondo, so it was not '
-                                   'stopped to make room for the vision model. Close ComfyUI before starting to let Mondo manage it.')
-                else:
-                    vision = VisionStage(settings, directory, plan, quality.framing_requested(request.get('direction')),
-                                         comfy_process, start_comfy if uses_comfy else None, progress,
-                                         compact=bool(request.get('compact_prompts')))
+                vision = VisionStage(settings, directory, plan, quality.framing_requested(request.get('direction')),
+                                     comfy_process, start_comfy if uses_comfy else None, progress,
+                                     compact=bool(request.get('compact_prompts')))
             quality_completed = False
             try:
                 # All passages exist before model swaps; vision retries share one further swap batch.
@@ -549,7 +579,8 @@ def run(home, directory, *, resume=False):
                     vision.close()
                     vision_note = vision.note()
                 write_json(directory / 'vision.json', {'requested': True, 'ran': quality_completed and vision is not None and not vision_note,
-                                                       'note': vision_note} if vision_wanted else {'requested': False})
+                                                       'note': vision_note, 'rerender_skipped': vision and vision.skipped}
+                           if vision_wanted else {'requested': False})
             write_json(directory / 'renders.json', rendered)
     finally:
         backend.close_render()
@@ -584,13 +615,26 @@ def run(home, directory, *, resume=False):
             sub_result = subliminal.apply_to_run(store, directory, prepared['subliminal'])
         except Exception as exc:                  # a bonus effect never fails the production: the clean video stays
             sub_error = str(exc)
+    caption_result = caption_error = None
+    if request['kind'] == 'video' and (prepared.get('captions') or {}).get('cues'):
+        progress('Adding the lyric captions', 97)
+        from . import captions
+        try:
+            caption_result = captions.apply_to_run(directory, prepared['captions'])
+        except Exception as exc:                  # captions never fail the production: the finished video stays as it was
+            caption_error = str(exc)
     from .media import duration
     warnings = [entry['warning'] for entry in read_json(directory / 'quality.json', {}).values() if entry.get('warning')]
     vision_note = read_json(directory / 'vision.json', {}).get('note')
     if vision_note:
         warnings.insert(0, vision_note)
+    if skipped := read_json(directory / 'vision.json', {}).get('rerender_skipped'):
+        warnings.insert(0, skipped)
     if sub_error:
         warnings.insert(0, 'The subliminal flashes could not be added, so the finished video is the clean one: ' + sub_error[:200])
+    caption_error = caption_error or (caption_result or {}).get('burn_error')
+    if caption_error:
+        warnings.insert(0, 'The lyric captions could not be burned in, so the finished video has none: ' + caption_error[:200])
     # Studio-quality clips: say plainly when the requested master was not delivered (never resubmitted automatically).
     lost = sorted(sid for sid, got in rendered.items() if isinstance(got, dict) and got.get('clip_quality_note'))
     if lost:
@@ -603,6 +647,7 @@ def run(home, directory, *, resume=False):
                                        **({'clip_quality': delivered, 'clip_quality_requested': request.get('clip_quality')}
                                           if (request.get('clip_quality') or 'standard') != 'standard' else {}),
                                        **({'subliminal': sub_result} if sub_result else {}),
+                                       **({'captions': caption_result} if caption_result else {}),
                                        **({'quality_warnings': warnings} if warnings else {})})
     progress('Complete',100)
 
@@ -646,7 +691,8 @@ def run_quality_stage(directory, backend, request, plan, rendered, render_passag
     {'status': 'pass'|'warn'|'fail'|'error', 'problems': [...], 'retry': bool}}.
     It is called for the chosen attempts, then once more for vision retries, so a
     production swaps renderer -> vision -> renderer -> vision at most.
-    `prepare_render()` runs before rendering vision retries.
+    `prepare_render()` runs before rendering vision retries; False means a re-render
+    would share the GPU with a vision model, so the retries are skipped.
     """
     from . import quality
     borders = not quality.framing_requested(request.get('direction'))
@@ -720,8 +766,7 @@ def run_quality_stage(directory, backend, request, plan, rendered, render_passag
         judge(list(report), lambda s: [best(s)])
         candidates = [s for s, e in report.items() if not e['retry_used'] and
                       (e['attempts'][best(s)].get('vision') or {}).get('retry')]
-        if free and candidates:
-            vision.prepare_render()
+        if free and candidates and vision.prepare_render() is not False:
             retry(candidates, 'vision check')
             judge(candidates, lambda s: [len(report[s]['attempts']) - 1])
 
@@ -758,6 +803,9 @@ def main():
         from .engine.analyze import ScoreMap
         from .stems import driven_score
         driven_score(ScoreMap.from_json(sys.argv[2]), sys.argv[3]).to_json(sys.argv[4])
+    elif sys.argv[1] == 'voice':
+        from .voice import estimate_voice
+        Path(sys.argv[3]).write_text(json.dumps(estimate_voice(sys.argv[2])), encoding='utf-8')
     elif sys.argv[1] == 'produce':
         home,directory=Path(sys.argv[2]),Path(sys.argv[3])
         import signal

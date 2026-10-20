@@ -31,6 +31,80 @@ def _cached_chromium():
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_instrument_assignments_restore_by_actor_and_flat_fields_are_removed(self):
+        from mmv import actors
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        actors.create_actor(self.fixture.store, 'player_a', 'Player A', 'Overview', picture())
+        actors.create_actor(self.fixture.store, 'player_b', 'Player B', 'Overview', picture())
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                form = page.locator('#video-form')
+                expect(form.locator('.instrument-assignments')).to_be_hidden()
+                expect(form.locator('.instrument-notice')).to_have_count(0)
+                form.locator('.actor-select').select_option(['player_a', 'player_b'])
+                form.locator('[name=instrument_mode]').select_option('perform')
+                expect(form.locator('.instrument-notice')).to_have_count(0)
+                form.get_by_label('Player B instrument', exact=True).select_option('keyboards')
+                form.locator('.actor-select').select_option(['player_b'])
+                expect(form.get_by_label('Player B instrument', exact=True)).to_have_value('keyboards')
+                page.wait_for_timeout(800)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                expect(form.get_by_label('Player B instrument', exact=True)).to_have_value('keyboards')
+                result = page.evaluate('''async () => {
+                    const {instrumentsFromForm} = await import('/js/instruments.js');
+                    const request = {actors: ['player_b'], instrument_mode: 'perform', instrument_actor_0: 'keyboards', instrument_assignments_json: '{}'};
+                    instrumentsFromForm(document.querySelector('#video-form'), request);
+                    return request;
+                }''')
+                self.assertEqual(result['instrument_assignments'], {'player_b': 'keyboards'})
+                self.assertTrue(result['instrument_references'])
+                self.assertNotIn('instrument_assignments_json', result)
+                self.assertNotIn('instrument_actor_0', result)
+            finally:
+                browser.close()
+
+    def test_independent_dance_parts_follow_actor_and_restore(self):
+        from mmv import actors
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        actors.create_actor(self.fixture.store, 'dance_a', 'Dancer A', 'Overview', picture())
+        actors.create_actor(self.fixture.store, 'dance_b', 'Dancer B', 'Overview', picture())
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                form = page.locator('#video-form')
+                expect(form.locator('.dance-parts')).to_be_hidden()
+                form.locator('.actor-select').select_option(['dance_a', 'dance_b'])
+                form.locator('[name=dance_mode]').select_option('independent')
+                form.get_by_label('Dancer B part', exact=True).select_option('bass')
+                form.locator('.actor-select').select_option(['dance_b'])
+                expect(form.get_by_label('Dancer B part', exact=True)).to_have_value('bass')
+                page.wait_for_timeout(1200)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                expect(form.locator('[name=dance_mode]')).to_have_value('independent')
+                expect(form.get_by_label('Dancer B part', exact=True)).to_have_value('bass')
+                result = page.evaluate("""async () => {
+                    const { dancePartsFromForm } = await import('/js/dance.js');
+                    const request = {actors: ['dance_b'], dance_mode: 'independent', dance_part_0: 'bass', dance_parts_json: '{}'};
+                    dancePartsFromForm(document.querySelector('#video-form'), request);
+                    return request;
+                }""")
+                self.assertEqual(result['dance_parts'], {'dance_b': 'bass'})
+                self.assertNotIn('dance_parts_json', result)
+                self.assertNotIn('dance_part_0', result)
+            finally:
+                browser.close()
+
     def test_delete_local_actor_and_style_with_confirmation(self):
         from mmv import actors
         from test_public_app import picture
@@ -222,9 +296,18 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.13')
+                expect(page.locator('#version')).to_have_text('1.9.5')
+                page.evaluate("""async () => {
+                  const m = await import('/js/production.js');
+                  m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
+                    detail: 'Mondo starts it when the vision check runs'}});
+                }""")
+                expect(page.locator('#service-badge-vision_quality')).to_have_text('STARTS AUTOMATICALLY')
+                expect(page.locator('#service-detail-vision_quality')).to_contain_text('Mondo starts it')
+                expect(page.locator('#service-card-vision .service-role')).to_have_text('Style Harvester')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(page.locator('#vocab-profile-select')).not_to_contain_text('hellonearthis')
                 expect(page.locator('.song-preview-wrap')).to_be_visible()
                 expect(page.locator('.song-preview')).to_have_attribute('src', __import__('re').compile(r'^blob:'))
                 expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded:')
@@ -239,8 +322,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('select[name=laya_device]')).to_have_value('cuda')
                 page.locator('#panel-settings > .panel-header-row .llama-help-btn').click()
                 expect(page.locator('#llama-helper-dialog')).to_be_visible()
+                expect(page.locator('#writer-tuning-preset')).not_to_contain_text('hellonearthis')
                 expect(page.locator('#llama-current-json')).to_have_text(command)
-                page.locator('#writer-tuning-preset').select_option('hellonearthis')
+                page.locator('#writer-tuning-preset').select_option('context_16k')
                 preview = json.loads(page.locator('#llama-current-json').inner_text())
                 self.assertEqual(preview[preview.index('-m') + 1], "my-model's.gguf")
                 self.assertEqual(preview[preview.index('-c') + 1], '16384')
@@ -313,6 +397,8 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.goto(self.url)
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 expect(page.locator('#panel-vocab')).to_be_visible()
+                # Summary cards render lazily, when the collapsed summary is first opened.
+                page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 card = page.locator('.vocab-summary-cat-card[data-category=settings]')
                 expect(card).to_contain_text('Workspace fixture')
                 # Edits to one card preserve the other cards and remain stable after opening.
@@ -330,6 +416,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, True, False])
                 page.locator('.nav[data-panel=vocab]').click()
+                page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
                 self.assertEqual(errors, [])
             finally:
@@ -627,6 +714,190 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 self.assertEqual(nested['request'], {'title': 'x', 'subliminal': {'mode': 'text', 'image': '', 'text': 'HONK', 'frames': 3,
                                  'placement': 'manual', 'times': [12.5, 40, 55.2], 'count': 4}})
                 self.assertIn('seconds', nested['message'])
+                page.locator('#video-form select[name=captions_mode]').select_option('burned')
+                colours = page.locator('#video-form [data-caption-colours]')
+                expect(colours).to_be_hidden()
+                def caption_request():
+                    return page.evaluate("""() => import('/js/production.js').then(m => {
+                        const request = Object.fromEntries(new FormData(document.querySelector('#video-form')));
+                        m.captionsFromForm(request);
+                        return {captions: request.captions, flat: Object.keys(request).filter(k => k.startsWith('captions_'))};
+                    })""")
+                defaults = {'mode': 'burned', 'style': 'classic', 'position': 'bottom', 'size': 'medium',
+                            'color': '', 'outline_color': '', 'font': ''}
+                self.assertEqual(caption_request(), {'captions': defaults, 'flat': []})
+                page.locator('#video-form input[name=captions_custom]').check()
+                expect(colours).to_be_visible()
+                page.locator('#video-form input[name=captions_color]').fill('#123456')
+                page.locator('#video-form input[name=captions_outline]').fill('#654321')
+                page.locator('#video-form input[name=captions_font]').fill('DejaVu Sans')
+                self.assertEqual(caption_request(), {'captions': {**defaults, 'color': '#123456',
+                                 'outline_color': '#654321', 'font': 'DejaVu Sans'}, 'flat': []})
+                page.locator('#video-form input[name=captions_custom]').uncheck()
+                expect(colours).to_be_hidden()
+                self.assertEqual(caption_request(), {'captions': {**defaults, 'font': 'DejaVu Sans'}, 'flat': []})
+                page.evaluate("() => import('/js/project.js').then(m => m.saveProject())")
+                page.reload()
+                page.wait_for_function("() => document.querySelector('#video-form input[name=captions_font]').value === 'DejaVu Sans'")
+                page.evaluate('() => { document.querySelectorAll("#video-form details").forEach(el => el.open = true); }')
+                expect(page.locator('#video-form [data-caption-colours]')).to_be_hidden()
+                page.locator('#video-form input[name=captions_custom]').check()
+                self.assertEqual(page.locator('#video-form input[name=captions_color]').input_value(), '#123456')
+                page.evaluate("() => import('/js/project.js').then(m => m.saveProject())")
+                page.reload()
+                page.wait_for_function("() => document.querySelector('#video-form input[name=captions_custom]').checked")
+                page.evaluate('() => { document.querySelectorAll("#video-form details").forEach(el => el.open = true); }')
+                expect(page.locator('#video-form [data-caption-colours]')).to_be_visible()
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_the_caption_dialog_defaults_to_the_bottom_and_sends_the_chosen_look(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors, sent = [], []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            video = {'file': 'run1/music-video.mp4', 'kind': 'video', 'title': 'Test video', 'duration': 5}
+            page.route('**/api/outputs', lambda route: route.fulfill(json=[video]))
+            page.route('**/api/captions/fonts', lambda route: route.fulfill(json={'fonts': ['DejaVu Sans', 'Liberation Serif']}))
+            page.route('**/api/captions', lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={'id': 'x'}))[1])
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.locator('button.nav[data-panel=outputs]').click()
+                page.get_by_role('button', name='Add lyric captions').click()
+                expect(page.locator('#caption-fonts option')).to_have_count(2)
+                self.assertEqual(page.locator('#caption-fonts option').evaluate_all('(nodes) => nodes.map(n => n.value)'), ['DejaVu Sans', 'Liberation Serif'])
+                dialog = page.locator('#caption-dialog')
+                expect(dialog).to_be_visible()
+                expect(page.locator('#caption-form [data-caption-colours]')).to_be_hidden()
+                self.assertEqual(page.locator('#caption-form select[name=position]').input_value(), 'bottom')   # the default
+                self.assertEqual([o.get_attribute('value') for o in page.locator('#caption-form select[name=position] option').all()], ['bottom', 'middle', 'top'])
+                dialog.get_by_role('button', name='Add captions').click()
+                expect(dialog).to_be_hidden()
+                page.get_by_role('button', name='Add lyric captions').click()
+                page.locator('#caption-form select[name=position]').select_option('top')
+                page.locator('#caption-form select[name=style]').select_option('neon')
+                page.locator('#caption-form input[name=custom]').check()
+                expect(page.locator('#caption-form [data-caption-colours]')).to_be_visible()
+                page.locator('#caption-form input[name=color]').fill('#abcdef')
+                page.locator('#caption-form input[name=outline]').fill('#112233')
+                page.locator('#caption-form input[name=font]').fill('Liberation Serif')
+                dialog.get_by_role('button', name='Add captions').click()
+                expect(dialog).to_be_hidden()
+                page.get_by_role('button', name='Add lyric captions').click()
+                page.locator('#caption-form input[name=custom]').uncheck()
+                expect(page.locator('#caption-form [data-caption-colours]')).to_be_hidden()
+                dialog.get_by_role('button', name='Add captions').click()
+                expect(dialog).to_be_hidden()
+                self.assertEqual(sent, [{'position': 'bottom', 'style': 'classic', 'size': 'medium', 'color': '', 'outline_color': '', 'font': '', 'source': 'run1/music-video.mp4'},
+                                        {'position': 'top', 'style': 'neon', 'size': 'medium', 'color': '#abcdef', 'outline_color': '#112233', 'font': 'Liberation Serif', 'source': 'run1/music-video.mp4'},
+                                        {'position': 'top', 'style': 'neon', 'size': 'medium', 'color': '', 'outline_color': '', 'font': 'Liberation Serif', 'source': 'run1/music-video.mp4'}])
+                page.unroute('**/api/captions/fonts')
+                page.route('**/api/captions/fonts', lambda route: route.abort())
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                expect(page.locator('#caption-fonts option')).to_have_count(0)
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_colour_wheel_maths_round_trips_and_wraps_hue(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                got = page.evaluate("""() => import('/js/colorwheel.js').then(m => ({
+                    trip: ['#ff8800', '#000000', '#ffffff', '#123456', '#34b354'].map(h => m.toHex(m.hsvToRgb(...Object.values(m.rgbToHsv(m.parseHex(h)))))),
+                    parsed: [m.parseHex('#f80'), m.parseHex('abc'), m.parseHex(' #AABBCC '), m.parseHex('nonsense'), m.parseHex('#12345')],
+                    wrapped: [m.toHex(m.hsvToRgb(-120, 1, 1)), m.toHex(m.hsvToRgb(240, 1, 1)), m.toHex(m.hsvToRgb(750, 1, 1))],
+                    grey: m.rgbToHsv([128, 128, 128]), black: m.rgbToHsv([0, 0, 0])
+                }))""")
+                self.assertEqual(got['trip'], ['#ff8800', '#000000', '#ffffff', '#123456', '#34b354'])
+                self.assertEqual(got['parsed'], [[255, 136, 0], [170, 187, 204], [170, 187, 204], None, None])
+                self.assertEqual(got['wrapped'], ['#0000ff', '#0000ff', '#ff8000'])
+                self.assertEqual((got['grey']['s'], got['black']['v']), (0, 0))
+            finally:
+                browser.close()
+
+    def test_colour_wheels_replace_the_native_pickers_and_drive_the_hex_values(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            cached = _cached_chromium()
+            browser = p.chromium.launch(headless=True, executable_path=str(cached[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors, sent = [], []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            video = {'file': 'run1/music-video.mp4', 'kind': 'video', 'title': 'Test video', 'duration': 5}
+            page.route('**/api/outputs', lambda route: route.fulfill(json=[video]))
+            page.route('**/api/captions', lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={'id': 'x'}))[1])
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.evaluate('() => { document.querySelectorAll("#video-form details").forEach(el => el.open = true); }')
+                self.assertEqual(page.locator('input[type=color]').count(), 0)                     # no native picker anywhere
+                page.locator('#video-form select[name=captions_mode]').select_option('burned')
+                page.locator('#video-form input[name=captions_custom]').check()
+                wheels = page.locator('#video-form .colour-wheel canvas')
+                self.assertEqual((wheels.count(), page.locator('#video-form .colour-wheel input[type=range]').count()), (2, 2))
+                text = page.locator('#video-form input[name=captions_color]')
+                wheels.nth(0).scroll_into_view_if_needed()
+                box = wheels.nth(0).bounding_box()
+                cx, cy, r = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2, box['width'] / 2
+                self.assertEqual(text.input_value(), '#ffffff')
+                page.mouse.click(cx + r * 0.9, cy)                                                  # the right edge is red
+                red = text.input_value()
+                self.assertRegex(red, r'^#ff[0-4][0-9a-f]{3}$|^#f[0-9a-f]{1}[0-4][0-9a-f]{3}$')
+                self.assertEqual(wheels.nth(0).get_attribute('role'), 'slider')
+                self.assertIn(red, wheels.nth(0).get_attribute('aria-valuetext'))
+                page.locator('#video-form .colour-wheel input[type=range]').first.fill('50')       # half brightness darkens it
+                dark = text.input_value()
+                self.assertLess(int(dark[1:3], 16), int(red[1:3], 16))
+                self.assertGreater(int(dark[1:3], 16), 100)
+                page.mouse.click(cx - r * 0.9, cy)                                                  # the left edge is cyan-ish: red drops out
+                self.assertLess(int(text.input_value()[1:3], 16), 0x80)
+                page.mouse.click(cx, cy)                                                            # the centre has no saturation: grey
+                grey = text.input_value()
+                self.assertEqual(grey[1:3], grey[3:5])
+                self.assertEqual(grey[3:5], grey[5:7])
+                text.fill('abc'); text.blur()                                                       # typing: 3 digits expand
+                self.assertEqual(text.input_value(), '#aabbcc')
+                text.fill('nonsense'); text.blur()                                                  # junk goes back to the last good colour
+                self.assertEqual(text.input_value(), '#aabbcc')
+                page.mouse.click(cx + r * 0.9, cy, button='right')                                  # a right click does not pick
+                self.assertEqual(text.input_value(), '#aabbcc')
+                wheels.nth(0).focus()                                                               # keyboard: arrows move hue and saturation
+                before = text.input_value()
+                page.keyboard.press('ArrowRight')
+                self.assertNotEqual(text.input_value(), before)
+                page.mouse.click(cx + r * 0.5, cy + r * 0.5)                                       # a click takes focus, so arrows act on the wheel
+                self.assertTrue(page.evaluate('() => document.activeElement.tagName === "CANVAS"'))
+                outline = page.locator('#video-form input[name=captions_outline]')
+                expect(outline).to_have_value('#000000')                                           # black: a wheel pick lifts it to full brightness
+                other = wheels.nth(1).bounding_box()
+                page.mouse.click(other['x'] + other['width'] * 0.9, other['y'] + other['height'] / 2)
+                self.assertRegex(outline.input_value(), r'^#ff')
+                request = page.evaluate("""() => import('/js/production.js').then(m => {
+                    const request = Object.fromEntries(new FormData(document.querySelector('#video-form'))); m.captionsFromForm(request); return request.captions; })""")
+                self.assertEqual((request['color'], request['outline_color']), (text.input_value(), outline.input_value()))
+                # the dialog uses the same wheels and posts their values
+                page.locator('button.nav[data-panel=outputs]').click()
+                page.get_by_role('button', name='Add lyric captions').click()
+                page.locator('#caption-form input[name=custom]').check()
+                dialog_wheel = page.locator('#caption-form .colour-wheel canvas').first
+                d = dialog_wheel.bounding_box()
+                page.mouse.click(d['x'] + d['width'] * 0.5, d['y'] + d['height'] * 0.05)           # the top edge is a green-yellow hue
+                chosen = page.locator('#caption-form input[name=color]').input_value()
+                page.get_by_role('button', name='Add captions').click()
+                expect(page.locator('#caption-dialog')).to_be_hidden()
+                self.assertEqual(sent[-1]['color'], chosen)
+                self.assertNotEqual(chosen, '#ffffff')
                 self.assertEqual(errors, [])
             finally:
                 browser.close()
@@ -754,7 +1025,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.8.13')
+                expect(page.locator('#version')).to_have_text('1.9.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

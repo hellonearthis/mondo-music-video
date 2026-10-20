@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -36,9 +36,20 @@ def create_server(base_url=None):
         return invoke(client.preview_resume, run_id)
 
     @server.tool()
+    def preview_retry_prompts(run_id: str) -> dict[str, Any]:
+        """Get a fresh quote after prompt validation stopped an unrendered run. Review it and obtain consent before starting again; paid work never retries automatically."""
+        return invoke(client.preview_retry_prompts, run_id)
+
+    @server.tool()
     def upload_media(kind: Literal["song", "reference", "oap", "agreement"], path: str) -> dict[str, Any]:
         """Upload a user-selected file from this machine into the local app; returns its upload ID."""
         return invoke(client.upload, kind, path)
+
+    @server.tool()
+    def import_instrument(instrument_id: Literal["drums", "bass", "guitar", "keyboards"], reference_path: str,
+                          license: str, provenance: str) -> dict[str, Any]:
+        """Import a user-selected instrument sheet with its license/provenance into the local app; never overwrites or publishes."""
+        return invoke(client.import_instrument, instrument_id, reference_path, license, provenance)
 
     @server.tool()
     def preview_production(request: dict) -> dict[str, Any]:
@@ -46,8 +57,9 @@ def create_server(base_url=None):
 
         Video request vision_quality_check (default false) enables slower local
         single-frame judging. Requires a vision-capable writer_launch + mmproj;
-        H3 needs comfy_launch and ComfyUI closed so Mondo can manage its own
-        process. Read output quality_warnings for skipped/failed checks. One
+        Existing ComfyUI can stay running: after rendering, Mondo releases cached models only while its queue is idle,
+        confirms memory release, and loads vision. Mondo-owned ComfyUI still uses process stop/restart.
+        Configure comfy_launch if ComfyUI is offline. Read output quality_warnings for skipped/failed checks. One
         shared free local retry per passage; paid re-renders require consent.
 
         Video previews return `score` (beats, energy, planned cuts) and `detected`
@@ -61,7 +73,17 @@ def create_server(base_url=None):
         one-time model download that only the user approves in the app (see
         inspect_studio kind "stems"). The first separation of a song takes minutes.
 
-        Dancing: `dance_mode` "group" makes the cast dance to the song's beat (default "off"); `dancers` lists actor ids (empty =
+        Independent mode gives each actor their own movement and musical part. `dance_parts` maps actor ids to `auto`, `beat`, `drums`, `bass` or `vocals`; auto cycles drums/bass/vocals/beat in cast order. No lead applies. Existing stem audio/analysis supplies per-part cues; unavailable parts explicitly fall back to the overall beat. This mode never downloads models or starts separation. Precise visual timing needs operator validation.
+
+        Instruments: instrument_mode "perform" (default "off"), instrument_assignments {actor_id: drums|bass|guitar|keyboards},
+        instrument_references true (default) attaches imported/bundled sheets only for active cast players. Inspect kind "instruments" first;
+        import missing sheets with import_instrument or set instrument_references false for text-only guidance. Previews return instruments,
+        shot activity and fallback notes. Uses existing stems only, with CPU analysis if needed; no separation or downloads.
+        Unknown activity follows the mix; guitar/piano need six-stem caches, keyboards follow piano only as a proxy. Players are excluded from
+        dance choreography; other actors may dance and approved singers may sing while playing. Slot overflow stops preview. Note/finger sync
+        and visual consistency require deliberate operator verification. All consent, OAP and one-operation guards remain in force.
+
+        Dancing: `dance_mode` "group" or "independent" makes the cast dance to the song's beat (default "off"); `dancers` lists actor ids (empty =
         everyone cast), `dance_direction` is a short style such as "gentle swaying" (default "Dancing"; it can only choose the
         movement style, never mouths or lyrics), `dance_lead` is an actor id or "none" (defaults to the main singer when lip sync
         is on; ignored in shots where the lead is off screen). At most 3 dancers per passage are choreographed. Mouths follow
@@ -74,10 +96,17 @@ def create_server(base_url=None):
         untouched and the untouched video is kept as music-video-clean.mp4. Warn the user that flashing can affect
         photosensitive viewers.
 
+        Lyric captions: `captions` {mode: off|sidecar|burned, style classic|bold|neon|box, position bottom|middle|top, size small|medium|large,
+        optional color/outline_color "#rrggbb" and font (see list_caption_fonts)} turns the timed `lyric_lines` into lyrics.srt (sidecar) and, for
+        burned, draws them on the video, keeping music-video-uncaptioned.mp4; it does not enable lip sync and nothing reaches
+        the writer. With no timed lines the preview carries a note and the video gets no captions. Download the files with the output file names listed in
+        output.json (`captions.srt`, `captions.uncaptioned_copy`). Lines with guessed timing are not captioned.
+
         Lip sync: `mouth_mode` "lip_sync" keeps every passage sealed except those covered by `lyric_lines`
         [{start, end, text}] (seconds on the song clock; use detect_lyrics or align_lyrics); `singers` lists actor
         ids (the first is the main singer; empty means a seeded pick). The preview's `lipsync` shows which passages
-        sing and who sings. "sealed" (default) and "natural" are unchanged.
+        sing and who sings; its `voice` (only when a vocals stem is already cached) advises when the vocals sound clearly
+        male or female and the main singer reads as the other, with a suggested actor. It never blocks. "sealed" (default) and "natural" are unchanged.
         """
         return invoke(client.preview, request)
 
@@ -257,6 +286,27 @@ def create_server(base_url=None):
         outside the four public starters, set allow_private_actors only after the user confirms (their reference
         images are still not copied). The result is a job: poll inspect_studio status for the package path."""
         return invoke(client.export_package, run_id, zip, allow_private_actors)
+
+    @server.tool()
+    def caption_video(source: str, lyric_lines: list[dict[str, Any]] | None = None,
+                      style: Literal["classic", "bold", "neon", "box"] = "classic",
+                      position: Literal["bottom", "middle", "top"] = "bottom",
+                      size: Literal["small", "medium", "large"] = "medium", color: str = "", outline_color: str = "",
+                      font: str = "") -> dict[str, Any]:
+        """Burn lyric captions into a finished music video as a NEW output; the original is never changed. Free.
+
+        `source` is the output file ("<run id>/music-video.mp4"). Uses the timed lines saved with that video unless
+        `lyric_lines` [{start, end, text, timing}] (seconds on the song clock; see detect_lyrics/align_lyrics) are given.
+        Lines with guessed timing are skipped. A video already captioned when made is redone from its uncaptioned copy.
+        `style` classic (white, black outline), bold (yellow capitals), neon (glowing magenta edge) or box (on a dark
+        panel); `position` and `size` as named. `color` (text) and `outline_color` (outline, glow or box) are "#rrggbb" or ""
+        for the style's own; `font` is an installed family from list_caption_fonts or "" for the default (others are refused). The result is a job: poll inspect_studio status. The new output also offers lyrics.srt."""
+        return invoke(client.caption_video, source, lyric_lines, style, position, size, color, outline_color, font)
+
+    @server.tool()
+    def list_caption_fonts() -> dict[str, Any]:
+        """Font families installed where the app runs, usable as the caption `font`. Read-only."""
+        return invoke(client.caption_fonts)
 
     @server.tool()
     def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:

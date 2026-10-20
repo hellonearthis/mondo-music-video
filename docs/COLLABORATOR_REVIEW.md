@@ -1,5 +1,138 @@
 # Collaborator review record
 
+## October 20, 2026 — Engine lifecycle and GPU memory (1.9.3)
+
+Task-start fork check: exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed, no new revisions. Claude Code Sonnet 5.5, medium effort, owned the main implementation and mock tests. Codex reviewed the two handoffs and tightened unknown Apple memory behavior, unverified renderer release, writer startup headroom, CPU/projector estimates, failed vision-stop ownership, and guards against rendering alongside known external GPU services. API, GUI, agent/MCP status and skill coverage were audited. A fresh isolated Claude medium session expanded the factory daylight preset. Codex added the harvest card free axes/motifs, removed copied legacy rigging/audio directives so preset content cannot override mouth/singing behavior, kept shot scale and ensemble framing free, and verified factory-only migration tests. Helper daylight tests were not run in its restricted session; coordinator ran them after integration. No fork merge, protected-source edit, private-asset import, paid/GPU generation, commit or publication.
+
+## October 20, 2026 — Existing ComfyUI handoff and UI labels (1.9.2)
+
+Fork checked at exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed; no new changes. The reduced-flashing vocabulary exclusions and writer-tuning behavior contributed by hellonearthis remain intact. At the owner's direction, visible labels use descriptive feature names instead of GitHub handles; the vocabulary profile ID and contribution credit are preserved. The writer control now uses `context_16k`; its command helper still accepts the legacy tuning identifier.
+
+## October 20, 2026 — instrument performance (1.9.0)
+
+Task-start fork check and isolated clone: exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed in 1.8.11. No new fork contributions to integrate.
+
+Claude Code Haiku reviewed the opt-in extension (CLI-reported model/receipt recorded locally). Fixed its confirmed Windows filename issue by using instrument staging keys that contain no colon and cannot collide with valid actor IDs. Removed private provenance/license data from writer jobs, stripped paths/provenance from demo instrument receipts, and kept instrument files out of demo exports. Quiet mix/no-sample activity is unknown rather than a forced instrument pause. Added original actor-slot contract checks. Clause attribution, curly quotes, bounded names and mock tests were already being added concurrently; coordinator verified the final paths. Some reported missing assets/tests reflected the earlier tree the helper read. Public authorization comes from the owner's explicit new-instrument request; the four-actor allowlist is unchanged.
+
+A final bounded Haiku review led to explicit saved-mode/assignment/reference-policy checks, pronoun antecedent and ambiguous-pronoun checks, continued-playing wording support and narrower action inflections (a pickup/player noun cannot supply an action). Existing public resume already verifies the original consent fingerprint; the new checks also protect direct preparation/worker use and fail earlier. Original-source hashes were removed from demo receipts; reference-PNG hashes remain for selected-reference identity/cache checks. The helper's claim that original-source hashes entered writer jobs was not supported by the final job structure: only reference-PNG hashes are sent. No API writer or paid-render retries were added.
+
+Guitar and keyboard public sheets supplied by the owner are bundled; drums/bass and real visual validation remain pending. No new fork history merges, private studio assets, protected-pin edits, commit or publication.
+
+## October 20, 2026 — fork integration, head 59f820d (release 1.8.11)
+
+Reviewed an isolated clone at exact revision `59f820d`, following last reviewed head `73cbd4b` (1.8.9). New commits: `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d`. Codex (low effort, read-only) acted as adversarial reviewer; its findings were checked against source. The owner reports EGG's changes fix a problem that appears on lower-memory machines and was invisible on the owner's larger-memory one.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Clear-log fix (`5a14e85`) | Adopted with fixes. Codex showed the saved offset was dropped once the run finished (cleared output reappeared) and that writer/Comfy service logs and old validation reports were not offset. Offsets now cover all three logs and persist; `tests/test_log_clear.py`. |
+| 16k default context, launcher preservation (`98a1cc0`) | Preservation of saved tuning and the duplicate `--image-min-tokens` fix adopted. The 16k default stays opt-in (`hellonearthis` preset): it costs memory on the machines the fix targets. Open (not fixed): the settings lookup hardcodes `%LOCALAPPDATA%` and ignores `MMV_HOME`; and passing only `-ContextSize` skips restoring saved batch settings. Needs a Windows test. |
+| Token telemetry (`4c6d79b`) | Adopted as a read-only helper (`mmv/writer_usage.py`, lock-guarded, urlopen always restored). It is needed because `engine/writer.py` is pinned. Context percentage omitted when unknown (the fork assumed 16384). |
+| KV-cache flush (`a7cb9df`) | Adapted. `--parallel 1` is now default for every preset (it gives the full context to the active prompt). `--no-cache-prompt`/`-sps 0` are opt-in in the `hellonearthis` preset. The per-request `cache_prompt:false` rewrite was not adopted: it duplicates the server flag and would be sent to paid API writers too (Codex P1; whether a given provider rejects it is unverified). Effect on output quality and speed is unmeasured. |
+| Video clips as idents (`59f820d`) | Adopted with a fix: preparation rejected `kind=video` outputs (Codex P1, confirmed at `mmv/pipeline.py`), so the picker option could not work. Accepted now. A real attach-render check is still to do. |
+
+No paid, GPU or Topaz work; no private assets; no commit, push or message to the collaborator.
+
+## October 20, 2026 — fork integration, head 73cbd4b (release 1.8.9)
+
+Reviewed an isolated clone of `hellonearthis/mondo-music-video` at exact revision `73cbd4b`, following last reviewed
+head `1704454` (1.8.1). New contribution commits: `63f4826`, `8b70f0a`, `bff3b9e`, `183eeb8`, `312b0c3`, `eeab8c0`, `73cbd4b`.
+Their changes were three-way merged (base `1704454`, ours 1.8.5, theirs `73cbd4b`); conflicts were version strings, markup and the vocabulary module.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Style export/import/duplicate (`73cbd4b`) | Adopted. Id pattern, size bounds and overwrite opt-in are enforced by the request models; agent client, CLI, MCP and skill coverage included. The release note's "four-layer validation" is a description of those checks, not a separate validator. |
+| Offline-engine guard (`bff3b9e`) | Adopted. It probes at quote and start and blocks only when the service is down and has no launch command. Resumes skip the writer and Laya checks. |
+| Unfinished-run manager, output deletion (`63f4826`, `8b70f0a`) | Adopted with a fix: "purge all" could delete interrupted runs that hold already-rendered, possibly paid clips. Those are now kept and need a one-at-a-time confirmation. Regression tests in `tests/test_unfinished_runs.py`. Local productions can now be resumed from the manager. |
+| Parallel probes, memoized UI, functional modules (`312b0c3`, `8b70f0a`) | Adopted. The stated "up to 65%" latency figure was not measured here. One of our browser tests assumed eagerly rendered vocabulary cards; it now opens the summary first. |
+| Render timeout (`eeab8c0`) | Already fixed independently in 1.8.4. At the owner's decision the unlimited default was replaced by the fork's two-hour default, exposed as the `render_timeout_minutes` setting (0 = unlimited). |
+| Home-path redaction in package export | Adopted. The pattern has no word boundary, so it may redact slightly more than a real path; that errs toward privacy. |
+| Upstream merge `183eeb8` | Nothing to adopt; it re-applies our 1.8.2. |
+
+No paid, GPU or Topaz work was run; no private assets were imported; no commit, push or message to the collaborator.
+
+## October 19, 2026 — independent dance differentiation (1.8.5)
+
+At the owner's request Claude Code reviewed the repair read-only (CLI-reported
+`claude-haiku-5-5`; receipt in the ignored local collaboration report). The first
+sandbox attempt failed DNS; the network-enabled attempt completed. No fork work
+was included: the owner explicitly directed focus on dancing.
+
+Confirmed from the operator test's saved jobs/prompts: separate stem cues shared
+generic move-per-beat hints, a prompt called a dancer the lead, and names instead
+of tags bypassed action attribution. Added independent-only movement families
+and checks without altering protected originals or group/off rules.
+
+Adopted Claude findings: reject identical mixed-family signatures; resolve
+collisions among three choreographed actors even with a larger selected roster;
+distinguish copying another dancer from following music or a mirror prop;
+handle affirmative nonstop actions and body actions in mouth-policy sentences;
+run both dance test classes under direct unittest execution. Added regression
+coverage. Name attribution uses saved cast display names; it remains lexical.
+
+Claude questioned approval for the additive independent rule block. Existing
+owner approval is recorded in BONK_DESIGN.md and the prior task handoff; this
+repair stays within that opt-in mode, leaving protected prompts/pins untouched.
+No automatic paid retry was added. Camera repetition is confirmed but recorded
+only on the roadmap, per the owner's deferral. Real same-song/seed validation of
+the revised choreography remains outstanding.
+
+## October 19, 2026 — live-test timeout repair (1.8.4)
+
+Task-start check found new fork head `eeab8c0b729650d41fa8f2b0093750129c543f9b`.
+Fetched into isolated `/tmp/mmv-fork-review-20261019`, without changing the main
+checkout or sharing object stores. Focused review of the timeout repair confirms
+hellonearthis independently identified the `None`/numeric comparison failure seen
+in our real local render test. Adapted at the worker boundary with numeric infinity
+so the owner's unlimited-wait default remains; protected engine files stay intact.
+The fork's finite 7200-second default is not silently substituted for that default.
+The numeric-adapter mock regression simulates history arriving after 9000 seconds.
+
+Other new fork commits (`63f4826`, `8b70f0a`, `bff3b9e`, `183eeb8`, `312b0c3`)
+include incomplete-run management/deletion, functional vocabulary/library/output UI,
+service-offline handling and concurrent service probes, plus upstream review fixes.
+Initial scope inspection confirms substantial unrelated UI/service changes (25 files,
+including the timeout commit). Full correctness/privacy/defaults/consent review and
+mock integration of those contributions is deferred to a separate integration batch,
+rather than expanding this explicitly requested real dance test. They are not rejected
+or claimed fully reviewed; latest fully completed broad review remains `1704454`.
+
+
+## October 19, 2026 — independent dancing (1.8.3)
+
+Task-start fork check: `1704454c4d3f538866b1cb3eed72af5dfb74f0e5`,
+unchanged from the completed review below. No new fork contributions to integrate.
+Claude Code reviewed current integration read-only through the guarded launcher;
+CLI-reported model and receipt are recorded in the ignored local task board.
+Antigravity's independent UI/API review has now been received and checked against
+the implementation. Its model/effort are self-reported as Gemini 3.8 Flash / High,
+not independently verified. The reviewer ran no tests or renders and made no tracked
+edits. Both requested reviews are received; visual render validation remains pending.
+
+| Claude finding | Disposition |
+| --- | --- |
+| Stem cues ignore score edits | Fixed: apply the same edits to copies of stem analysis; regression checks nudge, muted beats and bar phase without modifying caches. |
+| Parse failure can retain stale soft-advice draft | Fixed: clear prompt after parsing/assembly failure and require an assembled prompt before retaining a fallback. |
+| Empty stem energy mislabeled measured | Fixed: explicit mix fallback for empty-energy parts. |
+| Failed cached analysis aborts preview | Fixed: unreadable/failed part analysis falls back independently. |
+| Part override names a non-dancer | Intentional API validation, not a defect: reject inconsistent selections rather than silently ignore them. UI currently selects the whole cast. |
+| Auto cycle includes explicit overrides | Intentional stable slot assignment: an override must not shift other actors' automatic parts. Documented and tested. |
+| Mouth/body sentence can be excluded from lexical dance check | Existing conservative check retained: changing shared mouth-sentence treatment risks group-mode regression. Independent instructions request each visible dancer's body action. A targeted future validator change needs separate fixtures. |
+| Soft-advice prompts revalidated on cache reuse | Existing safety behavior retained. Relaxing cache validation needs separate review; no paid submission retries added. |
+
+
+| Antigravity observation | Verified disposition |
+| --- | --- |
+| Stable assignments, actor-ID persistence, explicit fallback, semantic controls and unchanged mouth rules | Confirmed against implementation and existing browser/API/worker tests. No blocking defect reported. |
+| Optional grid layout for many actors | Deferred cosmetic suggestion; the current native controls remain usable. No measured layout failure was reported, so this review handoff adds no product changes. |
+| Deselected actors retain manual overrides | Intentional: reselecting an actor restores their choice, while request serialization filters to currently selected actors. Existing browser test covers binding preservation. |
+| Existing stem analysis only | Clarification: existing stem WAVs can also be analyzed on CPU with a worker subprocess. This does not download models, separate audio or submit network/paid work. |
+
+The report's statement that the implementation "strictly satisfies all project
+constraints" is a read-only review assessment, not proof of generated video quality
+or precise synchronization. The recorded mock-suite results remain the verification
+evidence; same-song/same-seed real comparison is still outstanding.
+
+
 ## October 19, 2026 — Antigravity review follow-up (release 1.8.2)
 
 Antigravity delivered its read-only review of fork `1704454`; model/effort were

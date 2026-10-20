@@ -17,8 +17,7 @@ param(
     [int]$Port = 8091,
     [int]$LlamaPort = 8081,
     [ValidateRange(512, 1048576)]
-    [int]$ContextSize = 16384,
-    [ValidateSet("current", "hellonearthis")]
+    [int]$ContextSize = 8192,
     [string]$TuningPreset = "current",
     [ValidateRange(0, 1048576)]
     [int]$BatchSize = 0,
@@ -46,8 +45,8 @@ if ($Help) {
     Write-Host "  -Model <name>      Select model matching name or substring"
     Write-Host "  -Port <int>        Mondo Studio web port (default: 8091)"
     Write-Host "  -LlamaPort <int>   llama-server port (default: 8081)"
-    Write-Host "  -TuningPreset <name> current (default) or hellonearthis (16k/vision batches)"
-    Write-Host "  -ContextSize <int> llama-server context window (default: 16384)"
+    Write-Host "  -TuningPreset <name> current (default) or context_16k (16k/vision batches)"
+    Write-Host "  -ContextSize <int> llama-server context window (default: 8192)"
     Write-Host "  -BatchSize <int>   Optional logical batch size; 0 keeps server default"
     Write-Host "  -MicroBatchSize <int> Optional micro-batch size; 0 keeps server default"
     Write-Host "  -ImageMinTokens <int> Optional vision token minimum; 0 keeps server default"
@@ -58,7 +57,11 @@ if ($Help) {
     exit 0
 }
 
-if ($TuningPreset -eq "hellonearthis") {
+if ($TuningPreset -notin @("current", "context_16k", "hellonearthis")) {
+    throw "Choose current or context_16k for -TuningPreset."
+}
+$UseAlternateTuning = $TuningPreset -in @("context_16k", "hellonearthis")
+if ($UseAlternateTuning) {
     if (-not $PSBoundParameters.ContainsKey("ContextSize")) { $ContextSize = 16384 }
     if (-not $PSBoundParameters.ContainsKey("BatchSize")) { $BatchSize = 2048 }
     if (-not $PSBoundParameters.ContainsKey("MicroBatchSize")) { $MicroBatchSize = 1024 }
@@ -91,6 +94,10 @@ if ($TuningPreset -eq "hellonearthis") {
         } catch {}
     }
 }
+
+# One slot gives the whole context to the active prompt (the default 4 slots leave each a quarter, which truncates long passages
+# on low-memory machines). Dropping the prompt cache is opt-in with alternate tuning: it keeps earlier passages out of VRAM but reuses less.
+$SlotArgs = @("--parallel", "1") + $(if ($UseAlternateTuning) { @("--no-cache-prompt", "-sps", "0") } else { @() })
 
 $MmvProjectDir = $PSScriptRoot
 if (-not $MmvProjectDir) { $MmvProjectDir = (Get-Location).Path }
@@ -240,25 +247,19 @@ if ($selectedModel) {
         "-m", "$($selectedModel.RelativePath)",
         "-ngl", "99",
         "-c", "$ContextSize",
-        "--parallel", "1",
-        "--no-cache-prompt",
-        "-sps", "0",
         "--flash-attn", "on",
         "--host", "127.0.0.1",
         "--port", "$LlamaPort",
         "--alias", "$($selectedModel.DefaultAlias)",
         "--sleep-idle-seconds", "10"
     )
+    $launchArgs += $SlotArgs
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
         $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
     }
     if ($BatchSize -gt 0) { $launchArgs += @("-b", "$BatchSize") }
     if ($MicroBatchSize -gt 0) { $launchArgs += @("-ub", "$MicroBatchSize") }
-    if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) {
-        $launchArgs += @("--image-min-tokens", "$ImageMinTokens")
-    } elseif ($selectedModel.HasVision) {
-        $launchArgs += @("--image-min-tokens", "1024")
-    }
+    if ($selectedModel.HasVision) { $launchArgs += @("--image-min-tokens", $(if ($ImageMinTokens -gt 0) { "$ImageMinTokens" } else { "1024" })) }
 
     $settingsPayload = @{
         writer_url = "http://127.0.0.1:$LlamaPort/v1"
@@ -301,26 +302,20 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
             "-m", (Join-Path $LlamaDir $selectedModel.RelativePath),
             "-ngl", "99",
             "-c", "$ContextSize",
-            "--parallel", "1",
-            "--no-cache-prompt",
-            "-sps", "0",
             "--flash-attn", "on",
             "--host", "127.0.0.1",
             "--port", "$LlamaPort",
             "--alias", "$($selectedModel.DefaultAlias)",
             "--sleep-idle-seconds", "10"
         )
+        $serverArgs += $SlotArgs
         if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
             $serverArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
         }
 
         if ($BatchSize -gt 0) { $serverArgs += @("-b", "$BatchSize") }
         if ($MicroBatchSize -gt 0) { $serverArgs += @("-ub", "$MicroBatchSize") }
-        if ($selectedModel.HasVision -and $ImageMinTokens -gt 0) {
-            $serverArgs += @("--image-min-tokens", "$ImageMinTokens")
-        } elseif ($selectedModel.HasVision) {
-            $serverArgs += @("--image-min-tokens", "1024")
-        }
+        if ($selectedModel.HasVision) { $serverArgs += @("--image-min-tokens", $(if ($ImageMinTokens -gt 0) { "$ImageMinTokens" } else { "1024" })) }
 
         Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $LlamaDir -WindowStyle Minimized
 

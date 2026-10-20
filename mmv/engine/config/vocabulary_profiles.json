@@ -1,6 +1,6 @@
 {
   "reduced_flashing": {
-    "label": "Reduced flash/strobe cues (hellonearthis)",
+    "label": "Reduced flash/strobe cues",
     "exclude": {
       "lighting": [
         "direct on-camera flash",

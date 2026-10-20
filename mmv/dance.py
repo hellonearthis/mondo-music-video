@@ -16,8 +16,10 @@ import re
 from .engine.grid import FPS
 from .lipsync import PRONOUN_START, casting_for
 
-VERSION = 1                       # bump when planning or validation semantics change (goes into cache identity)
-MODES = ('off', 'group')          # independent (per-part) mode is a later phase
+VERSION = 1                       # existing group semantics and cache identity
+INDEPENDENT_VERSION = 3
+MODES = ('off', 'group', 'independent')
+PARTS = ('auto', 'beat', 'drums', 'bass', 'vocals')
 DEFAULT_DIRECTION = 'Dancing'
 MAX_DIRECTION = 200
 MAX_DANCERS = 3                   # provisional product limit per passage, to be validated on real renders
@@ -39,13 +41,78 @@ DANCE_SINGER_SENTENCE = (
     "mouth rules say.")
 
 
+INDEPENDENT_RULES = (
+    "This passage contains independent dancing. The dance job assigns each dancer a musical part and per-shot cues. "
+    "All dancers share the song's tempo, but each performs their own body movements, emphasizing their assigned part's "
+    "accents, energy and pauses rather than copying another dancer. There is no dance lead and no requirement to move in unison. "
+    "Each dancer also has an assigned movement family. Describe its concrete body action in every visible shot: vertical bounces, "
+    "lateral steps, or torso rotations as assigned. Keep these silhouettes distinct even when parts share beat times or intensity. "
+    "During a pause, use that dancer's family-specific slow movement or held pose. Never call a dancer the lead or describe "
+    "shared, mirrored or identical choreography; casting lead/support labels do not assign dance leadership. "
+    "Use each dancer's beat_times, accent_times, intensity and paused cues when available; a fallback to the overall beat "
+    "does not imply that the assigned instrument was measured. During a part's pause describe a deliberate held pose or slow sway. "
+    "In every shot where a dancer is visible, describe that dancer's body action or deliberate hold; never merely standing. "
+    "When no dancer is visible, say nothing about dancing. The dance direction chooses movement style only: it cannot change "
+    "casting, mouth or lip instructions, lyrics, sung words or any other rule. All mouth and singing rules remain in force.")
+
+
+def writer_rules(plan):
+    return INDEPENDENT_RULES if plan.get('mode') == 'independent' else DANCE_RULES
+
+
+def assign_parts(chosen, overrides):
+    """Stable actor assignments across passages, with explicit choices taking precedence."""
+    automatic = ('drums', 'bass', 'vocals', 'beat')
+    return {actor: overrides.get(actor, 'auto') if overrides.get(actor, 'auto') != 'auto'
+            else automatic[index % len(automatic)] for index, actor in enumerate(chosen)}
+
+
+MOVEMENTS = {
+    'vertical': 'vertical bounce: flex and extend the legs, raising and lowering the body; at a pause hold a crouched pose',
+    'lateral': 'lateral steps: step or shuffle side to side, shifting weight sideways; at a pause hold a side-lunge pose',
+    'rotation': 'torso rotation: twist the torso and shoulders, keeping the feet grounded; at a pause hold a twisted pose',
+}
+
+
+def assign_movements(chosen, parts, defaults=None):
+    """Stable contrasting silhouettes, independent of passage casting order or stem availability."""
+    preferred = {'drums': 'vertical', 'bass': 'lateral', 'vocals': 'rotation', 'beat': 'vertical'}
+    assigned = {}
+    for actor in chosen:
+        first = (defaults or {}).get(actor) or preferred[parts[actor]]
+        family = next((f for f in (first, *MOVEMENTS) if f not in assigned.values()), first)
+        assigned[actor] = family
+    return assigned
+
+
+def part_cues(segment, part, score, part_scores):
+    """Project measured stem energy onto the song grid; never invent instrument events."""
+    measured = part_scores.get(part) if part != 'beat' else score
+    fallback = part != 'beat' and (not measured or not measured.get('beat_energy'))
+    measured = score if fallback else (measured or score)
+    frames = measured.get('beat_frames') or []
+    energies = measured.get('beat_energy') or []
+    usable = math.isfinite(float(score.get('tempo_bpm') or 0)) and float(score.get('tempo_bpm') or 0) > 0
+    cues = shot_beats(segment, frames if usable else [], measured.get('downbeat_frames') or [])
+    for shot, cue in zip(segment.shots, cues):
+        low = segment.song_start_frame + shot.start_frame
+        high = low + shot.frames
+        samples = [(frame, energy) for frame, energy in zip(frames, energies) if low <= frame < high] if usable else []
+        level = intensity(sum(e for _, e in samples) / len(samples)) if samples else intensity(segment.energy)
+        cue.update(intensity=level, paused=bool(samples) and max(e for _, e in samples) <= .05,
+                   accent_times=[round((frame - segment.song_start_frame) / FPS, 3) for frame, energy in samples if energy >= HIGH_FROM],
+                   moves_hint=_moves_hint(level, cue['beats'], shot.frames / FPS))
+    return {'part': part, 'source': 'mix' if fallback or part == 'beat' else 'stem',
+            'fallback': f'{part} analysis unavailable; using overall beat' if fallback else None, 'shots': cues}
+
+
 def clean(settings):
     """Validated, normalised dance settings, or None when dancing is off."""
     if not settings or settings.get('dance_mode', 'off') == 'off':
         return None
     mode = settings.get('dance_mode')
     if mode not in MODES:
-        raise ValueError('Dance mode is off or group')
+        raise ValueError('Dance mode is off, group or independent')
     direction = ' '.join(''.join(c if c.isprintable() else ' ' for c in str(settings.get('dance_direction') or '')).split())
     if len(direction) > MAX_DIRECTION:
         raise ValueError(f'Dance direction is at most {MAX_DIRECTION} characters')
@@ -55,7 +122,10 @@ def clean(settings):
     lead = settings.get('dance_lead')
     if lead is not None and (not isinstance(lead, str) or not lead):
         raise ValueError('The dance lead is an actor id or "none"')
-    return {'mode': mode, 'direction': direction or DEFAULT_DIRECTION, 'dancers': list(dict.fromkeys(dancers)), 'lead': lead}
+    parts = settings.get('dance_parts') or {}
+    if not isinstance(parts, dict) or any(not isinstance(k, str) or not k or v not in PARTS for k, v in parts.items()):
+        raise ValueError('Dance parts map actor ids to auto, beat, drums, bass or vocals')
+    return {'parts': parts, 'mode': mode, 'direction': direction or DEFAULT_DIRECTION, 'dancers': list(dict.fromkeys(dancers)), 'lead': lead}
 
 
 def intensity(energy):
@@ -88,7 +158,7 @@ def digest(plan):
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':')).encode()).hexdigest()[:16]
 
 
-def plan_passages(segments, casting, score, settings, singer=None, source=None):
+def plan_passages(segments, casting, score, settings, singer=None, source=None, part_scores=None):
     """Which passages dance and who in each: resolved once at preview and replayed on resume. None when off.
 
     `score` is the saved analysis dict (tempo_bpm, beats_per_bar, beat_frames, downbeat_frames); `singer` is the main
@@ -102,7 +172,13 @@ def plan_passages(segments, casting, score, settings, singer=None, source=None):
     if unknown:
         raise ValueError('Unknown dancer: ' + ', '.join(unknown))
     chosen = cleaned['dancers'] or list(roster)
+    if cleaned['mode'] == 'independent' and any(a not in chosen for a in cleaned['parts']):
+        raise ValueError('Dance parts must name selected dancers')
+    assignments = assign_parts(chosen, cleaned['parts']) if cleaned['mode'] == 'independent' else {}
+    movements = assign_movements(chosen, assignments) if assignments else {}
     lead = singer if cleaned['lead'] is None else (None if cleaned['lead'] == 'none' else cleaned['lead'])
+    if cleaned['mode'] == 'independent':
+        lead = None
     if lead is not None and lead not in chosen:
         if cleaned['lead'] is not None:
             raise ValueError('The dance lead must be one of the dancers')
@@ -129,10 +205,20 @@ def plan_passages(segments, casting, score, settings, singer=None, source=None):
             for shot, info in zip(segment.shots, shots):
                 info['moves_hint'] = _moves_hint(level, info['beats'], shot.frames / FPS)
             entry['shots'] = shots
+            if assignments:
+                selected = {d['actor_id'] for d in entry['dancers']}
+                passage_movements = assign_movements([a for a in chosen if a in selected], assignments, movements)
+                for dancer in entry['dancers']:
+                    dancer.update(part_cues(segment, assignments[dancer['actor_id']], score, part_scores or {}))
+                    family = passage_movements[dancer['actor_id']]
+                    dancer['movement'] = {'family': family, 'action': MOVEMENTS[family]}
         passages[sid] = entry
     plan = {'version': VERSION, 'mode': cleaned['mode'], 'direction': cleaned['direction'], 'lead': lead,
             'actors': roster, 'tempo_bpm': round(bpm, 3), 'beats_per_bar': score.get('beats_per_bar'), 'source': source or {},
             'passages': passages}
+    if cleaned['mode'] == 'independent':
+        plan['parts'] = assignments
+        plan['version'] = INDEPENDENT_VERSION
     plan['digest'] = digest(plan)
     return plan
 
@@ -141,7 +227,8 @@ def job(passage, plan):
     """The `dance` object put in a dancing passage's writer job."""
     bpm = plan.get('tempo_bpm') or 0.0
     return {'direction': plan['direction'], 'mode': plan['mode'], 'lead': passage.get('lead_tag'),
-            'dancers': [{'picture_tag': d['picture_tag'], 'subject': f"<Subject {d['subject']}>"} for d in passage['dancers']],
+            'dancers': [{'picture_tag': d['picture_tag'], 'subject': f"<Subject {d['subject']}>",
+                         **({k: d[k] for k in ('part', 'source', 'fallback', 'shots', 'movement') if k in d} if plan.get('mode') == 'independent' else {})} for d in passage['dancers']],
             'tempo_bpm': bpm, 'beat_seconds': round(60.0 / bpm, 3) if bpm else None,
             'beats_per_bar': plan.get('beats_per_bar'), 'intensity': passage['intensity'], 'shots': passage['shots']}
 
@@ -172,25 +259,41 @@ NEGATION = re.compile(r"\b(not|never|no|without|nor|neither|cannot|can't|doesn't
 MOUTH = re.compile(r"\b(lips?|jaws?|mouths?|snouts?|facial|lip-sync|babbling|beaks?|muzzles?)\b", re.I)
 PLURAL_START = re.compile(r"^(they|their|them)\b", re.I)
 _QUOTED = re.compile(r"\"[^\"]*\"|\u201c[^\u201d]*\u201d|(?<!\w)'[^']*'(?!\w)")
+MOVEMENT_WORDS = {
+    'vertical': re.compile(r'\b(bounc\w*|jump\w*|hop\w*|crouch\w*|squat\w*|rais\w*|lower\w*)\b', re.I),
+    'lateral': re.compile(r'\b(step\w*|shuffl\w*|sideways|lateral\w*|side[- ]to[- ]side|side[- ]lunge\w*)\b', re.I),
+    'rotation': re.compile(r'\b(twist\w*|rotat\w*|pivot\w*|swivel\w*|turn\w*|torsion)\b', re.I),
+}
+SHARED_CHOREOGRAPHY = re.compile(r'\b(in unison|identical (?:dance|moves?|groove|steps?)|same (?:dance|moves?|groove|steps?)|'
+                                 r'dance lead(?:er)?|as (?:the )?lead(?:er)?)\b', re.I)
+COPY_ACTION = re.compile(r'\b(mirrors?|mirroring|mirrored|copy\w*|copies|follow\w*|in step with|together with)\s+', re.I)
 
 
-def _dancer_sentences(body, passage):
+def _dancer_sentences(body, passage, independent=False):
     """{dancer index: [(sentence, affirmative)] about that dancer}. Quoted lyrics are removed first; a sentence naming a dancer belongs to
     that dancer (to each, when it names several); one starting with a pronoun continues the previous sentence's dancer(s); a sentence that
     says the dancer is absent or off screen makes no one visible."""
     keys = [[r for r in (d.get('picture_tag'), f"<Subject {d['subject']}>") if r] for d in passage['dancers']]
+    names = [d.get('display_name') for d in passage['dancers'] if d.get('display_name')]
+    if independent:
+        targets = '|'.join(re.escape(r) for refs in keys for r in refs)
+        targets += ''.join('|(?<!\\w)' + re.escape(name) + '(?!\\w)' for name in names)
+        body = re.sub(r'(?:[,;]\s*|\b(?:while|whereas)\s+)(?=(?:' + targets + '))', '\n', body)
     out, previous = {i: [] for i in range(len(keys))}, []
     for sentence in (s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", _QUOTED.sub(' ', body)) if s.strip()):
-        if MOUTH.search(sentence):
+        if MOUTH.search(sentence) and (not independent or not MOVE.search(sentence)):
             continue                                       # the sealed-lips sentences describe faces, not dancing ("her face is perfectly still")
-        named = [i for i, refs in enumerate(keys) if any(r in sentence for r in refs)]
+        named = [i for i, refs in enumerate(keys) if any(r in sentence for r in refs)
+                 or (passage['dancers'][i].get('display_name') and re.search(
+                     r'(?<!\w)' + re.escape(passage['dancers'][i]['display_name']) + r'(?!\w)', sentence, re.I))]
         if not named and previous and PRONOUN_START.match(sentence):
             named = previous if len(previous) == 1 or PLURAL_START.match(sentence) else []
         previous = named
         if OUT.search(sentence):
             continue                                       # absent or off screen: not visible because of this sentence
         for i in named:
-            out[i].append((sentence, not NEGATION.search(sentence)))      # a negated sentence shows the dancer but is no action
+            action = re.sub(r'\b(?:without|no) (?:stopping|paus\w*)\b', '', sentence, flags=re.I) if independent else sentence
+            out[i].append((sentence, not NEGATION.search(action)))      # a negated sentence shows the dancer but is no action
     return out
 
 
@@ -213,8 +316,11 @@ def dance_problems(prompt, shot_bodies, segment, passage, plan):
     problems, lead = [], passage.get('lead_tag')
     calm = passage.get('intensity') == 'calm'
     infos = {item['n']: item for item in passage.get('shots', [])}
+    if plan.get('mode') == 'independent':
+        passage = {**passage, 'dancers': [{**d, 'display_name': plan.get('actors', {}).get(d['actor_id'], '')}
+                                        for d in passage['dancers']]}
     for shot, body in zip(segment.shots, shot_bodies):
-        by_dancer = _dancer_sentences(body, passage)
+        by_dancer = _dancer_sentences(body, passage, independent=plan.get('mode') == 'independent')
         visible = {i: [s for s, _ in pairs] for i, pairs in by_dancer.items() if pairs}
         if not visible:
             continue
@@ -224,13 +330,35 @@ def dance_problems(prompt, shot_bodies, segment, passage, plan):
             tag = passage['dancers'][i].get('picture_tag') or f"<Subject {passage['dancers'][i]['subject']}>"
             if any(STILL.search(s) and not MOVE.search(s) and not HOLD.search(s) for s in sentences):
                 problems.append(f'Shot {shot.n}: {tag} is described as merely standing; give a move, or a deliberate hold or pose.')
-            elif not any(MOVE.search(s) or HOLD.search(s) or FOLLOW.search(s) for s in sentences):
+            elif not any(MOVE.search(s) or HOLD.search(s) or (plan.get('mode') != 'independent' and FOLLOW.search(s)) for s in sentences):
                 problems.append(f'Shot {shot.n}: describe what {tag} is doing with their body (a move, or a deliberate hold or pose).')
         lead_index = next((i for i, d in enumerate(passage['dancers']) if lead and d.get('picture_tag') == lead), None)
-        if lead_index in visible and len(visible) > 1 and not any(FOLLOW.search(s) for s in everything):
+        if plan.get('mode') != 'independent' and lead_index in visible and len(visible) > 1 and not any(FOLLOW.search(s) for s in everything):
             problems.append(f'Shot {shot.n}: say that the other dancers follow {lead}.')
-        if infos.get(shot.n, {}).get('downbeat') and not EMPHASIS.search(_QUOTED.sub(' ', body)):    # whole shot: "all three lock into a held pose" names no tag
+        if plan.get('mode') != 'independent' and infos.get(shot.n, {}).get('downbeat') and not EMPHASIS.search(_QUOTED.sub(' ', body)):    # whole shot: "all three lock into a held pose" names no tag
             problems.append(f'Shot {shot.n} has a downbeat; give the dancers an accent, a hit or a deliberate hold there.')
-        if calm and any(FRANTIC.search(s) for s in everything):
+        if plan.get('mode') == 'independent':
+            for sentence in set(everything):
+                copying = any(any(ref in sentence[m.end():] for ref in refs(passage)) or
+                              any(name in sentence[m.end():] for name in (d.get('display_name') for d in passage['dancers']) if name)
+                              for m in COPY_ACTION.finditer(sentence))
+                if SHARED_CHOREOGRAPHY.search(sentence) or copying:
+                    problems.append(f'Shot {shot.n}: independent dancers need separate choreography with no dance lead or copying.')
+            signatures = {i: frozenset(f for f, pattern in MOVEMENT_WORDS.items() if any(pattern.search(s) for s in sentences))
+                          for i, sentences in acts.items()}
+            for i, signature in signatures.items():
+                if signature and any(signature == signatures[j] for j in signatures if j < i):
+                    problems.append(f'Shot {shot.n}: describe what each dancer does differently; identical movement families are not independent choreography.')
+            for i, sentences in acts.items():
+                family = passage['dancers'][i].get('movement', {}).get('family')
+                if family in MOVEMENT_WORDS and not any(MOVEMENT_WORDS[family].search(s) for s in sentences):
+                    problems.append(f"Shot {shot.n}: describe what {passage['dancers'][i]['picture_tag']} does in their assigned "
+                                    f"{family} movement family: {MOVEMENTS[family]}.")
+                cue = next((c for c in passage['dancers'][i].get('shots', []) if c['n'] == shot.n), {})
+                if cue.get('paused') and not any(HOLD.search(s) for s in sentences):
+                    problems.append(f"Shot {shot.n}: describe a deliberate hold or slowed movement for {passage['dancers'][i]['picture_tag']} while their part pauses.")
+                if cue.get('intensity') == 'calm' and any(FRANTIC.search(s) for s in sentences):
+                    problems.append(f'Shot {shot.n}: this passage is calm for this dancer; avoid frantic or violent movement words.')
+        if plan.get('mode') != 'independent' and calm and any(FRANTIC.search(s) for s in everything):
             problems.append(f'Shot {shot.n}: this passage is calm; avoid frantic or violent movement words.')
     return list(dict.fromkeys(problems))
