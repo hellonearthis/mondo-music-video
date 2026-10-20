@@ -35,7 +35,7 @@ from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
-MGL_APP_VERSION = "1.8.8"
+MGL_APP_VERSION = "1.8.9"
 WEB = Path(__file__).parent
 
 
@@ -1336,7 +1336,22 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.post("/api/log/clear")
     def clear_log():
-        write_json(store.home / "log_cleared.json", {"cleared_at": time.time()})
+        now = time.time()
+        active_id = None
+        cleared_offsets = {}
+        try:
+            status = jobs.status()
+            if status.get("state") in ("running", "cancelling"):
+                active_id = status.get("id")
+                if active_id:
+                    active_dir = store.home / "runs" / identifier(active_id)
+                    op_log = active_dir / "operation.log"
+                    if op_log.exists():
+                        cleared_offsets[active_id] = op_log.stat().st_size
+        except Exception:
+            pass
+
+        write_json(store.home / "log_cleared.json", {"cleared_at": now, "offsets": cleared_offsets})
         studio_log = store.home / "studio.log"
         if studio_log.exists():
             try:
@@ -1364,39 +1379,47 @@ def create_app(home=None, *, test_hosts=False):
     def operation_log(run_id: str):
         cleared_info = read_json(store.home / "log_cleared.json", {})
         cleared_at = float(cleared_info.get("cleared_at", 0))
+        cleared_offsets = cleared_info.get("offsets", {})
 
         active_id = None
         try:
-            active_id = jobs.status().get("id")
+            status = jobs.status()
+            if status.get("state") in ("running", "cancelling"):
+                active_id = status.get("id")
         except Exception:
             pass
 
         sections = []
         if run_id == "latest" or not run_id:
             runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                    if p.name == active_id or p.stat().st_mtime >= cleared_at]
+                    if (active_id and p.name == active_id) or p.stat().st_mtime >= cleared_at]
             directory = runs[0] if runs else None
         else:
             directory = store.home / "runs" / identifier(run_id)
-            if not directory.exists() or (directory.name != active_id and directory.stat().st_mtime < cleared_at):
-                runs = [p for p in sorted((store.home / "runs").glob("*"), key=lambda p: p.stat().st_mtime, reverse=True)
-                        if p.name == active_id or p.stat().st_mtime >= cleared_at]
-                directory = runs[0] if runs else None
+            if not directory.exists() or ((not active_id or directory.name != active_id) and directory.stat().st_mtime < cleared_at):
+                directory = None
 
-        if directory and directory.is_dir() and (directory.name == active_id or directory.stat().st_mtime >= cleared_at):
+        if directory and directory.is_dir():
             path = directory / "operation.log"
+            offset = int(cleared_offsets.get(directory.name, 0)) if (active_id and directory.name == active_id) else 0
             if path.exists():
-                with path.open("rb") as stream:
-                    stream.seek(max(0, path.stat().st_size - 64000))
-                    sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + stream.read().decode(errors="replace"))
+                file_size = path.stat().st_size
+                if file_size > offset:
+                    with path.open("rb") as stream:
+                        start_pos = max(offset, file_size - 64000)
+                        stream.seek(start_pos)
+                        content_chunk = stream.read().decode(errors="replace")
+                        if content_chunk.strip():
+                            sections.append(f"=== Operation Output (Run: {directory.name}) ===\n" + content_chunk)
             # Include any validation failure reports
             validations = sorted(directory.glob("*.validation-*.json"))
             for v in validations:
-                try:
-                    data = json.loads(v.read_text(encoding="utf-8"))
-                    sections.append(f"\n--- Validation Details ({v.name}) ---\n" + json.dumps(data, indent=2))
-                except Exception:
-                    pass
+                if v.stat().st_mtime >= cleared_at or (active_id and directory.name == active_id and not offset):
+                    try:
+                        data = json.loads(v.read_text(encoding="utf-8"))
+                        sections.append(f"\n--- Validation Details ({v.name}) ---\n" + json.dumps(data, indent=2))
+                    except Exception:
+                        pass
             # Include writer service output if present
             writer_log = directory / "writer-service.log"
             if writer_log.exists() and writer_log.stat().st_size > 0:

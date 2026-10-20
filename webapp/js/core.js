@@ -44,7 +44,7 @@ export function logSession(message, type = "INFO") {
   if ($("#operation-log") && !$("#operation-log").hidden) updateLogDisplay();
 }
 
-export function notice(message) {
+export function notice(message, log = true) {
   const noticeElem = $("#notice");
   if (noticeElem) {
     noticeElem.textContent = message;
@@ -54,7 +54,7 @@ export function notice(message) {
     node.textContent = message;
     node.hidden = !message;
   });
-  if (message) logSession(message, "NOTICE");
+  if (message && log) logSession(message, "NOTICE");
 }
 
 export async function api(path, options = {}) {
@@ -78,13 +78,17 @@ export async function updateLogDisplay() {
   try {
     const res = await (await api("/api/log/" + (state.currentRun || "latest"))).json();
     serverLog = res.log || "";
+    if (serverLog === "No operation or server log recorded yet.") {
+      serverLog = "";
+    }
   } catch (err) {
     serverLog = `(Could not fetch server log: ${err.message})`;
   }
   const clientSection = state.sessionLogs.length
     ? `=== Recent Session Activity & Notices ===\n${state.sessionLogs.join("\n")}\n\n`
     : "";
-  logElem.textContent = clientSection + (serverLog || "No logs recorded yet.");
+  const full = (clientSection + serverLog).trim();
+  logElem.textContent = full || "Log cleared. Waiting for new activity.";
 }
 
 export async function copyToClipboard(content) {

@@ -412,9 +412,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.8.8")
+        self.assertEqual(api_version()["version"], "1.8.9")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.8.8", (root / "README.md").read_text())
+        self.assertIn("1.8.9", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -558,11 +558,19 @@ class PublicAppTests(unittest.TestCase):
     def test_clear_log_endpoint(self):
         studio_log = self.home / "studio.log"
         studio_log.write_text("historical error line\n", encoding="utf-8")
+        run_dir = self.home / "runs" / "historical_run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "operation.log").write_text("historical operation output\n", encoding="utf-8")
+        time.sleep(0.01)
+
         self.assertIn("historical error", self.client.get("/api/log/latest").json()["log"])
+        self.assertIn("historical operation output", self.client.get("/api/log/latest").json()["log"])
+
         res = self.client.post("/api/log/clear")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json(), {"status": "cleared"})
         self.assertEqual(self.client.get("/api/log/latest").json()["log"], "No operation or server log recorded yet.")
+        self.assertEqual(self.client.get("/api/log/historical_run").json()["log"], "No operation or server log recorded yet.")
         self.assertEqual(studio_log.read_text(encoding="utf-8"), "")
 
     def test_sse_events_and_jobs_subscription(self):

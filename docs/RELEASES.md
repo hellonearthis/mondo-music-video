@@ -1,5 +1,14 @@
 # Releases
 
+## 1.8.9 — Fix operation log clearing and active session log reset
+
+- Resolved an issue where clicking "Clear log" failed to clear the diagnostic log view:
+  - Corrected `active_id` detection in `GET /api/log/{run_id}` to only treat actively running or cancelling operations as active, properly honoring `cleared_at` timestamps for historical runs.
+  - Implemented active run log offset tracking in `POST /api/log/clear`, ensuring that clearing the log during an active production resets the view and only displays lines generated after the clear action.
+  - Fixed client-side notice feedback in `webapp/js/core.js` and `webapp/js/production.js` so "Diagnostic log cleared" flashes without inserting a notice record back into the newly cleared session log array or triggering a premature redraw.
+  - Reset `state.currentRun` to `null` on clear log click to prevent immediate refetching of completed or interrupted runs.
+- Bumped application version to `1.8.9`.
+
 ## 1.8.8 — Style export, import, duplication and validation
 
 - Full portability for harvested and custom visual styles: download style cards as clean JSON and import styles into any Mondo Music Video studio library.
