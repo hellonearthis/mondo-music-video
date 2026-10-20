@@ -120,14 +120,25 @@ scheme's approval. Validate real before/after renders (same song and seed) befor
   ones. Checking/downloading/analyzing the fork does not itself authorize paid
   or GPU work, publication, pushing, or importing private assets.
 
-## Working with Codex and Claude Code
+## Working with Codex, Claude Code, Antigravity and Hermes
 
 Read `docs/COLLABORATION.md` before starting work, and `docs/TEAM_STATUS.md` if it
 exists (it is local session state and is not published). Read `README.md` and the relevant implementation and tests for context.
 
-Use the shared collaboration protocol for both Codex and Claude Code. Preserve
+Use the shared collaboration protocol for Codex, Claude Code and any other agent the owner adds. Preserve
 existing uncommitted work. Do not infer that another open terminal is idle.
 Before committing or pushing, follow the shared-checkout commit rules in `docs/COLLABORATION.md`.
 Do not start product changes until the user assigns a task. Never stage or
 publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
 are documentation and never trigger a version bump.
+Antigravity and Hermes are junior team members; Hermes normally takes light worker tasks. Their first session is read-only: read,
+search, review and report, but do not edit, stage, commit, push, or run renders or tests that touch real data. Put findings in
+`.collaboration/` reports or in your reply, never in tracked files. After that first session an agent may take assigned work as a
+junior helper: only the files and task the user or coordinator names, claimed in `docs/TEAM_STATUS.md`, with the coordinator
+reviewing the result before it is integrated. Helpers never bump the version, commit or push on their own. The protected prompting
+scheme, the public-asset allowlist and the privacy rules above apply to every agent without exception.
+Four agents may work concurrently under one named coordinator. Keep one writer in the main checkout;
+other agents review without edits or implement explicitly assigned tasks in separate worktrees.
+Record each assignment, allowed files, worktree and handoff in the shared local status file as described
+in `docs/COLLABORATION.md`. Hermes must also read `HERMES.md`. An open terminal is not an assignment,
+and these instructions do not automatically launch or connect any agents.
