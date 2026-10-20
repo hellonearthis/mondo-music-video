@@ -1,5 +1,9 @@
 # Releases
 
+## 1.9.8 — Component labeling mode
+
+Integrates [hellonearthis](https://github.com/hellonearthis)'s fork commit `5e2bba4`: a **Labels** header button (Ctrl+Shift+L, Alt+L, Esc to exit) outlines the hovered interface component and shows its stable name and ID; clicking the badge copies them. Components carry `data-component*` attributes, and `docs/interface-guide.md` records the naming. Adapted for this tree: the Open Prop Protocol library card is labelled, and the badge is built with text nodes instead of `innerHTML`. The overlay is a developer and pair-programming aid with no workflow, so it is intentionally GUI-only; agents use the existing API, CLI and MCP surfaces. No protected prompting, paid-consent or retry behavior changed. See [collaborator review](COLLABORATOR_REVIEW.md).
+
 ## 1.9.7 — Open Prop Protocol instrument references
 
 Added a private, general Open Prop Protocol v0.1 library. Users can upload,

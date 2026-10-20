@@ -1,5 +1,14 @@
 # Collaborator review record
 
+## Fork `5e2bba4` integrated (release 1.9.8, 2026-10-20)
+
+Reviewed from an isolated clone of `hellonearthis/mondo-music-video` at `5e2bba4f945d02f7c825e2002d83c2d084819c2e`; the only change beyond the previously reviewed `e6ef03e`.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Component labeling overlay, toggle, shortcuts, CSS, `data-component*` attributes, interface guide | Adopted with adaptation. The `index.html` patch conflicted only at the Actors panel, where our OPP library card was added; it was merged by hand and the OPP card labelled. The badge now uses text nodes rather than `innerHTML` (the labels are static, so this is hardening, not a demonstrated defect). GUI-only by design. |
+| Version 1.9.8 | Matches the fork. |
+
 ## OPP task-start fork check — `5e2bba4` (2026-10-20)
 
 The fork was checked at exact head `5e2bba4f945d02f7c825e2002d83c2d084819c2e`
