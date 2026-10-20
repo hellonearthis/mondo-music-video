@@ -1,5 +1,11 @@
 # Releases
 
+## 1.8.13 — Readable folder names for every job, and start.sh / stop.sh
+
+- Every new job folder now has a human-readable name like productions already did (`<what>_<what for>_<date>_<time>`): Topaz upscale outputs, lyrics detection and model setup, stem-model setup and package-export jobs no longer get random strings (`mmv/jobs.py`: `job_run_id`). Existing folders are not renamed, so saved references and resumes keep working. The package folders themselves were already readable.
+- `start.sh` and `stop.sh` for Linux, macOS and WSL (Windows keeps `start.ps1`): start in the foreground or with `--background`, always run this checkout's code, refuse a second copy, keep an accurate `server.pid`, and stop waits for a clean exit and protects a running production.
+- Not changed: protected prompts and scheme, the app's own session lock, and the Windows launcher.
+
 ## 1.8.12 — Lyric captions
 
 New, free and post-assembly (a joint Claude Code and Codex free-time project; Codex reviewed the design before the code was written).

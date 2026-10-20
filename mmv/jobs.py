@@ -32,6 +32,16 @@ def output_run_id(store, request, now=None):
     return identifier(candidate)
 
 
+def job_run_id(store, kind, label='', now=None):
+    """Readable folder for a job's own record (log, result): what it is, then what it was for, then the date and time."""
+    return output_run_id(store, {'title': f'{kind} {Path(str(label).replace(chr(92), "/")).stem}'.strip()}, now=now)
+
+
+def upload_name(store, song):
+    """The original file name of an uploaded song, for readable job folders (empty when unknown)."""
+    return read_json(store.home / 'uploads' / (Path(song).name + '.metadata.json'), {}).get('name') or '' if song else ''
+
+
 class BusyError(ValueError):
     pass
 

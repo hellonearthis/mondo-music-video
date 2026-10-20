@@ -309,7 +309,7 @@ Never copy from another checkout or use a private roster as an install source.
 
 ## 5. Launch and give an honest readiness report
 
-Start with `.venv/bin/mondo-music-video serve` (Windows:
+Start with `bash start.sh --background` (stop with `bash stop.sh`; it runs this checkout's code, which `.venv/bin/mondo-music-video serve` alone may not) (Windows:
 `.\.venv\Scripts\mondo-music-video.exe serve`). Open or provide
 `http://127.0.0.1:8091`. Inspect `/api/version`, `/api/status`, `doctor`, service
 health and advertised model IDs. Confirm configured paths and required files.

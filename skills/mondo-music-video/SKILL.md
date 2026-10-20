@@ -37,7 +37,7 @@ configuration, see the app's `docs/AGENT_SETUP.md`.
 Inspect status, catalog, styles and actors before choosing capabilities. Settings
 inspection reports configured services and key presence without secret values.
 If the app is stopped, use the user's app environment to run
-`mondo-music-video serve`. Missing models/keys need configuration; do not silently
+`bash start.sh --background` from the project folder (`bash stop.sh` stops it; it refuses while a production runs), or `mondo-music-video serve`. Missing models/keys need configuration; do not silently
 switch providers or install/download model weights.
 
 ## Produce

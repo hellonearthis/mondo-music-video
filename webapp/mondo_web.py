@@ -29,14 +29,14 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mmv import actors, agreements, production, score_view
-from mmv.jobs import BusyError, Jobs
+from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.8.12"
+MGL_APP_VERSION = "1.8.13"
 WEB = Path(__file__).parent
 
 
@@ -1119,7 +1119,8 @@ def create_app(home=None, *, test_hosts=False):
         from mmv import lyrics
         if value.consent is not True:
             raise ValueError("Approve the one-time speech model download first")
-        return jobs.start("lyrics", lambda context: lyrics.prepare_model(store, value.model, context))
+        return jobs.start("lyrics", lambda context: lyrics.prepare_model(store, value.model, context),
+                          run_id=job_run_id(store, "lyrics model", value.model))
 
     @app.post("/api/lyrics/detect")
     def lyrics_detect(value: LyricsRequest):
@@ -1133,7 +1134,7 @@ def create_app(home=None, *, test_hosts=False):
         def detect(context):
             found = lyrics.transcribe(store, song, digest, value.model, context, value.use_vocals)
             return {"lines": found["lines"], "source": found["source"], "language": found.get("language"), "model": value.model}
-        return jobs.start("lyrics", detect)
+        return jobs.start("lyrics", detect, run_id=job_run_id(store, "lyrics", upload_name(store, value.song)))
 
     @app.post("/api/lyrics/align")
     def lyrics_align(value: LyricsRequest):
@@ -1156,7 +1157,8 @@ def create_app(home=None, *, test_hosts=False):
         from mmv import stems
         if value.consent is not True:
             raise ValueError("Approve the one-time stem model download first")
-        return jobs.start("stems", lambda context: stems.prepare_model(store, value.model, context))
+        return jobs.start("stems", lambda context: stems.prepare_model(store, value.model, context),
+                          run_id=job_run_id(store, "stems model", value.model))
 
     @app.get("/api/waveform")
     def waveform(song: str):
@@ -1256,7 +1258,8 @@ def create_app(home=None, *, test_hosts=False):
         from mmv import package_export
         package_export.check_package(store, run_id, value.allow_private_actors)
         return jobs.start("export", lambda context: package_export.export_package(
-            store, run_id, zip_it=value.zip, allow_private=value.allow_private_actors, context=context))
+            store, run_id, zip_it=value.zip, allow_private=value.allow_private_actors, context=context),
+            run_id=job_run_id(store, "export", run_id))
 
     @app.get("/api/integrity")
     def integrity():
@@ -1480,7 +1483,9 @@ def create_app(home=None, *, test_hosts=False):
     def upscale(value: UpscaleRequest):
         with jobs.lock:
             jobs.require_idle()
-            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context))
+            title = read_json(inside(store.home / "runs", value.source).parent / "output.json", {}).get("title") or ""
+            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context),
+                              run_id=job_run_id(store, "upscale", title))
 
     @app.post("/api/captions")
     def caption_video(value: CaptionVideoRequest):

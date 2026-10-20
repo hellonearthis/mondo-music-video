@@ -11,7 +11,7 @@ From the checked-out project, with its virtual environment already installed:
 
 ```sh
 .venv/bin/python -m pip install '.[mcp]'
-.venv/bin/mondo-music-video serve
+.venv/bin/mondo-music-video serve   # or: bash start.sh --background (stop: bash stop.sh)
 ```
 
 On Windows use `.venv\Scripts\python.exe` and the corresponding `.exe` launchers.
