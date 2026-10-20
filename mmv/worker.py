@@ -178,8 +178,19 @@ def run(home, directory, *, resume=False):
             def __exit__(self, *a):
                 return self._r.__exit__(*a)
 
+        def _send_flush_request(req, *a, **kw):
+            if hasattr(req, 'data') and req.data:
+                try:
+                    d = json.loads(req.data.decode('utf-8'))
+                    if d.get('cache_prompt') is not False:
+                        d['cache_prompt'] = False
+                        req.data = json.dumps(d).encode('utf-8')
+                except Exception:
+                    pass
+            return _CaptureWrapper(orig_urlopen(req, *a, **kw))
+
         try:
-            urllib.request.urlopen = lambda *a, **kw: _CaptureWrapper(orig_urlopen(*a, **kw))
+            urllib.request.urlopen = _send_flush_request
             ok, text, error = call_llm(None, system, user, .7, 4096, 900,
                                        profile=(settings, store.key('MMV_WRITER_API_KEY')))
         finally:

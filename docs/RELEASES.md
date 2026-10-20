@@ -1,5 +1,13 @@
 # Releases
 
+## 1.8.12 — Eliminate prompt KV cache accumulation across passages
+
+- Context flush and dedicated single-slot tuning:
+  - Configured `llama-server` to launch with single-slot execution (`--parallel 1`) so 100% of the 16,384 context allocation is dedicated to the active prompt rather than fragmented across 4 unified slots.
+  - Disabled prompt prefix caching (`--no-cache-prompt`) and slot similarity matching (`-sps 0`) in `start.ps1` and `settings.json`, preventing lingering KV tokens from earlier passages from accumulating in VRAM.
+  - Added request-level `cache_prompt: false` enforcement in `mmv/worker.py` on all writer completion calls to guarantee clean, zeroed KV cache for every musical passage.
+- Bumped application version to `1.8.12`.
+
 ## 1.8.11 — Live prompt writer token usage and context tracking
 
 - Real-time token usage telemetry in Studio Operation Output:
