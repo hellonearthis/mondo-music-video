@@ -82,6 +82,11 @@ verify the assets appear in the app. Never import other local/private assets.
   package semantics to the four current instrument roles. Inspect, explicit
   signer acceptance, local import, sheet selection, preview and replay checks
   must remain available to agents as well as the GUI.
+- Keep the left sidebar tidy: generative workspaces (those that create video,
+  idents, styles, worlds or other media) stay at the top, library/management
+  tabs follow, and **Settings is always the last tab**. Any new or moved tab
+  must keep the 01–NN numbers consecutive and update every in-app reference to
+  a numbered tab. `tests/test_public_app.py` enforces the order.
 - Keep contributor GitHub handles out of application labels, tooltips, notices
   and help text. Preserve contribution credit in contributor/review/release documentation.
 

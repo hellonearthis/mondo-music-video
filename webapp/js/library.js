@@ -141,7 +141,7 @@ export async function loadActors() {
   $$(".actor-select").forEach((select) => {
     const old = [...select.selectedOptions].map((x) => x.value);
     if (!actors.length) {
-      const emptyOpt = option("", "No cast members yet — add in 02. Actors & OAP", "No cast members currently in your studio library");
+      const emptyOpt = option("", "No cast members yet — add in 03. Actors & OAP", "No cast members currently in your studio library");
       emptyOpt.disabled = true;
       select.replaceChildren(emptyOpt);
     } else {

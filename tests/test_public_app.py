@@ -424,13 +424,20 @@ class PublicAppTests(unittest.TestCase):
             settings['comfy_sdk_url'] = url
             self.assertEqual(self.client.put('/api/settings', json=settings).status_code, 422)
 
+    def test_sidebar_tab_order_and_numbering(self):
+        import re
+        html = (Path(__file__).resolve().parents[1] / "webapp" / "index.html").read_text()
+        tabs = re.findall(r'<button class="nav[^"]*" data-panel="(\w+)".*?<span>(\d\d)</span>', html)
+        self.assertEqual([k for k, _ in tabs], ["video", "idents", "actors", "styles", "harvest", "vocab", "worlds", "outputs", "settings"])
+        self.assertEqual([n for _, n in tabs], ["%02d" % i for i in range(1, len(tabs) + 1)])
+
     def test_version_matches_package_and_readme(self):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.0")
+        self.assertEqual(api_version()["version"], "1.10.1")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.0", (root / "README.md").read_text())
+        self.assertIn("1.10.1", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):

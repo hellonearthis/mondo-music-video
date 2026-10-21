@@ -17,15 +17,15 @@
   <button type="button" class="oap-badge oap-help-btn" data-tooltip="Open Actor Protocol specification version supported by this studio — Click for guide and details" title="Open Actor Protocol specification version supported by this studio — Click for guide and details">OAP BUILT IN <span id="oap-version"></span> <span class="oap-badge-info">&#x2139;&#xFE0F;</span></button></div></header>
 <div class="shell">
 <aside data-component="Navigation Sidebar" data-component-id="nav-sidebar" data-component-source="webapp/index.html"><div class="nav-label">YOUR STUDIO</div><nav aria-label="Studio sections">
-  <button class="nav active" data-panel="video" data-tooltip="Create a beat-driven music video from your uploaded song" title="Create a beat-driven music video from your uploaded song">Music video <span>01</span></button>
-  <button class="nav" data-panel="vocab" data-tooltip="Inspect and customize visual vocabulary pools, roll pseudo-random subsets, and manage presets" title="Inspect and customize visual vocabulary pools, roll pseudo-random subsets, and manage presets">Visual vocabulary <span>02</span></button>
+  <button class="nav active" data-panel="video" data-tooltip="Create a beat-driven music video from your uploaded song" title="Create a beat-driven music video from your uploaded song">Music Video <span>01</span></button>
+  <button class="nav" data-panel="idents" data-tooltip="Design and render animated production idents or title cards" title="Design and render animated production idents or title cards">Credits &amp; Idents <span>02</span></button>
   <button class="nav" data-panel="actors" data-tooltip="Manage your reference cast and import/export Open Actor Protocol packages" title="Manage your reference cast and import/export Open Actor Protocol packages">Actors &amp; OAP <span>03</span></button>
   <button class="nav" data-panel="styles" data-tooltip="Browse and create reusable visual style direction cards" title="Browse and create reusable visual style direction cards">Styles <span>04</span></button>
-  <button class="nav" data-panel="harvest" data-tooltip="Extract an aesthetic style language from reference images with vision AI" title="Extract an aesthetic style language from reference images with vision AI">Style harvest <span>05</span></button>
-  <button class="nav" data-panel="idents" data-tooltip="Design and render animated production idents or title cards" title="Design and render animated production idents or title cards">Credits &amp; idents <span>06</span></button>
-  <button class="nav" data-panel="outputs" data-tooltip="View, play, download, and upscale finished productions" title="View, play, download, and upscale finished productions">Finished videos <span>07</span></button>
-  <button class="nav" data-panel="settings" data-tooltip="Configure local models, ComfyUI, API endpoints, and credentials" title="Configure local models, ComfyUI, API endpoints, and credentials">Settings <span>08</span></button>
-  <button class="nav" data-panel="worlds" data-tooltip="Build a world from references and use it across your videos" title="Build a world from references and use it across your videos">Worlds <span>09</span></button>
+  <button class="nav" data-panel="harvest" data-tooltip="Extract an aesthetic style language from reference images with vision AI" title="Extract an aesthetic style language from reference images with vision AI">Style Harvest <span>05</span></button>
+  <button class="nav" data-panel="vocab" data-tooltip="Inspect and customize visual vocabulary pools, roll pseudo-random subsets, and manage presets" title="Inspect and customize visual vocabulary pools, roll pseudo-random subsets, and manage presets">Visual Vocabulary <span>06</span></button>
+  <button class="nav" data-panel="worlds" data-tooltip="Build a world from references and use it across your videos" title="Build a world from references and use it across your videos">Worlds <span>07</span></button>
+  <button class="nav" data-panel="outputs" data-tooltip="View, play, download, and upscale finished productions" title="View, play, download, and upscale finished productions">Finished Videos <span>08</span></button>
+  <button class="nav" data-panel="settings" data-tooltip="Configure local models, ComfyUI, API endpoints, and credentials" title="Configure local models, ComfyUI, API endpoints, and credentials">Settings <span>09</span></button>
 </nav><div class="nav-label full-label">THE FULL STUDIO</div><nav aria-label="Full studio previews">
   <button class="nav teaser" data-feature="Short films" data-tooltip="Full studio preview: Screenplay to screen short film production" title="Full studio preview: Screenplay to screen short film production">Short films <span>↗</span></button>
   <button class="nav teaser" data-feature="Micro Drama" data-tooltip="Full studio preview: Episodic narratives and serial drama" title="Full studio preview: Episodic narratives and serial drama">Micro Drama <span>↗</span></button>
@@ -112,7 +112,7 @@
         </select>
       </label>
       <button type="button" id="roll-vocab-random-btn" class="secondary" data-tooltip="Roll a deterministic pseudo-random vocabulary subset across all categories" title="Roll a deterministic pseudo-random vocabulary subset across all categories">🎲 Pseudo-random</button>
-      <button type="button" id="open-vocab-panel-btn" class="secondary" data-tooltip="Switch to 02. Visual vocabulary to explore rotation pools or customize entries">Explore vocabulary <span>↗</span> <span id="vocab-custom-badge" class="vocab-badge" hidden>Customized</span></button>
+      <button type="button" id="open-vocab-panel-btn" class="secondary" data-tooltip="Switch to 06. Visual Vocabulary to explore rotation pools or customize entries">Explore vocabulary <span>↗</span> <span id="vocab-custom-badge" class="vocab-badge" hidden>Customized</span></button>
       <button type="button" class="secondary vocab-help-btn" data-tooltip="Read the Visual Vocabulary Architecture &amp; Customization Guide" title="Read the Visual Vocabulary Architecture &amp; Customization Guide">&#x2139;&#xFE0F; Guide</button>
     </div>
     <div class="two-col world-row">

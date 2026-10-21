@@ -1,5 +1,13 @@
 # Releases
 
+## 1.10.1 — Sidebar tab order
+
+- Sidebar order is now Music video, Credits & idents, Actors & OAP, Styles,
+  Style harvest, Visual vocabulary, Worlds, Finished videos, Settings, with
+  numbers 01–09 and in-app cross-references updated.
+- New standing rules (AGENTS.md): generative tabs stay on top, Settings is
+  always last.
+
 ## 1.10.0 — Worlds
 
 A world is persistent, in-universe canon that videos share, built and grown from
