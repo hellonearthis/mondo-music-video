@@ -361,6 +361,14 @@ export function initLibraryForms() {
     notice(`Style “${result.name}” (${result.id}) successfully imported.`);
   }));
 
+  $("#oap-file").addEventListener("change", () => {
+    state.currentOap = undefined;
+    $("#oap-import-form").hidden = true;
+    $("#oap-report-card").hidden = true;
+    $("#oap-raw-toggle-wrap").hidden = true;
+    $("#oap-report").hidden = true;
+  });
+
   $("#inspect-oap").onclick = handle(async () => {
     const file = $("#oap-file").files[0];
     if (!file) throw new Error("Choose an OAP package first");

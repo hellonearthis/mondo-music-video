@@ -1,5 +1,17 @@
 # Releases
 
+## 1.9.9 — File drop on browser inputs
+
+All 11 browser file controls accept drops on their labeled areas. Dropped files
+enter the existing change handlers for song and reference uploads, actor and
+instrument images, and package/JSON selection. Multi-image drops replace the
+current selection. Unsupported types and too many images show an inline error
+without changing the selection. OAP and OPP inspection must be repeated after
+a new package selection; signer acceptance and import remain explicit. Settings
+Browse selects server paths and is unchanged. Agent API, CLI, MCP and the
+included skill keep their existing upload and import paths; the drag gesture is
+browser-only. No production, prompt, consent or automatic retry behavior changed.
+
 ## 1.9.8 — Component labeling mode
 
 Integrates [hellonearthis](https://github.com/hellonearthis)'s fork commit `5e2bba4`: a **Labels** header button (Ctrl+Shift+L, Alt+L, Esc to exit) outlines the hovered interface component and shows its stable name and ID; clicking the badge copies them. Components carry `data-component*` attributes, and `docs/interface-guide.md` records the naming. Adapted for this tree: the Open Prop Protocol library card is labelled, and the badge is built with text nodes instead of `innerHTML`. The overlay is a developer and pair-programming aid with no workflow, so it is intentionally GUI-only; agents use the existing API, CLI and MCP surfaces. No protected prompting, paid-consent or retry behavior changed. See [collaborator review](COLLABORATOR_REVIEW.md).

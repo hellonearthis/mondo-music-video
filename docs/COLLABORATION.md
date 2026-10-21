@@ -288,6 +288,15 @@ program change, verify the version through a fresh import of the `/api/version`
 handler (and the live endpoint if claiming a running process), as AGENTS.md
 requires. Preserve consent, one-active-operation and OAP verification guarantees.
 
+For a local user-facing app change, finish the handoff with the updated app
+running so the user can review it in their browser. Check whether the existing
+app has an active operation before a restart; leave it alone while busy. Reuse
+its data directory, port and settings, keep automatic updates off unless already
+enabled, and confirm the live version and page after startup. Include the URL
+and refresh instruction in the handoff. Document any blocker instead of calling
+the app ready on the strength of a fresh handler import alone. This live-review
+step does not start a production or a paid/GPU operation.
+
 ## References
 
 - Codex plugin for Claude Code: https://github.com/openai/codex-plugin-cc

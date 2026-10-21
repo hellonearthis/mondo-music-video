@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.9.8"
+MGL_APP_VERSION = "1.9.9"
 WEB = Path(__file__).parent
 
 

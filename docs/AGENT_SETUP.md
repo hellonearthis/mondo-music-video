@@ -41,11 +41,18 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.9.8 exposes **42 tools** and advertises the
+v1.9.9 exposes **42 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
+
+The browser's file drop areas are a selection shortcut. Agents use the existing
+`upload_media`/CLI `upload` for songs, references and packages, or the actor and
+instrument import tools for their image files. A new selection replaces the
+files in that control; upload IDs are passed to the same preview, inspection,
+import and recovery calls. Package selection never accepts a signer or imports
+anything on its own. There is no separate drag action in the agent interfaces.
 
 When a video fails prompt validation before rendering, `inspect_studio` status
 reports `can_retry_prompts`. Use `preview_retry_prompts(run_id)` (CLI:

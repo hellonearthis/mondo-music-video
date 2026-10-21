@@ -49,6 +49,14 @@ verify the assets appear in the app. Never import other local/private assets.
   delivery. Documentation-only deliveries do not bump versions.
 - Freshly import the version handler when verifying a version. Verify live
   `/api/version` too before claiming that a running process has that version.
+- After a local user-facing app change, leave the updated app running for user
+  review by default. Before replacing an existing process, check its operation
+  state and preserve any active work; if it is busy, do not interrupt it and
+  report that the update cannot be shown yet. Start with the installation's
+  existing data, port and settings, keep automatic updates disabled unless the
+  user enabled them, then verify the live `/api/version` and served UI. Give the
+  user the local URL and say whether a browser refresh is needed. Starting the
+  UI does not authorize generation, paid calls or GPU work.
 - Keep one active operation, no production queue, explicit paid consent and
   upstream OAP verification. Do not retry paid submissions automatically.
 - Use temporary data and mock services for automated tests. Real paid/GPU/Topaz

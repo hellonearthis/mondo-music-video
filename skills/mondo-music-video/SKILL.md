@@ -54,6 +54,8 @@ and renderer configuration before starting; model failures stop production.
 
 1. Use the user's selected song/reference files. Upload them into the local app;
    production requests use the resulting upload IDs, not source filesystem paths.
+   Browser file drops only select files. Agents use the existing upload and import
+   calls; inspect OAP/OPP packages and review signer acceptance separately.
    Use existing actor/style IDs where requested. Read
    [references/requests.md](references/requests.md) for request shapes and defaults.
 2. Preview the requested video, ident or harvest. Explain the plan and estimated

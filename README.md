@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.9.8** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.9.9** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -30,6 +30,10 @@ exports are kept.
 
 The studio defaults to dark mode. Use the header theme toggle for light mode; your
 browser remembers your choice.
+
+File controls accept a click or a drop on their labeled area. Dropping reference
+images replaces that control's selection (up to nine images); dropping a package
+only selects it, so inspect and import remain separate actions.
 
 Turn your song into a complete music video. Mondo listens to the track, detects
 beats and downbeats, measures energy, and identifies musical sections. Its
@@ -246,7 +250,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.9.8 MCP server has 42 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
+The v1.9.9 MCP server has 42 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 
