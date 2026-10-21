@@ -146,6 +146,41 @@ export function option(value, label, tooltip) {
   return node;
 }
 
+export const keyNames = {
+  WAVESPEED_API_KEY: "WaveSpeed (video rendering)",
+  MMV_WRITER_API_KEY: "Writer service",
+  MMV_VISION_API_KEY: "Vision service",
+  MMV_COMFY_API_KEY: "ComfyUI API proxy",
+  MMV_TOPAZ_API_KEY: "Topaz cloud (upscale)"
+};
+
+// One paste-and-save row for any provider key. `saved` is whether a key exists; `onSaved(configured)` follows a save.
+export function keyRow(name, saved, onSaved) {
+  const row = document.createElement("div");
+  row.className = "key-row";
+  const label = document.createElement("label");
+  label.dataset.tooltip = label.title = `Paste your ${keyNames[name] || name} key; it is stored privately on this machine`;
+  const status = text("span", saved ? "saved" : "not set", "muted");
+  label.append(`${keyNames[name] || name} `, status);
+  const input = document.createElement("input");
+  input.type = "password";
+  input.autocomplete = "new-password";
+  input.placeholder = saved ? "Paste a new key to replace it" : "Paste key here";
+  input.dataset.tooltip = input.title = "Paste the key from your provider account";
+  label.append(input);
+  const save = text("button", "Save key", "secondary", "Save this key locally; it is never shown again");
+  save.type = "button";
+  save.onclick = handle(async () => {
+    const result = await json("/api/key", { name, value: input.value.trim() }, "PUT");
+    input.value = "";
+    status.textContent = result.configured ? "saved" : "not set";
+    notice(result.configured ? `${keyNames[name] || name} key saved on this machine` : "No key saved");
+    if (onSaved) await onSaved(result.configured);
+  });
+  row.append(label, save);
+  return row;
+}
+
 export function text(tag, value, className, tooltip) {
   const node = document.createElement(tag);
   node.textContent = value;

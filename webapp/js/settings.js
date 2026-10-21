@@ -1,6 +1,6 @@
 // Studio Settings, API Profiles, Credentials, and Filesystem Browser Picker.
 
-import { $, api, handle, json, notice, option, state, text } from "./core.js";
+import { $, api, handle, json, keyRow, notice, option, state, text } from "./core.js";
 import { refreshServices } from "./production.js";
 
 export const settingLabels = {
@@ -29,6 +29,7 @@ export const settingLabels = {
   vision_model: "Vision model name",
   vision_key_env: "Vision credential name",
   vision_call_estimate: "Vision estimate per call, USD (0 for local)",
+  topaz_backend: "Topaz upscale service: installed program or cloud",
   topaz_executable: "Installed Topaz FFmpeg executable path",
   topaz_models: "Installed Topaz models folder",
   h3_video_vae: "H3 video VAE model",
@@ -60,6 +61,7 @@ export const settingTooltips = {
   vision_model: "Model identifier for your vision service",
   vision_key_env: "Environment variable name storing your vision API key",
   vision_call_estimate: "Estimated cost in USD per vision style-harvest call",
+  topaz_backend: "Use your installed Topaz Video AI, or the Topaz cloud service (needs a Topaz API key under Provider keys; Topaz charges credits)",
   topaz_executable: "Path to Topaz Video AI ffmpeg.exe binary for upscaling",
   topaz_models: "Folder path containing installed Topaz AI model weight files",
   h3_video_vae: "Video VAE safetensors filename for MiniMax H3 (node 119)",
@@ -243,6 +245,9 @@ export async function loadSettings() {
     } else if (name === "writer_mode") {
       input = document.createElement("select");
       input.append(option("local", "Local", "Local writer engine"), option("api", "API", "Hosted cloud API provider"));
+    } else if (name === "topaz_backend") {
+      input = document.createElement("select");
+      input.append(option("local", "Installed Topaz", "Run your own Topaz Video AI install"), option("cloud", "Topaz cloud (credits)", "Upscale on Topaz servers using your Topaz API key; charges Topaz credits"));
     } else if (name === "backend") {
       input = document.createElement("select");
       input.append(...Object.entries(state.catalog.backends).map(([key, card]) => option(key, card.name, `${card.name}: ${card.description || key}`)));
@@ -363,7 +368,8 @@ export async function loadSettings() {
     fields.push(button);
   }
   $("#settings-fields").replaceChildren(...fields);
-  $("#key-status").textContent = Object.entries(data.keys).map(([name, set]) => `${name}: ${set ? "configured" : "not set"}`).join(" · ");
+  $("#key-list").replaceChildren(...Object.entries(data.keys).map(([name, set]) =>
+    keyRow(name, set, async () => { await loadSettings(); await refreshServices(true); })));
   return data.settings;
 }
 
@@ -388,13 +394,7 @@ export function initSettingsAndPicker() {
     notice("Settings saved.");
   });
 
-  $("#key-form").onsubmit = handle(async event => {
-    await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT");
-    event.target.elements.value.value = "";
-    await loadSettings();
-    await refreshServices(true);
-    notice("Key saved locally. The settings API does not return it.");
-  });
+  $("#key-form").onsubmit = event => event.preventDefault();
 
   const pickerFilter = $("#picker-filter");
   if (pickerFilter) pickerFilter.oninput = () => renderPickerEntries();

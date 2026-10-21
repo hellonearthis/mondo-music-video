@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.2"
+MGL_APP_VERSION = "1.10.3"
 WEB = Path(__file__).parent
 
 
@@ -444,6 +444,7 @@ class Settings(StrictModel):
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
     topaz_models: str = ""
+    topaz_backend: Literal["local", "cloud"] = "local"
     h3_models: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("writer_api_profile", "vision_api_profile", "video_api_profile")
@@ -499,7 +500,7 @@ class StarterRequest(StrictModel):
 
 
 class KeyRequest(StrictModel):
-    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"]
+    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY", "MMV_TOPAZ_API_KEY"]
     value: str = Field(max_length=1000)
 
 
@@ -539,10 +540,34 @@ class AgreementSignRequest(StrictModel):
     role: Literal["agent", "director"]
 
 
+class TopazInterpolation(StrictModel):
+    model: Literal["apo-8", "apf-2", "chr-2", "chf-3", "aion-1"]
+    fps: float | None = Field(default=None, ge=15, le=240)
+    slowmo: int | None = Field(default=None, ge=1, le=16)
+    duplicate: bool = False
+
+
+class TopazOptions(StrictModel):
+    mode: Literal["Auto", "Relative", "Manual"] = "Auto"
+    tuning: dict[str, float] = Field(default_factory=dict)
+    interpolation: TopazInterpolation | None = None
+
+    @field_validator("tuning")
+    @classmethod
+    def known_tuning(cls, value):
+        from mmv.topaz_models import TUNING_RANGE
+        for key, number in value.items():
+            if key not in TUNING_RANGE or not TUNING_RANGE[key][0] <= number <= TUNING_RANGE[key][1]:
+                raise ValueError(f"Unknown or out-of-range Topaz tuning value: {key}")
+        return value
+
+
 class UpscaleRequest(StrictModel):
     source: str
-    model: str = Field(default="ahq-12", pattern=r"^[a-z][a-z0-9]*-\d+$")
-    scale: Literal[2, 4] = 2
+    model: str = Field(default="ahq-12", pattern=r"^([a-z][a-z0-9]*-\d+(\.\d+)?|none)$")
+    scale: Literal[1, 2, 4] = 2
+    options: TopazOptions | None = None
+    max_credits: int | None = Field(default=None, ge=1, le=1000000)
 
 
 class CaptionVideoRequest(StrictModel):
@@ -786,7 +811,8 @@ def create_app(home=None, *, test_hosts=False):
         return {"settings": s, "h3_models_installed": info["installed"],
                 "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
-                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
+                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY",
+                 "MMV_TOPAZ_API_KEY")}}
 
     @app.put("/api/settings")
     def settings(value: Settings):
@@ -1741,12 +1767,38 @@ def create_app(home=None, *, test_hosts=False):
             content = content.replace(secret, "[redacted]")
         return {"log": content or "No operation or server log recorded yet."}
 
+    quoted_upscales = {}
+
+    def upscale_options(value):
+        return value.options.model_dump(exclude_none=True) if value.options else None
+
+    def upscale_key(value):
+        return (value.source, value.model, value.scale, json.dumps(upscale_options(value), sort_keys=True))
+
+    @app.post("/api/upscale/estimate")
+    def upscale_estimate(value: UpscaleRequest):
+        """Free Topaz cloud quote (credits and time). Reserves nothing and starts no job."""
+        if store.settings().get("topaz_backend") != "cloud":
+            raise ValueError("Choose the Topaz cloud service in Settings to get an estimate")
+        quote = production.upscale_estimate(store, value.source, value.model, value.scale, upscale_options(value))
+        quoted_upscales[upscale_key(value)] = quote["credits"][1]
+        return quote
+
+    @app.get("/api/upscale/models")
+    def upscale_models():
+        """Topaz cloud models and frame-rate/tuning options (free; narrowed to what Topaz accepts now)."""
+        return production.upscale_models()
+
     @app.post("/api/upscale")
     def upscale(value: UpscaleRequest):
         with jobs.lock:
             jobs.require_idle()
+            if (store.settings().get("topaz_backend") == "cloud"
+                    and quoted_upscales.get(upscale_key(value)) != value.max_credits):
+                raise ValueError("Get a Topaz estimate for these exact settings and approve its credits first")
             title = read_json(inside(store.home / "runs", value.source).parent / "output.json", {}).get("title") or ""
-            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context),
+            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale,
+                                                                              context, value.max_credits, options=upscale_options(value)),
                               run_id=job_run_id(store, "upscale", title))
 
     @app.get("/api/captions/fonts")

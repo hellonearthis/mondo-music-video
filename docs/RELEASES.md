@@ -1,5 +1,49 @@
 # Releases
 
+## 1.10.3 — Topaz cloud upscale
+
+- Provider keys in Settings are now one paste-and-save row per key (WaveSpeed,
+  writer, vision, ComfyUI proxy, Topaz) with saved / not set status, and the
+  upscale dialog offers the same row in place when the Topaz key is missing.
+- New Settings choice **Topaz upscale service**: installed program (default,
+  unchanged) or **Topaz cloud** (`api.topazlabs.com`), so upscaling works without
+  a local Topaz install. Save the Topaz API key as `MMV_TOPAZ_API_KEY` in
+  Provider keys (private, redacted from logs like the other keys).
+- The upscale dialog has an **Upscale service** dropdown (installed or cloud) that
+  saves on selection, and the running status shows Topaz's own wording (for example
+  "Queued - waiting for resources (0%, about 21 min once running)") instead of
+  its raw state names; unchanged statuses are no longer logged every 5 seconds.
+  A first real cloud export (2×, with audio) was verified by the operator.
+- Paid-consent flow: the dialog first asks Topaz for a free estimate (credits,
+  time, output size), then requires a credit-approval tick. The job re-prices and
+  stops before reserving anything if the price rose above the approved figure.
+  Reserving credits is never retried; a failure or cancel before the result is
+  ready asks Topaz to cancel and refund unused credits, and the request id is
+  logged. The finished video downloads to a new `upscale` output; the source is
+  untouched. Output is H.264 (H.265 above 4096 px) with audio copied.
+- Cloud model and frame-rate choices: the dialog has a grouped model picker
+  (Proteus/Artemis/Gaia/Iris/Theia/Dione, Starlight, Astra 2, Nyx denoise, Themis,
+  stabilization, Hyperion) from `mmv/topaz_models.py`, narrowed to what Topaz's
+  public `/video/status` list accepts now (new Topaz models appear as "Other").
+  Frame rate section: interpolation model (Apollo, Chronos, Aion), target fps
+  15–240, slow-motion factor, duplicate-frame removal; "no upscale" gives
+  frame-rate-only jobs and 1× enhances without enlarging. A Tuning section
+  (parameter mode Auto/Relative/Manual plus compression, detail, noise, halo,
+  anti-aliasing, sharpness, original-detail, grain) applies to Precision models.
+  The credit approval is bound to the exact model, scale and options estimated.
+- Agents: MCP `list_topaz_models`, `estimate_upscale` and `upscale_video` take
+  `options` (53 tools), CLI `upscale-models` and `--options JSON`;
+  earlier: MCP `estimate_upscale` (53 tools), `upscale_video(max_credits=…)`,
+  `AgentClient.upscale_estimate`, CLI `upscale-estimate` and `upscale --max-credits`, REST `POST /api/upscale/estimate` and
+  `max_credits` on `/api/upscale`; skill, AGENT_SETUP, interface guide, platform
+  and scope documents updated.
+- Limitations: cloud models are chosen by Topaz model ID (for example `prob-4`,
+  `ahq-12`); model tuning parameters, frame interpolation and Topaz's
+  external-storage and webhook options are not exposed. The cloud key is not part
+  of the writer/vision/video API profiles. Uploads read the file into memory in
+  segments of up to 500 MB. Automated tests use a mock service; a real cloud export
+  spends credits and needs the operator's deliberate go-ahead.
+
 ## 1.10.2 — Panel heading numbers
 
 - Panel headings (the small "07 / WORLDS" line) now match the sidebar numbers

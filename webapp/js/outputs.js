@@ -1,6 +1,6 @@
 // Finished Videos, Musical Score Canvas visualization, and Topaz upscale dialog.
 
-import { $, $$, api, handle, json, notice, option, state, text } from "./core.js";
+import { $, $$, api, handle, json, keyRow, notice, option, state, text } from "./core.js";
 import { initColourWheels } from "./colorwheel.js";
 import { showQuote } from "./production.js";
 
@@ -163,6 +163,116 @@ function exportButton(output) {
     }
   });
   return button;
+}
+
+const field = (label, control, tip) => {
+  const node = document.createElement("label");
+  node.dataset.tooltip = node.title = tip;
+  node.append(label, control);
+  return node;
+};
+
+const numberInput = (min, max, step, placeholder = "") => {
+  const input = document.createElement("input");
+  Object.assign(input, { type: "number", min, max, step, placeholder });
+  return input;
+};
+
+// Builds the Topaz cloud model, frame rate and tuning controls from the catalog; returns a reader for their values.
+function buildCloudOptions(catalog) {
+  const model = document.createElement("select");
+  model.append(option("none", "No upscale or enhance (frame rate only)", "Only change the frame rate"));
+  for (const group of catalog.upscale) {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group.group;
+    optgroup.append(...group.models.map(m => option(m.id, `${m.name} (${m.id})`, m.note)));
+    model.append(optgroup);
+  }
+  model.value = catalog.upscale.some(g => g.models.some(m => m.id === "prob-4")) ? "prob-4" : model.options[1]?.value;
+  const note = text("p", "", "muted");
+  const describe = () => { note.textContent = catalog.upscale.flatMap(g => g.models).find(m => m.id === model.value)?.note || ""; };
+  model.addEventListener("change", describe);
+  describe();
+
+  const motion = document.createElement("select");
+  motion.append(option("", "Keep the original frame rate", "No frame interpolation"),
+    ...catalog.interpolation.map(m => option(m.id, `${m.name} (${m.id})`, m.note)));
+  const fps = numberInput(15, 240, 1, "e.g. 60");
+  const slowmo = numberInput(1, 16, 1, "1 = normal speed");
+  const duplicate = document.createElement("input");
+  duplicate.type = "checkbox";
+  const mode = document.createElement("select");
+  mode.append(...catalog.modes.map(m => option(m, m === "Auto" ? "Auto (Topaz chooses)" : m, `${m} parameter mode`)));
+  const tuning = catalog.tuning.map(t => [t, numberInput(t.min, t.max, 0.05, `${t.min} to ${t.max}`)]);
+
+  const frames = document.createElement("fieldset");
+  frames.append(text("legend", "Frame rate"),
+    field("Interpolation model ", motion, "Create in-between frames for a higher frame rate or slow motion"),
+    field("Target frames per second ", fps, "Output frame rate, 15 to 240; leave blank to keep the original"),
+    field("Slow motion factor ", slowmo, "Stretch time: 2 plays at half speed; 1 or blank keeps normal speed"),
+    field("Remove duplicate frames ", duplicate, "Detect repeated frames in the source and remove them before interpolating"));
+  const advanced = document.createElement("details");
+  advanced.append(text("summary", "Tuning (Precision models)", "", "Fine-tune Proteus, Artemis, Gaia, Iris and Theia models"),
+    field("Parameter mode ", mode, "Auto ignores the values below; Relative nudges Topaz's automatic values; Manual uses only your values"),
+    ...tuning.map(([t, input]) => field(`${t.label} `, input, `${t.label}: ${t.min} to ${t.max}; blank leaves Topaz's value`)));
+  $("#upscale-options").replaceChildren(
+    field("Model ", model, "Topaz cloud model; the note below describes the selected one"), note, frames, advanced);
+
+  return () => {
+    const options = {};
+    if (motion.value) {
+      options.interpolation = { model: motion.value, duplicate: duplicate.checked };
+      if (fps.value) options.interpolation.fps = Number(fps.value);
+      if (slowmo.value) options.interpolation.slowmo = Number(slowmo.value);
+    }
+    const values = Object.fromEntries(tuning.filter(([, input]) => input.value !== "").map(([t, input]) => [t.key, Number(input.value)]));
+    if (mode.value !== "Auto" && Object.keys(values).length) Object.assign(options, { mode: mode.value, tuning: values });
+    return { model: model.value, options };
+  };
+}
+
+function showUpscaleKey(saved) {
+  $("#upscale-key-row").replaceChildren(...(saved ? [] : [keyRow("MMV_TOPAZ_API_KEY", false, showUpscaleKey)]));
+  $("#upscale-key-row").hidden = saved;
+  $("#upscale-estimate").disabled = !saved;
+}
+
+async function openUpscaleDialog() {
+  await refreshUpscaleDialog();
+  $("#upscale-dialog").showModal();
+}
+
+async function chooseUpscaleService(backend) {
+  const { settings } = await (await api("/api/settings")).json();
+  delete settings.h3_models;
+  await json("/api/settings", { ...settings, topaz_backend: backend }, "PUT");
+  await refreshUpscaleDialog();
+}
+
+async function refreshUpscaleDialog() {
+  const data = await (await api("/api/settings")).json();
+  $("#upscale-service").value = data.settings.topaz_backend;
+  const settings = data.settings;
+  state.upscaleCloud = settings.topaz_backend === "cloud";
+  showUpscaleKey(data.keys.MMV_TOPAZ_API_KEY);
+  $("#upscale-cloud").hidden = !state.upscaleCloud;
+  $("#upscale-model-local").hidden = state.upscaleCloud;
+  $("#upscale-options").hidden = !state.upscaleCloud;
+  $("#upscale-form").elements.scale.querySelector('option[value="1"]').hidden = !state.upscaleCloud;
+  if (state.upscaleCloud) {
+    try {
+      state.readUpscaleOptions = buildCloudOptions(await (await api("/api/upscale/models")).json());
+    } catch (error) {
+      state.readUpscaleOptions = null;
+      notice(error.message);
+    }
+  }
+  $("#upscale-local-note").hidden = state.upscaleCloud;
+  state.upscaleCredits = null;
+  $("#upscale-quote").textContent = "";
+  $("#upscale-consent").checked = false;
+  $("#upscale-consent-row").hidden = true;
+  $("#upscale-start").disabled = state.upscaleCloud;
 }
 
 export function scoreView(output, video) {
@@ -345,7 +455,7 @@ export async function loadOutputs() {
     const upscale = text("button", "Topaz upscale", "secondary", `Upscale ${output.title} using Topaz Video AI`);
     upscale.onclick = () => {
       state.upscaleSource = output.file;
-      $("#upscale-dialog").showModal();
+      openUpscaleDialog();
     };
 
     const caption = text("button", "Add lyric captions", "secondary", `Burn ${output.title}'s lyric lines into a new copy; the original is kept`);
@@ -535,10 +645,40 @@ export function initUpscaleForm() {
       font: form.elements.font.value, source: state.captionSource });
     $("#caption-dialog").close();
   });
+  const upscaleBody = () => {
+    const form = $("#upscale-form").elements;
+    const cloud = state.upscaleCloud && state.readUpscaleOptions ? state.readUpscaleOptions() : null;
+    return { model: cloud ? cloud.model : form.model.value, scale: Number(form.scale.value), source: state.upscaleSource,
+      ...(cloud && Object.keys(cloud.options).length ? { options: cloud.options } : {}) };
+  };
+  let quoteSerial = 0;
+  const resetQuote = () => {
+    quoteSerial += 1;
+    state.upscaleCredits = null;
+    $("#upscale-quote").textContent = "";
+    $("#upscale-consent").checked = false;
+    $("#upscale-consent-row").hidden = true;
+    $("#upscale-start").disabled = state.upscaleCloud;
+  };
+  $("#upscale-form").elements.model.oninput = $("#upscale-form").elements.scale.onchange = resetQuote;
+  $("#upscale-service").onchange = handle(async event => { await chooseUpscaleService(event.target.value); });
+  $("#upscale-options").addEventListener("input", resetQuote);
+  $("#upscale-options").addEventListener("change", resetQuote);
+  $("#upscale-consent").onchange = event => { $("#upscale-start").disabled = !event.target.checked; };
+  $("#upscale-estimate").onclick = handle(async () => {
+    resetQuote();
+    $("#upscale-quote").textContent = "Asking Topaz for a price…";
+    const serial = quoteSerial;
+    const quote = await json("/api/upscale/estimate", upscaleBody());
+    if (serial !== quoteSerial) return;
+    const [low, high] = quote.credits;
+    state.upscaleCredits = high;
+    $("#upscale-quote").textContent = `Estimate: ${low}–${high} Topaz credits, about ${quote.seconds[0]}–${quote.seconds[1]} seconds, output ${quote.output.width}×${quote.output.height} at ${Math.round(quote.frame_rate * 100) / 100} fps.`;
+    $("#upscale-consent-text").textContent = `I approve spending up to ${high} Topaz credits.`;
+    $("#upscale-consent-row").hidden = false;
+  });
   $("#upscale-form").onsubmit = handle(async event => {
-    const body = Object.fromEntries(new FormData(event.target));
-    body.scale = Number(body.scale);
-    await json("/api/upscale", { ...body, source: state.upscaleSource });
+    await json("/api/upscale", { ...upscaleBody(), ...(state.upscaleCloud ? { max_credits: state.upscaleCredits } : {}) });
     $("#upscale-dialog").close();
   });
 }

@@ -257,7 +257,7 @@ To toggle Component Labeling Mode in the web interface:
 ### Provider Keys Form
 - **ID**: `key-form`
 - **Used in**: Inside `panel-settings`
-- **Code**: `webapp/index.html`, `webapp/js/settings.js`
+- **Design rules**: One paste-and-save row per provider key (WaveSpeed, ComfyUI, Vision, Writer, Topaz cloud) with saved / not set status; the row component (`keyRow` in `webapp/js/core.js`) is reused in the Topaz upscale dialog. Keys are never shown again.
 - **Design rules**: Secret credential storage for Wavespeed, ComfyUI, Vision, and Writer API keys.
 
 ---
@@ -277,7 +277,7 @@ To toggle Component Labeling Mode in the web interface:
 ### Topaz Upscale Dialog
 - **ID**: `upscale-dialog`
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
-- **Purpose**: Launches local Topaz Video AI enhancement job (2x or 4x) on finished renders.
+- **Purpose**: Launches a Topaz enhancement job (2x or 4x) on finished renders, using the installed Topaz Video AI or, when Settings chooses Topaz cloud, the Topaz cloud service. The cloud mode shows a model picker, Frame rate controls (interpolation model, fps, slow motion, duplicate removal), a Tuning section and a free **Get free estimate** step (credits, time, output size) and a credit-approval checkbox; Start stays disabled until it is ticked.
 
 ### Folder Picker Dialog
 - **ID**: `folder-picker-dialog`

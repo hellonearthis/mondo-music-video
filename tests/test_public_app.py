@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.2")
+        self.assertEqual(api_version()["version"], "1.10.3")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.2", (root / "README.md").read_text())
+        self.assertIn("1.10.3", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1469,6 +1469,73 @@ class PublicAppTests(unittest.TestCase):
             result = self.wait()
         self.assertEqual(result["state"], "complete", result)
         self.assertTrue(any("tvai_up=model=ahq-12:scale=2" in str(x) for x in commands[0]))
+        self.assertEqual((self.home / "runs" / source).read_bytes(), original)
+        self.assertEqual(self.client.get("/api/outputs").json()[0]["kind"], "upscale")
+
+    def test_topaz_cloud_estimate_consent_and_download(self):
+        _, started = self.start({"song": self.song_upload()})
+        started.raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        source = self.client.get("/api/outputs").json()[0]["file"]
+        original = (self.home / "runs" / source).read_bytes()
+        settings = self.store.settings()
+        settings.update(topaz_backend="cloud")
+        self.client.put("/api/settings", json=settings).raise_for_status()
+        self.assertEqual(self.client.post("/api/upscale/estimate", json={"source": source}).status_code, 400)
+        self.client.put("/api/key", json={"name": "MMV_TOPAZ_API_KEY", "value": "topaz-test-key-123"}).raise_for_status()
+        self.assertTrue(self.client.get("/api/settings").json()["keys"]["MMV_TOPAZ_API_KEY"])
+        calls, state = [], {"price": 3, "status": "complete"}
+
+        def send(method, url, headers, body):
+            calls.append((method, url.split("topazlabs.com")[-1], headers.get("X-API-Key"), body))
+            path = calls[-1][1]
+            if method == "POST" and path == "/video/":
+                return 200, {}, json.dumps({"requestId": "req-1", "estimates": {"cost": [2, state["price"]], "time": [10, 20]}}).encode()
+            if path.endswith("/accept"):
+                return 202, {}, json.dumps({"uploadId": "u", "urls": ["https://upload.invalid/part"]}).encode()
+            if method == "PUT":
+                return 200, {"ETag": '"abc"'}, b""
+            if path.endswith("/complete-upload"):
+                return 202, {}, b"{}"
+            if path.endswith("/status"):
+                return 200, {}, json.dumps({"status": state["status"], "progress": 100,
+                                            "download": {"url": "https://download.invalid/out.mp4"}}).encode()
+            return 200, {}, b"{}"
+
+        def fetch(url, destination):
+            Path(destination).write_bytes(MockService.video)
+
+        with patch("mmv.topaz_api.send_http", send), patch("mmv.topaz_api.download_http", fetch):
+            quote = self.client.post("/api/upscale/estimate", json={"source": source, "model": "prob-4", "scale": 2})
+            quote.raise_for_status()
+            self.assertEqual(quote.json()["credits"], [2, 3])
+            self.assertFalse(any(c[0] in ("PATCH", "PUT") for c in calls), "an estimate must not reserve or upload")
+            for credits in (None, 1000000):
+                refused = self.client.post("/api/upscale", json={"source": source, "model": "prob-4", "scale": 2,
+                                                                 **({"max_credits": credits} if credits else {})})
+                self.assertEqual(refused.status_code, 400, "approval must match a displayed estimate")
+            self.assertFalse(any(c[0] == "PATCH" for c in calls))
+            state["price"] = 9
+            self.client.post("/api/upscale", json={"source": source, "model": "prob-4", "scale": 2, "max_credits": 3}).raise_for_status()
+            self.assertEqual(self.wait()["state"], "failed", "a price above the approved credits must stop before reserving")
+            self.assertFalse(any(c[0] == "PATCH" for c in calls))
+            state["price"] = 3
+            self.client.post("/api/upscale", json={"source": source, "model": "prob-4", "scale": 2, "max_credits": 3}).raise_for_status()
+            result = self.wait()
+            motion = {"source": source, "model": "none", "scale": 1,
+                      "options": {"interpolation": {"model": "apo-8", "fps": 60}}}
+            self.client.post("/api/upscale/estimate", json=motion).raise_for_status()
+            sent = json.loads([c for c in calls if c[1] == "/video/"][-1][3])
+            self.assertEqual(sent["filters"], [{"model": "apo-8", "fps": 60}])
+            self.assertEqual(self.client.post("/api/upscale", json={**motion, "max_credits": 3,
+                             "options": {"interpolation": {"model": "apo-8", "fps": 24}}}).status_code, 400,
+                             "approval is bound to the exact options estimated")
+            self.assertEqual(self.client.post("/api/upscale/estimate", json={**motion, "options": {"tuning": {"x": 1}}}).status_code, 422)
+        self.assertEqual(result["state"], "complete", result)
+        self.assertEqual([c[0] for c in calls if c[1].startswith("/video/req-1")].count("PATCH"), 2)
+        self.assertTrue(all(c[2] == "topaz-test-key-123" for c in calls if "topazlabs" not in c[1] and c[1].startswith("/video")))
+        create = json.loads([c for c in calls if c[1] == "/video/" and b"prob-4" in c[3]][-1][3])
+        self.assertEqual(create["filters"], [{"model": "prob-4"}])
         self.assertEqual((self.home / "runs" / source).read_bytes(), original)
         self.assertEqual(self.client.get("/api/outputs").json()[0]["kind"], "upscale")
 

@@ -362,8 +362,20 @@ class AgentClient:
                                                     "position": position, "size": size, "color": color,
                                                     "outline_color": outline_color, "font": font})
 
-    def upscale(self, source, model="ahq-12", scale=2):
-        return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})
+    def upscale_models(self):
+        return self._json("GET", "/api/upscale/models")
+
+    def upscale_estimate(self, source, model="ahq-12", scale=2, options=None):
+        return self._json("POST", "/api/upscale/estimate",
+                          {"source": source, "model": model, "scale": scale, **({"options": options} if options else {})})
+
+    def upscale(self, source, model="ahq-12", scale=2, max_credits=None, options=None):
+        body = {"source": source, "model": model, "scale": scale}
+        if options:
+            body["options"] = options
+        if max_credits:
+            body["max_credits"] = max_credits
+        return self._json("POST", "/api/upscale", body)
 
 
 def main(argv=None):
@@ -408,6 +420,17 @@ def main(argv=None):
         confirmed = sub.add_parser(name)
         confirmed.add_argument("id")
         confirmed.add_argument("--confirm", action="store_true")
+    sub.add_parser("upscale-models")
+    for name in ("upscale-estimate", "upscale"):
+        topaz = sub.add_parser(name)
+        topaz.add_argument("source", help="Finished output file, e.g. <run id>/music-video.mp4")
+        topaz.add_argument("--model", default="ahq-12")
+        topaz.add_argument("--scale", type=int, choices=(1, 2, 4), default=2)
+        topaz.add_argument("--options", default=None, metavar="JSON",
+                           help='Topaz cloud only, e.g. \'{"interpolation": {"model": "apo-8", "fps": 60}}\'; model "none" = frame rate only')
+        if name == "upscale":
+            topaz.add_argument("--max-credits", type=int, default=None,
+                               help="Topaz cloud only: the highest credits the user approved from upscale-estimate")
     profile = sub.add_parser("select-api-profile")
     profile.add_argument("name")
     download = sub.add_parser("download")
@@ -446,6 +469,12 @@ def main(argv=None):
             result = client.log(args.run_id)
         elif args.command == "download":
             result = client.download(args.output_file, args.destination)
+        elif args.command == "upscale-estimate":
+            result = client.upscale_estimate(args.source, args.model, args.scale, json.loads(args.options or "null"))
+        elif args.command == "upscale":
+            result = client.upscale(args.source, args.model, args.scale, args.max_credits, json.loads(args.options or "null"))
+        elif args.command == "upscale-models":
+            result = client.upscale_models()
         elif args.command == "cancel":
             result = client.cancel()
         elif args.command == "delete-actor":

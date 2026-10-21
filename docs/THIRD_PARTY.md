@@ -17,7 +17,7 @@ under their respective licenses; this project does not relicense them.
 | openai-whisper (optional add-on, not bundled) | Optional lyrics detection | MIT; installed by the user with `pip install openai-whisper` or an existing Whisper Python is reused; model files download once after approval; https://github.com/openai/whisper |
 | FFmpeg / ffprobe | External, user-installed media tools | Licenses depend on the user's build; no binary is bundled |
 | ComfyUI, custom nodes and model files | Optional, user-installed local generation | Separate upstream terms; no copies bundled |
-| Topaz | Optional, user-owned export tool | Separate vendor license; no copy bundled |
+| Topaz | Optional, user-owned export tool or cloud API (api.topazlabs.com) | Separate vendor license/terms and credits; no copy bundled; the user's own API key |
 
 Provider API documentation used to implement the hosted adapters and estimate
 card, checked 2026-10-15:

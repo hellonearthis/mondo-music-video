@@ -371,9 +371,34 @@ def create_server(base_url=None):
         return invoke(client.caption_fonts)
 
     @server.tool()
-    def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:
-        """Start a requested Topaz export of a finished output using the configured user-owned installation."""
-        return invoke(client.upscale, source, model, scale)
+    def list_topaz_models() -> dict[str, Any]:
+        """Topaz cloud models, frame interpolation models and tuning ranges, narrowed to what Topaz accepts now. Free, read-only.
+
+        Pass a model id as `model` (or "none" for frame rate only) and, for frame rate or tuning, `options` to
+        estimate_upscale / upscale_video: {"interpolation": {"model": "apo-8", "fps": 60, "slowmo": 2, "duplicate": true},
+        "mode": "Relative"|"Manual", "tuning": {"details": 0.3}}. Scale 1 only enhances or retimes without enlarging."""
+        return invoke(client.upscale_models)
+
+    @server.tool()
+    def estimate_upscale(source: str, model: str = "ahq-12", scale: Literal[1, 2, 4] = 2,
+                         options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Free Topaz cloud price quote for upscaling a finished output: credits [low, high], seconds and output size.
+
+        Only when Settings chooses the Topaz cloud service (topaz_backend "cloud") and a Topaz API key is saved. Reserves
+        nothing and starts no job. Show the quote to the user; the highest credits figure is what they approve."""
+        return invoke(client.upscale_estimate, source, model, scale, options)
+
+    @server.tool()
+    def upscale_video(source: str, model: str = "ahq-12", scale: Literal[1, 2, 4] = 2,
+                      max_credits: int | None = None, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Start a requested Topaz export of a finished output: the user's installed Topaz, or the Topaz cloud.
+
+        With the cloud service this spends the user's Topaz credits, so call estimate_upscale first, get the user's explicit
+        approval of that figure, and pass the highest credits as `max_credits` (omitting it is refused). Use the same
+        model, scale and options as the estimate; a different combination needs its own estimate. The job re-prices
+        before reserving and refuses if the price rose above `max_credits`. It is never retried automatically; if it fails
+        or is cancelled the app asks Topaz to refund unused credits and logs the request id. Poll inspect_studio status."""
+        return invoke(client.upscale, source, model, scale, max_credits, options)
 
     return server
 

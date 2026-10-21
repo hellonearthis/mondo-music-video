@@ -1038,3 +1038,6 @@ button[aria-busy="true"], button.processing {
 html[data-theme=dark] .world-diff-add{background:#223a29;color:#c5dfb9}html[data-theme=dark] .world-diff-remove{background:#43261f;color:#ffb8aa}html[data-theme=dark] .world-diff-change{background:#3d3719;color:#e8dc9f}
 .world-runs{border:1px solid var(--line);border-radius:8px;margin:12px 0;padding:8px 12px}.world-runs label.inline{display:block}
 .world-row-select{display:grid}
+
+.key-row { display: flex; gap: 10px; align-items: flex-end; margin: 8px 0; }
+.key-row label { flex: 1; display: grid; gap: 4px; }

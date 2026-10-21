@@ -43,7 +43,9 @@ remote submission or guarantee that a provider will waive its charge.
 
 Completed outputs remain available for playback/download. Optional Topaz export
 starts directly from a completed video's controls, preserves the original, and
-requires a compatible installed copy. It is unavailable when detection fails.
+requires a compatible installed copy, or the Topaz cloud service with the user's
+own API key and credits (free estimate first, explicit credit approval, no
+automatic retry). It is unavailable when neither is configured.
 
 ## Full studio notices
 

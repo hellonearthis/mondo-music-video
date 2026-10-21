@@ -276,6 +276,40 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_topaz_cloud_choice_saves_and_opens_cloud_dialog(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('.nav[data-panel=settings]').click()
+                page.locator('select[name=topaz_backend]').select_option('cloud')
+                page.get_by_role('button', name='Save settings', exact=True).click()
+                expect(page.locator('#notice')).to_contain_text('Settings saved')
+                self.assertEqual(self.fixture.store.settings()['topaz_backend'], 'cloud')
+                expect(page.locator('select[name=topaz_backend]')).to_have_value('cloud')
+                page.evaluate("""() => { const s = document.querySelector('#upscale-service'); s.value = 'local'; s.dispatchEvent(new Event('change')); }""")
+                for _ in range(50):
+                    if self.fixture.store.settings()['topaz_backend'] == 'local':
+                        break
+                    page.wait_for_timeout(100)
+                page.wait_for_function("() => document.querySelector('#upscale-cloud').hidden === true")
+                self.assertEqual(self.fixture.store.settings()['topaz_backend'], 'local')
+                page.evaluate("""() => { const s = document.querySelector('#upscale-service'); s.value = 'cloud'; s.dispatchEvent(new Event('change')); }""")
+                for _ in range(50):
+                    if self.fixture.store.settings()['topaz_backend'] == 'cloud':
+                        break
+                    page.wait_for_timeout(100)
+                page.wait_for_function("() => document.querySelector('#upscale-cloud').hidden === false")
+                self.assertEqual(self.fixture.store.settings()['topaz_backend'], 'cloud')
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_saved_api_profiles_switch_independently_without_network_generation(self):
         from mmv.api_profiles import save_profile
         from playwright.sync_api import sync_playwright, expect
@@ -429,7 +463,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.2')
+                expect(page.locator('#version')).to_have_text('1.10.3')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1199,7 +1233,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.2')
+                expect(page.locator('#version')).to_have_text('1.10.3')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

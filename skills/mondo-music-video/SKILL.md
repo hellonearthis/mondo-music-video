@@ -202,8 +202,14 @@ Harvest uses the configured vision service and its per-call cost estimate. Style
 exported as JSON or imported with 4-layer validation via `export_style` and `import_style`,
 preserving any 11-axis forensic breakdown. Overwrite requires explicit opt-in.
 Generate idents separately, then select their completed output IDs for opening
-or closing credits. Topaz export uses the user's installed compatible Topaz and
-preserves the source. Cancel an operation when the user requests it; already
+or closing credits. Topaz export uses the user's installed compatible Topaz, or the Topaz
+cloud when Settings `topaz_backend` is `cloud` (key `MMV_TOPAZ_API_KEY`). The
+cloud spends the user's Topaz credits: call `list_topaz_models` (model, frame-rate and tuning choices) and
+`estimate_upscale` (free; same `model`, `scale`, `options` as the upscale), show the
+user the credits, and pass the approved top figure as `max_credits` to
+`upscale_video` (CLI: `upscale-estimate SOURCE`, then `upscale SOURCE --max-credits N`); it is refused without
+it, re-prices before reserving, never retries, and asks Topaz to refund unused
+credits on failure or cancel. Export preserves the source. Cancel an operation when the user requests it; already
 submitted remote jobs may continue and incur charges. No film, Micro Drama,
 Vault, cutting-room, Hodge TV, clip redo or manual reassembly tools exist here.
 
