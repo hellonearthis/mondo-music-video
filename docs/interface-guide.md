@@ -17,13 +17,13 @@ To toggle Component Labeling Mode in the web interface:
 - **Used in**: App layout root (always visible)
 - **Code**: `webapp/index.html`, `webapp/style.css`
 - **Design rules**: Height 56px, fixed at top, flex layout with brand mark, edition text, and `.header-actions`. Uses `--surface-2` background with bottom border.
-- **Notes**: Houses branding, community edition info, `#theme-toggle`, and the OAP version badge. Developer component labeling toggle (`#toggle-component-labels`) is located in Studio Settings (`08`).
+- **Notes**: Houses branding, community edition info, `#theme-toggle`, and the OAP version badge. The developer component-labeling toggle (`#toggle-component-labels`) lives in Studio Settings (09).
 
 ### Navigation Sidebar
 - **ID**: `nav-sidebar`
 - **Used in**: Main viewport left edge (desktop)
 - **Code**: `webapp/index.html`, `webapp/js/core.js`
-- **Design rules**: Width ~240px, fixed navigation rail. Contains two sections: `YOUR STUDIO` (active tabs 01–08) and `THE FULL STUDIO` (teaser links).
+- **Design rules**: Width ~240px, fixed navigation rail. Contains two sections: `YOUR STUDIO` (active tabs 01–09) and `THE FULL STUDIO` (teaser links).
 - **Notes**: Dispatches panel switching via `data-panel` attributes handled by `showPanel()` in `app.js`.
 
 ### Operation Control Bar
@@ -94,7 +94,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ---
 
-## 3. Visual Vocabulary Engine (Panel 02)
+## 3. Visual Vocabulary Engine (Panel 06)
 
 ### Visual Vocabulary Workspace
 - **ID**: `panel-vocab`
@@ -178,7 +178,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ---
 
-## 6. Credits, Idents & Finished Productions (Panels 06 & 07)
+## 6. Credits, Idents & Finished Productions (Panels 02 & 08)
 
 ### Credits & Idents Panel
 - **ID**: `panel-idents`
@@ -206,7 +206,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ---
 
-## 7. Studio Settings (Panel 08)
+## 7. Studio Settings (Panel 09)
 
 ### Studio Settings Panel
 - **ID**: `panel-settings`

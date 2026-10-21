@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -37,6 +38,17 @@ class UnfinishedRunTests(unittest.TestCase):
         listed = {row["id"]: row for row in self.client.get("/api/runs/unfinished").json()}
         self.assertEqual(set(listed), {"draft", "partial"})
         self.assertEqual(listed["partial"]["rendered_clips"], 2)
+
+    def test_run_size_cache_expires_when_nested_file_changes(self):
+        run = make_run(self.home, "draft")
+        with patch("webapp.mondo_web.time.monotonic", return_value=100):
+            first = self.client.get("/api/runs/unfinished").json()[0]["size_mb"]
+            (run / "renders" / "new.bin").write_bytes(b"x" * 1048576)
+            cached = self.client.get("/api/runs/unfinished").json()[0]["size_mb"]
+        with patch("webapp.mondo_web.time.monotonic", return_value=106):
+            refreshed = self.client.get("/api/runs/unfinished").json()[0]["size_mb"]
+        self.assertEqual(cached, first)
+        self.assertGreater(refreshed, first)
 
     def test_single_purge_needs_confirmation_when_clips_exist(self):
         run = make_run(self.home, "partial", clips=1)

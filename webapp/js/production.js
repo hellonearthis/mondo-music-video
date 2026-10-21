@@ -5,6 +5,7 @@ import { disposeScoreEditor, mountScoreEditor } from "./score_editor.js";
 import { loadActors, loadStyles } from "./library.js";
 import { loadOutputs } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
+import { loadWorlds } from "./worlds.js";
 
 import { syncInstrumentControls, instrumentsFromForm } from "./instruments.js";
 
@@ -200,6 +201,9 @@ export function showQuote(request, quote) {
   if (quote.instruments) {
     for (const [actor, instrument] of Object.entries(quote.instruments.assignments)) {
       summary.append(text("p", `${actor}: ${instrument}`, "muted"));
+    }
+    for (const [kind, asset] of Object.entries(quote.instruments.assets || {})) {
+      if (asset.prop_id) summary.append(text("p", `${kind}: OPP prop ${asset.name} (${asset.prop_id}), ${asset.sheet_kind} sheet “${asset.sheet_label}” · ${asset.clearance} clearance`, "muted"));
     }
     const fallbacks = [...new Set(Object.values(quote.instruments.passages).flatMap(p => p.performers.map(player => player.fallback).filter(Boolean)))];
     for (const fallback of fallbacks) summary.append(text("p", fallback, "muted"));
@@ -403,7 +407,7 @@ export async function applyStatus(status) {
     }
   }
   if (state.lastState && state.lastState !== status.state && !busy) {
-    await Promise.all([loadActors(), loadStyles(), loadOutputs()]);
+    await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds()]);
   }
   state.lastState = status.state;
 }

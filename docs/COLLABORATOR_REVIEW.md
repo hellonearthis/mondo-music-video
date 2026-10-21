@@ -1,5 +1,69 @@
 # Collaborator review record
 
+## Fork `5e2bba4` integrated (release 1.9.8, 2026-10-20)
+
+Reviewed from an isolated clone of `hellonearthis/mondo-music-video` at `5e2bba4f945d02f7c825e2002d83c2d084819c2e`; the only change beyond the previously reviewed `e6ef03e`.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Component labeling overlay, toggle, shortcuts, CSS, `data-component*` attributes, interface guide | Adopted with adaptation. The `index.html` patch conflicted only at the Actors panel, where our OPP library card was added; it was merged by hand and the OPP card labelled. The badge now uses text nodes rather than `innerHTML` (the labels are static, so this is hardening, not a demonstrated defect). GUI-only by design. |
+| Version 1.9.8 | Matches the fork. |
+
+## OPP task-start fork check — `5e2bba4` (2026-10-20)
+
+The fork was checked at exact head `5e2bba4f945d02f7c825e2002d83c2d084819c2e`
+and cloned independently into `/tmp/mmv-fork-opp-20261020`. Relative to the
+previously reviewed `e6ef03e`, the only new commit adds component-labeling
+mode: stable `data-component-*` attributes across the existing GUI, a header
+toggle/keyboard shortcut, an overlay in `webapp/js/component_labeling.js`, CSS,
+an interface guide, and a version bump to the fork's 1.9.8. This is a useful
+pair-programming aid, and its static labels would also help locate the new OPP
+card after an adapted integration. It makes no OPP import, actor, model,
+payment, renderer or resume changes. The OPP work modifies the same HTML and
+app files; copying the fork patch wholesale would omit new OPP elements and
+collide with this task's 1.9.7 version. The feature is deferred to its own
+interface batch so the labels can cover the final OPP UI and receive focused
+keyboard, accessibility and agent-surface review. This is a scope/version
+conflict, not a demonstrated defect in the collaborator's contribution. No
+fork files, private assets or Git object stores were imported into this tree.
+
+## October 21, 2026 — fork head 79d8515 (release 1.9.10)
+
+Reviewed isolated clone at exact revision `79d8515f76207c21c155981d3255bb60f7165611`
+(three commits by [hellonearthis](https://github.com/hellonearthis) after
+`5e2bba4`; 31 files, about 3,400 lines). A low-effort read-only Codex pass and a
+direct review traced the code; the fork's own new tests were not run (no numpy or
+scikit-learn in the review environment). The fork's 1.9.9 label collides with our
+shipped 1.9.9, so the adopted subset is 1.9.10.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Markdown renderer and formatted guide dialog | Adapted. 20,000 random inputs found a stack overflow: an indented `>` line was never stripped, so the blockquote recursed on itself. Fixed. Heading ids prefixed `md-`; non-https links no longer open new tabs (in-page anchors did). No XSS bypass found; output is escaped before the HTML sink. |
+| Top-placed tooltips, category and button tooltips | Adopted. The `themes` tooltip was removed: `vocab.json` has eleven tables, not twelve. |
+| Labels button moved to Settings | Adopted; the narrow-width hide rule was removed with it. |
+| Settings tooltip wording | Adapted without `C:\cui` and `C:\llamaCPP` example paths. |
+| Thematic Worlds workspace (`vocab-worlds.js`, `thematic_worlds` field) | Deferred. The compiled term pools reach the render through `custom_vocabulary`, but mode, juxtaposition slider and kappa bars are stored and displayed only; nothing under `mmv/` reads them, yet the UI and quote line say they are active. Choosing Off clears the worlds but leaves the compiled vocabulary override in place. Pinned terms are held only in DOM attributes and are lost when a term is added. The request field is an unbounded dict. Remaining work: a real consumer for mode and kappa (this touches the protected planning code and needs the owner's approval), then fix the three defects. |
+| `cluster_vocab.py`, `lint_vocab.py`, `mmv/style_embed.py`, embedding docs, `start-embedding.ps1` | Deferred. Depend on scikit-learn, which is not a declared dependency; `choose_k` selects k=1 for a two-term vocabulary and then calls a silhouette score that needs two clusters. Tests not run. |
+| `mmv/vision_check.py` `C:/llamaCPP` search, `start.ps1` changes | Deferred. The path search does nothing off Windows; `start.ps1` saves the writer selection before checking whether a different model is already being served. Needs a Windows host to verify. |
+
+## October 20, 2026 — fork head e6ef03e (release 1.9.6)
+
+Reviewed isolated clone `/tmp/mmv-fork-review-20261020-new` at exact revision `e6ef03e28f1cde7018be1710d0b8c89cad1480f4` against our `55671c4` (1.9.5). The fork first merged that upstream release in `26dba46`; new contributions are `5b026e5` and `e6ef03e`, authored by [hellonearthis](https://github.com/hellonearthis). This review compares the two new commits, not the already adopted upstream history. The isolated clone shares no Git object store with this checkout.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Writer working-directory label (`5b026e5`) | Adapted to “Writer working directory (llama.cpp folder)”. The `writer_cwd` setting can also launch other local writer commands, so “LLama Directory” alone would misdescribe it. Existing setting key and agent inspection remain intact. |
+| Windows GGUF and projector discovery (`e6ef03e`) | Adopted the single recursive scan and per-directory projector index. The prior loop queried each model directory separately. PowerShell execution is unavailable on this Linux host; no speed claim is made. |
+| UTF-8 child environment | Adopted `PYTHONUTF8=1` alongside the existing `PYTHONIOENCODING=utf-8`; mock tests passed. |
+| Service probes | Adopted bounded launch-command parsing cache and reused four probe workers. Added a lock around the shared result cache and a monotonic freshness clock so concurrent status requests do not duplicate probes or overwrite one another. External API writer readiness is still only a configuration signal, not verified generation. |
+| Unfinished-run traversal and size cache | Adopted `os.scandir` traversal and size counting without following symlinks. Replaced the fork's root-mtime-only invalidation: adding or changing a file in `renders/` does not reliably alter the run root mtime, so its size could remain stale indefinitely. The adapted cache expires after five seconds and is cleared for deleted runs; a temporary-run regression covers nested file growth. Rendered-clip deletion confirmation is preserved. |
+| Color wheel image cache | Adopted dimension-keyed `ImageData` reuse. The wheel's hue/saturation mathematics and form values are unchanged. |
+| Fork version and performance claims | Adapted to one patch bump, 1.9.6, for this delivery. The fork's 1.9.7 label and unmeasured timing claims were not copied; Windows timing and execution still need operator verification. Existing agent/MCP version assertions and documentation were updated. |
+
+Claude Code Sonnet 5.5 reviewed the fork patch read-only through the guarded launcher after its first attempt could not read the isolated `/tmp` clone; the exact patch was placed under ignored `.collaboration/`. Claude found the root-mtime size cache, `lru_cache` on potentially unhashable launch values, and an unguarded disappearing-directory stat in the fork. The integration addresses all three: a bounded freshness interval, a type guard outside the cached parser, and `OSError` handling before sorting. Claude also flagged symlinked runs as a behavior change; listing now excludes linked run folders and size traversal does not follow links. This keeps the manager within the installation's runs tree. Its concerns about executor lifetime and unfinished futures are unproven and introduce no new paid or GPU action; the shared probe lock prevents concurrent status calls from filling the executor. The normal process exit closes the executor's workers. The additional suggested tests for implementation details were not added; the nested-file growth regression and full mock suite cover the material behavior change. The initial report's missing-review-record observation was based on the tree before this documentation was written.
+
+No protected prompting, model defaults, paid submissions, retries, private assets, commit, push or publication are part of this integration. Verification is recorded in [VERIFICATION.md](VERIFICATION.md).
+
 ## October 20, 2026 — Engine lifecycle and GPU memory (1.9.3)
 
 Task-start fork check: exact head `59f820d6306271393aad815fb473104db46a9d17`, already reviewed, no new revisions. Claude Code Sonnet 5.5, medium effort, owned the main implementation and mock tests. Codex reviewed the two handoffs and tightened unknown Apple memory behavior, unverified renderer release, writer startup headroom, CPU/projector estimates, failed vision-stop ownership, and guards against rendering alongside known external GPU services. API, GUI, agent/MCP status and skill coverage were audited. A fresh isolated Claude medium session expanded the factory daylight preset. Codex added the harvest card free axes/motifs, removed copied legacy rigging/audio directives so preset content cannot override mouth/singing behavior, kept shot scale and ensemble framing free, and verified factory-only migration tests. Helper daylight tests were not run in its restricted session; coordinator ran them after integration. No fork merge, protected-source edit, private-asset import, paid/GPU generation, commit or publication.

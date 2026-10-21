@@ -263,6 +263,16 @@ shell history, shared reports or committed settings. Ask the user to enter
 secrets through the Settings UI when practical. Do not create accounts or spend
 money as part of an installation request.
 
+### Open Prop Protocol
+
+Open Prop Protocol v0.1 support is part of the application dependency set. It
+does not require model weights or automatic prop downloads. Verify that the app
+catalog reports `opp_version` and that `GET /api/props` works. The owner may
+later choose a `.opp` file; inspect its manifest, hashes and signer, obtain
+explicit acceptance of that exact signer key (or the separate unsigned-draft
+choice), then import it into the private prop library. Do not import sibling
+project examples or local/private props merely because they are available.
+
 ### Install and verify the bundled starters
 
 Both platform installers now run `install-starter-assets` as part of setup.

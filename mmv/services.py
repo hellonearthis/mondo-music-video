@@ -4,6 +4,7 @@ from __future__ import annotations
 import concurrent.futures
 import functools
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -13,20 +14,21 @@ _last_probe_time = 0.0
 _cached_probe_home = None
 _cached_probe_results = None
 _CACHE_TTL_SECONDS = 2.5
+_probe_lock = threading.Lock()
 _probe_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="mmv-service-probe")
 
 
 def check_services(store, active_job=None, force: bool = False) -> dict:
     global _last_probe_time, _cached_probe_home, _cached_probe_results
-    now = time.time()
-
-    if (force or _cached_probe_results is None or _cached_probe_home != store.home
-            or (now - _last_probe_time > _CACHE_TTL_SECONDS)):
-        _cached_probe_results = _probe_raw_services(store)
-        _cached_probe_home = store.home
-        _last_probe_time = now
-
-    return _evaluate_service_activity(store, _cached_probe_results, active_job)
+    with _probe_lock:
+        now = time.monotonic()
+        if (force or _cached_probe_results is None or _cached_probe_home != store.home
+                or (now - _last_probe_time > _CACHE_TTL_SECONDS)):
+            _cached_probe_results = _probe_raw_services(store)
+            _cached_probe_home = store.home
+            _last_probe_time = time.monotonic()
+        probed = _cached_probe_results
+    return _evaluate_service_activity(store, probed, active_job)
 
 
 @functools.lru_cache(maxsize=32)
@@ -34,9 +36,16 @@ def _launch_problem(raw) -> str | None:
     """None when raw is a usable JSON argv launch command, otherwise why it is not (empty means unset)."""
     if not raw:
         return "not set"
+    if not isinstance(raw, str):
+        return "is not valid JSON"
+    return _launch_problem_text(raw)
+
+
+@functools.lru_cache(maxsize=32)
+def _launch_problem_text(raw: str) -> str | None:
     try:
         argv = json.loads(raw)
-    except (ValueError, TypeError):
+    except ValueError:
         return "is not valid JSON"
     if not isinstance(argv, list) or not argv or any(not isinstance(a, str) or not a for a in argv):
         return "must be a JSON array of non-empty command arguments"
@@ -398,13 +407,13 @@ def check_required_services(store, request: dict, resume: bool = False) -> list[
     backend = request.get("backend", "local_h3")
     errors = []
 
-    if kind == "harvest":
+    if kind in ("harvest", "world_harvest"):
         vision = services.get("vision", {})
         if not vision.get("available"):
             endpoint = vision.get("url") or "unconfigured"
             errors.append(
                 f"Vision engine is offline or unreachable ({endpoint}). "
-                "Multimodal style harvesting requires a running vision model or API configuration in Settings."
+                f"Multimodal {'world reading' if kind == 'world_harvest' else 'style harvesting'} requires a running vision model or API configuration in Settings."
             )
         return errors
 

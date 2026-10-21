@@ -31,6 +31,139 @@ def _cached_chromium():
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_file_drop_uses_existing_upload_handlers_and_rejects_bad_files(self):
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+
+        def drop(page, selector, files):
+            return page.evaluate('''({selector, files}) => {
+              const input = document.querySelector(selector);
+              const target = input.closest('label');
+              const transfer = new DataTransfer();
+              for (const item of files) transfer.items.add(new File([new Uint8Array(item.bytes)], item.name, {type: item.type}));
+              target.dispatchEvent(new DragEvent('dragenter', {bubbles: true, dataTransfer: transfer}));
+              const hovered = target.classList.contains('file-drop-hover');
+              target.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: transfer}));
+              return {hovered, cleared: !target.classList.contains('file-drop-hover'), names: [...input.files].map(file => file.name)};
+            }''', {'selector': selector, 'files': files})
+
+        image = {'name': 'one.png', 'type': 'image/png', 'bytes': list(picture())}
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 14')
+                song = {'name': 'dropped.wav', 'type': 'audio/wav', 'bytes': list(self.song.read_bytes())}
+                result = drop(page, '#video-form .song-input', [song])
+                self.assertTrue(result['hovered'] and result['cleared'])
+                expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded: dropped.wav')
+                self.assertEqual(result['names'], ['dropped.wav'])
+                for form in ('video-form', 'harvest-form', 'ident-form'):
+                    selector = f'#{form} .refs-input'
+                    second = {**image, 'name': 'two.png'}
+                    drop(page, selector, [image, second])
+                    expect(page.locator(f'#{form} .refs-receipt')).to_contain_text('two.png')
+                    self.assertEqual(drop(page, selector, [image])['names'], ['one.png'])
+                    expect(page.locator(f'#{form} .refs-receipt')).to_contain_text('one.png')
+                    bad = {'name': 'bad.txt', 'type': 'text/plain', 'bytes': [65]}
+                    self.assertEqual(drop(page, selector, [bad])['names'], ['one.png'])
+                    expect(page.locator(selector).locator('..').locator('.file-drop-error')).to_contain_text('Unsupported')
+                    self.assertEqual(drop(page, selector, [image] * 10)['names'], ['one.png'])
+                    expect(page.locator(selector).locator('..').locator('.file-drop-error')).to_contain_text('at most nine')
+                for selector, filename, mime in (
+                    ('#opp-file', 'prop.opp', 'application/octet-stream'),
+                    ('#oap-file', 'actor.oap', 'application/octet-stream'),
+                    ('#agreement-file', 'agreement.json', 'application/json'),
+                    ('#style-import-file', 'style.json', 'application/json')):
+                    result = drop(page, selector, [{'name': filename, 'type': mime, 'bytes': [65]}])
+                    self.assertEqual(result['names'], [filename])
+                    self.assertEqual(drop(page, selector, [image])['names'], [filename])
+                page.locator('.nav[data-panel=actors]').click()
+                page.locator('#actor-form [name=actor_id]').fill('drop_actor')
+                page.locator('#actor-form [name=name]').fill('Drop Actor')
+                page.locator('#actor-form [name=description]').fill('Test portrait')
+                drop(page, '#actor-form [name=reference]', [image])
+                page.locator('#actor-form button').click()
+                expect(page.locator('#actor-list')).to_contain_text('Drop Actor')
+                page.locator('#instrument-library-fold summary').click()
+                page.locator('#instrument-import-form [name=instrument_id]').select_option('bass')
+                page.locator('#instrument-import-form [name=license]').fill('Test license')
+                page.locator('#instrument-import-form [name=provenance]').fill('Test fixture')
+                drop(page, '#instrument-import-form [name=reference]', [image])
+                page.locator('#instrument-import-form button').click()
+                expect(page.locator('#instrument-library')).to_contain_text('Electric bass')
+                page.evaluate('''() => {
+                  document.querySelector('#oap-import-form').hidden = false;
+                  document.querySelector('#oap-report-card').hidden = false;
+                  document.querySelector('#opp-import-form').hidden = false;
+                  document.querySelector('#opp-report').hidden = false;
+                }''')
+                drop(page, '#oap-file', [{'name': 'next.oap', 'type': 'application/octet-stream', 'bytes': [66]}])
+                drop(page, '#opp-file', [{'name': 'next.opp', 'type': 'application/octet-stream', 'bytes': [66]}])
+                expect(page.locator('#oap-import-form')).to_be_hidden()
+                expect(page.locator('#oap-report-card')).to_be_hidden()
+                expect(page.locator('#opp-import-form')).to_be_hidden()
+                expect(page.locator('#opp-report')).to_be_hidden()
+                page.evaluate('''() => {
+                  const label = document.querySelector('#actor-form [name=reference]').closest('label');
+                  const transfer = new DataTransfer();
+                  transfer.items.add(new File(['x'], 'one.png', {type: 'image/png'}));
+                  label.dispatchEvent(new DragEvent('dragenter', {bubbles: true, dataTransfer: transfer}));
+                  label.dispatchEvent(new DragEvent('dragleave', {bubbles: true, relatedTarget: document.body, dataTransfer: transfer}));
+                }''')
+                expect(page.locator('#actor-form [name=reference]').locator('..')).not_to_have_class('file-drop-hover')
+                page.route('**/api/upload/reference', lambda route: route.abort())
+                drop(page, '#harvest-form .refs-input', [image])
+                expect(page.locator('#harvest-form .refs-receipt')).to_contain_text('Upload failed')
+                page.unroute('**/api/upload/reference')
+                page.locator('#style-import-file').set_input_files({'name': 'chosen.json', 'mimeType': 'application/json', 'buffer': b'{}'})
+                self.assertEqual(page.locator('#style-import-file').evaluate('(node) => node.files[0].name'), 'chosen.json')
+            finally:
+                browser.close()
+
+    def test_opp_inspection_import_and_instrument_choice(self):
+        from mmv import actors
+        from tests.test_opp_props import package as make_opp_package
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        source = make_opp_package(self.home, signed=True)
+        actors.create_actor(self.fixture.store, 'guitarist', 'Guitarist', 'Test actor', picture())
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('[data-panel="actors"]').click()
+                page.locator('#opp-library-fold summary').click()
+                page.locator('#opp-file').set_input_files(str(source))
+                page.locator('#inspect-opp').click()
+                expect(page.locator('#opp-report')).to_contain_text('blue-guitar')
+                expect(page.locator('#opp-report')).to_contain_text('signature_valid')
+                page.locator('#opp-import-form [name=accept_signer]').check()
+                page.locator('#opp-import-form button').click()
+                expect(page.locator('#opp-library')).to_contain_text('Blue Guitar')
+                page.locator('[data-panel="video"]').click()
+                form = page.locator('#video-form')
+                form.locator('.actor-select').select_option(['guitarist'])
+                form.locator('[name=instrument_mode]').select_option('perform')
+                form.get_by_label('Guitarist instrument', exact=True).select_option('guitar')
+                expect(form.locator('.instrument-props')).to_be_visible()
+                form.locator('[name=instrument_prop_guitar]').select_option('blue-guitar')
+                form.locator('[name=instrument_use_guitar]').fill('strumming strings')
+                result = page.evaluate('''async () => {
+                    const {instrumentsFromForm} = await import('/js/instruments.js');
+                    const request = {actors: ['guitarist'], instrument_mode: 'perform'};
+                    instrumentsFromForm(document.querySelector('#video-form'), request);
+                    return request;
+                }''')
+                self.assertEqual(result['instrument_props'], {'guitar': 'blue-guitar'})
+                self.assertEqual(result['instrument_prop_uses'], {'guitar': 'strumming strings'})
+                self.assertNotIn('instrument_prop_guitar', result)
+            finally:
+                browser.close()
+
     def test_instrument_assignments_restore_by_actor_and_flat_fields_are_removed(self):
         from mmv import actors
         from test_public_app import picture
@@ -296,7 +429,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.9.8')
+                expect(page.locator('#version')).to_have_text('1.10.1')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -419,6 +552,47 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
                 self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_worlds_panel_lists_reviews_and_feeds_the_video_form(self):
+        from mmv import worlds
+        from playwright.sync_api import sync_playwright, expect
+        ledger = {"name": "Salt Archive", "seed_sentence": "A filing system.", "core_laws": ["The record outlives the person"],
+                  "pools": {"settings": {"include": ["a basement archive"]}}}
+        self.agent.create_world({"id": "salt", **ledger})
+        proposed = {**worlds.normalize(ledger), "id": "salt", "core_laws": ["The record outlives the person", "<b>Nothing leaves unfiled</b>"]}
+        worlds.write_proposal(self.fixture.store, "grow-one", "salt", "grow", 1, proposed, [("image", "x.png")], {"vision": "m"})
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#world-select").options.length === 2')
+                expect(page.locator('#world-select option').nth(1)).to_have_text('Salt Archive')
+                page.wait_for_function('() => document.querySelector(".nav[data-panel=worlds]").onclick !== null')
+                page.locator('.nav[data-panel="worlds"]').click()
+                expect(page.locator('#panel-worlds')).to_be_visible()
+                expect(page.locator('#worlds-list')).to_contain_text('Salt Archive')
+                expect(page.locator('#world-proposals-card')).to_be_visible()
+                expect(page.locator('#world-proposals .world-diff-add')).to_contain_text('<b>Nothing leaves unfiled</b>')
+                self.assertEqual(page.locator('#world-proposals b').count(), 0)
+                page.locator('#worlds-list button', has_text='Open').click()
+                expect(page.locator('#world-detail')).to_contain_text('version 1')
+                page.locator('#world-proposals button', has_text='Accept').click()
+                expect(page.locator('#world-proposals-card')).to_be_hidden()
+                self.assertEqual(self.agent.get_world('salt')['version'], 2)
+                page.locator('#world-form textarea[name="direction"]').fill('keep it damp')
+                page.locator('#world-form select[name="world_mode"]').select_option('grow')
+                page.wait_for_timeout(1500)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#world-select").options.length === 2')
+                page.wait_for_timeout(500)
+                self.assertEqual(page.locator('#world-form textarea[name="direction"]').input_value(), 'keep it damp')
+                self.assertEqual(page.locator('#world-form select[name="world_mode"]').input_value(), 'grow')
+                page.locator('.nav[data-panel="worlds"]').click()
+                expect(page.locator('#world-form select[name="world_existing"]')).to_be_visible()
+                expect(page.locator('#world-form input[name="world_new_id"]')).to_be_hidden()
             finally:
                 browser.close()
 
@@ -1025,7 +1199,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.9.8')
+                expect(page.locator('#version')).to_have_text('1.10.1')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

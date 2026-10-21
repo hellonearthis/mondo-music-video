@@ -27,9 +27,10 @@ function createOverlay() {
     const copiedText = `${name} (${id})`;
     try {
       await copyToClipboard(copiedText);
-      const original = badgeEl.innerHTML;
-      badgeEl.innerHTML = `<span class="comp-name">Copied!</span> <span class="comp-id">${id}</span>`;
-      setTimeout(() => { if (badgeEl) badgeEl.innerHTML = original; }, 1200);
+      const original = [...badgeEl.childNodes];
+      const copied = Object.assign(document.createElement("span"), { className: "comp-name", textContent: "Copied!" });
+      badgeEl.replaceChildren(copied);
+      setTimeout(() => { if (badgeEl) badgeEl.replaceChildren(...original); }, 1200);
       notice(`Copied component "${name}" (${id}) to clipboard.`);
     } catch {
       notice(`Component ID: ${id}`);
@@ -66,13 +67,9 @@ function updateOverlay(el) {
   overlayEl.style.height = `${rect.height}px`;
   overlayEl.hidden = false;
 
-  const sourceSpan = source ? `<span class="comp-source">[${source}]</span>` : "";
-  badgeEl.innerHTML = `
-    <span class="comp-name">${name}</span>
-    <span class="comp-id">${id}</span>
-    ${sourceSpan}
-    <span class="comp-copy-hint">📋 Click badge to copy</span>
-  `;
+  const part = (cls, text) => Object.assign(document.createElement("span"), { className: cls, textContent: text });
+  badgeEl.replaceChildren(part("comp-name", name), part("comp-id", id),
+    ...(source ? [part("comp-source", `[${source}]`)] : []), part("comp-copy-hint", "📋 Click badge to copy"));
   badgeEl.title = `Nesting: ${path}\nClick to copy component name & ID`;
 
   let badgeTop = rect.top - 28;

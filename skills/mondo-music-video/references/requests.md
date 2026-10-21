@@ -64,6 +64,14 @@ Music-video generation requires the configured writer and Laya model. Do not
 bypass a failed Laya review or promise a completed production before rendering
 and automatic frame-exact assembly have succeeded.
 
+To use an imported OPP prop for an actor's instrument, first inspect/import the
+package and preview sheet selection. Then add `instrument_mode: "perform"`,
+`instrument_assignments: {"actor_id": "guitar"}`,
+`instrument_props: {"guitar": "prop-id"}` and optionally
+`instrument_prop_uses: {"guitar": "strumming strings"}`. Prop IDs and use tags
+are free-form. Omit `instrument_props` to keep the existing instrument sheet.
+The quote shows the selected sheet and slot count; start still needs consent.
+
 ## Ident
 
 ```json
@@ -98,6 +106,37 @@ title correctly. A completed `RUN_ID/ident.mp4` can become `start_ident` and/or
 Requires a configured vision service/model and one or more image upload IDs.
 The new style ID must not already exist. The preview's estimate comes from the
 configured vision per-call estimate; it is not a provider spending cap.
+
+## World harvest
+
+```json
+{
+  "kind": "world_harvest",
+  "world_mode": "create",
+  "world_id": "salt-archive",
+  "title": "Salt Archive",
+  "direction": "optional notes for the reading",
+  "world_images": ["UPLOADED_IMAGE.png"],
+  "world_videos": ["UPLOADED_VIDEO.mp4"],
+  "world_lore": ["UPLOADED_TEXT.md"],
+  "world_runs": ["FINISHED_RUN_ID"]
+}
+```
+
+Upload images with kind `reference`, clips with `video` and text with `lore`.
+`world_mode` is `create` (the ID must be new) or `grow` (the world must exist).
+At least one source is required; a harvest reads at most 24 images (8 per video,
+4 per finished run), 3 videos and 5 lore files of 60 KB. It needs the configured
+vision service. Starting it only writes a **proposal**: call
+`inspect_world_proposal` to read its field-level changes, show them to the user,
+and call `accept_world_proposal(confirm=true)` only after the user has reviewed
+them (or `reject_world_proposal`). Growing is reviewed the same way; a stale
+proposal must be harvested again. `rollback_world` restores an earlier version as
+a new one.
+
+To use a world in a video, add `"world_id": "salt-archive"` and optionally
+`"world_pool_mode": "replace"` (only the world's terms, the default) or
+`"append"` (add to the standard pools) to a video request.
 
 ## Start, observe, export
 

@@ -31,8 +31,13 @@ def sha256(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def locate(store, kind):
+def locate(store, kind, *, prop_id=None, use=''):
     valid_kind(kind)
+    if prop_id:
+        from . import props
+        selected = props.select(store, prop_id, use)
+        return {**selected, 'id': kind, 'kind': 'opp.instrument.reference',
+                'version': 1, 'reference': Path(selected['path']).name}
     local = store.home / 'instruments' / kind
     root = local if (local / 'instrument.json').is_file() else BUNDLED / kind
     record = read_json(root / 'instrument.json')

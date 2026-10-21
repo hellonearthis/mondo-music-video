@@ -40,6 +40,24 @@ def clean(request):
     return assignments
 
 
+def prop_options(request, assignments):
+    """Keep OPP identities independent of the four current musical roles."""
+    from .props import prop_identifier
+    selected = set(assignments.values())
+    ids, uses = request.get('instrument_props') or {}, request.get('instrument_prop_uses') or {}
+    if not isinstance(ids, dict) or not isinstance(uses, dict) or any(k not in selected for k in (*ids, *uses)):
+        raise ValueError('OPP instrument selections must match assigned instrument roles')
+    if ids and not request.get('instrument_references', True):
+        raise ValueError('Enable instrument references to use selected OPP props')
+    for kind, prop_id in ids.items():
+        instrument_assets.valid_kind(kind)
+        prop_identifier(prop_id)
+    for kind, use in uses.items():
+        if kind not in ids or not isinstance(use, str) or len(use) > 200:
+            raise ValueError('OPP instrument use must be short text for a selected prop')
+    return ids, uses
+
+
 def cached_scores(store, digest, score_path, assignments, quality, edits):
     """Only existing stems/analyses; guitar and piano use the six-stem cache, never guessed from other."""
     from .stems import cached_dance_part, model_for
@@ -60,6 +78,7 @@ def plan_passages(segments, casting, score, request, assets=None, part_scores=No
     assignments = clean(request)
     if assignments is None:
         return None
+    prop_ids, prop_uses = prop_options(request, assignments)
     roster = {m['actor_id']: m for m in (casting or {}).get('roster', [])}
     if any(actor not in request.get('actors', []) or actor not in roster for actor in assignments):
         raise ValueError('Instrument players must be selected cast actors')
@@ -90,15 +109,22 @@ def plan_passages(segments, casting, score, request, assets=None, part_scores=No
                                'instrument': kind, 'description': instrument_assets.DESIGNS[kind][1],
                                'active': active, **cue})
         passages[segment.segment_id] = {'performers': performers, 'references': references, 'actor_slots': len(cast)}
-    return {'version': VERSION, 'assignments': dict(assignments), 'references_enabled': request.get('instrument_references', True),
+    result = {'version': VERSION, 'assignments': dict(assignments), 'references_enabled': request.get('instrument_references', True),
             'assets': assets or {},
             'passages': passages}
+    if prop_ids:
+        result['prop_ids'] = dict(prop_ids)
+        result['prop_uses'] = dict(prop_uses)
+    return result
 
 
 def check_replay(request, performance):
     if (clean(request) != performance['assignments'] or
             request.get('instrument_references', True) != performance['references_enabled']):
         raise ValueError('Instrument settings differ from the saved plan; start a new production preview')
+    ids, uses = prop_options(request, performance['assignments'])
+    if ids != performance.get('prop_ids', {}) or uses != performance.get('prop_uses', {}):
+        raise ValueError('OPP prop selection differs from the saved plan; start a new production preview')
 
 
 def apply_slots(plan, performance, maximum):
@@ -137,6 +163,10 @@ def verify_assets(performance):
         path = Path(asset['path'])
         if not path.is_file() or instrument_assets.sha256(path) != asset['sha256']:
             raise ValueError(f'{kind} instrument reference changed; restore the original sheet and preview again')
+        if asset.get('bundle_path'):
+            bundle = Path(asset['bundle_path'])
+            if not bundle.is_file() or instrument_assets.sha256(bundle) != asset['bundle_sha256']:
+                raise ValueError(f'{kind} OPP package changed; restore it and preview again')
 
 
 ACTION = {

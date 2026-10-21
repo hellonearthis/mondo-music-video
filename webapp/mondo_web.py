@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, agreements, instrument_assets, production, score_view
+from mmv import actors, agreements, instrument_assets, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.9.9"
+MGL_APP_VERSION = "1.10.1"
 WEB = Path(__file__).parent
 
 
@@ -169,6 +169,27 @@ class VocabularyTableOverride(StrictModel):
     exclude: list[str] = Field(default_factory=list, max_length=500)
 
 
+class WorldRequest(StrictModel):
+    id: str = Field(max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    seed_sentence: str = Field(default="", max_length=400)
+    subjects: list[dict[str, str]] = Field(default_factory=list, max_length=worlds.MAX_SUBJECTS)
+    pools: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
+    core_laws: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    locations: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    practices: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    objects: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    factions: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    ecology_rules: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    moral_ambiguities: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    open_threads: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    do_not_contradict: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+
+
+class WorldRollbackRequest(StrictModel):
+    version: int = Field(ge=1, le=9999)
+
+
 class VocabularyRequest(StrictModel):
     id: str = Field(max_length=64)
     name: str = Field(min_length=1, max_length=160)
@@ -256,7 +277,7 @@ class CaptionSettings(StrictModel):
 
 
 class ProductionRequest(StrictModel):
-    kind: Literal["video", "ident", "harvest"] = "video"
+    kind: Literal["video", "ident", "harvest", "world_harvest"] = "video"
     title: str = Field(default="", max_length=160)
     song: str = Field(default="", max_length=128)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
@@ -285,6 +306,8 @@ class ProductionRequest(StrictModel):
     instrument_mode: Literal["off", "perform"] = "off"
     instrument_assignments: dict[str, Literal["drums", "bass", "guitar", "keyboards"]] = Field(default_factory=dict, max_length=9)
     instrument_references: bool = True
+    instrument_props: dict[str, str] = Field(default_factory=dict, max_length=4)
+    instrument_prop_uses: dict[str, str] = Field(default_factory=dict, max_length=4)
     ref_policy: Literal["fragmentation", "single_subject", "all"] = "all"
     casting_policy: Literal["random", "rotate", "section"] = "random"
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
@@ -305,6 +328,18 @@ class ProductionRequest(StrictModel):
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     thematic_worlds: dict[str, Any] | None = None
+    world_id: str = Field(default="", max_length=64)
+    world_pool_mode: Literal["append", "replace"] = "replace"
+    world_mode: Literal["", "create", "grow"] = ""
+    world_images: list[str] = Field(default_factory=list, max_length=worlds.MAX_IMAGES)
+    world_videos: list[str] = Field(default_factory=list, max_length=3)
+    world_lore: list[str] = Field(default_factory=list, max_length=worlds.MAX_LORE_FILES)
+    world_runs: list[str] = Field(default_factory=list, max_length=6)
+
+    @field_validator("world_id")
+    @classmethod
+    def valid_world_id(cls, value):
+        return identifier(value) if value else ""
 
     @field_validator("vocabulary_profile")
     @classmethod
@@ -338,13 +373,41 @@ def request_dict(value):
         for key in DANCE_FIELDS:
             request.pop(key, None)
     if request.get("instrument_mode", "off") == "off":
-        for key in ("instrument_mode", "instrument_assignments", "instrument_references"):
+        for key in ("instrument_mode", "instrument_assignments", "instrument_references", "instrument_props", "instrument_prop_uses"):
             request.pop(key, None)
     elif request["kind"] != "video":
         raise ValueError("Instrument performance is available for music videos only")
+    if request["kind"] == "world_harvest":
+        if request["world_mode"] not in ("create", "grow") or not request["world_id"]:
+            raise ValueError("Choose a world ID and whether to create or grow it")
+        request.pop("world_pool_mode")
+    else:
+        for key in ("world_mode", "world_images", "world_videos", "world_lore", "world_runs"):
+            request.pop(key)
+        if request["kind"] != "video" or not request["world_id"]:
+            request.pop("world_id")
+            request.pop("world_pool_mode")
     if not request.get("thematic_worlds") or request.get("thematic_worlds", {}).get("mode", "off") == "off":
         request.pop("thematic_worlds", None)
     return request
+
+
+def with_world(store, request):
+    """The request with the chosen world's pools merged into its custom vocabulary (the world wins for tables it describes)."""
+    if request.get("kind") != "video" or not request.get("world_id"):
+        return request
+    ledger = worlds.load(store, request["world_id"])
+    return {**request, "custom_vocabulary": {**request["custom_vocabulary"], **worlds.custom_vocabulary(
+        ledger, request["world_pool_mode"])}}
+
+
+def instrument_preview(plan):
+    if not plan:
+        return plan
+    shown = ('id', 'name', 'description', 'sha256', 'width', 'height', 'license', 'clearance',
+             'prop_id', 'sheet_kind', 'sheet_label', 'sheet_tags', 'use')
+    return {**plan, 'assets': {kind: {key: asset[key] for key in shown if key in asset}
+                               for kind, asset in plan.get('assets', {}).items()}}
 
 
 class StartRequest(StrictModel):
@@ -678,7 +741,8 @@ def create_app(home=None, *, test_hosts=False):
     def catalog():
         return {"backends": CATALOG, "ratings": oap.CONTENT_ENUMS, "price_checked": "2026-10-15",
                 "oap_version": oap.OAP_VERSION,
-                "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]}}
+                "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]},
+                "opp_version": props.protocol_version(), "props": {"import": True, "instrument_selection": True}}
 
     @app.get("/api/project")
     def get_project():
@@ -843,13 +907,19 @@ def create_app(home=None, *, test_hosts=False):
         return {"configured": bool(store.key(value.name))}
 
     @app.post("/api/upload/{kind}")
-    def upload(kind: Literal["song", "reference", "oap", "agreement"], file: UploadFile = File(...)):
-        limit = {"song": 256, "reference": 25, "oap": 128, "agreement": 2}[kind] * 1024 * 1024
+    def upload(kind: Literal["song", "reference", "oap", "opp", "agreement", "video", "lore"], file: UploadFile = File(...)):
+        limit = {"song": 256, "reference": 25, "oap": 128, "opp": 128, "agreement": 2, "video": 512, "lore": 1}[kind] * 1024 * 1024
         suffix = Path(file.filename or "").suffix.lower()
         if kind == "song" and suffix not in (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".aiff"):
             raise ValueError("Choose a supported audio file")
-        name = uuid.uuid4().hex + (suffix if kind == "song" else ".png" if kind == "reference"
-                                   else ".json" if kind == "agreement" else ".oap")
+        if kind == "opp" and suffix != ".opp":
+            raise ValueError("Choose an .opp package")
+        if kind == "video" and suffix not in worlds.VIDEO_SUFFIXES:
+            raise ValueError("Choose a supported video file")
+        if kind == "lore" and suffix not in worlds.LORE_SUFFIXES:
+            raise ValueError("Choose a .txt or .md text file")
+        name = uuid.uuid4().hex + (suffix if kind in ("song", "video", "lore") else ".png" if kind == "reference"
+                                   else ".json" if kind == "agreement" else ".opp" if kind == "opp" else ".oap")
         target = store.home / "uploads" / name
         # Serialize mutations with operation startup so quoted inputs remain stable.
         with jobs.lock:
@@ -863,7 +933,7 @@ def create_app(home=None, *, test_hosts=False):
                     with target.open("xb") as stream:
                         while chunk := file.file.read(1024 * 1024):
                             size += len(chunk)
-                            if size > limit:
+                            if size > (worlds.LORE_BYTES if kind == "lore" else limit):
                                 raise ValueError("File exceeds upload size limit")
                             stream.write(chunk)
                     if not size:
@@ -871,8 +941,8 @@ def create_app(home=None, *, test_hosts=False):
                 except Exception:
                     target.unlink(missing_ok=True)
                     raise
-        if kind == "song":
-            write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or "song").replace("\\", "/")).name})
+        if kind in ("song", "video", "lore"):
+            write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or kind).replace("\\", "/")).name})
         return {"file": name, "name": file.filename}
 
     @app.get("/api/uploads/song/{filename}")
@@ -895,6 +965,38 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/instruments")
     def list_instruments():
         return instrument_assets.catalog(store)
+
+    @app.get("/api/props")
+    def list_props():
+        return props.catalog(store)
+
+    @app.get("/api/props/{prop_id}/reference")
+    def prop_reference(prop_id: str, use: str = ""):
+        return FileResponse(props.select(store, prop_id, use)["path"], media_type="image/png")
+
+    @app.get("/api/props/{prop_id}/selection")
+    def prop_selection(prop_id: str, use: str = ""):
+        selected = props.select(store, prop_id, use)
+        return {key: selected[key] for key in ('prop_id', 'name', 'description', 'license', 'clearance', 'sheet_kind',
+                                                'sheet_label', 'sheet_tags', 'use', 'sha256', 'source_sha256')}
+
+    @app.get("/api/opp/inspect/{filename}")
+    def inspect_opp(filename: str, allow_unsigned: bool = False):
+        path = inside(store.home / "uploads", filename)
+        if path.suffix != ".opp" or not path.is_file():
+            raise ValueError("OPP upload not found")
+        manifest, verification = props.package_info(path, allow_unsigned=allow_unsigned)
+        return {"manifest": manifest, "verification": verification}
+
+    @app.post("/api/opp/import")
+    def import_opp(filename: str = Form(...), allow_unsigned: bool = Form(False),
+                   accept_signer: str = Form("")):
+        path = inside(store.home / "uploads", filename)
+        if path.suffix != ".opp" or not path.is_file():
+            raise ValueError("OPP upload not found")
+        with jobs.lock:
+            jobs.require_idle()
+            return props.import_package(store, path, allow_unsigned=allow_unsigned, accept_signer=accept_signer)
 
     @app.post("/api/instruments/{instrument_id}")
     def import_instrument(instrument_id: str, license: str = Form(...), provenance: str = Form(...),
@@ -1072,6 +1174,72 @@ def create_app(home=None, *, test_hosts=False):
             quotes.clear()
         return {"deleted": style_id}
 
+    def world_or_error(world_id, version=None):
+        return worlds.load(store, identifier(world_id), version)
+
+    @app.get("/api/worlds")
+    def list_worlds():
+        return worlds.listing(store)
+
+    @app.post("/api/worlds")
+    def add_world(value: WorldRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.create(store, value.id, value.model_dump(exclude={"id"}))
+            quotes.clear()
+        return ledger
+
+    @app.get("/api/worlds/proposals")
+    def list_world_proposals():
+        return worlds.list_proposals(store)
+
+    @app.get("/api/worlds/proposals/{proposal_id}")
+    def get_world_proposal(proposal_id: str):
+        return worlds.read_proposal(store, proposal_id)
+
+    @app.post("/api/worlds/proposals/{proposal_id}/accept")
+    def accept_world_proposal(proposal_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.accept(store, proposal_id)
+            quotes.clear()
+        return ledger
+
+    @app.delete("/api/worlds/proposals/{proposal_id}")
+    def reject_world_proposal(proposal_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            worlds.reject(store, proposal_id)
+        return {"rejected": proposal_id}
+
+    @app.get("/api/worlds/{world_id}")
+    def get_world(world_id: str, version: int | None = None):
+        return world_or_error(world_id, version)
+
+    @app.get("/api/worlds/{world_id}/versions")
+    def get_world_versions(world_id: str):
+        return worlds.versions(store, world_id)
+
+    @app.get("/api/worlds/{world_id}/export")
+    def export_world(world_id: str):
+        return JSONResponse(world_or_error(world_id), headers={"Content-Disposition": f'attachment; filename="{identifier(world_id)}.world.json"'})
+
+    @app.post("/api/worlds/{world_id}/rollback")
+    def rollback_world(world_id: str, value: WorldRollbackRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.rollback(store, world_id, value.version)
+            quotes.clear()
+        return ledger
+
+    @app.delete("/api/worlds/{world_id}")
+    def delete_world(world_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            worlds.delete(store, world_id)
+            quotes.clear()
+        return {"deleted": world_id}
+
     @app.get("/api/vocabulary")
     def get_vocabulary():
         engine_cfg = Path(__file__).parent.parent / "mmv/engine/config"
@@ -1129,7 +1297,7 @@ def create_app(home=None, *, test_hosts=False):
     def build_quote(value: ProductionRequest, *, resume_directory=None):
         with jobs.lock:
             jobs.require_idle()
-            request = request_dict(value)
+            request = with_world(store, request_dict(value))
             kind = request.get("kind", "video")
             log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
             try:
@@ -1151,7 +1319,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": prepared.get("instruments"), "voice": prepared.get("voice"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
@@ -1351,25 +1519,25 @@ def create_app(home=None, *, test_hosts=False):
             quotes.clear()
         return {"deleted": run_id}
 
-    def run_folder_size_mb(path: Path, mtime: float) -> float:
+    def run_folder_size_mb(path: Path) -> float:
+        now = time.monotonic()
         cached = _run_size_cache.get(path.name)
-        if cached and cached[0] == mtime:
+        if cached and now - cached[0] < 5:
             return cached[1]
         total = 0
-        stack = [str(path)]
+        stack = [path]
         while stack:
-            cur = stack.pop()
             try:
-                with os.scandir(cur) as it:
-                    for item in it:
-                        if item.is_file(follow_symlinks=False):
-                            total += item.stat().st_size
-                        elif item.is_dir(follow_symlinks=False):
-                            stack.append(item.path)
+                with os.scandir(stack.pop()) as entries:
+                    for entry in entries:
+                        if entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            stack.append(Path(entry.path))
             except OSError:
-                pass
+                continue
         size_mb = round(total / (1024 * 1024), 2)
-        _run_size_cache[path.name] = (mtime, size_mb)
+        _run_size_cache[path.name] = (now, size_mb)
         return size_mb
 
     def rendered_clips(path):
@@ -1382,16 +1550,14 @@ def create_app(home=None, *, test_hosts=False):
         if not runs_dir.is_dir():
             return []
         entries = []
-        try:
-            with os.scandir(runs_dir) as it:
-                for entry in it:
+        with os.scandir(runs_dir) as candidates:
+            for entry in candidates:
+                try:
                     if entry.is_dir(follow_symlinks=False):
-                        entries.append(entry)
-        except OSError:
-            return []
-        entries.sort(key=lambda e: e.stat().st_mtime, reverse=True)
-        for entry in entries:
-            path = Path(entry.path)
+                        entries.append((entry.stat(follow_symlinks=False).st_mtime, entry.name, Path(entry.path)))
+                except OSError:
+                    continue
+        for mtime, run_id, path in sorted(entries, reverse=True):
             if (path / "output.json").is_file():
                 continue
             request = read_json(path / "request.json", {}) or {}
@@ -1404,9 +1570,8 @@ def create_app(home=None, *, test_hosts=False):
             total_segments = len(segments)
             validated_prompts = sum(1 for seg in segments if bool(prompts.get(f"seg{seg['index']:03d}")))
             can_finish = (total_segments > 0 and validated_prompts == total_segments and (backend in ("comfy_sdk_h3", "local_h3")))
-            mtime = entry.stat().st_mtime
             results.append({
-                "id": entry.name,
+                "id": run_id,
                 "title": title.strip().strip('"'),
                 "backend": backend,
                 "kind": kind,
@@ -1416,8 +1581,10 @@ def create_app(home=None, *, test_hosts=False):
                 "validated_prompts": validated_prompts,
                 "can_finish": can_finish,
                 "rendered_clips": rendered_clips(path),
-                "size_mb": run_folder_size_mb(path, mtime)
+                "size_mb": run_folder_size_mb(path)
             })
+        if len(_run_size_cache) > 512:
+            _run_size_cache.clear()
         return results
 
     @app.delete("/api/runs/unfinished/{run_id}")
@@ -1449,7 +1616,7 @@ def create_app(home=None, *, test_hosts=False):
             for path in purgeable:
                 if path not in kept:
                     shutil.rmtree(path, ignore_errors=True)
-            _run_size_cache.clear()
+                    _run_size_cache.pop(path.name, None)
             quotes.clear()
         return {"purged_count": len(purgeable) - len(kept), "kept_with_clips": len(kept)}
 

@@ -30,13 +30,9 @@ export function parseHex(text) {
 const wheelImageCache = new Map();
 
 function drawWheel(canvas) {
-  const px = canvas.width;
-  const ctx = canvas.getContext("2d");
+  const px = canvas.width, ctx = canvas.getContext("2d");
   const cached = wheelImageCache.get(px);
-  if (cached) {
-    ctx.putImageData(cached, 0, 0);
-    return;
-  }
+  if (cached) { ctx.putImageData(cached, 0, 0); return; }
   const radius = px / 2, image = new ImageData(px, px);
   for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
     const dx = x + 0.5 - radius, dy = y + 0.5 - radius, distance = Math.hypot(dx, dy);

@@ -1,34 +1,119 @@
 # Releases
 
-## 1.9.9 — Thematic Worlds & Classification, Native Markdown Guide, and Visual Vocabulary Tooltips
+## 1.10.1 — Sidebar tab order
 
-- **Thematic Worlds & Classification (`webapp/js/vocab-worlds.js`, `webapp/index.html`)**: Added dedicated Thematic Worlds workspace inside Visual Vocabulary (02). Features a 3-step pipeline: semantic premise embedding with matched world clusters (lock & drop), classification mode selection (Off, Guided, Strict) with dynamic juxtaposition slider ($\kappa$) and section energy curves, and rotation pool curation (cycling Included / Pinned / Excluded chips, borrowing terms from nearest semantic worlds, and custom term addition). Includes an "Apply Worlds to Current Video" action that packages curated pools into the production manifest, badges the studio interface, and binds settings to project drafts.
-- **Visual Vocabulary Architecture & Customization Guide (`docs/VOCABULARY_GUIDE.md`, `webapp/js/guides.js`)**: Added Section 7 detailing Thematic Worlds and classification mechanics. Provided popup guide dialog buttons in the Thematic Worlds workspace header and footer for instant in-app reference.
-- **Pure Functional Markdown Renderer (`webapp/js/markdown.js`)**: Implemented zero-dependency, pure functional client-side Markdown parser for the guide modal, supporting headings, GitHub-flavored tables, syntax-highlighted code blocks with one-click copy, blockquotes, inline styling, and strict HTML sanitization.
-- **Top-Positioned Contextual Tooltips (`webapp/js/tooltips.js`, `webapp/js/vocabulary.js`)**: Enhanced tooltip engine with automatic upward placement preference (`preferredPlacement = "top"`) and smart collision detection, and added detailed educational tooltips across all 12 vocabulary categories explaining their role in prompt generation.
-- **Developer Label Overlay Relocation (`webapp/index.html`, `webapp/js/settings.js`)**: Moved the component labeling debug button (`🏷️ Labels`) into Panel 08 (Settings) with an educational tooltip explaining its purpose for AI-assisted development.
-- **Vocabulary Semantic Clustering & Quality Verification (`cluster_vocab.py`, `lint_vocab.py`)**: Added tools and tests for automated vocabulary quality auditing, semantic clustering, and duplicate detection.
-- Bumped application version to 1.9.9 across package manifests, README, agent endpoints, and test suites.
+- Sidebar order is now Music video, Credits & idents, Actors & OAP, Styles,
+  Style harvest, Visual vocabulary, Worlds, Finished videos, Settings, with
+  numbers 01–09 and in-app cross-references updated.
+- New standing rules (AGENTS.md): generative tabs stay on top, Settings is
+  always last.
 
-## 1.9.8 — Component Labeling Mode & Interface Guide
+## 1.10.0 — Worlds
 
-- **Component Labeling Mode (`webapp/js/component_labeling.js`)**: Implemented pair-programming dev overlay accessible via the studio header button (`🏷️ Labels`) or keyboard shortcut (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> / <kbd>Alt</kbd> + <kbd>L</kbd>). Outlines active components, displays floating badge with Component Name, stable ID, source file, hierarchy nesting breadcrumbs, and one-click copy to clipboard.
-- **Stable UI Component Attributes (`webapp/index.html`)**: Tagged all primary studio sections, forms, cards, folds, and dialogs with immutable kebab-case `data-component-id`, human-readable `data-component`, and `data-component-source="webapp/index.html"` per the `component-labeling` specification.
-- **Studio Interface Guide (`docs/interface-guide.md`)**: Comprehensive documentation of all named UI components, IDs, usage locations, design rules, and hierarchy to streamline AI pair programming and UI refactoring.
-- Bumped application version to 1.9.8 across package manifests, README, agent endpoints, and test suites.
+A world is persistent, in-universe canon that videos share, built and grown from
+references.
 
-## 1.9.7 — Performance optimizations
+- **Worlds panel and store.** Private versioned ledgers under `worlds/`
+  (core laws, subjects, locations, practices, objects, factions, ecological
+  rules, moral ambiguities, open threads, never-contradict list, and include /
+  exclude pools for seven vocabulary tables). Every accepted change is a new
+  version; any version can be restored.
+- **World harvest.** A new operation reads pictures, video keyframes (ffmpeg),
+  lore text and finished runs through the configured vision model and writes a
+  proposal with a field-level diff. Nothing changes a world until accepted;
+  a proposal made against an older version is refused. It has its own prompt and
+  parser in `mmv/worlds.py`; the style harvest prompt and every protected file
+  are unchanged. Limits: 24 images (8 per video, 4 per run), 3 videos, 5 lore
+  files of 60 KB.
+- **Using a world.** Choosing a world on the video form fills the existing
+  custom vocabulary from its pools, either confined to the world's terms or added
+  to the standard pools. Planner and writer behaviour are unchanged.
+- **Privacy.** `worlds/` and `world-proposals/` are ignored and pruned from
+  sdists; shared production receipts leave out the world's identity and derived
+  pools.
+- **Agents.** Nine MCP tools (51 in all), matching CLI commands and agent client
+  methods, `video` and `lore` upload kinds, and skill/reference updates. Accepting
+  a proposal and deleting a world require explicit confirmation.
+- Deliberately not included: pinned terms (the existing vocabulary path cannot
+  guarantee a term appears), planner weighting and section-aware behaviour, and
+  injecting world canon into the writer's context. Each would touch the protected
+  prompting scheme and needs the owner's approval first.
+- Stale instruction fix carried with this release: the file-drop count test now
+  expects the three new Worlds inputs (14).
 
-- **Launcher model discovery (`start.ps1`)**: Discovers GGUF models and mmproj projectors in a single filesystem pass with hashtable lookups by folder, reducing discovery time on large model collections from ~1.5–3.0s down to milliseconds.
-- **Unfinished runs listing (`webapp/mondo_web.py`)**: Switched directory entry iteration to `os.scandir` to utilize OS-cached file metadata on Windows, and added mtime-based directory size caching (`_run_size_cache`), eliminating deep recursive filesystem walks on every UI poll.
-- **Service probe efficiency (`mmv/services.py`)**: Cached launch command validation via `@functools.lru_cache`, avoiding repetitive JSON parsing during health checks, and reused a persistent `ThreadPoolExecutor` worker pool to eliminate thread creation and teardown overhead on 2.5s polling cycles.
-- **Color wheel rendering (`webapp/js/colorwheel.js`)**: Cached rendered wheel image data keyed by pixel dimensions, rendering subsequent color wheel mounts and modal openings instantaneously without recomputing 150,000+ pixels.
-- Bumped application version to 1.9.7 across package manifests, README, agent endpoints, and test suites.
+## 1.9.10 — Formatted vocabulary guide, tooltips and Labels relocation
 
-## 1.9.6 — LLama directory settings label
+Selective integration of hellonearthis's fork revision `79d8515`, reviewed
+adversarially in an isolated checkout.
 
-- Renamed the `writer_cwd` setting label in the Studio Settings interface from "Writer working folder" to "LLama Directory", matching launcher and operator conventions for configuring `llama-server.exe` working directories.
-- Bumped application version to 1.9.6 across package manifests, README, agent endpoints, and test suites.
+- The vocabulary guide dialog renders `docs/VOCABULARY_GUIDE.md` with a new
+  dependency-free Markdown renderer (`webapp/js/markdown.js`), with a raw-text
+  toggle and copy buttons for the document and for code blocks. Adapted from the
+  fork: a blockquote line with leading spaces recursed without end and overflowed
+  the stack (found by fuzzing, fixed); heading ids are prefixed `md-` so they
+  cannot collide with page ids such as `version`; only `https` links open in a
+  new tab, `#` anchors stay in the page and relative links render as plain text.
+- Tooltips prefer to open above the target and flip when they would clip. The
+  vocabulary category tabs and Select/Clear/Reset buttons explain what each
+  table does. The fork's tooltip for a twelfth `themes` table was dropped: the
+  catalog has eleven tables.
+- The component-labeling button moves from the header to Studio Settings (08)
+  and is no longer hidden at narrow widths; settings tooltips gain clearer
+  launch guidance without Windows-only example paths.
+- Deferred: Thematic Worlds, its Strict/Guided mode, juxtaposition and kappa
+  controls, the `thematic_worlds` request field, clustering and lint tools,
+  embedding setup and the Windows launch changes. See
+  `docs/COLLABORATOR_REVIEW.md`.
+- No protected prompts, pins or banner changed. Agent API, CLI and MCP are
+  unchanged: the guide is already served at `/api/vocabulary/guide`.
+
+## 1.9.9 — File drop on browser inputs
+
+All 11 browser file controls accept drops on their labeled areas. Dropped files
+enter the existing change handlers for song and reference uploads, actor and
+instrument images, and package/JSON selection. Multi-image drops replace the
+current selection. Unsupported types and too many images show an inline error
+without changing the selection. OAP and OPP inspection must be repeated after
+a new package selection; signer acceptance and import remain explicit. Settings
+Browse selects server paths and is unchanged. Agent API, CLI, MCP and the
+included skill keep their existing upload and import paths; the drag gesture is
+browser-only. No production, prompt, consent or automatic retry behavior changed.
+
+## 1.9.8 — Component labeling mode
+
+Integrates [hellonearthis](https://github.com/hellonearthis)'s fork commit `5e2bba4`: a **Labels** header button (Ctrl+Shift+L, Alt+L, Esc to exit) outlines the hovered interface component and shows its stable name and ID; clicking the badge copies them. Components carry `data-component*` attributes, and `docs/interface-guide.md` records the naming. Adapted for this tree: the Open Prop Protocol library card is labelled, and the badge is built with text nodes instead of `innerHTML`. The overlay is a developer and pair-programming aid with no workflow, so it is intentionally GUI-only; agents use the existing API, CLI and MCP surfaces. No protected prompting, paid-consent or retry behavior changed. See [collaborator review](COLLABORATOR_REVIEW.md).
+
+## 1.9.7 — Open Prop Protocol instrument references
+
+Added a private, general Open Prop Protocol v0.1 library. Users can upload,
+inspect and import signed `.opp` packages after explicitly accepting the
+inspected signer key, or separately allow an unsigned local draft. The app
+checks archive bounds, paths, hashes and signatures, preserves the original
+bundle, and creates clean image references. Its first production adapter lets
+an assigned musical role use a selected OPP base or interaction sheet; free-form
+use text picks an interaction match with a base fallback. The quote shows the
+selected sheet and reference-slot cost, and saved plans/fingerprints bind the
+chosen sheet and package bytes. Existing instrument sheets remain available,
+and the original prompt scheme stays unchanged. GUI, API, CLI, MCP and the
+included operation skill cover import, selection and preview. General prop use
+outside musical instruments is a later host workflow; OPP itself keeps arbitrary
+prop IDs and tags. No private props are included in source or release packages.
+Package-authored prompt modifiers and descriptions are kept as data and do not
+enter the writer prompt.
+
+Claude Code Sonnet 5.5 reviewed the MMV adapter read-only. Its sandbox could
+not read the sibling OPP checkout, so Codex compared the pinned protocol source
+and tests directly. The review prompted exact-key signer acceptance, package
+text isolation from writer prompts, and stronger import/replay checks. The
+collaborator fork's new component-labeling feature at `5e2bba4` was reviewed
+for compatibility and deferred to a separate interface task; see
+[collaborator review](COLLABORATOR_REVIEW.md).
+
+## 1.9.6 — Collaborator performance improvements
+
+Integrated compatible work from [hellonearthis](https://github.com/hellonearthis)'s fork commits `5b026e5` and `e6ef03e`: Windows model/projector discovery now scans GGUF files once, production child processes started by `JobContext` use UTF-8 mode, service probes reuse workers and validated launch commands, the color wheel reuses its rendered image, and unfinished-run listing uses directory entries for faster traversal. The run-size cache expires after five seconds because writes in nested folders do not update the run folder's mtime. The writer working-directory label now mentions llama.cpp while retaining its generic meaning for other local writers. Existing preview, start, paid consent, deletion confirmation and agent actions are unchanged.
+
+No performance timings or Windows execution are claimed from this Linux review. See [collaborator review](COLLABORATOR_REVIEW.md) for integration decisions.
 
 ## 1.9.5 — Bounded instrument action repair
 

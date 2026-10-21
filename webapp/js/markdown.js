@@ -39,14 +39,14 @@ export const parseInline = (text = "") => {
     .replace(/(^|[^\w])_([^_]+)_(?=[^\w]|$)/g, "$1<em>$2</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>");
 
-  // 4. Links [label](url)
+  // 4. Links [label](url): only http(s) opens in a new tab, #anchors stay in the page, anything else is plain text
   protectedText = protectedText.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
     (_, label, url) => {
-      const trimmedUrl = url.trim();
-      const isSafe = /^https?:\/\//i.test(trimmedUrl) || /^#|^(\.\.?\/)/i.test(trimmedUrl);
-      const safeHref = isSafe ? trimmedUrl : "#";
-      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      const href = url.trim();
+      if (/^https?:\/\//i.test(href)) return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      if (/^#[\w-]*$/.test(href)) return `<a href="#md-${href.slice(1)}">${label}</a>`;
+      return label;
     }
   );
 
@@ -118,7 +118,7 @@ export const renderMarkdown = (markdown = "") => {
     if (headingMatch) {
       const level = headingMatch[1].length;
       const titleText = headingMatch[2].trim();
-      const id = slugify(titleText);
+      const id = `md-${slugify(titleText)}`;
       const parsedTitle = parseInline(titleText);
       htmlParts.push(`<h${level} id="${id}">${parsedTitle}</h${level}>`);
       index++;
@@ -142,7 +142,7 @@ export const renderMarkdown = (markdown = "") => {
             quoteLines.length > 0 &&
             !lines[index].match(/^(#{1,6}\s|```|\||[-*+]\s|\d+\.\s)/)))
       ) {
-        quoteLines.push(lines[index].replace(/^>\s?/, ""));
+        quoteLines.push(lines[index].replace(/^\s*>\s?/, ""));
         index++;
       }
       const quoteHtml = renderMarkdown(quoteLines.join("\n"));
@@ -272,4 +272,3 @@ export const renderMarkdown = (markdown = "") => {
 
   return htmlParts.join("\n");
 };
-

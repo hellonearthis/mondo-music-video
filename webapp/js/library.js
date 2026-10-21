@@ -141,7 +141,7 @@ export async function loadActors() {
   $$(".actor-select").forEach((select) => {
     const old = [...select.selectedOptions].map((x) => x.value);
     if (!actors.length) {
-      const emptyOpt = option("", "No cast members yet — add in 02. Actors & OAP", "No cast members currently in your studio library");
+      const emptyOpt = option("", "No cast members yet — add in 03. Actors & OAP", "No cast members currently in your studio library");
       emptyOpt.disabled = true;
       select.replaceChildren(emptyOpt);
     } else {
@@ -360,6 +360,14 @@ export function initLibraryForms() {
     scheduleSave();
     notice(`Style “${result.name}” (${result.id}) successfully imported.`);
   }));
+
+  $("#oap-file").addEventListener("change", () => {
+    state.currentOap = undefined;
+    $("#oap-import-form").hidden = true;
+    $("#oap-report-card").hidden = true;
+    $("#oap-raw-toggle-wrap").hidden = true;
+    $("#oap-report").hidden = true;
+  });
 
   $("#inspect-oap").onclick = handle(async () => {
     const file = $("#oap-file").files[0];

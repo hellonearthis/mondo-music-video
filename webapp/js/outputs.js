@@ -386,7 +386,7 @@ export async function loadOutputs() {
     const videoOutputs = outputs.filter(output => output.kind === "video");
 
     const children = [
-      option("", identOutputs.length ? "None" : "None (render one in 06. Credits & idents)", "No ident clip attached")
+      option("", identOutputs.length ? "None" : "None (render one in 02. Credits & Idents)", "No ident clip attached")
     ];
 
     if (identOutputs.length) {

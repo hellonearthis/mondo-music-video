@@ -79,16 +79,25 @@ def stamp(seconds):
 
 
 def public_instrument_receipt(value):
-    """Instrument sheets and private import provenance never travel in demo receipts."""
+    """Instrument sheets, private import provenance and private world identity never travel in demo receipts."""
     if isinstance(value, list):
         return [public_instrument_receipt(item) for item in value]
     if not isinstance(value, dict):
         return value
     result = {key: public_instrument_receipt(item) for key, item in value.items()}
+    if result.get('world_id'):
+        for key in ('world_id', 'world_pool_mode', 'custom_vocabulary'):
+            result.pop(key, None)  # A private world's identity and its derived pools stay out of shared receipts.
+    result.pop('instrument_props', None)
+    result.pop('instrument_prop_uses', None)
     if isinstance(result.get('instruments'), dict):
         performance = result['instruments']
         performance.pop('notice', None)  # Old saved plans retain their binding, but internal notes do not travel in demo receipts.
-        performance['assets'] = {kind: {key: item for key, item in asset.items() if key not in ('path', 'provenance', 'original_sha256')}
+        performance.pop('prop_ids', None)
+        performance.pop('prop_uses', None)
+        performance['assets'] = {kind: ({key: asset[key] for key in ('id', 'kind', 'version', 'sha256') if key in asset}
+                                         if asset.get('prop_id') else
+                                         {key: item for key, item in asset.items() if key not in ('path', 'provenance', 'original_sha256')})
                                  for kind, asset in performance.get('assets', {}).items()}
     if isinstance(result.get('reference_identity'), dict):
         result['reference_identity'] = {kind: {'sha256': asset.get('sha256')}
@@ -113,7 +122,7 @@ class Package:
         target.parent.mkdir(parents=True, exist_ok=True)
         if source.suffix.lower() in TEXT:
             content = source.read_text(encoding='utf-8', errors='replace')
-            if source.suffix.lower() == '.json' and (source.name == 'prepared.json' or source.parent.name == 'writer_jobs'):
+            if source.suffix.lower() == '.json' and (source.name in ('prepared.json', 'request.json') or source.parent.name == 'writer_jobs'):
                 value = json.loads(content)
                 public = public_instrument_receipt(value)
                 if public != value:

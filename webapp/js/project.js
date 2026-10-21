@@ -1,3 +1,4 @@
+import { openWorldsPanel } from "./worlds.js";
 import { $, $$, api, json, notice, option, state, updateLogDisplay } from "./core.js";
 import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 
@@ -15,6 +16,9 @@ export function panel(name) {
   });
   if (name === "vocab") {
     openVocabularyPanel().catch(error => notice(error.message));
+  }
+  if (name === "worlds") {
+    openWorldsPanel().catch(error => notice(error.message));
   }
   scheduleSave();
 }
@@ -52,7 +56,7 @@ export function getProjectState() {
   const forms = {};
   const files = {};
 
-  ["video-form", "harvest-form", "ident-form", "actor-form", "style-form"].forEach(id => {
+  ["video-form", "harvest-form", "ident-form", "actor-form", "style-form", "world-form"].forEach(id => {
     const form = $("#" + id);
     if (!form) return;
     const data = {};
@@ -172,6 +176,7 @@ export async function restoreProject() {
     syncDanceControls(form);
     syncInstrumentControls(form);
   });
+  $("#world-form")?.elements.world_mode.dispatchEvent(new Event("change"));
 
   const filesData = saved.files || {};
   Object.entries(filesData).forEach(([formId, fileState]) => {
@@ -224,7 +229,7 @@ export function initNavigation() {
   const backBtn = $("#back-to-video");
   if (backBtn) backBtn.onclick = () => panel("video");
 
-  $$(".production-form, #actor-form, #style-form").forEach(form => {
+  $$(".production-form, #actor-form, #style-form, #world-form").forEach(form => {
     form.addEventListener("input", scheduleSave);
     form.addEventListener("change", scheduleSave);
   });

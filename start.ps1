@@ -135,7 +135,6 @@ function Get-DiscoveredModels {
     if (-not (Test-Path $modelsDir)) { return @() }
     $allGgufs = Get-ChildItem -Path $modelsDir -Recurse -Filter "*.gguf" -File -ErrorAction SilentlyContinue
     if (-not $allGgufs) { return @() }
-
     # Index projector paths by folder in a single pass to eliminate repetitive disk queries
     $projByDir = @{}
     foreach ($item in $allGgufs) {

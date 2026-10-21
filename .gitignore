@@ -31,10 +31,14 @@ config.local.*
 # User data and generated work
 data/
 uploads/
+worlds/
+world-proposals/
+*.world.json
 exports/
 styles/
 actors/
 /instruments/
+/props/
 runs/
 models/
 downloads/
@@ -42,6 +46,7 @@ logs/
 oap_inbox/
 oap_outbox/
 *.oap
+*.opp
 
 # Editor and OS files
 .idea/

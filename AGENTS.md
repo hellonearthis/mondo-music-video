@@ -49,6 +49,14 @@ verify the assets appear in the app. Never import other local/private assets.
   delivery. Documentation-only deliveries do not bump versions.
 - Freshly import the version handler when verifying a version. Verify live
   `/api/version` too before claiming that a running process has that version.
+- After a local user-facing app change, leave the updated app running for user
+  review by default. Before replacing an existing process, check its operation
+  state and preserve any active work; if it is busy, do not interrupt it and
+  report that the update cannot be shown yet. Start with the installation's
+  existing data, port and settings, keep automatic updates disabled unless the
+  user enabled them, then verify the live `/api/version` and served UI. Give the
+  user the local URL and say whether a browser refresh is needed. Starting the
+  UI does not authorize generation, paid calls or GPU work.
 - Keep one active operation, no production queue, explicit paid consent and
   upstream OAP verification. Do not retry paid submissions automatically.
 - Use temporary data and mock services for automated tests. Real paid/GPU/Topaz
@@ -69,6 +77,16 @@ verify the assets appear in the app. Never import other local/private assets.
   discovery and mock transport tests current; preserve confirmation and
   paid-consent guards. Record any intentional agent-interface limitation in
   release documentation instead of silently leaving a GUI-only path.
+- Keep OPP package storage general to props. Its current production adapter may
+  select props for musical instruments, but do not constrain OPP IDs, tags or
+  package semantics to the four current instrument roles. Inspect, explicit
+  signer acceptance, local import, sheet selection, preview and replay checks
+  must remain available to agents as well as the GUI.
+- Keep the left sidebar tidy: generative workspaces (those that create video,
+  idents, styles, worlds or other media) stay at the top, library/management
+  tabs follow, and **Settings is always the last tab**. Any new or moved tab
+  must keep the 01–NN numbers consecutive and update every in-app reference to
+  a numbered tab. `tests/test_public_app.py` enforces the order.
 - Keep contributor GitHub handles out of application labels, tooltips, notices
   and help text. Preserve contribution credit in contributor/review/release documentation.
 

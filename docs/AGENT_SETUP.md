@@ -41,11 +41,20 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.9.5 exposes **39 tools** and advertises the
+v1.10.0 exposes **51 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
+
+Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. See [Worlds](WORLDS.md).
+
+The browser's file drop areas are a selection shortcut. Agents use the existing
+`upload_media`/CLI `upload` for songs, references and packages, or the actor and
+instrument import tools for their image files. A new selection replaces the
+files in that control; upload IDs are passed to the same preview, inspection,
+import and recovery calls. Package selection never accepts a signer or imports
+anything on its own. There is no separate drag action in the agent interfaces.
 
 When a video fails prompt validation before rendering, `inspect_studio` status
 reports `can_retry_prompts`. Use `preview_retry_prompts(run_id)` (CLI:
@@ -60,6 +69,21 @@ which shots changed. Wrong-instrument actions still require writer correction.
 ## Instrument-playing actors
 
 See [instrument performance](INSTRUMENTS.md). `inspect_studio(kind="instruments")` lists available sheets; `import_instrument` imports a user-selected sheet with license/provenance locally. Preview `instrument_mode: "perform"`, `instrument_assignments: {actor_id: "guitar"}` and optional `instrument_references` (true by default). Mode off preserves original prompts/fingerprints. Review passage activity and reference counts before consent. Private provenance never enters the writer job or demo receipts. Guitar/keyboard sheets are bundled; drums/bass sheets and operator render validation are pending.
+
+OPP v0.1 props are a separate, general local library. Upload a user-selected
+`.opp` with `upload_media(kind="opp")`, call `inspect_opp(filename)` to review
+the manifest and verification report, then call `import_opp(filename,
+accept_signer="PUBLIC_KEY_FROM_INSPECT")` for a signed package whose signer the user accepts. For
+an unsigned local draft, explicitly pass `allow_unsigned=true` to inspection
+and import. `inspect_studio(kind="props")` lists imported props, and
+`select_opp_sheet(prop_id, use)` previews the base or interaction sheet chosen
+for free-form use text. The CLI exposes `upload opp`, `inspect-opp`,
+`import-opp`, `props`, and `select-opp-sheet` equivalents. The current video
+request can use an imported prop for an assigned musical role with
+`instrument_props: {"guitar": "prop-id"}` and optional
+`instrument_prop_uses: {"guitar": "strumming strings"}`. OPP prop IDs and tags
+remain free-form; other prop uses are not wired into production yet. Review
+the chosen sheet and slot count in the quote, then use the usual start consent.
 
 ## Independent dance
 
@@ -210,8 +234,8 @@ Agreements do not move money, approve rider exceptions or establish signer trust
 | `update_studio_settings` | Patch supported model/service/profile preferences, Laya device, H3 model selections, or the auto-update switch. Executable launch commands and secret values are excluded; configure those with the installer/GUI. |
 | `install_starter_assets` | Install only the four public actors and six styles, preserving existing items and removals. Without signer acceptance, return pending actors, public signer and riders for review. Set `accept_starter_signer` only with user acceptance; set `restore_removed` only when explicitly restoring deleted starters. |
 | `delete_actor`, `delete_style` | Remove an unwanted local asset with authorization and `confirm=true`, keeping completed outputs/exports. Production blocks deletion. |
-| `export_style` | Read-only. Download or retrieve a visual style card as JSON, including any 11-axis forensic breakdown. |
-| `import_style` | Import a visual style card into local styles. ID must match `^[a-z0-9][a-z0-9_-]{0,63}$`. Overwrite requires explicit `overwrite=true`. Preserves 11-axis style cards. |
+| `export_style` | Retrieve a visual style card as JSON, including its 11-axis breakdown when present. |
+| `import_style` | Import a visual style card. IDs match `^[a-z0-9][a-z0-9_-]{0,63}$`; overwriting an existing style requires `overwrite=true`. |
 
 All mutations go through the app's idle guard; existing paid consent and retry
 rules are unchanged. Adding/selecting profiles never submits a paid generation.
