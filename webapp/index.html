@@ -13,7 +13,7 @@
 <body>
 <header data-component="Studio Header" data-component-id="studio-header" data-component-source="webapp/index.html"><a class="brand" href="/" data-tooltip="Mondo Music Video — Return to the main studio" title="Mondo Music Video — Return to the main studio"><span class="brand-mark">M</span><span>MONDO<small>MUSIC VIDEO</small></span></a>
   <div class="edition" data-tooltip="Mondo Music Video application version" title="Mondo Music Video application version">A LITTLE STUDIO. A BIG PICTURE.<span>Community edition <span id="version"></span></span></div>
-  <div class="header-actions"><button type="button" id="toggle-component-labels" class="secondary" data-tooltip="Toggle Component Labeling Mode (Ctrl+Shift+L) to inspect component names and stable IDs" title="Toggle Component Labeling Mode (Ctrl+Shift+L) to inspect component names and stable IDs" aria-pressed="false">🏷️ Labels</button>
+  <div class="header-actions">
   <button type="button" id="theme-toggle" class="secondary" aria-label="Dark mode" aria-pressed="true">Dark mode</button>
   <button type="button" class="oap-badge oap-help-btn" data-tooltip="Open Actor Protocol specification version supported by this studio — Click for guide and details" title="Open Actor Protocol specification version supported by this studio — Click for guide and details">OAP BUILT IN <span id="oap-version"></span> <span class="oap-badge-info">&#x2139;&#xFE0F;</span></button></div></header>
 <div class="shell">
@@ -220,9 +220,15 @@
   </div>
 </div></form></section>
 
-<section id="panel-vocab" class="panel" data-component="Visual Vocabulary Workspace" data-component-id="panel-vocab" data-component-source="webapp/index.html" hidden><div class="eyebrow">02 / VISUAL VOCABULARY ENGINE</div><div class="panel-header-row"><h1>Fine-tune your <em>visual language.</em></h1><button type="button" class="secondary vocab-help-btn" data-tooltip="Read the Visual Vocabulary Architecture &amp; Customization Guide">&#x2139;&#xFE0F; Vocabulary guide</button></div><p class="intro">Fine-tune the rotation pools that the Mondo music-video planner samples for camera, lighting, settings, and props. Filter built-in keywords, add custom terms, roll deterministic pseudo-random seeds, or save reusable presets.</p>
+<section id="panel-vocab" class="panel" data-component="Visual Vocabulary Workspace" data-component-id="panel-vocab" data-component-source="webapp/index.html" hidden><div class="eyebrow">02 / VISUAL VOCABULARY ENGINE</div><div class="panel-header-row"><h1>Fine-tune your <em>visual language.</em></h1><div style="display:flex;gap:10px;align-items:center;"><button type="button" id="vocab-view-worlds-btn" class="secondary" data-tooltip="Switch to Thematic Worlds, semantic clustering, and juxtaposition control">🧭 Thematic Worlds &amp; Classification</button><button type="button" class="secondary vocab-help-btn" data-tooltip="Read the Visual Vocabulary Architecture &amp; Customization Guide">&#x2139;&#xFE0F; Vocabulary guide</button></div></div><p class="intro">Fine-tune the rotation pools that the Mondo music-video planner samples for camera, lighting, settings, and props. Filter built-in keywords, add custom terms, roll deterministic pseudo-random seeds, or align your prompt to semantic world clusters.</p>
+
+<div class="vocab-main-nav-bar" role="tablist">
+  <button type="button" id="tab-vocab-keywords" class="vocab-main-tab active" data-tooltip="Inspect and filter individual vocabulary category keyword pools">📋 Keyword Pools (12 Tables)</button>
+  <button type="button" id="tab-vocab-worlds" class="vocab-main-tab" data-tooltip="Align your song prompt to semantic world clusters, set juxtaposition arc, and balance pools">🧭 Thematic Worlds &amp; Classification</button>
+</div>
 
 <div class="card vocab-panel-card" data-component="Visual Vocabulary Editor Card" data-component-id="card-vocab-editor" data-component-source="webapp/index.html">
+  <div id="vocab-category-workspace">
   <div class="vocab-dialog-header">
     <div class="vocab-preset-loader">
       <label>Load preset or profile:
@@ -271,7 +277,7 @@
     </details>
   </div>
 
-  <div class="vocab-tabs-container">
+  <div class="vocab-tabs-container" data-tooltip-position="top">
     <div class="vocab-category-tabs" id="vocab-category-tabs">
       <!-- Tabs generated via JavaScript -->
     </div>
@@ -296,11 +302,11 @@
     <div class="vocab-builtin-section" id="vocab-builtin-section">
       <div class="vocab-filter-toolbar">
         <input type="text" id="vocab-search-input" placeholder="Search entries in this category..." autocomplete="off">
-        <div class="vocab-filter-buttons">
-          <button type="button" id="vocab-random-cat-btn" class="quiet" data-tooltip="Randomly pick N entries in this category only">🎲 Randomize category</button>
-          <button type="button" id="vocab-select-all-btn" class="quiet">Select all</button>
-          <button type="button" id="vocab-clear-all-btn" class="quiet">Clear all</button>
-          <button type="button" id="vocab-reset-cat-btn" class="quiet">Reset category</button>
+        <div class="vocab-filter-buttons" data-tooltip-position="top">
+          <button type="button" id="vocab-random-cat-btn" class="quiet" data-tooltip="Randomly pick N entries in this category only" data-tooltip-position="top">🎲 Randomize category</button>
+          <button type="button" id="vocab-select-all-btn" class="quiet" data-tooltip="Include all built-in entries in this category for prompt generation" data-tooltip-position="top" title="Include all built-in entries in this category for prompt generation">Select all</button>
+          <button type="button" id="vocab-clear-all-btn" class="quiet" data-tooltip="Exclude all built-in entries in this category, keeping only custom additions" data-tooltip-position="top" title="Exclude all built-in entries in this category, keeping only custom additions">Clear all</button>
+          <button type="button" id="vocab-reset-cat-btn" class="quiet" data-tooltip="Restore default built-in entries for this category, discarding exclusions" data-tooltip-position="top" title="Restore default built-in entries for this category, discarding exclusions">Reset category</button>
         </div>
       </div>
       <div class="vocab-checkbox-grid" id="vocab-checkbox-grid">
@@ -325,6 +331,69 @@
     <div class="vocab-dialog-actions">
       <button type="button" id="vocab-reset-all-btn" class="quiet">Reset all customizations</button>
       <button type="button" id="vocab-apply-btn" class="primary">Apply to Current Video</button>
+    </div>
+  </div>
+  </div>
+
+  <div id="vocab-worlds-workspace" hidden>
+    <div class="worlds-workspace-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+      <p class="muted" style="margin:0;font-size:12px;">Map your song premise to semantic world clusters, control juxtaposition levels, and filter visual rotation tables.</p>
+      <button type="button" class="secondary vocab-help-btn" data-tooltip="Open the Visual Vocabulary Architecture &amp; Thematic Worlds Guide">&#x2139;&#xFE0F; Thematic Worlds Guide</button>
+    </div>
+    <div class="card worlds-step-card">
+      <div class="worlds-card-header">
+        <span class="worlds-step-num">1</span>
+        <h3 style="margin:0;font-size:15px;font-weight:600;">Describe the video</h3>
+      </div>
+      <label for="worlds-prompt-input" class="sub" style="margin-bottom:6px;display:block;">Song premise or thematic direction:</label>
+      <textarea id="worlds-prompt-input" rows="2" style="width:100%;font-size:13px;line-height:1.5;margin-bottom:12px;" placeholder="A night-shift clerk drifts through an endless government archive">A night-shift clerk drifts through an endless government archive</textarea>
+      <div class="sub" style="margin:10px 0 8px;">Matched worlds. Untick to drop one, lock to preserve it when prompt changes:</div>
+      <div id="worlds-clusters-list" class="worlds-clusters-list"></div>
+    </div>
+
+    <div class="card worlds-step-card">
+      <div class="worlds-card-header">
+        <span class="worlds-step-num">2</span>
+        <h3 style="margin:0;font-size:15px;font-weight:600;">Choose how worlds are used (Classification mode)</h3>
+      </div>
+      <div class="worlds-seg-group" role="group" aria-label="Classification mode">
+        <button type="button" class="worlds-mode-btn" data-mode="off" data-tooltip="Sample from the entire visual vocabulary pool. Thematic worlds are ignored.">Off</button>
+        <button type="button" class="worlds-mode-btn on" data-mode="guided" data-tooltip="Matched thematic worlds are heavily weighted. Strays remain possible.">Guided</button>
+        <button type="button" class="worlds-mode-btn" data-mode="strict" data-tooltip="Strictly confined to matched anchor worlds plus kappa-governed strays.">Strict</button>
+      </div>
+      <div id="worlds-mode-note" class="sub" style="margin:8px 0 16px;">Matched thematic worlds are weighted up. Diverse strays remain possible across musical passages.</div>
+
+      <div class="worlds-slider-row">
+        <span class="worlds-slider-label">Juxtaposition</span>
+        <span class="sub">Coherent</span>
+        <input type="range" id="worlds-juxtaposition-slider" min="0" max="100" step="1" value="50" aria-label="Juxtaposition level" style="flex:1;">
+        <span class="sub">Clashing</span>
+        <span id="worlds-slider-multiplier" class="worlds-multiplier-val">x1.0</span>
+      </div>
+
+      <div id="worlds-kappa-bars" class="worlds-bars-grid"></div>
+      <div class="sub" style="margin-top:10px;">Kappa (&kappa;) per section. Amber bars (&ge; 0.90) indicate intense juxtaposition and suspend tier adjacency.</div>
+    </div>
+
+    <div class="card worlds-step-card">
+      <div class="worlds-card-header">
+        <span class="worlds-step-num">3</span>
+        <h3 style="margin:0;font-size:15px;font-weight:600;">Review the pools</h3>
+      </div>
+      <div class="sub" style="margin-bottom:14px;">Click any term to cycle state: Included &rarr; Pinned (must appear) &rarr; Excluded.</div>
+      <div id="worlds-pools-list" class="worlds-pools-list"></div>
+    </div>
+
+    <div class="vocab-dialog-footer worlds-footer">
+      <div class="worlds-footer-summary">
+        <span class="worlds-summary-pill" id="worlds-summary-status">Mode: Guided · 2 worlds active · Juxtaposition x1.0</span>
+      </div>
+      <p class="muted" style="margin:0;font-size:12px;flex:1 1 200px;">Click <strong>Apply Worlds to Current Video</strong> to bind these thematic pools and juxtaposition rules to your active music video. Leaving without applying keeps previous settings.</p>
+      <div class="vocab-dialog-actions">
+        <button type="button" class="secondary vocab-help-btn" data-tooltip="Open the Thematic Worlds Architecture &amp; Customization Guide">&#x2139;&#xFE0F; Guide</button>
+        <button type="button" id="worlds-reset-btn" class="quiet" data-tooltip="Reset worlds, mode, slider, and pool terms back to defaults">Reset worlds</button>
+        <button type="button" id="worlds-apply-btn" class="primary" data-tooltip="Apply this Thematic World configuration to your active music video and return to 01 / Music video">Apply Worlds to Current Video</button>
+      </div>
     </div>
   </div>
 </div></section>
@@ -369,7 +438,7 @@
 </details>
 </section>
 
-<section id="panel-settings" class="panel" data-component="Studio Settings Panel" data-component-id="panel-settings" data-component-source="webapp/index.html" hidden><div class="eyebrow">08 / YOUR MACHINE, YOUR STUDIO</div><div class="panel-header-row"><h1>Set the <em>stage.</em></h1><button type="button" class="secondary llama-help-btn" data-tooltip="Open guide for configuring local llama.cpp writer, vision models, and token buffers">Local writer setup guide</button></div><p class="intro">Connect your own services and installed models. Save multiple API profiles and select writing, vision and video accounts independently. Save Settings and a key before capturing a profile. Your keys stay on this machine and are never returned by the settings API.</p><form id="settings-form" class="card" data-component="Studio Settings Form" data-component-id="settings-form" data-component-source="webapp/index.html"><div id="settings-fields" class="form-grid" data-tooltip="Studio engine and model configuration parameters" title="Studio engine and model configuration parameters"></div><button class="primary operation-action" data-tooltip="Save all settings to local settings.json" title="Save all settings to local settings.json">Save settings</button></form><form id="key-form" class="card narrow" data-component="Provider Keys Form" data-component-id="key-form" data-component-source="webapp/index.html"><h2>Provider keys</h2><label data-tooltip="Select provider credential to store locally" title="Select provider credential to store locally">Credential<select name="name" data-tooltip="Choose which API key to configure" title="Choose which API key to configure"><option>WAVESPEED_API_KEY</option><option>MMV_COMFY_API_KEY</option><option>MMV_VISION_API_KEY</option><option>MMV_WRITER_API_KEY</option></select></label><label data-tooltip="Enter provider secret key (stored in a local file with filesystem permissions)" title="Enter provider secret key (stored in a local file with filesystem permissions)">API key<input name="value" type="password" autocomplete="new-password" required data-tooltip="Paste your API key here" title="Paste your API key here"></label><p id="key-status" class="muted" data-tooltip="Credential configuration status" title="Credential configuration status"></p><button class="secondary operation-action" data-tooltip="Save this secret key securely to your local machine" title="Save this secret key securely to your local machine">Save key locally</button></form><p class="muted">Keep the server on localhost. See the included installation and platform guides for setup details.</p></section>
+<section id="panel-settings" class="panel" data-component="Studio Settings Panel" data-component-id="panel-settings" data-component-source="webapp/index.html" hidden><div class="eyebrow">08 / YOUR MACHINE, YOUR STUDIO</div><div class="panel-header-row"><h1>Set the <em>stage.</em></h1><div style="display:flex;gap:10px;align-items:center;"><button type="button" id="toggle-component-labels" class="secondary" data-tooltip="Developer debugging tool: highlights component boundaries and copies stable IDs to help identify HTML elements when working with AI vibe coders (Ctrl+Shift+L)" title="Developer debugging tool: highlights component boundaries and copies stable IDs to help identify HTML elements when working with AI vibe coders (Ctrl+Shift+L)" aria-pressed="false">🏷️ Labels</button><button type="button" class="secondary llama-help-btn" data-tooltip="Open guide for configuring local llama.cpp writer, vision models, and token buffers">Local writer setup guide</button></div></div><p class="intro">Connect your own services and installed models. Save multiple API profiles and select writing, vision and video accounts independently. Save Settings and a key before capturing a profile. Your keys stay on this machine and are never returned by the settings API.</p><form id="settings-form" class="card" data-component="Studio Settings Form" data-component-id="settings-form" data-component-source="webapp/index.html"><div id="settings-fields" class="form-grid" data-tooltip="Studio engine and model configuration parameters" title="Studio engine and model configuration parameters"></div><button class="primary operation-action" data-tooltip="Save all settings to local settings.json" title="Save all settings to local settings.json">Save settings</button></form><form id="key-form" class="card narrow" data-component="Provider Keys Form" data-component-id="key-form" data-component-source="webapp/index.html"><h2>Provider keys</h2><label data-tooltip="Select provider credential to store locally" title="Select provider credential to store locally">Credential<select name="name" data-tooltip="Choose which API key to configure" title="Choose which API key to configure"><option>WAVESPEED_API_KEY</option><option>MMV_COMFY_API_KEY</option><option>MMV_VISION_API_KEY</option><option>MMV_WRITER_API_KEY</option></select></label><label data-tooltip="Enter provider secret key (stored in a local file with filesystem permissions)" title="Enter provider secret key (stored in a local file with filesystem permissions)">API key<input name="value" type="password" autocomplete="new-password" required data-tooltip="Paste your API key here" title="Paste your API key here"></label><p id="key-status" class="muted" data-tooltip="Credential configuration status" title="Credential configuration status"></p><button class="secondary operation-action" data-tooltip="Save this secret key securely to your local machine" title="Save this secret key securely to your local machine">Save key locally</button></form><p class="muted">Keep the server on localhost. See the included installation and platform guides for setup details.</p></section>
 
 <section id="panel-teaser" class="panel" data-component="Teaser Preview Panel" data-component-id="panel-teaser" data-component-source="webapp/index.html" hidden><div class="eyebrow">A BIGGER STUDIO AWAITS</div><h1 id="teaser-title"></h1><p class="intro" id="teaser-description"></p><div class="card narrow"><h2>Part of the full Mondo studio</h2><p>This feature is not included in Mondo Music Video. This community edition is dedicated to music videos, actors, styles, and idents.</p><button id="back-to-video" class="primary" data-tooltip="Return to the music video creation studio" title="Return to the music video creation studio">Back to making music videos</button></div></section>
 <footer>MAXIMUM GOOSE LABORATORY <span data-tooltip="Mondo Music Video motto" title="Mondo Music Video motto">MAKE SOMETHING THAT MOVES.</span></footer>
@@ -426,11 +495,33 @@
   <button type="button" id="delete-confirm-btn" class="primary" style="background:#b91c1c;border-color:#991b1b;color:#fff;">Delete permanently</button>
 </div>
 </dialog>
-<dialog id="vocab-helper-dialog" class="oap-dialog" data-component="Visual Vocabulary Guide Dialog" data-component-id="vocab-helper-dialog" data-component-source="webapp/index.html" aria-labelledby="vocab-guide-title">
-<form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide">×</button></form>
-<h2 id="vocab-guide-title">Visual vocabulary guide</h2>
-<pre id="vocab-guide-raw">Loading guide…</pre>
-<div class="oap-dialog-footer"><button type="button" class="secondary nav-to-vocab-btn">Open Visual vocabulary</button><button type="button" class="primary close-vocab-dialog">Close guide</button></div>
+<dialog id="vocab-helper-dialog" class="oap-dialog vocab-guide-dialog" data-component="Visual Vocabulary Guide Dialog" data-component-id="vocab-helper-dialog" data-component-source="webapp/index.html" aria-labelledby="vocab-guide-title">
+<form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide" data-tooltip="Dismiss guide dialog">×</button></form>
+<div class="vocab-guide-header">
+  <div class="eyebrow" style="margin-bottom:6px;">02 / VISUAL VOCABULARY ENGINE ARCHITECTURE</div>
+  <div class="vocab-guide-title-row">
+    <h2 id="vocab-guide-title" style="margin:0;">Visual Vocabulary Architecture &amp; Customization Guide</h2>
+    <div class="vocab-guide-actions">
+      <button type="button" id="toggle-vocab-raw-btn" class="quiet" data-tooltip="Switch between rendered documentation and raw markdown text">View raw markdown</button>
+      <button type="button" id="copy-vocab-doc-btn" class="secondary" data-tooltip="Copy the full markdown guide to your clipboard">📋 Copy Markdown</button>
+    </div>
+  </div>
+</div>
+<div class="vocab-guide-scroll-body" id="vocab-guide-body">
+  <div id="vocab-guide-formatted" class="markdown-body">
+    <p style="color:var(--muted);font-style:italic;">Loading architecture guide…</p>
+  </div>
+  <pre id="vocab-guide-raw" hidden>Loading raw guide…</pre>
+</div>
+<div class="oap-dialog-footer">
+  <div class="vocab-guide-footer-note" style="font-size:11px;color:var(--muted);">
+    Source: <code>docs/VOCABULARY_GUIDE.md</code>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button type="button" class="secondary nav-to-vocab-btn">Open Visual vocabulary</button>
+    <button type="button" class="primary close-vocab-dialog">Close guide</button>
+  </div>
+</div>
 </dialog>
 <div id="studio-tooltip" class="studio-tooltip" role="tooltip" hidden></div>
 </body></html>

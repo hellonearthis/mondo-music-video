@@ -201,6 +201,13 @@ def vision_command(writer_launch_json, port):
     if not model:
         raise ValueError('writer launch needs a local -m model')
     path = Path(model).expanduser()
+    if not path.is_file() and not path.is_absolute():
+        for root in [Path("C:/llamaCPP"), Path("C:/llamaCPP/models")]:
+            candidate = root / path
+            if candidate.is_file() or candidate.parent.is_dir():
+                path = candidate
+                model = str(candidate)
+                break
     def family(stem):
         stem = re.sub(r'^mmproj[-_.]*', '', stem, flags=re.I)
         return re.sub(r'[-_.](?:[qi]q?\d.*|f16|f32|bf16)$', '', stem, flags=re.I).lower()

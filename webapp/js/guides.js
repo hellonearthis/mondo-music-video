@@ -1,6 +1,7 @@
 // Interactive In-App Help & Architecture Guides (OAP, llama.cpp tuning, Vocabulary).
 
 import { $, $$, api, copyToClipboard, handle, notice } from "./core.js";
+import { renderMarkdown } from "./markdown.js";
 
 let vocabDocLoaded = false;
 
@@ -123,24 +124,32 @@ export function setupLlamaGuide() {
 export async function loadVocabGuideMarkdown() {
   if (vocabDocLoaded) return;
   const rawPre = $("#vocab-guide-raw");
-  if (!rawPre) return;
+  const formattedDiv = $("#vocab-guide-formatted");
+  if (!rawPre && !formattedDiv) return;
   try {
     const resp = await api("/api/vocabulary/guide");
     if (resp.ok) {
       const data = await resp.json();
-      rawPre.textContent = data.markdown || "Guide content empty.";
+      const markdown = data.markdown || "Guide content empty.";
+      if (rawPre) rawPre.textContent = markdown;
+      if (formattedDiv) formattedDiv.innerHTML = renderMarkdown(markdown);
       vocabDocLoaded = true;
     } else {
-      rawPre.textContent = "Could not load the vocabulary guide.";
+      if (rawPre) rawPre.textContent = "Could not load the vocabulary guide.";
+      if (formattedDiv) formattedDiv.innerHTML = "<p>Could not load the vocabulary guide.</p>";
     }
   } catch {
-    rawPre.textContent = "Error fetching vocabulary guide from server.";
+    if (rawPre) rawPre.textContent = "Error fetching vocabulary guide from server.";
+    if (formattedDiv) formattedDiv.innerHTML = "<p>Error fetching vocabulary guide from server.</p>";
   }
 }
 
 export function setupVocabGuide() {
   const dialog = $("#vocab-helper-dialog");
   if (!dialog) return;
+
+  // Pre-load guide in background so it renders immediately when opened
+  loadVocabGuideMarkdown().catch(() => {});
 
   $$(".vocab-help-btn").forEach(btn => {
     btn.onclick = () => {
@@ -162,20 +171,18 @@ export function setupVocabGuide() {
     };
   });
 
-  $$("#vocab-helper-dialog .vocab-tab-btn").forEach(tabBtn => {
-    tabBtn.onclick = () => {
-      const tabId = tabBtn.dataset.tab;
-      $$("#vocab-helper-dialog .vocab-tab-btn").forEach(b => b.classList.toggle("active", b === tabBtn));
-      $$("#vocab-helper-dialog .oap-tab-content").forEach(content => {
-        const matches = content.id === `tab-${tabId}`;
-        content.classList.toggle("active", matches);
-        content.hidden = !matches;
-      });
-      if (tabId === "vocab-doc") {
-        loadVocabGuideMarkdown();
-      }
+  const toggleRawBtn = $("#toggle-vocab-raw-btn");
+  if (toggleRawBtn) {
+    toggleRawBtn.onclick = () => {
+      const rawPre = $("#vocab-guide-raw");
+      const formattedDiv = $("#vocab-guide-formatted");
+      if (!rawPre || !formattedDiv) return;
+      const isRawVisible = !rawPre.hidden;
+      rawPre.hidden = isRawVisible;
+      formattedDiv.hidden = !isRawVisible;
+      toggleRawBtn.textContent = isRawVisible ? "View raw markdown" : "View formatted guide";
     };
-  });
+  }
 
   const copyBtn = $("#copy-vocab-doc-btn");
   if (copyBtn) {
@@ -188,11 +195,25 @@ export function setupVocabGuide() {
       }
       if (!await copyToClipboard(content)) throw new Error("Could not copy document to clipboard.");
       notice("Vocabulary Architecture Guide copied to clipboard.");
-      const status = $("#vocab-doc-status");
-      if (status) {
-        status.textContent = "Copied to clipboard!";
-        setTimeout(() => { if (status) status.textContent = ""; }, 3000);
-      }
+      const origText = copyBtn.textContent;
+      copyBtn.textContent = "✓ Copied!";
+      setTimeout(() => { copyBtn.textContent = origText; }, 2500);
+    });
+  }
+
+  const guideBody = $("#vocab-guide-body");
+  if (guideBody) {
+    guideBody.onclick = handle(async (event) => {
+      const copyCodeBtn = event.target.closest(".md-copy-btn");
+      if (!copyCodeBtn) return;
+      const codeBlock = copyCodeBtn.closest(".md-code-block");
+      const codeText = codeBlock?.querySelector("code")?.textContent || "";
+      if (!codeText) return;
+      if (!await copyToClipboard(codeText)) throw new Error("Could not copy code snippet.");
+      notice("Code snippet copied to clipboard.");
+      const origText = copyCodeBtn.textContent;
+      copyCodeBtn.textContent = "✓ Copied";
+      setTimeout(() => { copyCodeBtn.textContent = origText; }, 2000);
     });
   }
 }

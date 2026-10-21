@@ -120,6 +120,9 @@ export async function preview(form) {
       request.content[category] = request["rating_" + category];
       delete request["rating_" + category];
     }
+    if (state.thematicWorlds && state.thematicWorlds.mode && state.thematicWorlds.mode !== "off") {
+      request.thematic_worlds = state.thematicWorlds;
+    }
     if (state.currentCustomVocab && Object.keys(state.currentCustomVocab).length) {
       request.custom_vocabulary = state.currentCustomVocab;
     }
@@ -210,6 +213,13 @@ export function showQuote(request, quote) {
   if (quote.captions) {
     if (quote.captions.note) summary.append(text("p", quote.captions.note, "se-warn"));
     else summary.append(text("p", `Lyric captions: ${quote.captions.cues.length} line(s) ${quote.captions.mode === "burned" ? "burned into the video (a copy without captions is kept) and saved" : "saved"} as lyrics.srt.`, "muted"));
+  }
+  if (request.thematic_worlds && request.thematic_worlds.mode && request.thematic_worlds.mode !== "off") {
+    const tw = request.thematic_worlds;
+    const activeNames = (tw.activeWorlds && tw.activeWorlds.length) ? tw.activeWorlds.join(", ") : "Selected themes";
+    const modeLabel = tw.mode.charAt(0).toUpperCase() + tw.mode.slice(1);
+    const mult = (2 * ((tw.slider ?? 50) / 100)).toFixed(1);
+    summary.append(text("p", `🧭 Thematic Worlds active: ${modeLabel} mode (juxtaposition ${tw.slider ?? 50}% / x${mult}), anchored by ${activeNames}.`, "muted"));
   }
   if (request.clip_quality && request.clip_quality !== "standard") {
     summary.append(text("p", `Studio-quality raw clips (${request.clip_quality === "prores" ? "ProRes 4444" : "FFV1 lossless"}): each passage clip is saved near-lossless for editing. `

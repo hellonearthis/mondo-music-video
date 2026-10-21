@@ -130,3 +130,58 @@ If we implement user-customizable vocabulary, `mmv/pipeline.py` should enforce f
 3. **Preserve `rigging`**: Keep `rigging` locked to `["lips firmly sealed shut, jaw completely relaxed"]` so [`mmv/engine/schema.py:validate_prompt()`](../mmv/engine/schema.py#L272-L273) (`RIGGING_TAIL`) never fails lip-sync validation.
 4. **Quote Fingerprinting**: Because `prepare()` already stores the resulting `plan` inside `prepared['plan']`, and `fingerprint()` hashes `prepared` + `request`, any custom vocabulary selections or entries included in `request` will automatically invalidate stale preview quotes if changed.
 
+---
+
+## 7. Thematic Worlds & Classification Engine
+
+The **Thematic Worlds & Classification** workspace inside **02 / Visual Vocabulary** provides an intelligent semantic layer above the raw 12 keyword tables. It aligns the music video planner to coherent visual themes, controls the juxtaposition tension arc (&kappa;) across song sections, and lets directors curate rotation pools before rendering.
+
+### A. How Thematic Worlds Works (Step 1: Matched Worlds)
+
+1. **Semantic Premise Embedding**: The director inputs a song premise or thematic visual direction (e.g., *"A night-shift clerk drifts through an endless government archive"*).
+2. **Anchor World Scoring**: The system computes semantic similarity against known thematic world clusters (e.g., *Bureaucratic / Carceral* at 0.81, *Brutalist Concrete* at 0.70).
+3. **Lock & Drop**: Directors can uncheck irrelevant worlds or click the lock icon (🔒) to preserve anchor worlds even if the song direction text changes.
+
+### B. Classification Modes (Step 2: How Worlds Are Used)
+
+| Mode | Behavior | When to Use |
+| :--- | :--- | :--- |
+| **Off** | Ignores thematic worlds and samples uniformly from the entire visual vocabulary. | Abstract or completely eclectic videos with maximum stylistic variety. |
+| **Guided** *(Default)* | Strongly weights matched anchor terms into rotation while allowing creative strays and unexpected flourishes across passages. | Most narrative and conceptual music videos where visual cohesion is desired without feeling repetitive. |
+| **Strict** | Exclusively locks rotation tables (`settings`, `lighting`, `mechanisms`, `costume`, `practical_effects`) to matched anchor worlds. Strays only occur during high-energy sections governed by &kappa;. | Highly stylized, single-world videos (e.g. strict sci-fi, period piece, minimalist brutalist). |
+
+### C. Juxtaposition Arc & &kappa; (Kappa) Mechanics
+
+The **Juxtaposition Slider** controls the contrast multiplier $M = 2 \times (s / 100)$ where $s$ is the slider percentage ($0\%$ to $100\%$, default $50\% \rightarrow 1.0\times$).
+
+- **Per-Section Effective Kappa (&kappa;<sub>eff</sub>)**: Each musical section (Verse 1, Chorus, Bridge, Outro) has a base energy kappa that scales with the slider:
+  $$\kappa_{\text{eff}} = \min(1.0, \max(0.0, \kappa_{\text{base}} \times M))$$
+- **Low &kappa; (Verses / Outro)**: High visual coherence; strict adherence to the primary anchor world.
+- **Hot Bars (&kappa; &ge; 0.90, Amber Bars)**: During high-energy choruses and bridges, **tier adjacency is suspended**, allowing abrupt, shocking visual juxtaposition (e.g. a burst of neon or theatrical mechanisms within a monochromatic concrete world).
+
+### D. Curating Rotation Pools (Step 3: Review the Pools)
+
+Each dimension (`Settings`, `Lighting`, `Mechanisms`, `Costume`, `Practical Effects`) displays its available terms and pool sufficiency (e.g. *14 in pool, about 9 needed*):
+
+- **Term Chip States** (Click to cycle):
+  1. **Included** *(Default)*: Enters normal rotation according to the chosen classification mode.
+  2. **Pinned** *(Amber badge 📌)*: Guaranteed to be injected into the generation rotation; forces the term to appear in generated shot prompts.
+  3. **Excluded** *(Strikethrough / Muted)*: Strictly banned from appearing in the video.
+- **Borrow from Nearest World**: When a dimension is low on terms (e.g. *Costume* has 4 terms but needs 6), directors can borrow complementary terms from the nearest semantic cluster with one click.
+- **+ Add Term**: Directors can inject custom terms directly into any world pool.
+
+### E. Applying to Active Music Video Production
+
+To activate Thematic Worlds for your video:
+1. Click the primary **[Apply Worlds to Current Video]** button at the bottom of the workspace.
+2. The system automatically:
+   - Compiles your pool terms, pins, and exclusions into `state.currentCustomVocab`.
+   - Binds the mode, juxtaposition level, and matched worlds to `state.thematicWorlds`.
+   - Badges the main production button on **01 / Music video** (`🧭 Worlds: Guided (x1.0)`).
+   - Saves your project draft automatically.
+   - Transitions your view directly back to **01 / Music video**.
+3. When you click **Preview video**, the quote summary displays an explicit confirmation line:
+   > `🧭 Thematic Worlds active: GUIDED mode (juxtaposition 50% / x1.0), anchored by Bureaucratic / Carceral, Brutalist Concrete.`
+4. Clicking **Start production** feeds your curated pools directly into the planner and prompt writer.
+
+

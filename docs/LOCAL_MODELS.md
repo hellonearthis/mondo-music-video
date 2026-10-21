@@ -16,6 +16,10 @@ response. Laya's notes feed that loop. API writers make one call per passage;
 a rejection stops production before rendering and is recorded for inspection.
 There is no automatic paid retry or provider substitution.
 
+## Quality Vision (Frame Inspection)
+
+When enabled during production, Mondo starts a local vision server on port 8083 right after rendering to inspect sampled frames for unrequested framing devices and visual defects. It derives its launch configuration from `writer_launch`. See [Quality Vision Setup Guide](QUALITY_VISION_SETUP.md) for details on sibling `mmproj` requirements and launch mechanics.
+
 ## Laya
 
 The original Laya semantic reviewer checks visual density, cinematic
@@ -63,6 +67,10 @@ started for this production; they do not terminate other applications.
 
 For a local llama-server and H3 sharing a GPU, let Mondo launch both services.
 It writes and reviews all prompts, stops its writer, and then starts ComfyUI.
+
+## Embeddings (Vocabulary & Style Clustering)
+
+For vocabulary clustering, style deduplication, and `.emb.json` vector sidecars, Mondo can connect to an OpenAI-compatible `/v1/embeddings` endpoint. The recommended model is `Qwen3-Embedding-0.6B-GGUF` served on port 8092 via `llama-server`. See [Qwen Embedding Setup Guide](QWEN_EMBEDDING_SETUP.md) for launch commands, pooling parameters, and verification.
 
 ## Download other models
 

@@ -1,5 +1,15 @@
 # Releases
 
+## 1.9.9 — Thematic Worlds & Classification, Native Markdown Guide, and Visual Vocabulary Tooltips
+
+- **Thematic Worlds & Classification (`webapp/js/vocab-worlds.js`, `webapp/index.html`)**: Added dedicated Thematic Worlds workspace inside Visual Vocabulary (02). Features a 3-step pipeline: semantic premise embedding with matched world clusters (lock & drop), classification mode selection (Off, Guided, Strict) with dynamic juxtaposition slider ($\kappa$) and section energy curves, and rotation pool curation (cycling Included / Pinned / Excluded chips, borrowing terms from nearest semantic worlds, and custom term addition). Includes an "Apply Worlds to Current Video" action that packages curated pools into the production manifest, badges the studio interface, and binds settings to project drafts.
+- **Visual Vocabulary Architecture & Customization Guide (`docs/VOCABULARY_GUIDE.md`, `webapp/js/guides.js`)**: Added Section 7 detailing Thematic Worlds and classification mechanics. Provided popup guide dialog buttons in the Thematic Worlds workspace header and footer for instant in-app reference.
+- **Pure Functional Markdown Renderer (`webapp/js/markdown.js`)**: Implemented zero-dependency, pure functional client-side Markdown parser for the guide modal, supporting headings, GitHub-flavored tables, syntax-highlighted code blocks with one-click copy, blockquotes, inline styling, and strict HTML sanitization.
+- **Top-Positioned Contextual Tooltips (`webapp/js/tooltips.js`, `webapp/js/vocabulary.js`)**: Enhanced tooltip engine with automatic upward placement preference (`preferredPlacement = "top"`) and smart collision detection, and added detailed educational tooltips across all 12 vocabulary categories explaining their role in prompt generation.
+- **Developer Label Overlay Relocation (`webapp/index.html`, `webapp/js/settings.js`)**: Moved the component labeling debug button (`🏷️ Labels`) into Panel 08 (Settings) with an educational tooltip explaining its purpose for AI-assisted development.
+- **Vocabulary Semantic Clustering & Quality Verification (`cluster_vocab.py`, `lint_vocab.py`)**: Added tools and tests for automated vocabulary quality auditing, semantic clustering, and duplicate detection.
+- Bumped application version to 1.9.9 across package manifests, README, agent endpoints, and test suites.
+
 ## 1.9.8 — Component Labeling Mode & Interface Guide
 
 - **Component Labeling Mode (`webapp/js/component_labeling.js`)**: Implemented pair-programming dev overlay accessible via the studio header button (`🏷️ Labels`) or keyboard shortcut (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> / <kbd>Alt</kbd> + <kbd>L</kbd>). Outlines active components, displays floating badge with Component Name, stable ID, source file, hierarchy nesting breadcrumbs, and one-click copy to clipboard.
