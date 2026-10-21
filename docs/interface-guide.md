@@ -98,7 +98,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ### Visual Vocabulary Workspace
 - **ID**: `panel-vocab`
-- **Used in**: Section 02 navigation
+- **Used in**: Section 06 navigation
 - **Code**: `webapp/index.html`, `webapp/js/vocab.js`
 - **Design rules**: Interactive vocabulary customization suite for camera, lighting, settings, and prop rotation pools.
 
@@ -182,7 +182,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ### Credits & Idents Panel
 - **ID**: `panel-idents`
-- **Used in**: Section 06 navigation
+- **Used in**: Section 02 navigation
 - **Code**: `webapp/index.html`, `webapp/js/app.js`
 - **Design rules**: Production ident and title card animator.
 
@@ -194,7 +194,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ### Finished Videos Panel
 - **ID**: `panel-outputs`
-- **Used in**: Section 07 navigation
+- **Used in**: Section 08 navigation
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
 - **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, and export triggers.
 
@@ -206,11 +206,45 @@ To toggle Component Labeling Mode in the web interface:
 
 ---
 
-## 7. Studio Settings (Panel 09)
+## 7. Worlds (Panel 07)
+
+### Worlds Panel
+- **ID**: `panel-worlds`
+- **Used in**: Section 07 navigation
+- **Code**: `webapp/index.html`, `webapp/js/worlds.js`
+- **Design rules**: Persistent, versioned canon shared across videos. Contains the worlds list, the proposal review card and the build/grow form. Nothing is saved to a world until a proposal is accepted. See `docs/WORLDS.md`.
+
+### Worlds List and Detail
+- **IDs**: `worlds-list-card`, `worlds-list`, `world-detail`
+- **Used in**: Top of `panel-worlds`
+- **Code**: `webapp/index.html`, `webapp/js/worlds.js`
+- **Design rules**: Lists saved worlds; the detail view shows the ledger, version history, rollback, export and delete (delete needs explicit confirmation).
+
+### World Proposals
+- **IDs**: `world-proposals-card`, `world-proposals`
+- **Used in**: Inside `panel-worlds`, hidden until a proposal is pending
+- **Code**: `webapp/index.html`, `webapp/js/worlds.js`
+- **Design rules**: Field-level changes from a world harvest, with Accept and Reject. A proposal made against an older version must be harvested again.
+
+### World Builder Form
+- **IDs**: `world-form`, `world-builder-form`, `world-images`, `world-videos`, `world-lore`, `world-runs`, `world-preview`, `world-clear`, `world-quote`, `world-consent`, `world-start`
+- **Used in**: Inside `panel-worlds`
+- **Code**: `webapp/index.html`, `webapp/js/worlds.js`
+- **Design rules**: Start a new world or grow an existing one from pictures (up to 24), video clips (up to 3), lore text (up to 5 files) and finished runs. Preview first; starting follows the usual quote and paid-consent flow when an API vision profile is used.
+
+### World Selector
+- **ID**: `world-select`
+- **Used in**: Music Video form (`panel-video`)
+- **Code**: `webapp/index.html`, `webapp/js/worlds.js`
+- **Design rules**: Chooses the world a video draws on; the pool mode decides whether the world's terms replace or add to the standard vocabulary pools.
+
+---
+
+## 8. Studio Settings (Panel 09)
 
 ### Studio Settings Panel
 - **ID**: `panel-settings`
-- **Used in**: Section 08 navigation
+- **Used in**: Section 09 navigation
 - **Code**: `webapp/index.html`, `webapp/js/settings.js`
 - **Design rules**: Local hardware, model parameters, API profiles, and credential configuration.
 
@@ -228,7 +262,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ---
 
-## 8. Modals & Dialogs
+## 9. Modals & Dialogs
 
 ### Pre-Production Review Dialog
 - **ID**: `preview-dialog`

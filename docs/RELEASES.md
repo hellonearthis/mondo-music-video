@@ -1,5 +1,13 @@
 # Releases
 
+## 1.10.2 — Panel heading numbers
+
+- Panel headings (the small "07 / WORLDS" line) now match the sidebar numbers
+  introduced in 1.10.1; a test checks them. `docs/interface-guide.md` gains a
+  Worlds section and the new panel numbers. No new agent tool was needed: the
+  Worlds MCP tools, CLI commands and skill text already shipped in 1.10.0, and
+  agents address panels by tool, not by sidebar number.
+
 ## 1.10.1 — Sidebar tab order
 
 - Sidebar order is now Music video, Credits & idents, Actors & OAP, Styles,
