@@ -5,16 +5,41 @@ import { $ } from "./core.js";
 let activeTooltipTrigger = null;
 let tooltipTimeout = null;
 
-export const computeTooltipPosition = (rect, tipRect, viewportWidth, viewportHeight, gap = 8, padding = 10) => {
+export const computeTooltipPosition = (
+  rect,
+  tipRect,
+  viewportWidth,
+  viewportHeight,
+  gap = 8,
+  padding = 10,
+  preferredPlacement = "top"
+) => {
   let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
   left = Math.max(padding, Math.min(left, viewportWidth - tipRect.width - padding));
 
-  let top = rect.bottom + gap;
-  if (top + tipRect.height > viewportHeight - padding) {
-    top = Math.max(padding, rect.top - tipRect.height - gap);
+  let top;
+  let placement = preferredPlacement;
+
+  if (preferredPlacement === "top") {
+    top = rect.top - tipRect.height - gap;
+    if (top < padding) {
+      const bottomPos = rect.bottom + gap;
+      if (bottomPos + tipRect.height <= viewportHeight - padding) {
+        top = bottomPos;
+        placement = "bottom";
+      } else {
+        top = Math.max(padding, top);
+      }
+    }
+  } else {
+    top = rect.bottom + gap;
+    if (top + tipRect.height > viewportHeight - padding) {
+      top = Math.max(padding, rect.top - tipRect.height - gap);
+      placement = "top";
+    }
   }
 
-  return { left: Math.round(left), top: Math.round(top) };
+  return { left: Math.round(left), top: Math.round(top), placement };
 };
 
 export function showTooltip(target) {
@@ -36,8 +61,22 @@ export function showTooltip(target) {
 
   const rect = target.getBoundingClientRect();
   const tipRect = tip.getBoundingClientRect();
-  const pos = computeTooltipPosition(rect, tipRect, window.innerWidth, window.innerHeight);
+  const preferredPlacement =
+    target.dataset.tooltipPosition ||
+    target.dataset.placement ||
+    target.closest("[data-tooltip-position]")?.dataset.tooltipPosition ||
+    "top";
+  const pos = computeTooltipPosition(
+    rect,
+    tipRect,
+    window.innerWidth,
+    window.innerHeight,
+    8,
+    10,
+    preferredPlacement
+  );
 
+  tip.dataset.placement = pos.placement;
   tip.style.left = `${pos.left}px`;
   tip.style.top = `${pos.top}px`;
 }

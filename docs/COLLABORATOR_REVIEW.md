@@ -27,6 +27,25 @@ keyboard, accessibility and agent-surface review. This is a scope/version
 conflict, not a demonstrated defect in the collaborator's contribution. No
 fork files, private assets or Git object stores were imported into this tree.
 
+## October 21, 2026 — fork head 79d8515 (release 1.9.10)
+
+Reviewed isolated clone at exact revision `79d8515f76207c21c155981d3255bb60f7165611`
+(three commits by [hellonearthis](https://github.com/hellonearthis) after
+`5e2bba4`; 31 files, about 3,400 lines). A low-effort read-only Codex pass and a
+direct review traced the code; the fork's own new tests were not run (no numpy or
+scikit-learn in the review environment). The fork's 1.9.9 label collides with our
+shipped 1.9.9, so the adopted subset is 1.9.10.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Markdown renderer and formatted guide dialog | Adapted. 20,000 random inputs found a stack overflow: an indented `>` line was never stripped, so the blockquote recursed on itself. Fixed. Heading ids prefixed `md-`; non-https links no longer open new tabs (in-page anchors did). No XSS bypass found; output is escaped before the HTML sink. |
+| Top-placed tooltips, category and button tooltips | Adopted. The `themes` tooltip was removed: `vocab.json` has eleven tables, not twelve. |
+| Labels button moved to Settings | Adopted; the narrow-width hide rule was removed with it. |
+| Settings tooltip wording | Adapted without `C:\cui` and `C:\llamaCPP` example paths. |
+| Thematic Worlds workspace (`vocab-worlds.js`, `thematic_worlds` field) | Deferred. The compiled term pools reach the render through `custom_vocabulary`, but mode, juxtaposition slider and kappa bars are stored and displayed only; nothing under `mmv/` reads them, yet the UI and quote line say they are active. Choosing Off clears the worlds but leaves the compiled vocabulary override in place. Pinned terms are held only in DOM attributes and are lost when a term is added. The request field is an unbounded dict. Remaining work: a real consumer for mode and kappa (this touches the protected planning code and needs the owner's approval), then fix the three defects. |
+| `cluster_vocab.py`, `lint_vocab.py`, `mmv/style_embed.py`, embedding docs, `start-embedding.ps1` | Deferred. Depend on scikit-learn, which is not a declared dependency; `choose_k` selects k=1 for a two-term vocabulary and then calls a silhouette score that needs two clusters. Tests not run. |
+| `mmv/vision_check.py` `C:/llamaCPP` search, `start.ps1` changes | Deferred. The path search does nothing off Windows; `start.ps1` saves the writer selection before checking whether a different model is already being served. Needs a Windows host to verify. |
+
 ## October 20, 2026 — fork head e6ef03e (release 1.9.6)
 
 Reviewed isolated clone `/tmp/mmv-fork-review-20261020-new` at exact revision `e6ef03e28f1cde7018be1710d0b8c89cad1480f4` against our `55671c4` (1.9.5). The fork first merged that upstream release in `26dba46`; new contributions are `5b026e5` and `e6ef03e`, authored by [hellonearthis](https://github.com/hellonearthis). This review compares the two new commits, not the already adopted upstream history. The isolated clone shares no Git object store with this checkout.

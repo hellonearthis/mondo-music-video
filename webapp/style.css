@@ -38,7 +38,7 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 [data-theme=dark] progress::-webkit-progress-bar{background-color:#15221b;border-radius:3px}
 [data-theme=dark] progress::-webkit-progress-value{background-color:var(--green);border-radius:3px;box-shadow:0 0 6px rgba(164,204,170,0.4)}
 [data-theme=dark] progress::-moz-progress-bar{background-color:var(--green);border-radius:3px;box-shadow:0 0 6px rgba(164,204,170,0.4)}
-@media(max-width:650px){#toggle-component-labels{display:none}.header-actions{gap:6px}#theme-toggle{font-size:10px;padding:8px}.header-actions .oap-badge{font-size:8px;letter-spacing:0;padding:8px 6px}.brand{gap:7px;letter-spacing:1px}header{gap:8px}}
+@media(max-width:650px){.header-actions{gap:6px}#theme-toggle{font-size:10px;padding:8px}.header-actions .oap-badge{font-size:8px;letter-spacing:0;padding:8px 6px}.brand{gap:7px;letter-spacing:1px}header{gap:8px}}
 
 .brand small{white-space:nowrap}
 
@@ -706,3 +706,322 @@ button[aria-busy="true"], button.processing {
 }
 
 .file-drop-target{padding:6px;border:2px dashed transparent;border-radius:6px;transition:background .15s,border-color .15s}.file-drop-target.file-drop-hover{background:#eaf1dc;border-color:#4c784f}.file-drop-hint{display:block;margin-top:5px;font-weight:400}.file-drop-error{display:block;color:#a12721;font-weight:700}.file-drop-error:empty{display:none}html[data-theme=dark] .file-drop-target.file-drop-hover{background:#294535;border-color:#b5d38d}html[data-theme=dark] .file-drop-error{color:#ffb8aa}
+
+/* Visual Vocabulary Architecture Guide Dialog & Markdown Body */
+.vocab-guide-dialog:not([open]) {
+  display: none !important;
+}
+
+.vocab-guide-dialog[open] {
+  max-width: 1060px !important;
+  width: min(1060px, 94vw) !important;
+  height: 88vh !important;
+  max-height: 88vh !important;
+  padding: 26px 32px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+}
+
+.vocab-guide-header {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.vocab-guide-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.vocab-guide-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vocab-guide-scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 14px;
+  margin-bottom: 14px;
+}
+
+.vocab-guide-scroll-body pre#vocab-guide-raw {
+  margin: 0;
+  padding: 16px;
+  background: #e9ede4;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+}
+
+/* Markdown typography and components */
+.markdown-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.markdown-body h1 {
+  font-family: Georgia, serif;
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--green);
+  margin: 10px 0 16px;
+  line-height: 1.2;
+}
+
+.markdown-body h2 {
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--green);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin: 28px 0 12px;
+}
+
+.markdown-body h3 {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--green);
+  margin: 20px 0 10px;
+}
+
+.markdown-body h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 16px 0 6px;
+}
+
+.markdown-body p {
+  margin: 0 0 14px;
+}
+
+.markdown-body a {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.markdown-body a:hover {
+  color: #143628;
+}
+
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.markdown-body :not(pre) > code {
+  background: #ecefe5;
+  color: var(--green);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  border: 1px solid #909689;
+}
+
+.markdown-body hr.md-hr {
+  border: 0;
+  height: 1px;
+  background: var(--line);
+  margin: 28px 0;
+}
+
+.markdown-body blockquote.md-blockquote {
+  border-left: 3px solid var(--green);
+  background: #f3f6eb;
+  padding: 12px 18px;
+  margin: 16px 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.markdown-body blockquote.md-blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 8px 0 16px 24px;
+  padding: 0;
+}
+
+.markdown-body li {
+  margin-bottom: 6px;
+  line-height: 1.65;
+}
+
+.markdown-body .md-table-wrapper {
+  overflow-x: auto;
+  margin: 18px 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+}
+
+.markdown-body table.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.markdown-body table.md-table th,
+.markdown-body table.md-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.markdown-body table.md-table th:last-child,
+.markdown-body table.md-table td:last-child {
+  border-right: 0;
+}
+
+.markdown-body table.md-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-body table.md-table th {
+  background: #eef2de;
+  color: var(--green);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.markdown-body table.md-table tr:nth-child(even) td {
+  background: #fafbf7;
+}
+
+.markdown-body table.md-table tr:hover td {
+  background: #f3f7ea;
+}
+
+.markdown-body .md-code-block {
+  background: #17241f;
+  color: #f1f5ee;
+  border: 1px solid #32473c;
+  border-radius: 6px;
+  margin: 18px 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.markdown-body .md-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #101a16;
+  padding: 6px 14px;
+  border-bottom: 1px solid #23352c;
+}
+
+.markdown-body .md-code-lang {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #9cb2a5;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.markdown-body .md-copy-btn {
+  background: #23382f;
+  color: #e5f0de;
+  border: 1px solid #3c5648;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.markdown-body .md-copy-btn:hover {
+  background: #2e4a3e;
+  border-color: #527563;
+  color: #fff;
+}
+
+.markdown-body .md-code-block pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 11.5px;
+  line-height: 1.6;
+  background: transparent;
+  color: inherit;
+}
+
+/* Dark Mode Overrides for Visual Vocabulary Guide & Markdown Body */
+[data-theme=dark] .vocab-guide-dialog {
+  background: var(--card) !important;
+  border-color: var(--line) !important;
+}
+
+[data-theme=dark] .vocab-guide-scroll-body pre#vocab-guide-raw {
+  background: #24342b;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+[data-theme=dark] .markdown-body a {
+  color: var(--green);
+}
+
+[data-theme=dark] .markdown-body a:hover {
+  color: var(--lime);
+}
+
+[data-theme=dark] .markdown-body :not(pre) > code {
+  background: #263a2d;
+  color: #c5dfb9;
+  border-color: #55745d;
+}
+
+[data-theme=dark] .markdown-body blockquote.md-blockquote {
+  background: #223027;
+  color: var(--ink);
+  border-left-color: var(--green);
+}
+
+[data-theme=dark] .markdown-body .md-table-wrapper {
+  background: var(--card);
+  border-color: var(--line);
+}
+
+[data-theme=dark] .markdown-body table.md-table th {
+  background: #283d2f;
+  color: #c5dfb9;
+  border-color: var(--line);
+}
+
+[data-theme=dark] .markdown-body table.md-table td {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+[data-theme=dark] .markdown-body table.md-table tr:nth-child(even) td {
+  background: #202d25;
+}
+
+[data-theme=dark] .markdown-body table.md-table tr:hover td {
+  background: #293f30;
+}

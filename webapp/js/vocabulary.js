@@ -48,6 +48,31 @@ const escapeHtml = (s = "") =>
 
 const formatCatLabel = (cat = "") => cat.replace(/_/g, " ");
 
+export const VOCAB_CATEGORY_TOOLTIPS = {
+  settings:
+    "Physical environment and location. In prompt generation, sets the scene space for the shot (shot.vocab.setting); stays continuous across standard passages or rotates per cut in multi-scene montage.",
+  lighting:
+    "Cinematic light sources, direction, and color temperature. In prompt generation, tells the writer how the scene is illuminated (shot.vocab.lighting), shifting dynamically with musical energy.",
+  mechanisms:
+    "Dynamic physical actions, object interactions, and mechanical processes. In prompt generation, injects kinetic movement into the shot (shot.vocab.mechanism) and acts as the unifying thematic anchor across cuts.",
+  subject_types:
+    "Character archetypes and contextual roles. In prompt generation, guides who or what appears on screen (shot.vocab.subject_type) when no specific cast actor is assigned.",
+  tonal_registers:
+    "Cinematic mood, color grading, and emotional atmosphere. In prompt generation, guides the writer's descriptive tone and aesthetic tension (shot.vocab.tonal_register).",
+  costume:
+    "Wardrobe styling, fabrics, and silhouettes. In prompt generation, specifies character clothing textures (shot.vocab.costume) unless locked by an actor's OAP rider.",
+  practical_effects:
+    "In-camera physical stage effects (smoke, haze, rain, sparks, prisms). In prompt generation, sampled once per musical passage (segment.practical_effects) to give the scene tangible atmosphere.",
+  footage_anchors:
+    "Base film stock, camera format, and optical texture (e.g. 35mm anamorphic, 16mm reversal, VHS). In prompt generation, anchors the physical image medium for the entire segment.",
+  camera_by_energy:
+    "Camera motion verbs (track, push in, arc, static, whip). In prompt generation, dynamically selected by the song's energy level at the exact downbeat of each cut.",
+  shot_scales:
+    "Framing distance (extreme wide to macro). In prompt generation, chosen by musical intensity: wide establishing shots during low energy, tightening to intimate close-ups at peak energy.",
+  rigging:
+    "Facial movement suppression instructions ('lips firmly sealed shut'). In prompt generation, enforces sealed-lip realism when silent mouths is active to eliminate AI babble."
+};
+
 const tabsHtml = (categories, activeCat, catalog, draft) =>
   categories
     .map((cat) => {
@@ -55,7 +80,11 @@ const tabsHtml = (categories, activeCat, catalog, draft) =>
       const escCat = escapeHtml(cat);
       const active = cat === activeCat ? " active" : "";
       const weight = isModified ? "700" : "600";
-      return `<button type="button" class="vocab-tab-btn${active}" data-category="${escCat}" style="font-weight:${weight}">${escapeHtml(formatCatLabel(cat))}<span class="vocab-tab-badge">${count}</span></button>`;
+      const tooltip =
+        VOCAB_CATEGORY_TOOLTIPS[cat] ||
+        `Visual vocabulary pool for ${formatCatLabel(cat)}. Sampled by the montage planner to provide concrete variety for the prompt writer.`;
+      const escTip = escapeHtml(tooltip);
+      return `<button type="button" class="vocab-tab-btn${active}" data-category="${escCat}" data-tooltip="${escTip}" data-tooltip-position="top" title="${escTip}" style="font-weight:${weight}">${escapeHtml(formatCatLabel(cat))}<span class="vocab-tab-badge">${count}</span></button>`;
     })
     .join("");
 

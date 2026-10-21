@@ -1,5 +1,31 @@
 # Releases
 
+## 1.9.10 — Formatted vocabulary guide, tooltips and Labels relocation
+
+Selective integration of hellonearthis's fork revision `79d8515`, reviewed
+adversarially in an isolated checkout.
+
+- The vocabulary guide dialog renders `docs/VOCABULARY_GUIDE.md` with a new
+  dependency-free Markdown renderer (`webapp/js/markdown.js`), with a raw-text
+  toggle and copy buttons for the document and for code blocks. Adapted from the
+  fork: a blockquote line with leading spaces recursed without end and overflowed
+  the stack (found by fuzzing, fixed); heading ids are prefixed `md-` so they
+  cannot collide with page ids such as `version`; only `https` links open in a
+  new tab, `#` anchors stay in the page and relative links render as plain text.
+- Tooltips prefer to open above the target and flip when they would clip. The
+  vocabulary category tabs and Select/Clear/Reset buttons explain what each
+  table does. The fork's tooltip for a twelfth `themes` table was dropped: the
+  catalog has eleven tables.
+- The component-labeling button moves from the header to Studio Settings (08)
+  and is no longer hidden at narrow widths; settings tooltips gain clearer
+  launch guidance without Windows-only example paths.
+- Deferred: Thematic Worlds, its Strict/Guided mode, juxtaposition and kappa
+  controls, the `thematic_worlds` request field, clustering and lint tools,
+  embedding setup and the Windows launch changes. See
+  `docs/COLLABORATOR_REVIEW.md`.
+- No protected prompts, pins or banner changed. Agent API, CLI and MCP are
+  unchanged: the guide is already served at `/api/vocabulary/guide`.
+
 ## 1.9.9 — File drop on browser inputs
 
 All 11 browser file controls accept drops on their labeled areas. Dropped files

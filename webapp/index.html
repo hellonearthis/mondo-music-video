@@ -13,8 +13,7 @@
 <body>
 <header data-component="Studio Header" data-component-id="studio-header" data-component-source="webapp/index.html"><a class="brand" href="/" data-tooltip="Mondo Music Video — Return to the main studio" title="Mondo Music Video — Return to the main studio"><span class="brand-mark">M</span><span>MONDO<small>MUSIC VIDEO</small></span></a>
   <div class="edition" data-tooltip="Mondo Music Video application version" title="Mondo Music Video application version">A LITTLE STUDIO. A BIG PICTURE.<span>Community edition <span id="version"></span></span></div>
-  <div class="header-actions"><button type="button" id="toggle-component-labels" class="secondary" data-tooltip="Toggle Component Labeling Mode (Ctrl+Shift+L) to inspect component names and stable IDs" title="Toggle Component Labeling Mode (Ctrl+Shift+L) to inspect component names and stable IDs" aria-pressed="false">🏷️ Labels</button>
-  <button type="button" id="theme-toggle" class="secondary" aria-label="Dark mode" aria-pressed="true">Dark mode</button>
+  <div class="header-actions">  <button type="button" id="theme-toggle" class="secondary" aria-label="Dark mode" aria-pressed="true">Dark mode</button>
   <button type="button" class="oap-badge oap-help-btn" data-tooltip="Open Actor Protocol specification version supported by this studio — Click for guide and details" title="Open Actor Protocol specification version supported by this studio — Click for guide and details">OAP BUILT IN <span id="oap-version"></span> <span class="oap-badge-info">&#x2139;&#xFE0F;</span></button></div></header>
 <div class="shell">
 <aside data-component="Navigation Sidebar" data-component-id="nav-sidebar" data-component-source="webapp/index.html"><div class="nav-label">YOUR STUDIO</div><nav aria-label="Studio sections">
@@ -277,7 +276,7 @@
     </details>
   </div>
 
-  <div class="vocab-tabs-container">
+  <div class="vocab-tabs-container" data-tooltip-position="top">
     <div class="vocab-category-tabs" id="vocab-category-tabs">
       <!-- Tabs generated via JavaScript -->
     </div>
@@ -302,11 +301,11 @@
     <div class="vocab-builtin-section" id="vocab-builtin-section">
       <div class="vocab-filter-toolbar">
         <input type="text" id="vocab-search-input" placeholder="Search entries in this category..." autocomplete="off">
-        <div class="vocab-filter-buttons">
-          <button type="button" id="vocab-random-cat-btn" class="quiet" data-tooltip="Randomly pick N entries in this category only">🎲 Randomize category</button>
-          <button type="button" id="vocab-select-all-btn" class="quiet">Select all</button>
-          <button type="button" id="vocab-clear-all-btn" class="quiet">Clear all</button>
-          <button type="button" id="vocab-reset-cat-btn" class="quiet">Reset category</button>
+        <div class="vocab-filter-buttons" data-tooltip-position="top">
+          <button type="button" id="vocab-random-cat-btn" class="quiet" data-tooltip="Randomly pick N entries in this category only" data-tooltip-position="top">🎲 Randomize category</button>
+          <button type="button" id="vocab-select-all-btn" class="quiet" data-tooltip="Include all built-in entries in this category for prompt generation" data-tooltip-position="top" title="Include all built-in entries in this category for prompt generation">Select all</button>
+          <button type="button" id="vocab-clear-all-btn" class="quiet" data-tooltip="Exclude all built-in entries in this category, keeping only custom additions" data-tooltip-position="top" title="Exclude all built-in entries in this category, keeping only custom additions">Clear all</button>
+          <button type="button" id="vocab-reset-cat-btn" class="quiet" data-tooltip="Restore default built-in entries for this category, discarding exclusions" data-tooltip-position="top" title="Restore default built-in entries for this category, discarding exclusions">Reset category</button>
         </div>
       </div>
       <div class="vocab-checkbox-grid" id="vocab-checkbox-grid">
@@ -378,7 +377,7 @@
 </details>
 </section>
 
-<section id="panel-settings" class="panel" data-component="Studio Settings Panel" data-component-id="panel-settings" data-component-source="webapp/index.html" hidden><div class="eyebrow">08 / YOUR MACHINE, YOUR STUDIO</div><div class="panel-header-row"><h1>Set the <em>stage.</em></h1><button type="button" class="secondary llama-help-btn" data-tooltip="Open guide for configuring local llama.cpp writer, vision models, and token buffers">Local writer setup guide</button></div><p class="intro">Connect your own services and installed models. Save multiple API profiles and select writing, vision and video accounts independently. Save Settings and a key before capturing a profile. Your keys stay on this machine and are never returned by the settings API.</p><form id="settings-form" class="card" data-component="Studio Settings Form" data-component-id="settings-form" data-component-source="webapp/index.html"><div id="settings-fields" class="form-grid" data-tooltip="Studio engine and model configuration parameters" title="Studio engine and model configuration parameters"></div><button class="primary operation-action" data-tooltip="Save all settings to local settings.json" title="Save all settings to local settings.json">Save settings</button></form><form id="key-form" class="card narrow" data-component="Provider Keys Form" data-component-id="key-form" data-component-source="webapp/index.html"><h2>Provider keys</h2><label data-tooltip="Select provider credential to store locally" title="Select provider credential to store locally">Credential<select name="name" data-tooltip="Choose which API key to configure" title="Choose which API key to configure"><option>WAVESPEED_API_KEY</option><option>MMV_COMFY_API_KEY</option><option>MMV_VISION_API_KEY</option><option>MMV_WRITER_API_KEY</option></select></label><label data-tooltip="Enter provider secret key (stored in a local file with filesystem permissions)" title="Enter provider secret key (stored in a local file with filesystem permissions)">API key<input name="value" type="password" autocomplete="new-password" required data-tooltip="Paste your API key here" title="Paste your API key here"></label><p id="key-status" class="muted" data-tooltip="Credential configuration status" title="Credential configuration status"></p><button class="secondary operation-action" data-tooltip="Save this secret key securely to your local machine" title="Save this secret key securely to your local machine">Save key locally</button></form><p class="muted">Keep the server on localhost. See the included installation and platform guides for setup details.</p></section>
+<section id="panel-settings" class="panel" data-component="Studio Settings Panel" data-component-id="panel-settings" data-component-source="webapp/index.html" hidden><div class="eyebrow">08 / YOUR MACHINE, YOUR STUDIO</div><div class="panel-header-row"><h1>Set the <em>stage.</em></h1><div style="display:flex;gap:10px;align-items:center;"><button type="button" id="toggle-component-labels" class="secondary" data-tooltip="Toggle Component Labeling Mode (Ctrl+Shift+L) to inspect component names and stable IDs" title="Toggle Component Labeling Mode (Ctrl+Shift+L) to inspect component names and stable IDs" aria-pressed="false">🏷️ Labels</button><button type="button" class="secondary llama-help-btn" data-tooltip="Open guide for configuring local llama.cpp writer, vision models, and token buffers">Local writer setup guide</button></div></div><p class="intro">Connect your own services and installed models. Save multiple API profiles and select writing, vision and video accounts independently. Save Settings and a key before capturing a profile. Your keys stay on this machine and are never returned by the settings API.</p><form id="settings-form" class="card" data-component="Studio Settings Form" data-component-id="settings-form" data-component-source="webapp/index.html"><div id="settings-fields" class="form-grid" data-tooltip="Studio engine and model configuration parameters" title="Studio engine and model configuration parameters"></div><button class="primary operation-action" data-tooltip="Save all settings to local settings.json" title="Save all settings to local settings.json">Save settings</button></form><form id="key-form" class="card narrow" data-component="Provider Keys Form" data-component-id="key-form" data-component-source="webapp/index.html"><h2>Provider keys</h2><label data-tooltip="Select provider credential to store locally" title="Select provider credential to store locally">Credential<select name="name" data-tooltip="Choose which API key to configure" title="Choose which API key to configure"><option>WAVESPEED_API_KEY</option><option>MMV_COMFY_API_KEY</option><option>MMV_VISION_API_KEY</option><option>MMV_WRITER_API_KEY</option></select></label><label data-tooltip="Enter provider secret key (stored in a local file with filesystem permissions)" title="Enter provider secret key (stored in a local file with filesystem permissions)">API key<input name="value" type="password" autocomplete="new-password" required data-tooltip="Paste your API key here" title="Paste your API key here"></label><p id="key-status" class="muted" data-tooltip="Credential configuration status" title="Credential configuration status"></p><button class="secondary operation-action" data-tooltip="Save this secret key securely to your local machine" title="Save this secret key securely to your local machine">Save key locally</button></form><p class="muted">Keep the server on localhost. See the included installation and platform guides for setup details.</p></section>
 
 <section id="panel-teaser" class="panel" data-component="Teaser Preview Panel" data-component-id="panel-teaser" data-component-source="webapp/index.html" hidden><div class="eyebrow">A BIGGER STUDIO AWAITS</div><h1 id="teaser-title"></h1><p class="intro" id="teaser-description"></p><div class="card narrow"><h2>Part of the full Mondo studio</h2><p>This feature is not included in Mondo Music Video. This community edition is dedicated to music videos, actors, styles, and idents.</p><button id="back-to-video" class="primary" data-tooltip="Return to the music video creation studio" title="Return to the music video creation studio">Back to making music videos</button></div></section>
 <footer>MAXIMUM GOOSE LABORATORY <span data-tooltip="Mondo Music Video motto" title="Mondo Music Video motto">MAKE SOMETHING THAT MOVES.</span></footer>
@@ -435,11 +434,33 @@
   <button type="button" id="delete-confirm-btn" class="primary" style="background:#b91c1c;border-color:#991b1b;color:#fff;">Delete permanently</button>
 </div>
 </dialog>
-<dialog id="vocab-helper-dialog" class="oap-dialog" data-component="Visual Vocabulary Guide Dialog" data-component-id="vocab-helper-dialog" data-component-source="webapp/index.html" aria-labelledby="vocab-guide-title">
-<form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide">×</button></form>
-<h2 id="vocab-guide-title">Visual vocabulary guide</h2>
-<pre id="vocab-guide-raw">Loading guide…</pre>
-<div class="oap-dialog-footer"><button type="button" class="secondary nav-to-vocab-btn">Open Visual vocabulary</button><button type="button" class="primary close-vocab-dialog">Close guide</button></div>
+<dialog id="vocab-helper-dialog" class="oap-dialog vocab-guide-dialog" data-component="Visual Vocabulary Guide Dialog" data-component-id="vocab-helper-dialog" data-component-source="webapp/index.html" aria-labelledby="vocab-guide-title">
+<form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide" data-tooltip="Dismiss guide dialog">×</button></form>
+<div class="vocab-guide-header">
+  <div class="eyebrow" style="margin-bottom:6px;">02 / VISUAL VOCABULARY ENGINE ARCHITECTURE</div>
+  <div class="vocab-guide-title-row">
+    <h2 id="vocab-guide-title" style="margin:0;">Visual Vocabulary Architecture &amp; Customization Guide</h2>
+    <div class="vocab-guide-actions">
+      <button type="button" id="toggle-vocab-raw-btn" class="quiet" data-tooltip="Switch between rendered documentation and raw markdown text">View raw markdown</button>
+      <button type="button" id="copy-vocab-doc-btn" class="secondary" data-tooltip="Copy the full markdown guide to your clipboard">📋 Copy Markdown</button>
+    </div>
+  </div>
+</div>
+<div class="vocab-guide-scroll-body" id="vocab-guide-body">
+  <div id="vocab-guide-formatted" class="markdown-body">
+    <p style="color:var(--muted);font-style:italic;">Loading architecture guide…</p>
+  </div>
+  <pre id="vocab-guide-raw" hidden>Loading raw guide…</pre>
+</div>
+<div class="oap-dialog-footer">
+  <div class="vocab-guide-footer-note" style="font-size:11px;color:var(--muted);">
+    Source: <code>docs/VOCABULARY_GUIDE.md</code>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button type="button" class="secondary nav-to-vocab-btn">Open Visual vocabulary</button>
+    <button type="button" class="primary close-vocab-dialog">Close guide</button>
+  </div>
+</div>
 </dialog>
 <div id="studio-tooltip" class="studio-tooltip" role="tooltip" hidden></div>
 </body></html>

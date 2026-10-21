@@ -17,7 +17,7 @@ To toggle Component Labeling Mode in the web interface:
 - **Used in**: App layout root (always visible)
 - **Code**: `webapp/index.html`, `webapp/style.css`
 - **Design rules**: Height 56px, fixed at top, flex layout with brand mark, edition text, and `.header-actions`. Uses `--surface-2` background with bottom border.
-- **Notes**: Houses branding, community edition info, `#toggle-component-labels`, `#theme-toggle`, and the OAP version badge.
+- **Notes**: Houses branding, community edition info, `#theme-toggle`, and the OAP version badge. The developer component-labeling toggle (`#toggle-component-labels`) lives in Studio Settings (08).
 
 ### Navigation Sidebar
 - **ID**: `nav-sidebar`
