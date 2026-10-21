@@ -635,6 +635,14 @@ def create_app(home=None, *, test_hosts=False):
     def css():
         return FileResponse(WEB / "style.css", media_type="text/css")
 
+    @app.get("/favicon.ico")
+    def favicon_ico():
+        return FileResponse(WEB / "favicon.ico", media_type="image/x-icon")
+
+    @app.get("/favicon.svg")
+    def favicon_svg():
+        return FileResponse(WEB / "favicon.svg", media_type="image/svg+xml")
+
     app.get("/api/version")(api_version)
 
     @app.get("/api/update")

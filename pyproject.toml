@@ -39,7 +39,7 @@ where = ["."]
 include = ["mmv*", "webapp*"]
 
 [tool.setuptools.package-data]
-webapp = ["*.html", "*.js", "*.css", "js/*.js", "vendor/wavesurfer/*.js", "vendor/wavesurfer/LICENSE", "vendor/wavesurfer/plugins/*.js"]
+webapp = ["*.html", "*.js", "*.css", "*.ico", "*.svg", "js/*.js", "vendor/wavesurfer/*.js", "vendor/wavesurfer/LICENSE", "vendor/wavesurfer/plugins/*.js"]
 mmv = ["assets/instruments/*/instrument.json", "assets/instruments/*/reference.png", "assets/instruments/README.md"]
 "mmv.engine" = ["config/*.json", "prompts/*.md", "workflows/*.json"]
 "mmv.engine.validators" = ["laya/*.py", "laya/*.md"]
