@@ -297,6 +297,18 @@ export async function loadSettings() {
         });
       };
       group.append(input, btn);
+      if (name === "workflow_map_path") {
+        const presets = data.workflow_presets || [];
+        const picker = document.createElement("select");
+        picker.title = picker.dataset.tooltip = "Bundled H3 workflows: standard (20 steps) or FastH3 Omni (8 steps, INT8 or BF16)";
+        picker.append(option("", "Custom path", "Use the path typed below"), ...presets.map(p => option(p.path, p.name)));
+        picker.value = presets.some(p => p.path === value) ? value : "";
+        picker.onchange = () => {
+          if (picker.value) { input.value = picker.value; input.dispatchEvent(new Event("change", { bubbles: true })); }
+        };
+        input.addEventListener("input", () => { picker.value = presets.some(p => p.path === input.value) ? input.value : ""; });
+        label.append(picker);
+      }
       label.append(group);
     } else {
       label.append(input);

@@ -11,7 +11,7 @@ VERSION = 1
 PARTS = {'drums': 'drums', 'bass': 'bass', 'guitar': 'guitar', 'keyboards': 'piano'}
 RULES = (
     'This passage has an instrument_performance job. Its performers bind an actor subject to one instrument. '
-    'In every shot where a player is visible, explicitly name that subject and describe their own instrument action in a separate sentence: '
+    'A player need not play in every shot; they may also stand, pose, move or react. Whenever a player is shown playing, explicitly name that subject and describe their own instrument action in a separate sentence: '
     'drums use sticks striking heads or cymbals with feet on pedals; bass plucks strings with one hand while the other frets; '
     'guitar picks or strums strings with one hand while the other frets; keyboards press keys with fingers of both hands. '
     'Follow each performer\'s shot cues for energy and pauses. In a paused shot explicitly describe that subject resting their hands '
@@ -296,6 +296,13 @@ def repair_shot_bodies(shot_bodies, segment, passage, performance, tags):
     return repaired, edits
 
 
+def is_blocking(problem):
+    """Prompt integrity stops a prompt: every shot described, the player present, and the instrument reference cited so the renderer
+    uses it. Whether the playing is convincingly worded is advice for Laya's review, never a rewrite."""
+    return (problem.startswith(('Instrument performance requires', 'Instrument player '))
+            or bool(re.match(r'Shot \d+: connect ', problem)))
+
+
 def problems(prompt, shot_bodies, segment, passage, performance, tags):
     """Shot-level lexical guard, not proof of rendered contact or synchronization."""
     if len(shot_bodies) != len(segment.shots):
@@ -326,11 +333,17 @@ def problems(prompt, shot_bodies, segment, passage, performance, tags):
                     result.append(f'Shot {shot.n}: {performer["subject"]} must rest or hold during the {kind} pause')
                 if any(ACTION[kind].search(s) and CONTACT[kind].search(s) for s in affirmative):
                     result.append(f'Shot {shot.n}: {performer["subject"]} must not play during the {kind} pause')
-            elif not any(ACTION[kind].search(s) and CONTACT[kind].search(s) for s in affirmative):
-                result.append(f'Shot {shot.n}: {performer["subject"]} must visibly play the {kind}: {wrong_note(kind, affirmative)}'
-                              f'write one sentence like "{performer["subject"]} {EXAMPLE[kind]}"')
+                continue
+            playing = any(ACTION[kind].search(s) and CONTACT[kind].search(s) for s in affirmative)
+            if not playing:
+                # A player may be shown doing something else; a vague attempt to play or another instrument's gesture is wrong.
+                attempting = any(ACTION[kind].search(s) for s in affirmative)
+                if (note := wrong_note(kind, affirmative)) or attempting:
+                    result.append(f'Shot {shot.n}: {performer["subject"]} must visibly play the {kind}: {note}'
+                                  f'write one sentence like "{performer["subject"]} {EXAMPLE[kind]}"')
+                continue
             picture = performer.get('instrument_picture_tag')
-            if picture and not cue['paused']:
+            if picture:
                 if any(picture in s for s in affirmative):
                     bound.add(performer['subject'])
                 elif performer['subject'] not in bound:

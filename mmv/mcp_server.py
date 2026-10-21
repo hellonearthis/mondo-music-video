@@ -105,6 +105,10 @@ def create_server(base_url=None):
         `mouth_mode` unchanged; a singer can also dance. The preview returns `dance` (who dances where). Stillness is allowed
         only as a described, deliberate hold.
 
+        Strict checks: `strict_prompt_checks` true (default false) makes every dance/instrument wording finding send the passage back to the
+        writer (up to 4 attempts) like earlier releases; by default only integrity problems do and wording findings are saved as
+        segNNN.advice.json for Laya's review. Enable only when the user asks.
+
         Subliminal flash: `subliminal` {mode: off|image|text, text, image (an uploaded PNG/JPEG id), frames 1-12,
         placement manual|downbeats, times [seconds on the finished video's clock], count} flashes a picture or words
         for a few frames (flashes are kept 1 s apart); the preview returns the resolved times, the audio and length are

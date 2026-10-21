@@ -130,13 +130,17 @@ def test_guard_requires_each_players_own_action_and_reference_and_respects_pause
     good = '<Subject 1> strums strings of the guitar <Picture 3> while fretting. <Subject 2> rests both hands without playing.'
     assert inst.problems('', [good, good], seg, passage, performance, tags) == []
     for bad in ('<Subject 1> stands near guitar <Picture 3>. <Subject 2> presses keys.',
-                '<Subject 1> stands beside guitar pickups and strings <Picture 3>. <Subject 2> rests.',
-                '<Subject 1> does not strum strings of <Picture 3>. <Subject 2> rests.',
-                '<Subject 1> says "strum strings <Picture 3>". <Subject 2> rests.',
                 '<Subject 1> stands, while <Subject 2> strums strings of <Picture 3>.',
                 '<Subject 1> strums strings. <Subject 2> rests.',
                 'The guitar is on the stage. The keyboard gleams.'):
         assert inst.problems('', [bad, bad], seg, passage, performance, tags)
+    # A player is not required to play in every shot: standing, moving or reacting is fine. A vague attempt
+    # to play ("strikes the guitar") or another instrument's gesture is still rejected.
+    idle = '<Subject 1> stands beside the guitar <Picture 3> and nods. <Subject 2> rests.'
+    assert inst.problems('', [idle, good], seg, passage, performance, tags) == []
+    assert inst.problems('', [good, idle], seg, passage, performance, tags) == []
+    assert inst.problems('', [good, '<Subject 1> strikes the guitar <Picture 3>. <Subject 2> rests.'], seg, passage, performance, tags)
+    assert inst.problems('', [good, '<Subject 1> does not strum the guitar. <Subject 2> rests.'], seg, passage, performance, tags) == []
     # A detail-only shot need not force a player into frame; a later shot still shows them.
     assert inst.problems('', ['The lights glow.', good], seg, passage, performance, tags) == []
 
@@ -157,10 +161,8 @@ def test_natural_phrasing_and_one_binding_then_same_instrument_pass_without_loos
     # Never bound: the first visible shot must still cite the tag.
     assert any('connect' in e for e in inst.problems('', [later, first], seg, passage, performance, tags))
     # Later shots still need this player's own action, the instrument and no negation or other-player text.
-    for bad in (f'<Subject 1> stands near the guitar. {rest}',
-                f'<Subject 1> right hand strikes the strings. {rest}',
-                f'<Subject 1> does not strike the guitar strings. {rest}',
-                f'<Subject 1> stands, while <Subject 2> strikes the guitar strings. {rest}',
+    assert inst.problems('', [first, f'<Subject 1> stands near the guitar. {rest}'], seg, passage, performance, tags) == []
+    for bad in (f'<Subject 1> right hand strikes the strings. {rest}',
                 f'<Subject 1> strikes the keys of the piano. {rest}'):
         assert inst.problems('', [first, bad], seg, passage, performance, tags), bad
     # Without a reference the pre-existing behaviour is unchanged: no instrument noun is demanded.
@@ -212,7 +214,7 @@ def test_instrument_worker_rules_tags_cache_and_singing_coexist(tmp_path, monkey
     assert read_json(directory / 'prompts.json')['seg000']
     second, *_ = capture(tmp_path, monkeypatch, 'lip_sync', instrument_settings=settings, body=body)
     assert not second['calls']
-    monkeypatch.setattr(inst, 'problems', lambda *a: ['instrument action missing'])
+    monkeypatch.setattr(inst, 'problems', lambda *a: ['Instrument player <Subject 1> must appear in at least one shot of this passage'])
     with pytest.raises(ValueError, match='validation failed'):
         capture(tmp_path, monkeypatch, 'lip_sync', instrument_settings=settings, body=body)
 
@@ -270,15 +272,15 @@ def test_worker_audits_surgical_guitar_repair_and_validates_result(tmp_path, mon
     assert '<Subject 1> strikes the guitar' in (directory / 'seg000.writer-1.json').read_text()
 
 
-def test_worker_does_not_repair_wrong_instrument_gesture(tmp_path, monkeypatch):
+def test_worker_does_not_repair_wrong_instrument_gesture_and_leaves_it_to_review(tmp_path, monkeypatch):
     settings = {'instrument_mode': 'perform', 'actors': ['fixture_actor'],
                 'instrument_assignments': {'fixture_actor': 'guitar'}}
     body = '<Subject 1> plays the guitar <Picture 2>, fingers pressing keyboard keys.'
-    actual, _, directory, *_ = capture(tmp_path, monkeypatch, 'sealed', instrument_settings=settings,
-                                        body=body, expect=ValueError, match='validation failed')
-    assert len(actual['calls']) == 1
+    actual, _, directory, *_ = capture(tmp_path, monkeypatch, 'sealed', instrument_settings=settings, body=body)
+    assert len(actual['calls']) == 1 and actual['validation'][-1]['name'] == 'laya'     # advice, not a rewrite
     assert not list(directory.glob('*.instrument-repair-*.json'))
-    assert not read_json(directory / 'prompts.json', {})
+    assert any('non-guitar gesture' in x for x in read_json(directory / 'seg000.advice.json')['advice'])
+    assert read_json(directory / 'prompts.json')['seg000']
 
 
 def test_instrument_off_preserves_golden_worker(tmp_path, monkeypatch):

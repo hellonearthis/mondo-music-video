@@ -35,9 +35,14 @@ cues do not identify notes, fingering or exact audible silence.
 Players are excluded from dance choreography; other selected actors can still
 dance. A player cannot be an explicit dance lead. Approved singers can sing while
 playing, under the existing singing rules. Other mouths keep their existing mode.
-Visible players need a concrete action/contact description or an explicit rest
-for a paused shot. Each player appears in at least one shot per cast passage;
-object-only shots are allowed. Lexical checks also run on cached prompts. This is
+A player does not have to play in every shot: they may stand, move or react. When a
+player is shown playing, the prompt should give concrete action/contact ("strikes the
+guitar" alone is weak), avoid another instrument's gesture, and rest in a paused shot;
+these are advice to Laya's review, not rewrite triggers. Each player appears in at least one shot per cast passage;
+object-only shots are allowed. Only integrity problems (every shot described, the
+player present, the instrument reference cited) force a rewrite; wording findings
+are saved as advice in `segNNN.advice.json` and the prompt goes to Laya. The same
+integrity checks run on cached prompts. This is
 a prompt guard, not a measurement of rendered hands, object identity or timing.
 
 Instrument plans, references and cues are bound to saved prompts for resume.

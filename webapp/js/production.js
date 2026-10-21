@@ -101,6 +101,7 @@ export async function preview(form) {
   if (files.pending) throw new Error("Wait for the selected files to finish uploading");
   const request = { kind: form.dataset.kind, ...data, references: files.references };
   request.compact_prompts = Boolean(form.elements.compact_prompts?.checked);
+  request.strict_prompt_checks = Boolean(form.elements.strict_prompt_checks?.checked);
   if (request.kind === "video") {
     if (!files.song) throw new Error("Upload your song first");
     request.song = files.song;

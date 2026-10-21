@@ -33,10 +33,11 @@ from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
 from mmv.services import check_services
+from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.4"
+MGL_APP_VERSION = "1.10.5"
 WEB = Path(__file__).parent
 
 
@@ -322,6 +323,7 @@ class ProductionRequest(StrictModel):
     subliminal: SubliminalSettings = Field(default_factory=SubliminalSettings)
     captions: CaptionSettings = Field(default_factory=CaptionSettings)
     compact_prompts: bool = False
+    strict_prompt_checks: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
     stem_quality: Literal["standard", "high"] = "standard"
@@ -368,6 +370,8 @@ def request_dict(value):
     request = value.model_dump()
     if request.get("captions", {}).get("mode", "off") == "off":
         request.pop("captions", None)
+    if not request.get("strict_prompt_checks"):
+        request.pop("strict_prompt_checks", None)
     if request.get("dance_mode", "off") == "off":
         for key in DANCE_FIELDS:
             request.pop(key, None)
@@ -446,6 +450,7 @@ class Settings(StrictModel):
     topaz_models: str = ""
     topaz_backend: Literal["local", "cloud"] = "local"
     h3_models: dict[str, str] = Field(default_factory=dict)
+    workflow_preset: str = ""
 
     @field_validator("writer_api_profile", "vision_api_profile", "video_api_profile")
     @classmethod
@@ -817,6 +822,7 @@ def create_app(home=None, *, test_hosts=False):
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
+                "workflow_presets": workflow_presets(),
                 "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY",
@@ -829,6 +835,8 @@ def create_app(home=None, *, test_hosts=False):
             dump = value.model_dump()
             from mmv.api_profiles import resolve, save_settings
             dump = Settings(**resolve(store, dump)).model_dump()
+            if dump.pop("workflow_preset", ""):
+                dump["workflow_map_path"] = preset_path(value.workflow_preset)
             h3_models = dump.pop("h3_models", None)
             if h3_models:
                 _update_h3_models(store, dump, h3_models)

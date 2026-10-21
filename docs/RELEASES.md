@@ -1,5 +1,71 @@
 # Releases
 
+## 1.10.5 — FastH3 Omni workflows
+
+- Two new bundled workflows for the FastVideo FastH3 Omni 8-step model
+  (`FastVideo/FastH3-Omni-Comfy`), selectable from a **Bundled H3 workflow**
+  picker above the workflow path in Settings or by the agent setting
+  `workflow_preset` (`standard`, `fasth3_int8`, `fasth3_bf16`):
+  - **FastH3 Omni INT8**: `fasth3_omniref_8step_pruned_int8_convrot` with the
+    `qwen3vl_32b_h3_ultra_uncensored_heretic_int8_convrot` text encoder.
+  - **FastH3 Omni BF16**: `fasth3_omniref_8step_pruned_bf16` with the
+    `qwen3vl_32b_h3_ultra_uncensored_heretic_bf16` text encoder.
+  Neither has a LoRA option. The standard 20-step workflow and map are untouched
+  and remain the default.
+- A map may now set `default_steps`; the new maps use 8 (the model card's step
+  count). Local and SDK renders read it, otherwise stay at 20. Guidance 1.0 is
+  what the graph's BasicGuider already applies; the card's video/audio shift
+  values (12.0 / 3.0) are not set by the graph and rely on ComfyUI's native
+  MiniMax-H3 handling. Sampler/scheduler are unchanged (`res_multistep`/`simple`),
+  as the card does not specify them. Real inference is not verified here.
+- Instrument performance no longer requires a named player to be playing in every
+  shot they appear in. The check (`mmv/instruments.py`) now rejects a shot only for
+  a vague attempt to play ("strikes the guitar"), another instrument's gesture, or
+  playing during a paused shot; the instrument reference must be cited at the first
+  shot where the player plays. The matching sentence in the instrument writer rules
+  (appended only when instruments are on) says players may also stand, move or react.
+  Cause: with dancing on, four runs failed because every shot naming the keyboard
+  player demanded keys and a picture-tag link. Known gap: a player's instrument being
+  played by a different named actor in a shot where the owner does not play is no
+  longer caught by that shot's check.
+- Local-writer retries for dancing and instrument passages are sturdier
+  (`mmv/worker.py`, `mmv/writer_json.py`; the pinned `writer.py`/`schema.py` are
+  untouched): raw newlines/tabs inside a JSON string are escaped before parsing;
+  a reply that is not valid JSON is asked again with the same feedback and does not
+  use up one of the four attempts (at most two such free retries per passage); and a
+  retry now includes the previous draft's shots so the writer revises instead of
+  rewriting every shot. Passages without dancing or instruments are unchanged.
+- Dance check (`mmv/dance.py`): "lunge" and "footwork" count as moves, a few more
+  downbeat accent words are accepted, and in group mode a move in the same sentence
+  as a mouth clause now counts (the mouth clause is dropped, face-only sentences are
+  still ignored). Evidence: Codex read-only review of runs 160410-172316.
+  Independent mode's assigned-movement-family check also accepts natural wording
+  (vertical: "vertical sway", "flexes and extends", "rising and falling"; lateral:
+  "weight shifted", "slides"; rotation: "spins", "twirls", "torso"). Run 180005 failed
+  all four attempts on shots that already showed the assigned vertical movement.
+  The "prompt validation failed" message no longer blames Laya alone.
+- **Dance and instrument wording checks are advice, not rewrites.** Before, any
+  word-list finding (a dancer "not described moving", a movement family, a downbeat
+  accent, "must visibly play", a pronoun) sent the passage back to the local writer,
+  up to four times, before Laya ever saw it. Runs 163328-181732 used 9-12 writer
+  calls for 3-5 passages and several died on these checks. Now only integrity
+  problems force a rewrite: a wrong shot count, a missing instrument player, and an
+  uncited instrument reference (`dance.is_blocking`, `instruments.is_blocking`),
+  plus the existing schema, quality and lip-sync checks. All other findings are
+  written to `segNNN.advice.json` (with the prompt's SHA-256) and the draft goes
+  straight to Laya. Cached prompts are no longer refused for advice-level findings.
+  A new video option, **Strict dance & instrument checks** (`strict_prompt_checks`,
+  off by default, in the form under Dancing and in the preview request), restores the
+  earlier send-back-to-the-writer behaviour for every finding; cached prompts made
+  under it are kept separate. Compare the two on the same song and seed by eye.
+  The advice receipt is in the run folder and in production packages; the Agent
+  API/CLI/MCP are otherwise unchanged. Known limit: Laya's questions do not yet
+  include the dance or instrument job, so it cannot judge whether each dancer
+  follows their assigned cues or each player plays the right instrument. Teaching
+  Laya that means editing the protected `validators/` folder and needs the owner's
+  explicit approval and a before/after render comparison; it was not done here.
+- No protected prompts, pins or banner changed.
+
 ## 1.10.4 — Mondo favicon
 
 - The app now has a browser-tab icon: `/favicon.svg` (green badge with an italic

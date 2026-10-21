@@ -75,6 +75,10 @@ and renderer configuration before starting; model failures stop production.
 Silent mouths (`silent_mouths`, default `true`) now applies with or without lyrics;
 set `false` only when the user explicitly wants natural or speaking mouths.
 
+Strict checks: `strict_prompt_checks: true` (default `false`) sends every dance/instrument wording finding back to the
+writer, as earlier releases did; the default saves such findings as `segNNN.advice.json` for Laya and rewrites only for
+integrity problems. Set it only when the user asks.
+
 Low-memory option: `compact_prompts: true` (default `false`) shortens the writer
 instructions, trims ident sections that do not apply and shrinks vision-check frames. It can change writing
 quality, so only set it when the user asks for it or the machine is memory-limited.

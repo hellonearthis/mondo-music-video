@@ -11,6 +11,17 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from . import writer_usage
+from .dance import is_blocking as dance_blocking
+from .instruments import is_blocking as instrument_blocking
+
+
+def blocking_for(request, blocking):
+    """Which findings force a rewrite: only integrity problems, or every finding when the request asks for strict dance/instrument checks."""
+    return (lambda problem: True) if request.get('strict_prompt_checks') else blocking
+
+
+from .workflow_presets import map_steps
+from .writer_json import MAX_FREE_RETRIES, draft_feedback, escape_control_characters, is_broken_json
 from .storage import Storage, inside, read_json, write_json
 
 
@@ -378,6 +389,7 @@ def run(home, directory, *, resume=False):
                 if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
                 write_json(jobs_dir / (seg.segment_id+'.json'), job)
 
+                dance_blocks, instrument_blocks = blocking_for(request, dance_blocking), blocking_for(request, instrument_blocking)
                 cache_validators = []
                 if singing:
                     cache_validators = [
@@ -389,12 +401,14 @@ def run(home, directory, *, resume=False):
                     if not singing:
                         cache_validators.append(lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent))
                     dance_version = f"dance-v{dance_plan.get('version', dance.VERSION)}"
-                    cache_validators.append(lambda prompt: dance.dance_problems(prompt, cached_shot_bodies(prompt), seg, dpass, dance_plan))
+                    cache_validators.append(lambda prompt: list(filter(dance_blocks, dance.dance_problems(prompt, cached_shot_bodies(prompt), seg, dpass, dance_plan))))
                 if performing:
                     if not singing and not dancing:
                         cache_validators.append(lambda prompt: validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent))
                     dance_version += f'instruments-v{instrument_plan["version"]}'
-                    cache_validators.append(lambda prompt: instruments.problems(prompt, cached_shot_bodies(prompt), seg, ipass, instrument_plan, tags))
+                    cache_validators.append(lambda prompt: list(filter(instrument_blocks, instruments.problems(prompt, cached_shot_bodies(prompt), seg, ipass, instrument_plan, tags))))
+                if request.get('strict_prompt_checks'):
+                    dance_version += '-strict'
                 if reuse_prompts:
                     cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', seg_system, job, seg, tags,
                                                         cleared_at=cleared_at, extra_validators=cache_validators, validators_version=dance_version)
@@ -414,25 +428,27 @@ def run(home, directory, *, resume=False):
                 feedback, soft_fallback = '', None
                 compact = bool(request.get('compact_prompts'))
                 attempts = (4 if singing or dancing or performing else 3) if settings['writer_mode'] == 'local' else 1
-                for attempt in range(attempts):
-                    tag = f"{seg.segment_id} (attempt {attempt + 1})" if attempt else seg.segment_id
+                attempt = call = free_retries = 0          # attempt counts real tries; call also counts replies that were not JSON
+                while attempt < attempts:
+                    tag = f"{seg.segment_id} (attempt {call + 1})" if call else seg.segment_id
                     if compact:
                         raw = llm(seg_system, _compact_writer_job(job) + feedback, label=tag)
                     else:
                         raw = llm(seg_system + feedback, json.dumps(job, indent=2), label=tag)
-                    (directory / f'{seg.segment_id}.writer-{attempt+1}.json').write_text(raw, encoding='utf-8')
-                    instrument_problems = []
+                    (directory / f'{seg.segment_id}.writer-{call+1}.json').write_text(raw, encoding='utf-8')
+                    instrument_problems, advice, draft_bodies = [], [], None
                     try:
-                        response = WriterResponse.parse(raw, seg.segment_id)
+                        response = WriterResponse.parse(escape_control_characters(raw), seg.segment_id)
                         if performing:
                             bodies, repaired_shots = instruments.repair_shot_bodies(
                                 response.shot_bodies, seg, ipass, instrument_plan, tags)
                             if repaired_shots:
                                 response = replace(response, shot_bodies=bodies)
-                                write_json(directory / f'{seg.segment_id}.instrument-repair-{attempt+1}.json',
+                                write_json(directory / f'{seg.segment_id}.instrument-repair-{call+1}.json',
                                            {'shots': repaired_shots, 'action': instruments.GUITAR_CONTACT})
                                 print(f'{seg.segment_id}: corrected guitar hand contact in shots '
                                       + ', '.join(map(str, repaired_shots)) + '; checking the complete prompt', flush=True)
+                        draft_bodies = response.shot_bodies
                         prompt = assemble_prompt(seg, response, tags)
                         if singing:
                             prompt = lipsync.swap_audio_sentence(prompt, tags.music_tag)
@@ -442,11 +458,15 @@ def run(home, directory, *, resume=False):
                                 prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
                             else:
                                 prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
-                        instrument_problems = instruments.problems(prompt, response.shot_bodies, seg, ipass, instrument_plan, tags) if performing else []
+                        found_instruments = instruments.problems(prompt, response.shot_bodies, seg, ipass, instrument_plan, tags) if performing else []
+                        found_dance = dance.dance_problems(prompt, response.shot_bodies, seg, dpass, dance_plan) if dancing else []
+                        # Word-list findings about dancing and playing are advice: only integrity problems force a rewrite, Laya reviews the rest.
+                        instrument_problems = list(filter(instrument_blocks, found_instruments))
+                        advice = [x for x in found_instruments if not instrument_blocks(x)] + [x for x in found_dance if not dance_blocks(x)]
                         problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent)
                                     + quality.prompt_problems(prompt, seg, request['direction'])
                                     + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else [])
-                                    + (dance.dance_problems(prompt, response.shot_bodies, seg, dpass, dance_plan) if dancing else [])
+                                    + list(filter(dance_blocks, found_dance))
                                     + instrument_problems)
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
                         prompt = None
@@ -464,22 +484,32 @@ def run(home, directory, *, resume=False):
                                  'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':seg_cast_block}
                         response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=seg_silent,state=state)
                         clip = validator.last_clipboard_request if hasattr(validator, 'last_clipboard_request') else validator.build_clipboard_request(prompt,seg,tags,silent_mouths=seg_silent,state=state)
-                        write_json(directory / f'{seg.segment_id}.laya-request-{attempt+1}.json', clip)
-                        write_json(directory / f'{seg.segment_id}.laya-response-{attempt+1}.json', response)
+                        write_json(directory / f'{seg.segment_id}.laya-request-{call+1}.json', clip)
+                        write_json(directory / f'{seg.segment_id}.laya-response-{call+1}.json', response)
                     if not problems:
+                        if advice:
+                            write_json(directory / f'{seg.segment_id}.advice.json', {'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(), 'advice': advice})
+                            print(f'{seg.segment_id}: accepted with {len(advice)} dance/instrument wording notes (no rewrite); see {seg.segment_id}.advice.json', flush=True)
                         prompts[seg.segment_id] = prompt
                         write_json(directory / 'prompts.json', prompts)
                         save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id, validators_version=dance_version)
                         break
-                    write_json(directory / f'{seg.segment_id}.validation-{attempt+1}.json', problems)
+                    write_json(directory / f'{seg.segment_id}.validation-{call+1}.json', problems)
+                    call += 1
+                    if prompt is None and is_broken_json(problems) and free_retries < MAX_FREE_RETRIES:
+                        free_retries += 1                   # the reply was not JSON: ask again with the same feedback, without spending an attempt
+                        continue
+                    attempt += 1
                     if instrument_problems:
                         others = [x for x in problems if x not in instrument_problems]
                         feedback = (('\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(others)) if others else '') \
                                    + instruments.retry_feedback(instrument_problems)
                     else:
                         feedback = '\n\nCorrect these validation failures in your next response:\n' + validator.format_retry_feedback(problems)
+                    if draft_bodies is not None and (dancing or performing):
+                        feedback += draft_feedback(draft_bodies)
                 else:
-                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (evaluated by Laya and schema validator). See {directory / f"{seg.segment_id}.validation-{attempts}.json"}. Nothing rendered.')
+                    raise ValueError(f'{seg.segment_id}: prompt validation failed after {attempts} attempts (Mondo prompt checks first, then Laya; the validation file lists which check failed). See {directory / f"{seg.segment_id}.validation-{call}.json"}. Nothing rendered.')
             write_json(directory / 'prompts.json', prompts)
         if validator is not None:
             validator._agent = None
@@ -526,7 +556,7 @@ def run(home, directory, *, resume=False):
             return prompt_id
         ComfyClient.queue = record_queue
     backend.open_render(slug=plan.slug, out_dir=directory / 'renders', cast_sheets=list(sheets.items()), subject_image=None,
-                        song=None, steps=20, timeout_s=render_timeout(request['backend'], settings.get('render_timeout_minutes', 120)), comfy_host=url.hostname, comfy_port=url.port or 8188,
+                        song=None, steps=map_steps(settings['workflow_map_path']), timeout_s=render_timeout(request['backend'], settings.get('render_timeout_minutes', 120)), comfy_host=url.hostname, comfy_port=url.port or 8188,
                         comfy_input=settings['comfy_input'], comfy_output=settings['comfy_output'],
                         map_path=settings['workflow_map_path'], root=ENGINE,
                         comfy_sdk_url=settings['comfy_sdk_url'], comfy_sdk_key=store.key('MMV_COMFY_API_KEY'),

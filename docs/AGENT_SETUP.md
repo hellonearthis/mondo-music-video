@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.4 exposes **53 tools** and advertises the
+v1.10.5 exposes **53 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -94,6 +94,14 @@ bounce/step/rotation actions and prompt checks; start a fresh preview to use the
 repair. Resuming an existing production preserves its saved choreography. No new
 MCP tool or paid consent exception is introduced; rendered distinctness still
 needs operator verification.
+
+## Strict dance and instrument checks
+
+`strict_prompt_checks: true` in a video preview request restores the earlier behaviour in
+which every dance or instrument wording finding sends the passage back to the local writer
+(up to four attempts). Default `false`: only integrity problems (shot count, missing player,
+uncited instrument reference) force a rewrite and wording findings are saved as
+`segNNN.advice.json` for Laya's review. Enable it only when the user asks.
 
 ## Compact prompts
 

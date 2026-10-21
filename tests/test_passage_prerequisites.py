@@ -18,7 +18,7 @@ class StopBeforeRender(Exception):
     pass
 
 
-def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=None, instrument_settings=None, body=None, prepared_settings=None, stop_process=None, expect=StopBeforeRender, match=None, **request_fields):
+def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=None, instrument_settings=None, body=None, prepared_settings=None, stop_process=None, expect=StopBeforeRender, match=None, replies=None, **request_fields):
     home, directory = tmp_path / 'home', tmp_path / 'run'
     directory.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv('MMV_HOME', str(home))
@@ -67,6 +67,8 @@ def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=N
     trace, calls = [], []
     def writer(_unused, system, user, *args, **kwargs):
         calls.append({'system': system, 'job': json.loads(user)})
+        if replies is not None:
+            return True, replies[len(calls) - 1], ''
         return True, json.dumps({'style_opening': 'Daylight photography.', 'shot_bodies': [
             body or '<Subject 1> sings "hello world" while moving through the light.'], 'overall_soundscape': 'Wind.'}), ''
     monkeypatch.setattr('mmv.engine.writer.call_llm', writer)
