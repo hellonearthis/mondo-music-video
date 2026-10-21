@@ -1100,6 +1100,44 @@ button[aria-busy="true"], button.processing {
   color: #c5dfb9;
 }
 
+.worlds-prompt-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.worlds-prompt-row textarea {
+  flex: 1 1 auto;
+  min-height: 54px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 0 !important;
+}
+
+.worlds-process-btn {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .worlds-prompt-row {
+    flex-direction: column;
+  }
+  .worlds-process-btn {
+    width: 100%;
+    min-height: 38px;
+  }
+}
+
 .worlds-clusters-list {
   display: flex;
   flex-direction: column;

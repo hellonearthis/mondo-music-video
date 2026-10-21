@@ -12,6 +12,346 @@ export const DEFAULT_WORLDS = [
   { name: "Maritime / Salt", score: 0.31, active: false, locked: false }
 ];
 
+export const THEMATIC_WORLDS_LIBRARY = [
+  {
+    name: "Bureaucratic / Carceral",
+    keywords: [
+      "clerk", "archive", "office", "government", "paperwork", "dossier", "cubicle", "desk",
+      "stamp", "lanyard", "prison", "carceral", "cell", "fluorescent", "warden",
+      "institutional", "records", "annex", "ledger", "typewriter", "linoleum", "official",
+      "tribunal", "audit", "shift", "night-shift", "document", "filing", "cabinet", "pen", "stairwell"
+    ],
+    pools: {
+      Settings: ["evidence locker", "sodium-lit stairwell", "records annex", "flooded basement", "linoleum corridor", "interrogation room", "card-catalogue annex"],
+      Lighting: ["flickering fluorescent tube", "single desk lamp", "amber exit signs", "cold green cathode hum", "overhead strip glare"],
+      Mechanisms: ["pneumatic tube dispatch", "card-catalogue drawers sliding", "stamp descending", "manual typewriter carriage", "rotary dial spin"],
+      Costume: ["grey wool cardigan", "laminated lanyard", "rumpled polyester tie", "oversized metal badge", "stiff cotton clerk coat"],
+      "Practical Effects": ["drifting paper dust", "steam from a vent", "yellowing water stain", "buzzing ballast flicker", "coffee ring on parchment"]
+    }
+  },
+  {
+    name: "Brutalist Concrete",
+    keywords: [
+      "brutalist", "concrete", "monolith", "bunker", "aggregate", "gray", "grey", "shear wall",
+      "geometric", "slab", "underpass", "pillar", "cold", "overpass", "fortress", "foundation",
+      "viaduct", "gravel", "cement", "raw", "monolithic", "architecture", "monumental"
+    ],
+    pools: {
+      Settings: ["monolithic atrium", "shear concrete underpass", "subterranean bunker", "recessed pedestrian tunnel", "brutalist civic plaza"],
+      Lighting: ["stark raking sidelight", "deep geometric shadow", "cold halogen wash", "single slit aperture sunbeam"],
+      Mechanisms: ["hydraulic blast door", "counterweight pulley", "heavy steel turnstile", "concrete core drill", "cable-stayed winch"],
+      Costume: ["heavy charcoal trench", "rough wool greatcoat", "steel-toe boots", "utilitarian boiler suit", "dark canvas parka"],
+      "Practical Effects": ["chalky concrete dust", "dripping condensation", "cold breath mist", "wind whipping fine gravel"]
+    }
+  },
+  {
+    name: "Industrial Decay",
+    keywords: [
+      "industrial", "decay", "factory", "rust", "abandoned", "iron", "boiler", "furnace",
+      "scrap", "grease", "foundry", "smokestack", "pipe", "turbine", "corrugated", "toxic",
+      "derelict", "mill", "smelting", "assembly", "soot", "machinery", "metal", "welding"
+    ],
+    pools: {
+      Settings: ["abandoned assembly floor", "rusted catwalk", "inactive blast furnace", "scrap yard crane bay", "dripping steam conduit"],
+      Lighting: ["flickering sodium vapor", "welding flash reflection", "amber hazard strobe", "dull rusted twilight"],
+      Mechanisms: ["cracked flywheel spinning", "pneumatic piston hiss", "rusty chain hoist", "loose drive belt flapping"],
+      Costume: ["grease-stained canvas overalls", "battered leather apron", "pitted welding goggles", "frayed cloth gloves"],
+      "Practical Effects": ["curling iron filings", "oily puddle rainbow", "soot fallout", "high-pressure steam leak"]
+    }
+  },
+  {
+    name: "Maritime / Salt",
+    keywords: [
+      "maritime", "salt", "ocean", "sea", "wharf", "harbor", "brine", "trawler", "dock",
+      "pier", "foghorn", "slicker", "fish", "tide", "boat", "ship", "wave", "coast",
+      "coastal", "buoy", "barnacle", "hull", "seaweed", "gulls", "lighthouse", "water", "anchor"
+    ],
+    pools: {
+      Settings: ["fog-choked timber pier", "rusted trawler deck", "fish cannery slipway", "salt-crusted watchtower", "low-tide mudflat"],
+      Lighting: ["revolving lighthouse beam", "grey overcast sea mist", "lantern reflecting in wet planks", "sickly yellow deck floodlight"],
+      Mechanisms: ["winch drum groaning", "rusty capstan turning", "foghorn bellows breathing", "bilge pump chugging"],
+      Costume: ["yellow rubber slicker", "salt-stiffened denim", "heavy knit fisherman sweater", "sou'wester oilskin hat"],
+      "Practical Effects": ["cold sea spray", "thick sea fog rolling", "dripping brine", "scattered wet fish scales"]
+    }
+  },
+  {
+    name: "Cyberpunk / High-Tech",
+    keywords: [
+      "cyberpunk", "cyber", "tech", "high-tech", "neon", "fiber", "optic", "server", "terminal",
+      "circuit", "hacker", "glitch", "holographic", "data", "synthetic", "diode", "wire",
+      "screen", "motherboard", "digital", "network", "drone", "interface", "virtual", "matrix", "code"
+    ],
+    pools: {
+      Settings: ["crowded server bank", "neon-lit rainy alleyway", "subterranean cyber clinic", "cramped terminal booth", "optic cabling conduit"],
+      Lighting: ["saturated magenta neon", "pulsing cyan diode glow", "scanning laser grid", "stuttering CRT monitor flicker"],
+      Mechanisms: ["robotic actuator arm", "cooling fan spin-up", "optic cable rack patching", "motorized iris camera lens"],
+      Costume: ["transparent vinyl coat", "modular techwear harness", "reflective visor", "fingerless grounding gloves"],
+      "Practical Effects": ["circuit board smoke", "holographic glitch artifact", "fiber optic sparks", "pooling oily neon reflection"]
+    }
+  },
+  {
+    name: "Nocturnal Noir",
+    keywords: [
+      "noir", "detective", "night", "nocturnal", "rain", "wet", "asphalt", "trenchcoat",
+      "alley", "venetian", "blinds", "shadow", "cigarette", "smoke", "jazz", "crime",
+      "mystery", "streetlamp", "diner", "femme", "fatale", "fedora", "midnight", "whiskey"
+    ],
+    pools: {
+      Settings: ["rain-slicked back alley", "venetian-blinded private office", "empty 2am diner", "fire escape landing", "telephone booth under streetlight"],
+      Lighting: ["slanted venetian blind shadow", "single sodium streetlight", "glowing cigarette tip", "wet pavement neon bounce"],
+      Mechanisms: ["rotary phone cradle click", "revolver cylinder spin", "ceiling fan turning slowly", "coin clinking in jukebox"],
+      Costume: ["damp gabardine trenchcoat", "tilted felt fedora", "loosened silk tie", "leather shoulder holster"],
+      "Practical Effects": ["curling cigarette smoke", "rain pouring off metal awning", "wet tire hiss", "windshield wiper drag"]
+    }
+  },
+  {
+    name: "Pastoral Nature",
+    keywords: [
+      "nature", "pastoral", "overgrowth", "forest", "woods", "moss", "meadow", "trees",
+      "leaves", "pollen", "roots", "soil", "canopy", "flora", "garden", "organic",
+      "wild", "fungal", "mushrooms", "thicket", "lichen", "grove", "sunbeam", "creek", "river", "botanical"
+    ],
+    pools: {
+      Settings: ["moss-carpeted forest clearing", "ruined stone chapel overgrown with ivy", "sun-dappled creek bed", "ancient hollow oak grove"],
+      Lighting: ["dappled canopy sunlight", "amber golden-hour slant", "glowing bioluminescent moss", "soft morning mist"],
+      Mechanisms: ["creaking tree bough", "timber water wheel turning", "seed pod bursting", "deep root cracking stone"],
+      Costume: ["hand-spun linen tunic", "dirt-stained hem", "woven willow crown", "unbleached cotton smock"],
+      "Practical Effects": ["floating airborne pollen", "falling dried leaves", "rising soil dew", "spore cloud drifting"]
+    }
+  },
+  {
+    name: "Baroque / Theatrical",
+    keywords: [
+      "baroque", "theatrical", "theater", "theatre", "velvet", "curtain", "gold", "gilded",
+      "masquerade", "chandelier", "opera", "stage", "footlights", "proscenium", "drama",
+      "costume", "regal", "palace", "candle", "candelabra", "brocade", "orchestra", "mask"
+    ],
+    pools: {
+      Settings: ["decaying opera house balcony", "gilded mirror gallery", "empty orchestra pit", "dusty backstage dressing room"],
+      Lighting: ["gas footlights flickering", "multi-tiered crystal chandelier", "single amber spotlight cone", "flickering beeswax candles"],
+      Mechanisms: ["counterweighted stage rope", "velvet grand drape rising", "trapdoor latch releasing", "mechanical music box cylinder"],
+      Costume: ["heavy crimson velvet cape", "tarnished filigree mask", "gold brocade waistcoat", "ruffled lace collar"],
+      "Practical Effects": ["billowing stage rosin dust", "drifting red rose petals", "melting wax drip", "floating theatrical haze"]
+    }
+  },
+  {
+    name: "Clinical / Medical",
+    keywords: [
+      "medical", "clinical", "hospital", "sterile", "surgical", "tile", "doctor", "nurse",
+      "clinic", "syringe", "stainless", "examination", "patient", "antiseptic",
+      "laboratory", "pharma", "specimen", "diagnosis", "white", "gloves", "quarantine", "scalpel"
+    ],
+    pools: {
+      Settings: ["glazed white tile operating theater", "silent quarantine corridor", "specimen preservation vault", "sterile recovery ward"],
+      Lighting: ["harsh shadowless surgical ring light", "pale blue inspection beam", "cold white fluorescent glare"],
+      Mechanisms: ["centrifuge spinning", "pneumatic syringe valve", "stainless gurney caster rolling", "ECG tape feeding"],
+      Costume: ["pale mint surgical scrubs", "translucent examination gloves", "starch-white lab coat", "disposable paper mask"],
+      "Practical Effects": ["condensation inside oxygen tent", "dripping saline chamber", "antiseptic mist spray", "frost on cryogenic vial"]
+    }
+  },
+  {
+    name: "Cosmic / Void",
+    keywords: [
+      "cosmic", "void", "space", "star", "stars", "starfield", "obsidian", "gravity",
+      "zero-g", "vacuum", "celestial", "nebula", "observatory", "radio", "dish", "meteor",
+      "dust", "satellite", "astronaut", "orbit", "planetary", "black hole", "galaxy", "deep space"
+    ],
+    pools: {
+      Settings: ["deep space observation cupola", "radio telescope dish rim", "obsidian asteroid crater", "pressurized airlock chamber"],
+      Lighting: ["distant blue starlight pinpricks", "earth-rise specular rim light", "cold solar flare glare", "monochrome instrument backlight"],
+      Mechanisms: ["airlock decompression cycle", "reaction control thruster puff", "gyroscope spinning in gimbal", "solar array unrolling"],
+      Costume: ["multilayer EVA spacesuit", "gold-tinted reflective helmet visor", "pressurized tether umbilical", "quilted thermal liner"],
+      "Practical Effects": ["floating weightless droplets", "solar wind particle trails", "micro-meteorite impact sparkle", "ice crystals venting"]
+    }
+  }
+];
+
+export const scorePromptAgainstWorlds = (promptText, currentWorlds = [], library = THEMATIC_WORLDS_LIBRARY) => {
+  const rawText = String(promptText || "").toLowerCase().trim();
+  if (!rawText) {
+    return library.slice(0, 4).map((w, i) => {
+      const existing = currentWorlds.find(cw => cw.name === w.name);
+      return {
+        name: w.name,
+        score: existing ? existing.score : Number((0.75 - i * 0.15).toFixed(2)),
+        active: existing ? existing.active : i < 2,
+        locked: existing ? existing.locked : false
+      };
+    });
+  }
+
+  const tokens = rawText
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter(t => t.length > 2);
+
+  const STOPWORDS = new Set([
+    "the", "and", "that", "this", "with", "from", "for", "through", "into", "over",
+    "under", "about", "your", "they", "them", "their", "have", "been", "were",
+    "will", "would", "could", "should", "some", "what", "when", "where", "which"
+  ]);
+
+  const meaningfulTokens = tokens.filter(t => !STOPWORDS.has(t));
+
+  const scored = library.map((world) => {
+    let rawScore = 0;
+    const worldKeywords = (world.keywords || []).map(k => k.toLowerCase());
+    const worldNameLower = world.name.toLowerCase();
+
+    // 1. Prompt string contains whole keywords/phrases
+    worldKeywords.forEach(kw => {
+      if (rawText.includes(kw)) {
+        rawScore += (kw.includes(" ") || kw.includes("-")) ? 4.5 : 3.0;
+      }
+    });
+
+    // 2. Token overlap and prefix matching
+    meaningfulTokens.forEach(tok => {
+      if (worldNameLower.includes(tok)) {
+        rawScore += 2.5;
+      }
+      for (const kw of worldKeywords) {
+        if (kw === tok) {
+          rawScore += 2.0;
+          break;
+        } else if (tok.length >= 4 && (kw.startsWith(tok) || tok.startsWith(kw))) {
+          rawScore += 1.0;
+          break;
+        }
+      }
+    });
+
+    // 3. Signature pools check
+    Object.values(world.pools || {}).forEach(terms => {
+      terms.forEach(term => {
+        const termLower = term.toLowerCase();
+        if (rawText.includes(termLower)) {
+          rawScore += 2.0;
+        }
+      });
+    });
+
+    return {
+      world,
+      rawScore
+    };
+  });
+
+  const maxRaw = Math.max(...scored.map(s => s.rawScore), 0);
+
+  scored.sort((a, b) => b.rawScore - a.rawScore);
+
+  const ranked = scored.map((item, idx) => {
+    let normalizedScore = 0.25;
+    if (maxRaw > 0) {
+      const ratio = item.rawScore / maxRaw;
+      if (ratio > 0.8) {
+        normalizedScore = 0.80 + (ratio - 0.8) * 0.75;
+      } else if (ratio > 0.4) {
+        normalizedScore = 0.55 + (ratio - 0.4) * 0.625;
+      } else if (ratio > 0) {
+        normalizedScore = 0.30 + ratio * 0.625;
+      } else {
+        normalizedScore = Math.max(0.15, 0.28 - idx * 0.03);
+      }
+    } else {
+      normalizedScore = Math.max(0.20, Number((0.75 - idx * 0.12).toFixed(2)));
+    }
+
+    const finalScore = Number(Math.min(0.98, Math.max(0.12, normalizedScore)).toFixed(2));
+    const existing = currentWorlds.find(cw => cw.name === item.world.name);
+
+    return {
+      name: item.world.name,
+      score: finalScore,
+      active: existing?.locked ? existing.active : idx < 2,
+      locked: existing ? existing.locked : false
+    };
+  });
+
+  const lockedWorlds = currentWorlds.filter(w => w.locked);
+  const result = [];
+  const addedNames = new Set();
+
+  for (const item of ranked) {
+    if (result.length < 4 || item.locked) {
+      result.push({
+        name: item.name,
+        score: item.score,
+        active: item.active,
+        locked: item.locked
+      });
+      addedNames.add(item.name);
+    }
+  }
+
+  for (const locked of lockedWorlds) {
+    if (!addedNames.has(locked.name)) {
+      result.push({
+        name: locked.name,
+        score: locked.score || 0.50,
+        active: locked.active,
+        locked: true
+      });
+      addedNames.add(locked.name);
+    }
+  }
+
+  result.sort((a, b) => b.score - a.score);
+
+  return result.slice(0, Math.max(4, lockedWorlds.length));
+};
+
+export const compilePoolsFromActiveWorlds = (activeWorldNames = [], currentPools = [], library = THEMATIC_WORLDS_LIBRARY) => {
+  const activeSet = new Set(activeWorldNames);
+  const activeWorlds = library.filter(w => activeSet.has(w.name));
+
+  if (activeWorlds.length === 0) {
+    return (currentPools.length ? currentPools : DEFAULT_POOLS).map(p => ({
+      ...p,
+      terms: [...p.terms]
+    }));
+  }
+
+  const dimensions = [
+    { name: "Settings", defaultNeed: 9 },
+    { name: "Lighting", defaultNeed: 6 },
+    { name: "Mechanisms", defaultNeed: 10 },
+    { name: "Costume", defaultNeed: 6 },
+    { name: "Practical Effects", defaultNeed: 5 }
+  ];
+
+  return dimensions.map(dim => {
+    const existingPool = currentPools.find(p => p.dimension.toLowerCase() === dim.name.toLowerCase());
+    const existingTerms = existingPool ? existingPool.terms : [];
+    const need = existingPool ? existingPool.need : dim.defaultNeed;
+
+    const worldTerms = [];
+    activeWorlds.forEach(world => {
+      const termsForDim = world.pools?.[dim.name] || [];
+      termsForDim.forEach(term => {
+        if (!worldTerms.includes(term)) {
+          worldTerms.push(term);
+        }
+      });
+    });
+
+    const mergedTerms = [...worldTerms];
+    existingTerms.forEach(t => {
+      if (!mergedTerms.some(mt => mt.toLowerCase() === t.toLowerCase())) {
+        mergedTerms.push(t);
+      }
+    });
+
+    return {
+      dimension: dim.name,
+      pool: mergedTerms.length,
+      need,
+      terms: mergedTerms
+    };
+  });
+};
+
 export const DEFAULT_SECTIONS = [
   { name: "Verse 1", baseKappa: 0.08 },
   { name: "Pre-chorus", baseKappa: 0.35 },
@@ -287,6 +627,13 @@ export function initVocabWorlds() {
       const dirVal = document.querySelector("#video-form [name='direction']")?.value;
       if (dirVal) promptInput.value = dirVal.trim();
     }
+    promptInput.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        const btn = $("#worlds-process-prompt-btn");
+        if (btn) btn.click();
+      }
+    });
   }
 
   const updateView = () => {
@@ -345,6 +692,34 @@ export function initVocabWorlds() {
 
   // Wire mode switches, locks, chip cycling, and apply/reset actions
   container.addEventListener("click", event => {
+    const processBtn = event.target.closest("#worlds-process-prompt-btn");
+    if (processBtn) {
+      const promptEl = $("#worlds-prompt-input");
+      const text = (promptEl?.value || "").trim();
+      if (!text) {
+        notice("Please enter a song premise or thematic direction to analyze.");
+        if (promptEl) promptEl.focus();
+        return;
+      }
+
+      const scoredWorlds = scorePromptAgainstWorlds(text, state.worlds, THEMATIC_WORLDS_LIBRARY);
+      state.worlds = scoredWorlds;
+
+      const activeNames = scoredWorlds.filter(w => w.active).map(w => w.name);
+      state.pools = compilePoolsFromActiveWorlds(activeNames, state.pools, THEMATIC_WORLDS_LIBRARY);
+
+      updateView();
+
+      const topWorld = scoredWorlds[0];
+      const secondWorld = scoredWorlds[1];
+      if (topWorld && secondWorld) {
+        notice(`⚡ Analyzed prompt: Matched "${topWorld.name}" (${topWorld.score.toFixed(2)}) & "${secondWorld.name}" (${secondWorld.score.toFixed(2)}).`);
+      } else if (topWorld) {
+        notice(`⚡ Analyzed prompt: Matched "${topWorld.name}" (${topWorld.score.toFixed(2)}).`);
+      }
+      return;
+    }
+
     const modeBtn = event.target.closest(".worlds-mode-btn");
     if (modeBtn) {
       state.mode = modeBtn.dataset.mode;
@@ -456,6 +831,8 @@ export function initVocabWorlds() {
       const idx = Number(check.dataset.index);
       if (state.worlds[idx]) {
         state.worlds[idx].active = check.checked;
+        const activeNames = state.worlds.filter(w => w.active).map(w => w.name);
+        state.pools = compilePoolsFromActiveWorlds(activeNames, state.pools, THEMATIC_WORLDS_LIBRARY);
         updateView();
       }
       return;

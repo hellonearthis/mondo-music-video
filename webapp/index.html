@@ -346,7 +346,10 @@
         <h3 style="margin:0;font-size:15px;font-weight:600;">Describe the video</h3>
       </div>
       <label for="worlds-prompt-input" class="sub" style="margin-bottom:6px;display:block;">Song premise or thematic direction:</label>
-      <textarea id="worlds-prompt-input" rows="2" style="width:100%;font-size:13px;line-height:1.5;margin-bottom:12px;" placeholder="A night-shift clerk drifts through an endless government archive">A night-shift clerk drifts through an endless government archive</textarea>
+      <div class="worlds-prompt-row">
+        <textarea id="worlds-prompt-input" rows="2" placeholder="A night-shift clerk drifts through an endless government archive">A night-shift clerk drifts through an endless government archive</textarea>
+        <button type="button" id="worlds-process-prompt-btn" class="primary worlds-process-btn" data-tooltip="Analyze prompt to discover and rank the most relevant thematic world clusters (Ctrl+Enter)">⚡ Process</button>
+      </div>
       <div class="sub" style="margin:10px 0 8px;">Matched worlds. Untick to drop one, lock to preserve it when prompt changes:</div>
       <div id="worlds-clusters-list" class="worlds-clusters-list"></div>
     </div>
