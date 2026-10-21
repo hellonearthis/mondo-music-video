@@ -3,7 +3,7 @@
 
 import { $, $$, copyToClipboard, notice, state as appState } from "./core.js";
 import { scheduleSave } from "./project.js";
-import { updateVocabCustomBadge } from "./vocabulary.js";
+import { loadVocabularyCatalog, updateVocabCustomBadge } from "./vocabulary.js";
 
 export const DEFAULT_WORLDS = [
   { name: "Bureaucratic / Carceral", score: 0.81, active: true, locked: false },
@@ -131,7 +131,20 @@ export const renderBarsHtml = (sections, sliderValue, mode) => {
   return { barsHtml: bars, multiplierText: multText };
 };
 
-export const renderPoolsHtml = (pools, borrowed) => {
+export const dimensionToCategoryKey = (dim) => {
+  const normalized = String(dim || "").toLowerCase().trim();
+  const map = {
+    settings: "settings",
+    lighting: "lighting",
+    mechanisms: "mechanisms",
+    costume: "costume",
+    "practical effects": "practical_effects",
+    practical_effects: "practical_effects"
+  };
+  return map[normalized] || normalized.replace(/\s+/g, "_");
+};
+
+export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
   return pools.map((p, poolIdx) => {
     const isCostume = p.dimension === "Costume";
     const currentPoolCount = (isCostume && borrowed) ? 9 : p.pool;
@@ -146,6 +159,22 @@ export const renderPoolsHtml = (pools, borrowed) => {
       return `<button type="button" class="worlds-term-chip" data-pool="${poolIdx}" data-term="${termIdx}" data-state="0" data-tooltip="Click to cycle: Included → Pinned (must appear) → Excluded">${escapeHtml(term)}</button>`;
     }).join("");
 
+    const catKey = dimensionToCategoryKey(p.dimension);
+    const catalogItems = catalog?.base?.[catKey] || [];
+    const existingTermsSet = new Set(p.terms.map(t => t.toLowerCase().trim()));
+    const candidateTerms = catalogItems
+      .filter(item => !existingTermsSet.has(item.toLowerCase().trim()))
+      .sort((a, b) => a.localeCompare(b));
+
+    const dropdownHtml = candidateTerms.length > 0
+      ? `
+        <select class="worlds-select-term-dropdown" data-pool="${poolIdx}" data-tooltip="Add a relevant built-in ${escapeHtml(p.dimension)} term to this pool" aria-label="Add built-in ${escapeHtml(p.dimension)} term">
+          <option value="">+ Add from ${escapeHtml(p.dimension)} catalog (${candidateTerms.length})…</option>
+          ${candidateTerms.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}
+        </select>
+      `
+      : "";
+
     return `
       <div class="worlds-pool-dimension-row">
         <div class="worlds-pool-dim-header">
@@ -155,7 +184,8 @@ export const renderPoolsHtml = (pools, borrowed) => {
         </div>
         <div class="worlds-chips-wrap">
           ${chips}
-          <button type="button" class="worlds-term-chip worlds-add-term-btn" data-pool="${poolIdx}" data-tooltip="Add a custom term to this world pool">+ Add term</button>
+          <button type="button" class="worlds-term-chip worlds-add-term-btn" data-pool="${poolIdx}" data-tooltip="Type a custom keyword to add to this world pool">+ Add custom</button>
+          ${dropdownHtml}
         </div>
       </div>
     `;
@@ -227,6 +257,8 @@ export function initVocabWorlds() {
   const container = $("#vocab-worlds-workspace");
   if (!container) return;
 
+  let catalogCache = null;
+
   // Local state container for the interactive view, initialized from appState if present
   const state = {
     mode: appState.thematicWorlds?.mode || "guided",
@@ -238,6 +270,14 @@ export function initVocabWorlds() {
       ? JSON.parse(JSON.stringify(appState.thematicWorlds.pools))
       : JSON.parse(JSON.stringify(DEFAULT_POOLS))
   };
+
+  // Eagerly pre-load catalog so category dropdowns populate immediately
+  loadVocabularyCatalog()
+    .then((cat) => {
+      catalogCache = cat;
+      updateView();
+    })
+    .catch(() => {});
 
   const promptInput = $("#worlds-prompt-input");
   if (promptInput) {
@@ -286,7 +326,7 @@ export function initVocabWorlds() {
     // Pools
     const poolsContainer = $("#worlds-pools-list");
     if (poolsContainer) {
-      poolsContainer.innerHTML = renderPoolsHtml(state.pools, state.borrowed);
+      poolsContainer.innerHTML = renderPoolsHtml(state.pools, state.borrowed, catalogCache);
     }
 
     // Footer summary pill
@@ -345,12 +385,13 @@ export function initVocabWorlds() {
     const addBtn = event.target.closest(".worlds-add-term-btn");
     if (addBtn) {
       const poolIdx = Number(addBtn.dataset.pool);
-      const input = prompt("Enter a custom term to add to this world pool:");
+      const input = prompt(`Enter a custom term to add to the ${state.pools[poolIdx].dimension} pool:`);
       if (input && input.trim()) {
-        state.pools[poolIdx].terms.push(input.trim());
+        const cleaned = input.trim();
+        state.pools[poolIdx].terms.push(cleaned);
         state.pools[poolIdx].pool += 1;
         updateView();
-        notice(`Added "${input.trim()}" to ${state.pools[poolIdx].dimension}.`);
+        notice(`Added "${cleaned}" to ${state.pools[poolIdx].dimension} pool.`);
       }
       return;
     }
@@ -408,7 +449,7 @@ export function initVocabWorlds() {
     }
   });
 
-  // Wire checkbox changes
+  // Wire checkbox and dropdown changes
   container.addEventListener("change", event => {
     const check = event.target.closest(".worlds-cluster-check");
     if (check) {
@@ -417,6 +458,22 @@ export function initVocabWorlds() {
         state.worlds[idx].active = check.checked;
         updateView();
       }
+      return;
+    }
+
+    const select = event.target.closest(".worlds-select-term-dropdown");
+    if (select && select.value) {
+      const poolIdx = Number(select.dataset.pool);
+      const chosen = select.value.trim();
+      if (chosen && state.pools[poolIdx]) {
+        if (!state.pools[poolIdx].terms.includes(chosen)) {
+          state.pools[poolIdx].terms.push(chosen);
+          state.pools[poolIdx].pool += 1;
+          updateView();
+          notice(`Added "${chosen}" to ${state.pools[poolIdx].dimension} pool.`);
+        }
+      }
+      return;
     }
   });
 
@@ -453,6 +510,14 @@ export function initVocabWorlds() {
     if (promptEl && !promptEl.value.trim()) {
       const dirVal = document.querySelector("#video-form [name='direction']")?.value;
       if (dirVal) promptEl.value = dirVal.trim();
+    }
+    if (!catalogCache) {
+      loadVocabularyCatalog()
+        .then((cat) => {
+          catalogCache = cat;
+          updateView();
+        })
+        .catch(() => {});
     }
     updateView();
   };

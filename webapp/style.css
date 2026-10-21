@@ -1390,6 +1390,24 @@ button[aria-busy="true"], button.processing {
   color: var(--muted);
 }
 
+.worlds-select-term-dropdown {
+  margin-top: 0 !important;
+  border: 1px solid #c8d7b7;
+  background: #fbfcf8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+  color: var(--ink);
+  max-width: 260px;
+}
+
+[data-theme=dark] .worlds-select-term-dropdown {
+  border-color: #3e5645;
+  background: #1c2921;
+  color: var(--ink);
+}
+
 .worlds-footer {
   margin-top: 24px;
 }
