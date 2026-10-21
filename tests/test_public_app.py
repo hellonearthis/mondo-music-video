@@ -595,6 +595,7 @@ class PublicAppTests(unittest.TestCase):
             "files": {"video-form": {"song": "test.wav", "references": []}},
             "details_open": True,
             "details_sections": {"director-camera": True, "director-render": False},
+            "thematic_worlds": {"mode": "guided", "slider": 50, "activeWorlds": ["Bureaucratic / Carceral"]},
             "log_open": False
         }
         res = self.client.put("/api/project", json=project)
@@ -605,6 +606,7 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(got["forms"]["video-form"]["title"], "My Track")
         self.assertTrue(got["details_open"])
         self.assertEqual(got["details_sections"], project["details_sections"])
+        self.assertEqual(got.get("thematic_worlds"), project["thematic_worlds"])
 
     def test_clear_log_endpoint(self):
         studio_log = self.home / "studio.log"

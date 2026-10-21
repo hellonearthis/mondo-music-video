@@ -12,7 +12,7 @@ import uuid
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 import oap
@@ -304,6 +304,7 @@ class ProductionRequest(StrictModel):
     stem_quality: Literal["standard", "high"] = "standard"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+    thematic_worlds: dict[str, Any] | None = None
 
     @field_validator("vocabulary_profile")
     @classmethod
@@ -341,6 +342,8 @@ def request_dict(value):
             request.pop(key, None)
     elif request["kind"] != "video":
         raise ValueError("Instrument performance is available for music videos only")
+    if not request.get("thematic_worlds") or request.get("thematic_worlds", {}).get("mode", "off") == "off":
+        request.pop("thematic_worlds", None)
     return request
 
 
@@ -499,6 +502,7 @@ class ProjectState(StrictModel):
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     vocab_random_key: str = Field(default="", max_length=128)
+    thematic_worlds: dict[str, Any] | None = None
     details_open: bool = False
     details_sections: dict[str, bool] = Field(default_factory=dict)
     log_open: bool = False
