@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.3")
+        self.assertEqual(api_version()["version"], "1.10.4")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.3", (root / "README.md").read_text())
+        self.assertIn("1.10.4", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -452,6 +452,21 @@ class PublicAppTests(unittest.TestCase):
             self.assertIn("text/javascript", res.headers["content-type"])
         self.assertEqual(self.client.get("/js/nonexistent.js").status_code, 400)
         self.assertEqual(self.client.get("/js/index.html").status_code, 400)
+
+    def test_favicons_served_and_linked(self):
+        ico_res = self.client.get("/favicon.ico")
+        self.assertEqual(ico_res.status_code, 200)
+        self.assertIn("image/x-icon", ico_res.headers["content-type"])
+        self.assertGreater(len(ico_res.content), 0)
+
+        svg_res = self.client.get("/favicon.svg")
+        self.assertEqual(svg_res.status_code, 200)
+        self.assertIn("image/svg+xml", svg_res.headers["content-type"])
+        self.assertIn("<svg", svg_res.text)
+
+        html = self.client.get("/").text
+        self.assertIn('href="/favicon.svg"', html)
+        self.assertIn('href="/favicon.ico"', html)
 
     def test_uploaded_song_preview_endpoint(self):
         up = self.client.post("/api/upload/song", files={"file": ("track.wav", self.song, "audio/wav")})

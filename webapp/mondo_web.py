@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.3"
+MGL_APP_VERSION = "1.10.4"
 WEB = Path(__file__).parent
 
 
@@ -655,6 +655,14 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/style.css")
     def css():
         return FileResponse(WEB / "style.css", media_type="text/css")
+
+    @app.get("/favicon.ico")
+    def favicon_ico():
+        return FileResponse(WEB / "favicon.ico", media_type="image/x-icon")
+
+    @app.get("/favicon.svg")
+    def favicon_svg():
+        return FileResponse(WEB / "favicon.svg", media_type="image/svg+xml")
 
     app.get("/api/version")(api_version)
 

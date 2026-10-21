@@ -1,5 +1,18 @@
 # Releases
 
+## 1.10.4 — Mondo favicon
+
+- The app now has a browser-tab icon: `/favicon.svg` (green badge with an italic
+  "M") and a multi-size `/favicon.ico`, linked from the page head and included
+  in the package data. Adopted unchanged from hellonearthis's fork revision
+  `c699179` with its endpoint test. Credit: hellonearthis.
+- Reviewed fork head `c699179`. Not adopted: `5ca5eb9` (Thematic Worlds "Process"
+  button and keyword cluster matching). It builds on the deferred
+  `vocab-worlds.js` work from `79d8515`, so it waits on that foundation; no new
+  defect was found in the diff. See `docs/COLLABORATOR_REVIEW.md`.
+- No protected prompts, pins or banner changed. The icon is a static asset;
+  Agent API, CLI and MCP are unchanged.
+
 ## 1.10.3 — Topaz cloud upscale
 
 - Provider keys in Settings are now one paste-and-save row per key (WaveSpeed,

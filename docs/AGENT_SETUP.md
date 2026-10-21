@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.3 exposes **53 tools** and advertises the
+v1.10.4 exposes **53 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`

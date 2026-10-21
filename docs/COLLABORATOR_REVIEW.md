@@ -27,6 +27,17 @@ keyboard, accessibility and agent-surface review. This is a scope/version
 conflict, not a demonstrated defect in the collaborator's contribution. No
 fork files, private assets or Git object stores were imported into this tree.
 
+## October 21, 2026 — fork head c699179 (release 1.10.4)
+
+Reviewed isolated clone at exact revision `c699179db724b6b292c63594dc03d48351cfdd5f`.
+The fork merged our releases through 1.10.1 in `54f1ba2`; the new contributions
+by [hellonearthis](https://github.com/hellonearthis) are `5ca5eb9` and `c699179`.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Mondo favicon (`c699179`) | Adopted unchanged. The `.ico` is a valid four-size icon, the routes serve static files only, and its endpoint test passes here. |
+| Thematic Worlds Process button and keyword cluster scoring (`5ca5eb9`) | Deferred. Client-side only and stacked on the deferred `vocab-worlds.js` (see the `79d8515` entry), whose mode/kappa consumer and three defects remain open. No new defect found. Remaining work: land that foundation, then revisit. |
+
 ## October 21, 2026 — fork head 79d8515 (release 1.9.10)
 
 Reviewed isolated clone at exact revision `79d8515f76207c21c155981d3255bb60f7165611`
