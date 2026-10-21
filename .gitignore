@@ -31,6 +31,9 @@ config.local.*
 # User data and generated work
 data/
 uploads/
+worlds/
+world-proposals/
+*.world.json
 exports/
 styles/
 actors/

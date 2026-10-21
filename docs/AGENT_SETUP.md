@@ -41,11 +41,13 @@ The server uses the official MCP Python SDK 2.x and stdio transport. Its tools
 inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs and start a requested Topaz export.
-v1.9.10 exposes **42 tools** and advertises the
+v1.10.0 exposes **51 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
+
+Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. See [Worlds](WORLDS.md).
 
 The browser's file drop areas are a selection shortcut. Agents use the existing
 `upload_media`/CLI `upload` for songs, references and packages, or the actor and

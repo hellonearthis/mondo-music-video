@@ -5,6 +5,7 @@ import { disposeScoreEditor, mountScoreEditor } from "./score_editor.js";
 import { loadActors, loadStyles } from "./library.js";
 import { loadOutputs } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
+import { loadWorlds } from "./worlds.js";
 
 import { syncInstrumentControls, instrumentsFromForm } from "./instruments.js";
 
@@ -396,7 +397,7 @@ export async function applyStatus(status) {
     }
   }
   if (state.lastState && state.lastState !== status.state && !busy) {
-    await Promise.all([loadActors(), loadStyles(), loadOutputs()]);
+    await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds()]);
   }
   state.lastState = status.state;
 }

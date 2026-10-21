@@ -134,6 +134,24 @@ def roster_for(store, request, refs):
     return roster
 
 
+def prepare_world_harvest(store, request, settings):
+    from . import worlds
+    if not settings['vision_model']:
+        raise ValueError('Configure your vision model in Settings')
+    exists = bool(worlds.versions(store, request['world_id'])) if (worlds.worlds_dir(store) / request['world_id']).is_dir() else False
+    if request['world_mode'] == 'create' and exists:
+        raise ValueError('That world already exists; grow it or choose a different ID')
+    if request['world_mode'] == 'grow' and not exists:
+        raise ValueError('World not found; create it first')
+    sources = worlds.resolve_sources(store, request)
+    files = [*sources['images'], *sources['videos'], *sources['lore'], *(d / 'plan.json' for _, d in sources['runs'] if (d / 'plan.json').is_file()),
+             *(worlds.run_video(d) for _, d in sources['runs'])]
+    base = worlds.load(store, request['world_id']) if request['world_mode'] == 'grow' else None
+    return {'settings': settings, 'segments': [], 'seconds': 0, 'references': files,
+            'estimate': settings['vision_call_estimate'], 'world': {'id': request['world_id'], 'mode': request['world_mode'],
+                                                                    'base_version': base['version'] if base else 0}}
+
+
 def prepare(store, request, *, saved_prepared=None):
     from .render import get_backend
     from .engine.plan import plan
@@ -143,6 +161,8 @@ def prepare(store, request, *, saved_prepared=None):
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise ValueError('Install FFmpeg and FFprobe; run the setup doctor')
     kind = request['kind']
+    if kind == 'world_harvest':
+        return prepare_world_harvest(store, request, settings)
     if kind == 'harvest':
         if not settings['vision_model']:
             raise ValueError('Configure your vision model in Settings')
@@ -385,7 +405,7 @@ def fingerprint(store, request, prepared):
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))
     for key in ('start_ident', 'end_ident'):
         if request.get(key): files.append(inside(store.home / 'runs', request[key]))
-    if request['backend'] in ('local_h3', 'comfy_sdk_h3') and request['kind'] != 'harvest':
+    if request['backend'] in ('local_h3', 'comfy_sdk_h3') and request['kind'] not in ('harvest', 'world_harvest'):
         from .engine.comfy import WorkflowBuilder
         builder = WorkflowBuilder.load(prepared['settings']['workflow_map_path'], ENGINE)
         digest.update(json.dumps(builder.base, sort_keys=True).encode())
@@ -422,8 +442,13 @@ def produce(store, request, prepared, context, *, resume=False):
     write_json(directory / 'consent.json', prepared['consent'])
     data = {**prepared, 'references': [str(p) for p in prepared['references']]}
     write_json(directory / 'prepared.json', data)
-    context.update('Starting original Mondo production pipeline', 1)
     from .jobs import Cancelled
+    if request['kind'] == 'world_harvest':
+        context.update('Starting the world harvest', 1)
+        context.command([sys.executable, '-u', '-m', 'mmv.worlds', 'harvest', str(store.home), str(directory)],
+                        progress_path=directory / 'progress.json')
+        return read_json(directory / 'result.json')
+    context.update('Starting original Mondo production pipeline', 1)
     try:
         context.command([sys.executable, '-u', '-m', 'mmv.worker', 'produce', str(store.home), str(directory), *(['resume'] if resume else [])],
                         progress_path=directory / 'progress.json')

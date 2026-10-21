@@ -1025,3 +1025,16 @@ button[aria-busy="true"], button.processing {
 [data-theme=dark] .markdown-body table.md-table tr:hover td {
   background: #293f30;
 }
+
+/* Worlds */
+.worlds-list{display:grid;gap:10px}
+.world-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+.world-detail,.world-proposal,.world-quote{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:8px}
+.world-detail h4{margin:10px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.world-block ul,.world-diff{margin:0;padding-left:18px}
+.world-diff{list-style:none;padding-left:0}
+.world-diff li{padding:3px 6px;border-radius:4px;margin-bottom:3px}
+.world-diff-add{background:#e3f1dc;color:#1f4a22}.world-diff-remove{background:#f6e0dc;color:#7a2a20}.world-diff-change{background:#f3ecd2;color:#5c4a12}
+html[data-theme=dark] .world-diff-add{background:#223a29;color:#c5dfb9}html[data-theme=dark] .world-diff-remove{background:#43261f;color:#ffb8aa}html[data-theme=dark] .world-diff-change{background:#3d3719;color:#e8dc9f}
+.world-runs{border:1px solid var(--line);border-radius:8px;margin:12px 0;padding:8px 12px}.world-runs label.inline{display:block}
+.world-row-select{display:grid}

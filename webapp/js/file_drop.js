@@ -16,7 +16,8 @@ function acceptsFile(input, file) {
 function dropError(input, files) {
   if (!files.length) return 'Drop a file here.';
   if (!input.multiple && files.length !== 1) return 'Drop one file at a time.';
-  if (input.multiple && files.length > 9) return 'Choose at most nine reference images.';
+  const most = Number(input.dataset.max || 9);
+  if (input.multiple && files.length > most) return most === 9 ? 'Choose at most nine reference images.' : `Choose at most ${most} files.`;
   if (files.some(file => !acceptsFile(input, file))) return `Unsupported file type. Choose ${input.accept}.`;
   return '';
 }
@@ -28,7 +29,7 @@ export function initFileDropTargets() {
     label.classList.add('file-drop-target');
     const hint = document.createElement('small');
     hint.className = 'file-drop-hint';
-    hint.textContent = input.multiple ? 'Choose files or drop up to 9 images here' : 'Choose a file or drop it here';
+    hint.textContent = input.multiple ? `Choose files or drop up to ${input.dataset.max || 9} ${input.dataset.max ? 'files' : 'images'} here` : 'Choose a file or drop it here';
     label.append(hint);
     const error = document.createElement('small');
     error.className = 'file-drop-error';

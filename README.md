@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.9.10** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.10.0** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -167,6 +167,18 @@ can intentionally recur across shots. A larger pool changes the visual choices
 for existing seeds; musical timing and actor assignments stay unchanged.
 See [vocabulary details](docs/VOCABULARY.md).
 
+## Worlds
+
+A world is the canon your videos share: its places, rituals, people, objects and
+rules. Build one in **Worlds** from pictures, video clips, lore or backstory text
+and videos you have already made; your configured vision model reads them and
+proposes a world. Nothing is saved until you review the changes and accept, every
+accepted change is a new version you can restore, and a world can keep growing as
+you add more material. Choose a world on the video form to draw that video's
+settings, lighting, mechanisms, wardrobe, effects, subjects and tone from it.
+Worlds are private, stay in your data directory and are never packaged or
+published. See [Worlds](docs/WORLDS.md).
+
 ## Install
 
 Manual installation:
@@ -250,7 +262,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.9.10 MCP server has 42 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
+The v1.10.0 MCP server has 51 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 

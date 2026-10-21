@@ -406,13 +406,13 @@ def check_required_services(store, request: dict, resume: bool = False) -> list[
     backend = request.get("backend", "local_h3")
     errors = []
 
-    if kind == "harvest":
+    if kind in ("harvest", "world_harvest"):
         vision = services.get("vision", {})
         if not vision.get("available"):
             endpoint = vision.get("url") or "unconfigured"
             errors.append(
                 f"Vision engine is offline or unreachable ({endpoint}). "
-                "Multimodal style harvesting requires a running vision model or API configuration in Settings."
+                f"Multimodal {'world reading' if kind == 'world_harvest' else 'style harvesting'} requires a running vision model or API configuration in Settings."
             )
         return errors
 

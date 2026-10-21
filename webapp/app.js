@@ -4,6 +4,7 @@ import { $, $$, api, initThemeToggle, notice, option, state, text } from "./js/c
 import { setupLlamaGuide, setupOapGuide, setupVocabGuide } from "./js/guides.js";
 import { initComponentLabeling } from "./js/component_labeling.js";
 import { initFileDropTargets } from "./js/file_drop.js";
+import { initWorlds, loadWorlds } from "./js/worlds.js";
 import { initInstrumentLibrary } from "./js/instruments.js";
 import { initLibraryForms, loadActors, loadAgreements, loadStyles } from "./js/library.js";
 import { initCaptionControls, initUpscaleForm, loadOutputs } from "./js/outputs.js";
@@ -76,7 +77,8 @@ async function initialize() {
     loadActors(),
     loadStyles(),
     loadOutputs(),
-    loadAgreements()
+    loadAgreements(),
+    loadWorlds()
   ]);
 
   $$(".backend-select").forEach(select => {
@@ -90,6 +92,7 @@ async function initialize() {
   initOperationControls();
   initLibraryForms();
   await initInstrumentLibrary();
+  initWorlds();
   initFileDropTargets();
   initSettingsAndPicker();
   initUpscaleForm();

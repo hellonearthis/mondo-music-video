@@ -79,12 +79,15 @@ def stamp(seconds):
 
 
 def public_instrument_receipt(value):
-    """Instrument sheets and private import provenance never travel in demo receipts."""
+    """Instrument sheets, private import provenance and private world identity never travel in demo receipts."""
     if isinstance(value, list):
         return [public_instrument_receipt(item) for item in value]
     if not isinstance(value, dict):
         return value
     result = {key: public_instrument_receipt(item) for key, item in value.items()}
+    if result.get('world_id'):
+        for key in ('world_id', 'world_pool_mode', 'custom_vocabulary'):
+            result.pop(key, None)  # A private world's identity and its derived pools stay out of shared receipts.
     result.pop('instrument_props', None)
     result.pop('instrument_prop_uses', None)
     if isinstance(result.get('instruments'), dict):

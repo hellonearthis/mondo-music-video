@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mmv import actors, agreements, instrument_assets, production, props, score_view
+from mmv import actors, agreements, instrument_assets, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.9.10"
+MGL_APP_VERSION = "1.10.0"
 WEB = Path(__file__).parent
 
 
@@ -169,6 +169,27 @@ class VocabularyTableOverride(StrictModel):
     exclude: list[str] = Field(default_factory=list, max_length=500)
 
 
+class WorldRequest(StrictModel):
+    id: str = Field(max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    seed_sentence: str = Field(default="", max_length=400)
+    subjects: list[dict[str, str]] = Field(default_factory=list, max_length=worlds.MAX_SUBJECTS)
+    pools: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
+    core_laws: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    locations: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    practices: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    objects: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    factions: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    ecology_rules: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    moral_ambiguities: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    open_threads: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+    do_not_contradict: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+
+
+class WorldRollbackRequest(StrictModel):
+    version: int = Field(ge=1, le=9999)
+
+
 class VocabularyRequest(StrictModel):
     id: str = Field(max_length=64)
     name: str = Field(min_length=1, max_length=160)
@@ -256,7 +277,7 @@ class CaptionSettings(StrictModel):
 
 
 class ProductionRequest(StrictModel):
-    kind: Literal["video", "ident", "harvest"] = "video"
+    kind: Literal["video", "ident", "harvest", "world_harvest"] = "video"
     title: str = Field(default="", max_length=160)
     song: str = Field(default="", max_length=128)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
@@ -306,6 +327,18 @@ class ProductionRequest(StrictModel):
     stem_quality: Literal["standard", "high"] = "standard"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+    world_id: str = Field(default="", max_length=64)
+    world_pool_mode: Literal["append", "replace"] = "replace"
+    world_mode: Literal["", "create", "grow"] = ""
+    world_images: list[str] = Field(default_factory=list, max_length=worlds.MAX_IMAGES)
+    world_videos: list[str] = Field(default_factory=list, max_length=3)
+    world_lore: list[str] = Field(default_factory=list, max_length=worlds.MAX_LORE_FILES)
+    world_runs: list[str] = Field(default_factory=list, max_length=6)
+
+    @field_validator("world_id")
+    @classmethod
+    def valid_world_id(cls, value):
+        return identifier(value) if value else ""
 
     @field_validator("vocabulary_profile")
     @classmethod
@@ -343,7 +376,26 @@ def request_dict(value):
             request.pop(key, None)
     elif request["kind"] != "video":
         raise ValueError("Instrument performance is available for music videos only")
+    if request["kind"] == "world_harvest":
+        if request["world_mode"] not in ("create", "grow") or not request["world_id"]:
+            raise ValueError("Choose a world ID and whether to create or grow it")
+        request.pop("world_pool_mode")
+    else:
+        for key in ("world_mode", "world_images", "world_videos", "world_lore", "world_runs"):
+            request.pop(key)
+        if request["kind"] != "video" or not request["world_id"]:
+            request.pop("world_id")
+            request.pop("world_pool_mode")
     return request
+
+
+def with_world(store, request):
+    """The request with the chosen world's pools merged into its custom vocabulary (the world wins for tables it describes)."""
+    if request.get("kind") != "video" or not request.get("world_id"):
+        return request
+    ledger = worlds.load(store, request["world_id"])
+    return {**request, "custom_vocabulary": {**request["custom_vocabulary"], **worlds.custom_vocabulary(
+        ledger, request["world_pool_mode"])}}
 
 
 def instrument_preview(plan):
@@ -851,14 +903,18 @@ def create_app(home=None, *, test_hosts=False):
         return {"configured": bool(store.key(value.name))}
 
     @app.post("/api/upload/{kind}")
-    def upload(kind: Literal["song", "reference", "oap", "opp", "agreement"], file: UploadFile = File(...)):
-        limit = {"song": 256, "reference": 25, "oap": 128, "opp": 128, "agreement": 2}[kind] * 1024 * 1024
+    def upload(kind: Literal["song", "reference", "oap", "opp", "agreement", "video", "lore"], file: UploadFile = File(...)):
+        limit = {"song": 256, "reference": 25, "oap": 128, "opp": 128, "agreement": 2, "video": 512, "lore": 1}[kind] * 1024 * 1024
         suffix = Path(file.filename or "").suffix.lower()
         if kind == "song" and suffix not in (".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".aiff"):
             raise ValueError("Choose a supported audio file")
         if kind == "opp" and suffix != ".opp":
             raise ValueError("Choose an .opp package")
-        name = uuid.uuid4().hex + (suffix if kind == "song" else ".png" if kind == "reference"
+        if kind == "video" and suffix not in worlds.VIDEO_SUFFIXES:
+            raise ValueError("Choose a supported video file")
+        if kind == "lore" and suffix not in worlds.LORE_SUFFIXES:
+            raise ValueError("Choose a .txt or .md text file")
+        name = uuid.uuid4().hex + (suffix if kind in ("song", "video", "lore") else ".png" if kind == "reference"
                                    else ".json" if kind == "agreement" else ".opp" if kind == "opp" else ".oap")
         target = store.home / "uploads" / name
         # Serialize mutations with operation startup so quoted inputs remain stable.
@@ -873,7 +929,7 @@ def create_app(home=None, *, test_hosts=False):
                     with target.open("xb") as stream:
                         while chunk := file.file.read(1024 * 1024):
                             size += len(chunk)
-                            if size > limit:
+                            if size > (worlds.LORE_BYTES if kind == "lore" else limit):
                                 raise ValueError("File exceeds upload size limit")
                             stream.write(chunk)
                     if not size:
@@ -881,8 +937,8 @@ def create_app(home=None, *, test_hosts=False):
                 except Exception:
                     target.unlink(missing_ok=True)
                     raise
-        if kind == "song":
-            write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or "song").replace("\\", "/")).name})
+        if kind in ("song", "video", "lore"):
+            write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or kind).replace("\\", "/")).name})
         return {"file": name, "name": file.filename}
 
     @app.get("/api/uploads/song/{filename}")
@@ -1114,6 +1170,72 @@ def create_app(home=None, *, test_hosts=False):
             quotes.clear()
         return {"deleted": style_id}
 
+    def world_or_error(world_id, version=None):
+        return worlds.load(store, identifier(world_id), version)
+
+    @app.get("/api/worlds")
+    def list_worlds():
+        return worlds.listing(store)
+
+    @app.post("/api/worlds")
+    def add_world(value: WorldRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.create(store, value.id, value.model_dump(exclude={"id"}))
+            quotes.clear()
+        return ledger
+
+    @app.get("/api/worlds/proposals")
+    def list_world_proposals():
+        return worlds.list_proposals(store)
+
+    @app.get("/api/worlds/proposals/{proposal_id}")
+    def get_world_proposal(proposal_id: str):
+        return worlds.read_proposal(store, proposal_id)
+
+    @app.post("/api/worlds/proposals/{proposal_id}/accept")
+    def accept_world_proposal(proposal_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.accept(store, proposal_id)
+            quotes.clear()
+        return ledger
+
+    @app.delete("/api/worlds/proposals/{proposal_id}")
+    def reject_world_proposal(proposal_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            worlds.reject(store, proposal_id)
+        return {"rejected": proposal_id}
+
+    @app.get("/api/worlds/{world_id}")
+    def get_world(world_id: str, version: int | None = None):
+        return world_or_error(world_id, version)
+
+    @app.get("/api/worlds/{world_id}/versions")
+    def get_world_versions(world_id: str):
+        return worlds.versions(store, world_id)
+
+    @app.get("/api/worlds/{world_id}/export")
+    def export_world(world_id: str):
+        return JSONResponse(world_or_error(world_id), headers={"Content-Disposition": f'attachment; filename="{identifier(world_id)}.world.json"'})
+
+    @app.post("/api/worlds/{world_id}/rollback")
+    def rollback_world(world_id: str, value: WorldRollbackRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.rollback(store, world_id, value.version)
+            quotes.clear()
+        return ledger
+
+    @app.delete("/api/worlds/{world_id}")
+    def delete_world(world_id: str):
+        with jobs.lock:
+            jobs.require_idle()
+            worlds.delete(store, world_id)
+            quotes.clear()
+        return {"deleted": world_id}
+
     @app.get("/api/vocabulary")
     def get_vocabulary():
         engine_cfg = Path(__file__).parent.parent / "mmv/engine/config"
@@ -1171,7 +1293,7 @@ def create_app(home=None, *, test_hosts=False):
     def build_quote(value: ProductionRequest, *, resume_directory=None):
         with jobs.lock:
             jobs.require_idle()
-            request = request_dict(value)
+            request = with_world(store, request_dict(value))
             kind = request.get("kind", "video")
             log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
             try:

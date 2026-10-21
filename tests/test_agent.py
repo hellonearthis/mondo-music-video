@@ -158,7 +158,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.9.10")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.10.0")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -166,7 +166,46 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.9.10")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.0")
+
+    def test_world_management_guards_and_cli(self):
+        ledger = {"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"],
+                  "pools": {"settings": {"include": ["a basement archive"]}}}
+        self.assertEqual(self.agent.create_world(ledger)["version"], 1)
+        self.assertEqual([w["id"] for w in self.agent.inspect("worlds")], ["salt"])
+        self.assertEqual(self.agent.get_world("salt", 1)["name"], "Salt Archive")
+        self.assertEqual(self.agent.export_world("salt")["id"], "salt")
+        saved = self.agent.export_world("salt", self.home)
+        self.assertTrue(Path(saved["saved"]).is_file())
+        self.assertEqual(self.agent.world_proposals(), [])
+        from mmv import worlds
+        proposed = {**worlds.normalize(ledger), "id": "salt", "core_laws": ["Nothing leaves unfiled"]}
+        worlds.write_proposal(self.fixture.store, "grow-one", "salt", "grow", 1, proposed, [("lore", "a.md")], {"vision": "m"})
+        self.assertEqual(self.agent.world_proposal("grow-one")["changes"][0]["added"], ["Nothing leaves unfiled"])
+        with self.assertRaises(ValueError) as refused:
+            self.agent.accept_world_proposal("grow-one")
+        self.assertIn("reviewed", str(refused.exception))
+        self.assertEqual(self.agent.get_world("salt")["version"], 1)
+        self.assertEqual(self.agent.accept_world_proposal("grow-one", confirm=True)["version"], 2)
+        self.assertEqual(self.agent.rollback_world("salt", 1)["version"], 3)
+        self.assertEqual([v["version"] for v in self.agent.world_versions("salt")], [1, 2, 3])
+        with self.assertRaises(ValueError):
+            self.agent.delete_world("salt")
+        env = {**os.environ, "MMV_URL": self.url, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+        run = lambda *args: subprocess.run([sys.executable, "-m", "mmv.agent", *args], env=env, capture_output=True, text=True, timeout=20)
+        self.assertEqual(json.loads(run("world", "salt", "--version", "2").stdout)["version"], 2)
+        self.assertEqual(json.loads(run("world-versions", "salt").stdout)[-1]["version"], 3)
+        refused = run("delete-world", "salt")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("authorization", refused.stderr)
+        self.assertEqual(json.loads(run("delete-world", "salt", "--confirm").stdout), {"deleted": "salt"})
+        (self.home / "a.md").write_bytes(b"The archive never closes.")
+        (self.home / "a.mp4").write_bytes(b"x")
+        (self.home / "a.exe").write_bytes(b"x")
+        with self.assertRaises(ValueError):
+            self.agent.upload("video", str(self.home / "a.exe"))
+        self.assertEqual(self.agent.upload("video", str(self.home / "a.mp4"))["name"], "media.mp4")
+        self.assertEqual(self.agent.upload("lore", str(self.home / "a.md"))["name"], "media.md")
 
     def test_create_style_and_upload_reference(self):
         style = self.agent.create_style("cool", "Cool", "Cool blue light", style_card="Forensic test card")
@@ -234,7 +273,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 42)
+                self.assertEqual(len(names), 51)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score'} <= names)
                 self.assertTrue({'detect_lyrics', 'align_lyrics', 'export_production_package'} <= names)
@@ -243,6 +282,12 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertTrue({"caption_video", "list_caption_fonts"} <= names)
                 self.assertIn('import_instrument', names)
                 self.assertTrue({'inspect_opp', 'import_opp', 'select_opp_sheet'} <= names)
+                self.assertTrue({'get_world', 'world_versions', 'create_world', 'export_world', 'rollback_world', 'delete_world',
+                                 'inspect_world_proposal', 'accept_world_proposal', 'reject_world_proposal'} <= names)
+                refused = await client.call_tool('accept_world_proposal', {'proposal_id': 'none', 'confirm': False})
+                self.assertTrue(refused.is_error)
+                refused = await client.call_tool('delete_world', {'world_id': 'none'})
+                self.assertTrue(refused.is_error)
                 imported = await client.call_tool('import_instrument', {'instrument_id': 'bass', 'reference_path': str(self.reference),
                     'license': 'test only', 'provenance': 'synthetic test fixture'})
                 self.assertFalse(imported.is_error)
@@ -257,7 +302,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.9.10")
+                self.assertEqual(result.structured_content["data"]["version"], "1.10.0")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)

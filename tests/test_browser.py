@@ -53,7 +53,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page = browser.new_page()
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 11')
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 14')
                 song = {'name': 'dropped.wav', 'type': 'audio/wav', 'bytes': list(self.song.read_bytes())}
                 result = drop(page, '#video-form .song-input', [song])
                 self.assertTrue(result['hovered'] and result['cleared'])
@@ -429,7 +429,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.9.10')
+                expect(page.locator('#version')).to_have_text('1.10.0')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -552,6 +552,47 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
                 self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_worlds_panel_lists_reviews_and_feeds_the_video_form(self):
+        from mmv import worlds
+        from playwright.sync_api import sync_playwright, expect
+        ledger = {"name": "Salt Archive", "seed_sentence": "A filing system.", "core_laws": ["The record outlives the person"],
+                  "pools": {"settings": {"include": ["a basement archive"]}}}
+        self.agent.create_world({"id": "salt", **ledger})
+        proposed = {**worlds.normalize(ledger), "id": "salt", "core_laws": ["The record outlives the person", "<b>Nothing leaves unfiled</b>"]}
+        worlds.write_proposal(self.fixture.store, "grow-one", "salt", "grow", 1, proposed, [("image", "x.png")], {"vision": "m"})
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#world-select").options.length === 2')
+                expect(page.locator('#world-select option').nth(1)).to_have_text('Salt Archive')
+                page.wait_for_function('() => document.querySelector(".nav[data-panel=worlds]").onclick !== null')
+                page.locator('.nav[data-panel="worlds"]').click()
+                expect(page.locator('#panel-worlds')).to_be_visible()
+                expect(page.locator('#worlds-list')).to_contain_text('Salt Archive')
+                expect(page.locator('#world-proposals-card')).to_be_visible()
+                expect(page.locator('#world-proposals .world-diff-add')).to_contain_text('<b>Nothing leaves unfiled</b>')
+                self.assertEqual(page.locator('#world-proposals b').count(), 0)
+                page.locator('#worlds-list button', has_text='Open').click()
+                expect(page.locator('#world-detail')).to_contain_text('version 1')
+                page.locator('#world-proposals button', has_text='Accept').click()
+                expect(page.locator('#world-proposals-card')).to_be_hidden()
+                self.assertEqual(self.agent.get_world('salt')['version'], 2)
+                page.locator('#world-form textarea[name="direction"]').fill('keep it damp')
+                page.locator('#world-form select[name="world_mode"]').select_option('grow')
+                page.wait_for_timeout(1500)
+                page.reload()
+                page.wait_for_function('() => document.querySelector("#world-select").options.length === 2')
+                page.wait_for_timeout(500)
+                self.assertEqual(page.locator('#world-form textarea[name="direction"]').input_value(), 'keep it damp')
+                self.assertEqual(page.locator('#world-form select[name="world_mode"]').input_value(), 'grow')
+                page.locator('.nav[data-panel="worlds"]').click()
+                expect(page.locator('#world-form select[name="world_existing"]')).to_be_visible()
+                expect(page.locator('#world-form input[name="world_new_id"]')).to_be_hidden()
             finally:
                 browser.close()
 
@@ -1158,7 +1199,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.9.10')
+                expect(page.locator('#version')).to_have_text('1.10.0')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

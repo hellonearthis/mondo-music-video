@@ -1,5 +1,38 @@
 # Releases
 
+## 1.10.0 — Worlds
+
+A world is persistent, in-universe canon that videos share, built and grown from
+references.
+
+- **Worlds panel and store.** Private versioned ledgers under `worlds/`
+  (core laws, subjects, locations, practices, objects, factions, ecological
+  rules, moral ambiguities, open threads, never-contradict list, and include /
+  exclude pools for seven vocabulary tables). Every accepted change is a new
+  version; any version can be restored.
+- **World harvest.** A new operation reads pictures, video keyframes (ffmpeg),
+  lore text and finished runs through the configured vision model and writes a
+  proposal with a field-level diff. Nothing changes a world until accepted;
+  a proposal made against an older version is refused. It has its own prompt and
+  parser in `mmv/worlds.py`; the style harvest prompt and every protected file
+  are unchanged. Limits: 24 images (8 per video, 4 per run), 3 videos, 5 lore
+  files of 60 KB.
+- **Using a world.** Choosing a world on the video form fills the existing
+  custom vocabulary from its pools, either confined to the world's terms or added
+  to the standard pools. Planner and writer behaviour are unchanged.
+- **Privacy.** `worlds/` and `world-proposals/` are ignored and pruned from
+  sdists; shared production receipts leave out the world's identity and derived
+  pools.
+- **Agents.** Nine MCP tools (51 in all), matching CLI commands and agent client
+  methods, `video` and `lore` upload kinds, and skill/reference updates. Accepting
+  a proposal and deleting a world require explicit confirmation.
+- Deliberately not included: pinned terms (the existing vocabulary path cannot
+  guarantee a term appears), planner weighting and section-aware behaviour, and
+  injecting world canon into the writer's context. Each would touch the protected
+  prompting scheme and needs the owner's approval first.
+- Stale instruction fix carried with this release: the file-drop count test now
+  expects the three new Worlds inputs (14).
+
 ## 1.9.10 — Formatted vocabulary guide, tooltips and Labels relocation
 
 Selective integration of hellonearthis's fork revision `79d8515`, reviewed

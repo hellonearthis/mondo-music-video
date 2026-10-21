@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -75,8 +75,8 @@ class AgentClient:
         return result
 
     def preview(self, request):
-        if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest"):
-            raise ValueError("Preview requires a music video, ident or harvest request object")
+        if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest", "world_harvest"):
+            raise ValueError("Preview requires a music video, ident, style harvest or world harvest request object")
         return self._json("POST", "/api/quote", request)
 
     def detect_lyrics(self, song, model="large-v3", use_vocals=True):
@@ -136,8 +136,8 @@ class AgentClient:
             return json.load(response)
 
     def upload(self, kind, path):
-        if kind not in ("song", "reference", "oap", "opp", "agreement"):
-            raise ValueError("Choose song, reference, oap, opp or agreement")
+        if kind not in ("song", "reference", "oap", "opp", "agreement", "video", "lore"):
+            raise ValueError("Choose song, reference, oap, opp, agreement, video or lore")
         return self._multipart("/api/upload/" + kind, {}, "file", path)
 
     def import_instrument(self, instrument_id, reference_path, license, provenance):
@@ -191,6 +191,51 @@ class AgentClient:
         if style_card:
             payload["style_card"] = style_card
         return self._json("POST", "/api/styles/import", payload)
+
+    def get_world(self, world_id, version=None):
+        query = "" if version is None else "?version=" + str(int(version))
+        return self._json("GET", "/api/worlds/" + urllib.parse.quote(world_id, safe="") + query)
+
+    def world_versions(self, world_id):
+        return self._json("GET", "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/versions")
+
+    def create_world(self, world):
+        """Save a world written by hand or by an agent; a harvest instead proposes one through preview and start."""
+        return self._json("POST", "/api/worlds", world)
+
+    def export_world(self, world_id, destination=None):
+        path = "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/export"
+        with self._open("GET", path) as response:
+            content = response.read()
+        if destination is None:
+            return json.loads(content.decode("utf-8"))
+        dest = Path(destination)
+        dest = dest / f"{world_id}.world.json" if dest.is_dir() else dest
+        dest.write_bytes(content)
+        return {"saved": str(dest), "bytes": len(content)}
+
+    def rollback_world(self, world_id, version):
+        return self._json("POST", "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/rollback", {"version": int(version)})
+
+    def delete_world(self, world_id, confirm=False):
+        if confirm is not True:
+            raise ValueError("Deleting a world requires explicit user authorization; set confirm only after that authorization")
+        return self._json("DELETE", "/api/worlds/" + urllib.parse.quote(world_id, safe=""))
+
+    def world_proposals(self):
+        return self._json("GET", "/api/worlds/proposals")
+
+    def world_proposal(self, proposal_id):
+        """A harvest's proposed world with its field-level changes, for review before anything is saved."""
+        return self._json("GET", "/api/worlds/proposals/" + urllib.parse.quote(proposal_id, safe=""))
+
+    def accept_world_proposal(self, proposal_id, confirm=False):
+        if confirm is not True:
+            raise ValueError("Accepting a proposal changes a world's canon; set confirm only after the user has reviewed its changes")
+        return self._json("POST", "/api/worlds/proposals/" + urllib.parse.quote(proposal_id, safe="") + "/accept")
+
+    def reject_world_proposal(self, proposal_id):
+        return self._json("DELETE", "/api/worlds/proposals/" + urllib.parse.quote(proposal_id, safe=""))
 
     def save_vocabulary(self, vocab_id, name, tables, description="", base_profile="full"):
         return self._json("POST", "/api/vocabularies", {
@@ -325,10 +370,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
-    upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement"))
+    upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
     upload.add_argument("path")
     preview = sub.add_parser("preview")
     preview.add_argument("request_file", help="JSON production request file")
@@ -345,6 +390,24 @@ def main(argv=None):
         delete = sub.add_parser(name)
         delete.add_argument("id")
         delete.add_argument("--confirm", action="store_true")
+    for name in ("world", "world-versions", "world-proposal", "reject-world-proposal"):
+        world_cmd = sub.add_parser(name)
+        world_cmd.add_argument("id")
+        if name == "world":
+            world_cmd.add_argument("--version", type=int, default=None)
+    sub.add_parser("world-proposals")
+    create_world = sub.add_parser("create-world")
+    create_world.add_argument("file", help="Path to world JSON file")
+    export_world = sub.add_parser("export-world")
+    export_world.add_argument("id")
+    export_world.add_argument("--destination", default=None)
+    rollback_world = sub.add_parser("rollback-world")
+    rollback_world.add_argument("id")
+    rollback_world.add_argument("version", type=int)
+    for name in ("delete-world", "accept-world-proposal"):
+        confirmed = sub.add_parser(name)
+        confirmed.add_argument("id")
+        confirmed.add_argument("--confirm", action="store_true")
     profile = sub.add_parser("select-api-profile")
     profile.add_argument("name")
     download = sub.add_parser("download")
@@ -404,6 +467,26 @@ def main(argv=None):
                 style_card=data.get("style_card"),
                 overwrite=args.overwrite,
             )
+        elif args.command == "world":
+            result = client.get_world(args.id, args.version)
+        elif args.command == "world-versions":
+            result = client.world_versions(args.id)
+        elif args.command == "world-proposals":
+            result = client.world_proposals()
+        elif args.command == "world-proposal":
+            result = client.world_proposal(args.id)
+        elif args.command == "reject-world-proposal":
+            result = client.reject_world_proposal(args.id)
+        elif args.command == "create-world":
+            result = client.create_world(json.loads(Path(args.file).read_text(encoding="utf-8")))
+        elif args.command == "export-world":
+            result = client.export_world(args.id, args.destination)
+        elif args.command == "rollback-world":
+            result = client.rollback_world(args.id, args.version)
+        elif args.command == "delete-world":
+            result = client.delete_world(args.id, args.confirm)
+        elif args.command == "accept-world-proposal":
+            result = client.accept_world_proposal(args.id, args.confirm)
         elif args.command == "inspect-opp":
             result = client.inspect_opp(args.filename, args.allow_unsigned)
         elif args.command == "import-opp":
