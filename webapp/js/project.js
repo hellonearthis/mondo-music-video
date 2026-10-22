@@ -171,6 +171,7 @@ export async function restoreProject() {
     });
     syncDanceControls(form);
     syncInstrumentControls(form);
+    form.querySelector(".style-select")?.dispatchEvent(new Event("change"));
   });
   $("#world-form")?.elements.world_mode.dispatchEvent(new Event("change"));
 

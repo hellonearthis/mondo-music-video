@@ -285,6 +285,11 @@ def prepare(store, request, *, saved_prepared=None):
     width, height = backend.plan_resolution(aspect_w, aspect_h, megapixels=request['megapixels'],
                                             resolution=request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None)
     vocab = load_vocabulary(request.get('vocabulary_profile', 'full'), store=store, custom=request.get('custom_vocabulary'))
+    if request.get('vocab_selection') == 'contextual':
+        from .vocab_select import contextual_vocabulary
+        vocab = contextual_vocabulary(vocab, request['seed'], (
+            request.get('direction', ''), request.get('title', ''),
+            [t for spec in (request.get('custom_vocabulary') or {}).values() for t in spec.get('add', [])]))
     roster = roster_for(store, request, refs)
     p = plan(score, width=width, height=height, vocab=vocab, seed=request['seed'], slug='music-video',
              bars_per_phrase=request['bars_per_phrase'], ref_policy=request['ref_policy'],
@@ -303,6 +308,12 @@ def prepare(store, request, *, saved_prepared=None):
             raise ValueError('This renderer needs a reference in every passage. Choose an actor/image and Reference policy: All')
         if s.ref_image_slots > backend.capabilities()['max_reference_images']:
             raise ValueError('The planned cast exceeds this renderer’s reference limit')
+    departures = {}
+    if request.get('world_departures'):
+        from .vocab_select import plan_world_departures
+        departures = plan_world_departures(p.segments, request['world_departures'], request['seed'], request.get('world_contrast_strength', 50))
+        for (s_idx, sh_idx), (_, vocab_after) in departures.items():
+            p.segments[s_idx].shots[sh_idx].vocab = vocab_after
     casting = assign(p, roster, policy=request['casting_policy'], seed=request['seed'],
                      ref_policy=request['ref_policy'], ensemble_mode=request['ensemble_mode'], on_screen=request['on_screen']) if roster else None
     from . import passage_plans
@@ -384,6 +395,8 @@ def prepare(store, request, *, saved_prepared=None):
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),
                          'downbeats': len(score.downbeat_frames), 'sections': len(score.sections),
                          'shots': sum(len(s.shots) for s in p.segments), 'width': width, 'height': height}}
+    if departures:
+        prepared['world_contrast'] = {'shots': len(departures), 'roles': sorted({role for role, _ in departures.values()})}  # absent when off
     if caption_plan:
         prepared['captions'] = caption_plan          # absent when off, so earlier consent fingerprints stay valid
     if voice_note is not None:

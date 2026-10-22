@@ -2,6 +2,7 @@
 
 import { $, $$, api, handle, json, notice, option, saveDownload, state, text, upload } from "./core.js";
 import { scheduleSave } from "./project.js";
+import { updateVocabCustomBadge } from "./vocabulary.js";
 
 // --- Pure Helper & Formatting Functions ---
 
@@ -117,6 +118,33 @@ const agreementCardHtml = (agreement) => {
 
 // --- DOM Population & Renderers ---
 
+export const styleVocabularyOf = (styles, id) => {
+  const vocabulary = styles.find((style) => style.id === id)?.vocabulary;
+  return vocabulary && Object.keys(vocabulary).length ? vocabulary : null;
+};
+
+// Offer (never auto-apply) the selected style's own vocabulary on the video form.
+export function refreshStyleVocabularyOffer(select) {
+  const offer = select?.closest("form")?.querySelector(".style-vocab-offer");
+  if (!offer) return;
+  const vocabulary = styleVocabularyOf(state.styles || [], select.value);
+  offer.hidden = !vocabulary;
+  if (!vocabulary) return;
+  const tables = Object.keys(vocabulary).map((key) => key.replaceAll("_", " ")).join(", ");
+  const button = Object.assign(document.createElement("button"), {
+    type: "button", className: "quiet", textContent: "Use this style's vocabulary",
+    title: "Replace this video's custom vocabulary with the one saved in the style",
+  });
+  button.onclick = () => {
+    state.currentCustomVocab = structuredClone(vocabulary);
+    state.currentVocabRandomKey = "";
+    updateVocabCustomBadge();
+    scheduleSave();
+    notice(`Applied the style's vocabulary (${tables}) to this video.`);
+  };
+  offer.replaceChildren(document.createTextNode(`This style carries its own vocabulary (${tables}). `), button);
+}
+
 export async function loadStyles() {
   const styles = await (await api("/api/styles")).json();
   state.styles = styles;
@@ -129,6 +157,11 @@ export async function loadStyles() {
       select.replaceChildren(empty);
     }
     if (styles.some((x) => x.id === old)) select.value = old;
+    if (!select.dataset.vocabOffer) {
+      select.dataset.vocabOffer = "1";
+      select.addEventListener("change", () => refreshStyleVocabularyOffer(select));
+    }
+    refreshStyleVocabularyOffer(select);
   });
 
   const listEl = $("#style-list");
@@ -347,6 +380,9 @@ export function initLibraryForms() {
     };
     if (parsed.style_card) {
       payload.style_card = String(parsed.style_card);
+    }
+    if (parsed.vocabulary && typeof parsed.vocabulary === "object") {
+      payload.vocabulary = parsed.vocabulary;
     }
 
     if (!payload.id) throw new Error("Style JSON must include an 'id'");

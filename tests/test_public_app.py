@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.5")
+        self.assertEqual(api_version()["version"], "1.10.6")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.5", (root / "README.md").read_text())
+        self.assertIn("1.10.6", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1962,6 +1962,45 @@ class UtilityTests(unittest.TestCase):
             self.assertEqual(data.get("vocab_random_key"), "482910:5")
             self.assertEqual(data.get("forms", {}).get("video", {}).get("title"), "Neon Dreams")
             self.assertIn("lighting", data.get("custom_vocabulary", {}))
+
+    def test_style_carries_validated_optional_vocabulary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            client = TestClient(create_app(Storage(temp).home, test_hosts=True))
+            vocab = {"settings": {"mode": "append", "add": ["rain-slick archive"], "exclude": []}}
+            base = {"id": "vocab_style", "name": "Vocab Style", "direction": "Cold archive light."}
+            saved = client.post("/api/styles/import", json={**base, "vocabulary": vocab, "overwrite": False})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.assertEqual(saved.json()["vocabulary"]["settings"]["add"], ["rain-slick archive"])
+            listed = next(s for s in client.get("/api/styles").json() if s["id"] == "vocab_style")
+            self.assertEqual(listed["vocabulary"]["settings"]["add"], ["rain-slick archive"])
+            self.assertEqual(client.get("/api/styles/vocab_style/export").json()["vocabulary"], saved.json()["vocabulary"])
+            for bad in ({"nonsense": {"add": ["x"]}}, {"settings": {"mode": "replace", "add": []}}):
+                refused = client.post("/api/styles/import", json={**base, "vocabulary": bad, "overwrite": True})
+                self.assertEqual(refused.status_code, 400, refused.text)
+            long = {"settings": {"mode": "append", "add": ["x" * 301], "exclude": []}}
+            self.assertEqual(client.post("/api/styles/import", json={**base, "vocabulary": long, "overwrite": True}).status_code, 400)
+            plain = client.post("/api/styles/import", json={**base, "overwrite": True})
+            self.assertNotIn("vocabulary", plain.json())
+
+    def test_world_contrast_resolves_pools_and_stays_out_of_defaults(self):
+        from mmv import worlds
+        from webapp.mondo_web import ProductionRequest, request_dict, with_world
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            for wid, place in (("home", "salt pan"), ("away", "glass atrium")):
+                worlds.create(store, wid, {"id": wid, "name": wid.title(), "pools": {"settings": {"include": [place], "exclude": []}}})
+            plain = request_dict(ProductionRequest(song="s.wav", direction="d", world_id="home", world_contrast={"tangent": "away"}, world_contrast_strength=80))
+            self.assertEqual(plain["world_contrast"], {"tangent": "away"})
+            resolved = with_world(store, plain)
+            self.assertEqual(resolved["world_departures"], {"tangent": {"settings": ["glass atrium"]}})
+            self.assertEqual(ProductionRequest(**resolved).world_departures, resolved["world_departures"])   # resume and retry re-validate the stored request
+            self.assertNotIn("world_contrast", request_dict(ProductionRequest(song="s.wav", direction="d", world_id="home", world_contrast={"tangent": "away"}, world_contrast_strength=0)))
+            with self.assertRaises(ValueError):
+                ProductionRequest(song="s.wav", direction="d", world_id="home", world_contrast={"mirror": "home"})
+            off = request_dict(ProductionRequest(song="s.wav", direction="d", world_id="home"))
+            self.assertNotIn("world_contrast", off)
+            self.assertNotIn("world_departures", with_world(store, off))
+            self.assertNotIn("world_contrast", request_dict(ProductionRequest(song="s.wav", direction="d", world_contrast={"tangent": "away"})))
 
     def test_style_export_import_and_validation(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -1,5 +1,31 @@
 # Releases
 
+## 1.10.6 — Style vocabulary and contextual selection (fork contribution)
+
+- Adapted from hellonearthis's fork commit `56d9f04`. Styles may carry an optional
+  `vocabulary` (`custom_vocabulary` format). Import, create, CLI `import-style`,
+  the MCP style tools and the Style JSON import accept it; it is validated with
+  the real vocabulary rules and stored as data. It is never applied automatically:
+  picking the style on the music-video form shows a **Use this style's vocabulary**
+  button, and nothing changes until it is pressed.
+- New request setting `vocab_selection` (`legacy` default, `contextual`).
+  `contextual` narrows the rotation tables (settings, lighting, mechanisms,
+  costume, practical effects) to the terms that best match the direction,
+  title and custom additions, with seeded hash tie-breaks, before planning. The
+  planner, prompts and pins are untouched and `legacy` requests are identical to
+  before. No GUI control yet (API, CLI and MCP request objects only); no real
+  before/after render has been compared.
+- **Contrast worlds (opt-in).** Adapting the fork's mirror / opposite / tangent
+  juxtaposition to our Worlds: a video may name contrast worlds and a departure
+  strength; intense, high-energy shots borrow settings, lighting, mechanisms and tonal
+  registers from them (request fields `world_contrast`, `world_contrast_strength`;
+  video-form "Contrast worlds" section; agent, CLI and MCP request objects; see
+  `docs/WORLDS.md`). Off by default and off-identical. Planner, prompts and pins are
+  untouched. Not yet compared on real renders.
+- Fixed in the port: the fork's unclosed `<div>` in the video form.
+- Not adopted: the fork's blanket per-shot term override (see
+  `docs/COLLABORATOR_REVIEW.md`).
+
 ## 1.10.5 — FastH3 Omni workflows
 
 - Two new bundled workflows for the FastVideo FastH3 Omni 8-step model

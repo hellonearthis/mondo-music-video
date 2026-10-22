@@ -94,6 +94,14 @@ export function initSubliminalControls() {
   sync();
 }
 
+// Gather the contrast_<role> selects into the world_contrast request map and remove the loose fields.
+function contrastFromRequest(request) {
+  const roles = ["mirror", "opposite", "tangent"];
+  const chosen = Object.fromEntries(roles.filter((role) => request["contrast_" + role]).map((role) => [role, request["contrast_" + role]]));
+  roles.forEach((role) => delete request["contrast_" + role]);
+  return request.world_id ? chosen : {};
+}
+
 export async function preview(form) {
   if (form.dataset.subliminalPending) throw new Error("Wait for the flash picture to finish uploading");
   const data = Object.fromEntries(new FormData(form));
@@ -122,6 +130,8 @@ export async function preview(form) {
       request.content[category] = request["rating_" + category];
       delete request["rating_" + category];
     }
+    request.world_contrast = contrastFromRequest(request);
+    request.world_contrast_strength = Number(request.world_contrast_strength);
     if (state.currentCustomVocab && Object.keys(state.currentCustomVocab).length) {
       request.custom_vocabulary = state.currentCustomVocab;
     }

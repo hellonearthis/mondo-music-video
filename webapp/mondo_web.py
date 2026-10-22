@@ -26,7 +26,7 @@ logging.getLogger("uvicorn.access").addFilter(_PollingAccessFilter())
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from mmv import actors, agreements, instrument_assets, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
@@ -37,7 +37,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.5"
+MGL_APP_VERSION = "1.10.6"
 WEB = Path(__file__).parent
 
 
@@ -329,8 +329,12 @@ class ProductionRequest(StrictModel):
     stem_quality: Literal["standard", "high"] = "standard"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+    vocab_selection: Literal["legacy", "contextual"] = "legacy"
     world_id: str = Field(default="", max_length=64)
     world_pool_mode: Literal["append", "replace"] = "replace"
+    world_contrast: dict[Literal["mirror", "opposite", "tangent"], str] = Field(default_factory=dict)
+    world_contrast_strength: int = Field(default=50, ge=0, le=100)
+    world_departures: dict[Literal["mirror", "opposite", "tangent"], dict[str, list[str]]] = Field(default_factory=dict)
     world_mode: Literal["", "create", "grow"] = ""
     world_images: list[str] = Field(default_factory=list, max_length=worlds.MAX_IMAGES)
     world_videos: list[str] = Field(default_factory=list, max_length=3)
@@ -341,6 +345,26 @@ class ProductionRequest(StrictModel):
     @classmethod
     def valid_world_id(cls, value):
         return identifier(value) if value else ""
+
+    @field_validator("world_contrast")
+    @classmethod
+    def valid_world_contrast(cls, value):
+        return {role: identifier(world) for role, world in value.items() if world}
+
+    @field_validator("world_departures")
+    @classmethod
+    def valid_world_departures(cls, value):
+        """The resolved contrast pools saved with a run, so resume and retry replay the same terms."""
+        if any(table not in worlds.WORLD_TABLES or len(terms) > worlds.MAX_POOL or any(len(t) > 300 for t in terms)
+               for pools in value.values() for table, terms in pools.items()):
+            raise ValueError("Invalid contrast pools")
+        return value
+
+    @model_validator(mode="after")
+    def contrast_differs_from_world(self):
+        if self.world_id and self.world_id in self.world_contrast.values():
+            raise ValueError("A contrast world must differ from the main world")
+        return self
 
     @field_validator("vocabulary_profile")
     @classmethod
@@ -372,6 +396,13 @@ def request_dict(value):
         request.pop("captions", None)
     if not request.get("strict_prompt_checks"):
         request.pop("strict_prompt_checks", None)
+    if request["kind"] != "video" or not request.get("world_id") or not request.get("world_contrast") or not request.get("world_contrast_strength"):
+        for key in ("world_contrast", "world_contrast_strength", "world_departures"):
+            request.pop(key, None)
+    elif not request.get("world_departures"):
+        request.pop("world_departures", None)
+    if request.get("vocab_selection", "legacy") == "legacy":
+        request.pop("vocab_selection", None)
     if request.get("dance_mode", "off") == "off":
         for key in DANCE_FIELDS:
             request.pop(key, None)
@@ -398,8 +429,12 @@ def with_world(store, request):
     if request.get("kind") != "video" or not request.get("world_id"):
         return request
     ledger = worlds.load(store, request["world_id"])
-    return {**request, "custom_vocabulary": {**request["custom_vocabulary"], **worlds.custom_vocabulary(
+    merged = {**{k: v for k, v in request.items() if k != "world_departures"}, "custom_vocabulary": {**request["custom_vocabulary"], **worlds.custom_vocabulary(
         ledger, request["world_pool_mode"])}}
+    contrast = {role: worlds.load(store, world) for role, world in request.get("world_contrast", {}).items()}
+    pools = {role: {table: pool["include"] for table, pool in ledger["pools"].items() if pool.get("include")}
+             for role, ledger in contrast.items()}
+    return {**merged, "world_departures": {role: terms for role, terms in pools.items() if terms}} if any(pools.values()) else merged
 
 
 def instrument_preview(plan):
@@ -514,6 +549,7 @@ class StyleRequest(StrictModel):
     name: str = Field(min_length=1, max_length=160)
     direction: str = Field(min_length=1, max_length=8000)
     style_card: str | None = Field(default=None, max_length=16000)
+    vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
 
 
 class StyleImportRequest(StrictModel):
@@ -521,7 +557,21 @@ class StyleImportRequest(StrictModel):
     name: str = Field(min_length=1, max_length=160)
     direction: str = Field(min_length=1, max_length=8000)
     style_card: str | None = Field(default=None, max_length=16000)
+    vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     overwrite: bool = False
+
+
+def style_payload(value, style_id):
+    """The stored style card. An optional vocabulary is validated like a custom vocabulary and kept as data only;
+    it is never applied unless the user chooses it on the video form."""
+    vocabulary = {key: spec.model_dump() for key, spec in value.vocabulary.items()}
+    if any(len(term) > 300 for spec in vocabulary.values() for key in ("add", "exclude") for term in spec[key]):
+        raise ValueError("Style vocabulary entries must be 300 characters or fewer")
+    if vocabulary:
+        apply_vocabulary_overrides(load_vocabulary("full"), vocabulary)
+    return {"id": style_id, "name": value.name.strip(), "direction": value.direction.strip(),
+            **({"style_card": value.style_card} if value.style_card else {}),
+            **({"vocabulary": vocabulary} if vocabulary else {})}
 
 
 class AgreementRequest(StrictModel):
@@ -1168,13 +1218,7 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             if path.exists():
                 raise ValueError("Style already exists; use a different ID")
-            payload = {
-                "id": style_id,
-                "name": value.name.strip(),
-                "direction": value.direction.strip(),
-            }
-            if value.style_card:
-                payload["style_card"] = value.style_card
+            payload = style_payload(value, style_id)
             write_json(path, payload)
         return payload
 
@@ -1186,13 +1230,7 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             if path.exists() and not value.overwrite:
                 raise ValueError(f"Style '{style_id}' already exists; choose a different ID or enable overwrite")
-            payload = {
-                "id": style_id,
-                "name": value.name.strip(),
-                "direction": value.direction.strip(),
-            }
-            if value.style_card:
-                payload["style_card"] = value.style_card
+            payload = style_payload(value, style_id)
             write_json(path, payload)
         return payload
 
@@ -1357,7 +1395,7 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"), "world_contrast": prepared.get("world_contrast"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
@@ -1381,7 +1419,7 @@ def create_app(home=None, *, test_hosts=False):
             if not retryable_prompt_run(snapshot, request):
                 raise ValueError('Only an unrendered production stopped by prompt validation can be tried again')
             result = build_quote(ProductionRequest(**request))
-            result.update(kind='video', request=request)
+            result.update(kind='video', request={key: value for key, value in request.items() if key != 'world_departures'})
             return result
 
     @app.get("/api/lyrics")

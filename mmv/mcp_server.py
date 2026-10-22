@@ -171,9 +171,9 @@ def create_server(base_url=None):
         return invoke(client.create_actor, actor_id, name, description, reference_path)
 
     @server.tool()
-    def create_style(style_id: str, name: str, direction: str, style_card: str = "") -> dict[str, Any]:
+    def create_style(style_id: str, name: str, direction: str, style_card: str = "", vocabulary: dict[str, Any] | None = None) -> dict[str, Any]:
         """Save a new visual style; use preview_production for vision-based style harvesting."""
-        return invoke(client.create_style, style_id, name, direction, style_card or None)
+        return invoke(client.create_style, style_id, name, direction, style_card or None, vocabulary)
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def export_style(style_id: str) -> dict[str, Any]:
@@ -181,9 +181,9 @@ def create_server(base_url=None):
         return invoke(client.export_style, style_id)
 
     @server.tool()
-    def import_style(style_id: str, name: str, direction: str, style_card: str = "", overwrite: bool = False) -> dict[str, Any]:
-        """Import a visual style card into local styles. ID must be alphanumeric/dashes/underscores. Overwrite requires explicit opt-in."""
-        return invoke(client.import_style, style_id, name, direction, style_card or None, overwrite)
+    def import_style(style_id: str, name: str, direction: str, style_card: str = "", overwrite: bool = False, vocabulary: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Import a visual style card into local styles. ID must be alphanumeric/dashes/underscores. Overwrite requires explicit opt-in. Optional vocabulary (custom_vocabulary format) is stored with the style and only applied when the user chooses it."""
+        return invoke(client.import_style, style_id, name, direction, style_card or None, overwrite, vocabulary)
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def get_world(world_id: str, version: int | None = None) -> dict[str, Any]:

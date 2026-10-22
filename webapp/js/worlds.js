@@ -142,6 +142,7 @@ export async function loadWorlds() {
   if (!list) return worlds;
   list.replaceChildren(...(worlds.length ? worlds.map(worldRow) : [text("p", "No worlds yet. Build one below.", "muted")]));
   fillSelect($("#world-select"), worlds, "No world");
+  $$(".world-contrast-select").forEach((select) => fillSelect(select, worlds, "None"));
   fillSelect($("#world-form")?.elements.world_existing, worlds, "");
   const pending = await (await api("/api/worlds/proposals")).json();
   const full = await Promise.all(pending.map(item => api(`/api/worlds/proposals/${item.id}`).then(r => r.json())));

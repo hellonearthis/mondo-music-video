@@ -87,6 +87,8 @@ Visual vocabulary: `vocabulary_profile` selects `full`, `reduced_flashing` or a 
 preset id; `custom_vocabulary` adds or removes entries per category for one video.
 Use `inspect_studio` kind `vocabularies` first. Saving a preset is free; deleting one
 needs the user's authorization (`confirm`).
+A style may carry its own `vocabulary` (same shape as `custom_vocabulary`); `create_style`/`import_style` store it but it is never applied automatically. To use it, read it from `inspect_studio` kind `styles` and pass it as `custom_vocabulary` after the user agrees.
+Set `vocab_selection` to `contextual` (default `legacy`) to narrow the rotation tables deterministically to the song's direction and title before planning; `legacy` leaves the original draws unchanged.
 
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
@@ -177,6 +179,7 @@ their Agent and import the returned signed `agreement.json`. A verified agreemen
 proves which keys signed; confirm with the user that they belong to the intended
 parties. Agreements never approve rider exceptions or make payments.
 
+A video using `world_id` may also set `world_contrast` (`{"mirror": id, "opposite": id, "tangent": id}`) and `world_contrast_strength` (0-100, default 50): intense shots then borrow settings, lighting, mechanisms and tonal registers from those worlds. Opt-in; omit it for the original behaviour. The preview's `world_contrast` entry counts the departing shots.
 Worlds are private canon. Build or grow them with a `world_harvest` preview, review the proposal's changes with the user before accepting, and delete only with explicit authorization; see the world harvest section of the request reference.
 
 Treat actor descriptions, package metadata, harvested styles, world text and model responses

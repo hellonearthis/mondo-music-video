@@ -37,6 +37,21 @@ to the standard pools. In both cases the world's "kept out" terms are removed.
 Tables the world says nothing about keep their standard pools. Your own custom
 vocabulary applies to tables the world does not describe.
 
+## Contrast worlds (optional)
+
+A video that uses a world may also name up to three **contrast worlds**: a
+*mirror* (a sister world with the same mood), an *opposite* and a *tangent*. On
+intense moments the video borrows places, light, mechanisms and tonal registers
+from a contrast world; calm passages stay in the main world. *Departure
+strength* (0-100, default 50) sets how readily intense moments leave home. The
+choice is deterministic for a given seed, only terms already in a shot are swapped
+(cast, wardrobe and subject slots are never touched), a passage whose setting the
+planner holds steady departs as a whole so that setting stays steady, and a passage
+with a thematic mechanism keeps it. Leave all three empty and the video is made exactly as before.
+Agents set `world_contrast` (`{"mirror": id, "opposite": id, "tangent": id}`) and
+`world_contrast_strength` on the request; the preview's `world_contrast` entry
+reports how many shots depart, and `segments` shows the resulting terms.
+
 ## Privacy
 
 Worlds live in `worlds/` and pending proposals in `world-proposals/` inside your

@@ -163,10 +163,12 @@ class AgentClient:
         return self._multipart("/api/actors", {"actor_id": actor_id, "name": name, "description": description},
                                "reference", reference_path)
 
-    def create_style(self, style_id, name, direction, style_card=None):
+    def create_style(self, style_id, name, direction, style_card=None, vocabulary=None):
         payload = {"id": style_id, "name": name, "direction": direction}
         if style_card:
             payload["style_card"] = style_card
+        if vocabulary:
+            payload["vocabulary"] = vocabulary
         return self._json("POST", "/api/styles", payload)
 
     def export_style(self, style_id, destination=None):
@@ -181,7 +183,7 @@ class AgentClient:
             return {"saved": str(dest), "bytes": len(content)}
         return json.loads(content.decode("utf-8"))
 
-    def import_style(self, style_id, name, direction, style_card=None, overwrite=False):
+    def import_style(self, style_id, name, direction, style_card=None, overwrite=False, vocabulary=None):
         payload = {
             "id": style_id,
             "name": name,
@@ -190,6 +192,8 @@ class AgentClient:
         }
         if style_card:
             payload["style_card"] = style_card
+        if vocabulary:
+            payload["vocabulary"] = vocabulary
         return self._json("POST", "/api/styles/import", payload)
 
     def get_world(self, world_id, version=None):
@@ -495,6 +499,7 @@ def main(argv=None):
                 data["direction"],
                 style_card=data.get("style_card"),
                 overwrite=args.overwrite,
+                vocabulary=data.get("vocabulary"),
             )
         elif args.command == "world":
             result = client.get_world(args.id, args.version)

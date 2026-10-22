@@ -138,6 +138,11 @@ To use a world in a video, add `"world_id": "salt-archive"` and optionally
 `"world_pool_mode": "replace"` (only the world's terms, the default) or
 `"append"` (add to the standard pools) to a video request.
 
+Optional contrast worlds: `"world_contrast": {"mirror": "id", "opposite": "id", "tangent": "id"}` (any subset) and
+`"world_contrast_strength": 0-100` (default 50). High-energy shots then take settings, lighting, mechanisms and tonal
+registers from those worlds; cast, wardrobe and subject slots are never changed. Requires `world_id`. Off by default.
+The preview reports `world_contrast` (shots that depart and the roles used).
+
 ## Start, observe, export
 
 The preview returns `id`, `estimate_usd`, `paid`, clip count, duration and notes.
