@@ -285,12 +285,22 @@ def prepare(store, request, *, saved_prepared=None):
     width, height = backend.plan_resolution(aspect_w, aspect_h, megapixels=request['megapixels'],
                                             resolution=request['resolution'] if request['backend'] not in ('local_h3', 'comfy_sdk_h3') else None)
     vocab = load_vocabulary(request.get('vocabulary_profile', 'full'), store=store, custom=request.get('custom_vocabulary'))
+    if request.get('vocab_selection') == 'contextual':
+        from .vocab_select import contextual_vocabulary
+        worlds_ctx = request.get('thematic_worlds') or {}
+        vocab = contextual_vocabulary(vocab, request['seed'], (
+            request.get('direction', ''), request.get('title', ''), worlds_ctx.get('prompt', ''),
+            worlds_ctx.get('activeWorlds', []),
+            [t for spec in (request.get('custom_vocabulary') or {}).values() for t in spec.get('add', [])]))
     roster = roster_for(store, request, refs)
     p = plan(score, width=width, height=height, vocab=vocab, seed=request['seed'], slug='music-video',
              bars_per_phrase=request['bars_per_phrase'], ref_policy=request['ref_policy'],
              cast_size=len(roster), on_screen=request['on_screen'], ensemble_mode=request['ensemble_mode'], backend=backend)
     if not p.segments:
         raise ValueError('The original planner produced no musical segments for this track')
+    if request.get('vocab_selection') == 'contextual':
+        from .vocab_select import apply_contextual_shot_vocabulary
+        p.segments = apply_contextual_shot_vocabulary(p.segments, vocab, request['seed'], request.get('thematic_worlds'))
     if kind == 'video':
         from .score_edit import check_plan_coverage, is_empty
         if not is_empty(request.get('score_edits')):

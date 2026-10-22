@@ -435,9 +435,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.1")
+        self.assertEqual(api_version()["version"], "1.10.2")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.1", (root / "README.md").read_text())
+        self.assertIn("1.10.2", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_frontend_es_modules_served_and_protected(self):
@@ -1895,6 +1895,23 @@ class UtilityTests(unittest.TestCase):
             self.assertEqual(data.get("vocab_random_key"), "482910:5")
             self.assertEqual(data.get("forms", {}).get("video", {}).get("title"), "Neon Dreams")
             self.assertIn("lighting", data.get("custom_vocabulary", {}))
+
+    def test_style_carries_validated_optional_vocabulary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            client = TestClient(create_app(Storage(temp).home, test_hosts=True))
+            vocab = {"settings": {"mode": "append", "add": ["rain-slick archive"], "exclude": []}}
+            base = {"id": "vocab_style", "name": "Vocab Style", "direction": "Cold archive light."}
+            saved = client.post("/api/styles/import", json={**base, "vocabulary": vocab, "overwrite": False})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.assertEqual(saved.json()["vocabulary"]["settings"]["add"], ["rain-slick archive"])
+            listed = next(s for s in client.get("/api/styles").json() if s["id"] == "vocab_style")
+            self.assertEqual(listed["vocabulary"]["settings"]["add"], ["rain-slick archive"])
+            self.assertEqual(client.get("/api/styles/vocab_style/export").json()["vocabulary"], saved.json()["vocabulary"])
+            for bad in ({"nonsense": {"add": ["x"]}}, {"settings": {"mode": "replace", "add": []}}):
+                refused = client.post("/api/styles/import", json={**base, "vocabulary": bad, "overwrite": True})
+                self.assertEqual(refused.status_code, 400, refused.text)
+            plain = client.post("/api/styles/import", json={**base, "overwrite": True})
+            self.assertNotIn("vocabulary", plain.json())
 
     def test_style_export_import_and_validation(self):
         with tempfile.TemporaryDirectory() as temp:

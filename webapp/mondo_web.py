@@ -36,7 +36,7 @@ from mmv.services import check_services
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.1"
+MGL_APP_VERSION = "1.10.2"
 WEB = Path(__file__).parent
 
 
@@ -328,6 +328,7 @@ class ProductionRequest(StrictModel):
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     thematic_worlds: dict[str, Any] | None = None
+    vocab_selection: Literal["legacy", "contextual"] = "legacy"
     world_id: str = Field(default="", max_length=64)
     world_pool_mode: Literal["append", "replace"] = "replace"
     world_mode: Literal["", "create", "grow"] = ""
@@ -387,6 +388,8 @@ def request_dict(value):
         if request["kind"] != "video" or not request["world_id"]:
             request.pop("world_id")
             request.pop("world_pool_mode")
+    if request.get("vocab_selection", "legacy") == "legacy":
+        request.pop("vocab_selection", None)
     if not request.get("thematic_worlds") or request.get("thematic_worlds", {}).get("mode", "off") == "off":
         request.pop("thematic_worlds", None)
     return request
@@ -511,6 +514,7 @@ class StyleRequest(StrictModel):
     name: str = Field(min_length=1, max_length=160)
     direction: str = Field(min_length=1, max_length=8000)
     style_card: str | None = Field(default=None, max_length=16000)
+    vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
 
 
 class StyleImportRequest(StrictModel):
@@ -518,7 +522,19 @@ class StyleImportRequest(StrictModel):
     name: str = Field(min_length=1, max_length=160)
     direction: str = Field(min_length=1, max_length=8000)
     style_card: str | None = Field(default=None, max_length=16000)
+    vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     overwrite: bool = False
+
+
+def style_payload(value, style_id):
+    """The stored style card. An optional vocabulary is validated like a custom vocabulary and kept as data only;
+    it is never applied unless the user chooses it on the video form."""
+    vocabulary = {key: spec.model_dump() for key, spec in value.vocabulary.items()}
+    if vocabulary:
+        apply_vocabulary_overrides(load_vocabulary("full"), vocabulary)
+    return {"id": style_id, "name": value.name.strip(), "direction": value.direction.strip(),
+            **({"style_card": value.style_card} if value.style_card else {}),
+            **({"vocabulary": vocabulary} if vocabulary else {})}
 
 
 class AgreementRequest(StrictModel):
@@ -1138,13 +1154,7 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             if path.exists():
                 raise ValueError("Style already exists; use a different ID")
-            payload = {
-                "id": style_id,
-                "name": value.name.strip(),
-                "direction": value.direction.strip(),
-            }
-            if value.style_card:
-                payload["style_card"] = value.style_card
+            payload = style_payload(value, style_id)
             write_json(path, payload)
         return payload
 
@@ -1156,13 +1166,7 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             if path.exists() and not value.overwrite:
                 raise ValueError(f"Style '{style_id}' already exists; choose a different ID or enable overwrite")
-            payload = {
-                "id": style_id,
-                "name": value.name.strip(),
-                "direction": value.direction.strip(),
-            }
-            if value.style_card:
-                payload["style_card"] = value.style_card
+            payload = style_payload(value, style_id)
             write_json(path, payload)
         return payload
 

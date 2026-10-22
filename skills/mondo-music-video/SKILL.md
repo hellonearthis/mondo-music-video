@@ -83,6 +83,8 @@ Visual vocabulary: `vocabulary_profile` selects `full`, `reduced_flashing` or a 
 preset id; `custom_vocabulary` adds or removes entries per category for one video.
 Use `inspect_studio` kind `vocabularies` first. Saving a preset is free; deleting one
 needs the user's authorization (`confirm`).
+A style may carry its own `vocabulary` (same shape as `custom_vocabulary`); it is stored with `create_style`/`import_style` but never applied automatically. To use it, read it from `inspect_studio` kind `styles` and pass it as `custom_vocabulary` after the user agrees.
+Set `vocab_selection` to `contextual` (default `legacy`) to narrow the rotation tables deterministically to the song's direction, title and world before planning; the original random draws are unchanged when it is `legacy`.
 
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.

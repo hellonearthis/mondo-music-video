@@ -1,5 +1,13 @@
 # Releases
 
+## 1.10.2 - Contextual vocabulary selection (opt-in)
+
+- Styles can carry an optional `vocabulary` (`custom_vocabulary` format). Import, create, CLI `import-style` and the MCP style tools accept it; it is validated against the real vocabulary rules and stored as data. It is never applied automatically: choosing the style on the music-video form shows a one-click `Use this style's vocabulary` button, and nothing changes until it is pressed. Open Prop Protocol packages are unchanged (no vocabulary from packages).
+- New request setting `vocab_selection` (`legacy` default, `contextual`). Contextual mode narrows rotation tables before planning and performs deterministic shot-position hash selection (`sha256(seed:section:shot)`).
+- Tangent juxtaposition support: models mirror, opposite, and tangent departures along world cluster vectors during high-energy passages and structural shifts (governed by $\kappa$), anchored back to the primary world canon on lower-energy/resolution passages.
+- The protected planner, prompts, pins and golden fixtures are unchanged; `legacy` requests are byte-identical to before.
+- Agent: `vocab_selection` is accepted in production requests via the API, CLI and MCP request objects; skill updated. GUI control not added. No real before/after render comparison has been run.
+
 ## 1.10.1 — Sidebar tab order
 
 - Sidebar order is now Music video, Credits & idents, Actors & OAP, Styles,
