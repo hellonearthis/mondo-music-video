@@ -23,6 +23,12 @@ are implemented but real exports remain unverified. On WSL, configure paths in
 WSL notation; on Windows use native paths. Other Topaz/platform combinations
 must be tested individually and are not claimed as supported.
 
+The Topaz cloud option (`topaz_backend` = `cloud`) needs no local install, only
+a Topaz API key saved as `MMV_TOPAZ_API_KEY` and network access to
+`api.topazlabs.com`. It uploads the finished video to Topaz and spends Topaz
+credits. It works on any platform with FFprobe. One real cloud export (2×, audio
+kept) was verified on Linux/WSL on 2026-10-21; other platforms are untested.
+
 The app uses filesystem permissions for its credential file. Windows users
 should keep their application data under their private user profile and apply
 appropriate Windows ACLs; POSIX mode bits are not a Windows access-control claim.

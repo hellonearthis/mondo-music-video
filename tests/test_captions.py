@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from mmv import captions
+from mmv import captions, final_assembly
+from assembly_fixtures import source_recipe
 
 FFMPEG = shutil.which('ffmpeg')
 LINES = [{'start': 1.0, 'end': 3.0, 'text': 'Hello {world} \\ again', 'timing': 'matched'},
@@ -20,7 +21,8 @@ def video(path, seconds=6, fps=24):
 
 
 def frames(path):
-    return captions._probe_size(path)[2]
+    from mmv.engine.assemble import probe_frames
+    return probe_frames(path)
 
 
 class CueTests(unittest.TestCase):
@@ -122,7 +124,7 @@ class ApplyTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
-        video(self.dir / 'music-video.mp4')
+        source_recipe(self.dir, video, 160, 90)
         self.plan = captions.plan_run({'mode': 'burned'}, LINES, 0.0, 6.0, 6.0)
 
     def tearDown(self):
@@ -147,7 +149,7 @@ class ApplyTests(unittest.TestCase):
 
     def test_a_failed_burn_leaves_the_video_untouched_and_reports_it(self):
         original = (self.dir / 'music-video.mp4').read_bytes()
-        with mock.patch.object(captions, 'burn', side_effect=ValueError('boom')):
+        with mock.patch.object(final_assembly, 'render', side_effect=ValueError('boom')):
             result = captions.apply_to_run(self.dir, self.plan)
         self.assertEqual(result['burn_error'], 'boom')
         self.assertNotIn('uncaptioned_copy', result)
@@ -168,7 +170,7 @@ class FinishedVideoTests(unittest.TestCase):
         self.store = types.SimpleNamespace(home=self.home)
         self.run = self.home / 'runs' / 'abc'
         self.run.mkdir(parents=True)
-        video(self.run / 'music-video.mp4')
+        source_recipe(self.run, video, 160, 90)
         lines = [{'start': 0.5, 'end': 2.0, 'text': 'one', 'timing': 'matched'}, {'start': 2.5, 'end': 4.0, 'text': 'two', 'timing': 'uncertain'}]
         self.write = lambda name, value: (self.run / name).write_text(json.dumps(value))
         self.write('output.json', {'file': 'music-video.mp4', 'kind': 'video', 'title': 'T', 'duration': 6})
@@ -202,16 +204,17 @@ class FinishedVideoTests(unittest.TestCase):
         self.assertFalse((self.home / 'runs' / 'new' / 'captioned.mp4').exists())
         self.assertFalse((self.home / 'runs' / 'new' / 'output.json').exists())
 
-    def test_a_lost_backup_or_a_deleted_opening_ident_is_refused(self):
-        self.write('output.json', {'file': 'music-video.mp4', 'kind': 'video', 'captions': {'uncaptioned_copy': 'music-video-uncaptioned.mp4'}})
-        with self.assertRaisesRegex(ValueError, 'twice'):
+    def test_missing_originals_are_refused_even_when_a_finished_video_exists(self):
+        (self.run / 'original-clip.mkv').unlink()
+        with self.assertRaisesRegex(ValueError, 'Original assembly source is missing'):
             captions.caption_finished(self.store, 'abc/music-video.mp4', [], self.context())
-        self.write('output.json', {'file': 'music-video.mp4', 'kind': 'video'})
-        self.write('request.json', {'start_ident': 'abc/gone.mp4', 'lyric_lines': [{'start': 1, 'end': 2, 'text': 'x'}]})
-        (self.home / 'runs' / 'ident').mkdir()
-        self.write('request.json', {'start_ident': 'ident/ident.mp4', 'lyric_lines': [{'start': 1, 'end': 2, 'text': 'x'}]})
-        with self.assertRaisesRegex(ValueError, 'ident that was deleted'):
-            captions.caption_finished(self.store, 'abc/music-video.mp4', [], self.context())
+        self.assertFalse((self.home / 'runs' / 'new' / 'captioned.mp4').exists())
+
+    def test_missing_uncaptioned_backup_does_not_block_original_source_render(self):
+        self.write('output.json', {'file': 'music-video.mp4', 'kind': 'video',
+                                  'captions': {'uncaptioned_copy': 'music-video-uncaptioned.mp4'}})
+        captions.caption_finished(self.store, 'abc/music-video.mp4', [], self.context())
+        self.assertTrue((self.home / 'runs' / 'new' / 'captioned.mp4').exists())
 
 
 if __name__ == '__main__':

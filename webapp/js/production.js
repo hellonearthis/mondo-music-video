@@ -5,6 +5,7 @@ import { disposeScoreEditor, mountScoreEditor } from "./score_editor.js";
 import { loadActors, loadStyles } from "./library.js";
 import { loadOutputs } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
+import { storyboardFromForm, refreshStoryboards } from "./storyboard.js";
 import { loadWorlds } from "./worlds.js";
 
 import { syncInstrumentControls, instrumentsFromForm } from "./instruments.js";
@@ -94,6 +95,14 @@ export function initSubliminalControls() {
   sync();
 }
 
+// Gather the contrast_<role> selects into the world_contrast request map and remove the loose fields.
+function contrastFromRequest(request) {
+  const roles = ["mirror", "opposite", "tangent"];
+  const chosen = Object.fromEntries(roles.filter((role) => request["contrast_" + role]).map((role) => [role, request["contrast_" + role]]));
+  roles.forEach((role) => delete request["contrast_" + role]);
+  return request.world_id ? chosen : {};
+}
+
 export async function preview(form) {
   if (form.dataset.subliminalPending) throw new Error("Wait for the flash picture to finish uploading");
   const data = Object.fromEntries(new FormData(form));
@@ -101,6 +110,7 @@ export async function preview(form) {
   if (files.pending) throw new Error("Wait for the selected files to finish uploading");
   const request = { kind: form.dataset.kind, ...data, references: files.references };
   request.compact_prompts = Boolean(form.elements.compact_prompts?.checked);
+  request.strict_prompt_checks = Boolean(form.elements.strict_prompt_checks?.checked);
   if (request.kind === "video") {
     if (!files.song) throw new Error("Upload your song first");
     request.song = files.song;
@@ -124,11 +134,15 @@ export async function preview(form) {
     if (state.thematicWorlds && state.thematicWorlds.mode && state.thematicWorlds.mode !== "off") {
       request.thematic_worlds = state.thematicWorlds;
     }
+    request.world_contrast = contrastFromRequest(request);
+    request.world_contrast_strength = Number(request.world_contrast_strength);
     if (state.currentCustomVocab && Object.keys(state.currentCustomVocab).length) {
       request.custom_vocabulary = state.currentCustomVocab;
     }
   }
   if (request.kind === "ident") request.ident_seconds = Number(request.ident_seconds);
+
+  if (["video", "ident"].includes(request.kind)) storyboardFromForm(form, request);
 
   const submitBtn = form.querySelector('button[type="submit"]') || form.querySelector(".action-bar .primary") || form.querySelector("button.primary");
   const originalHtml = submitBtn ? submitBtn.innerHTML : null;
@@ -181,10 +195,16 @@ export function showQuote(request, quote) {
   const summary = $("#quote-summary");
   summary.replaceChildren();
   summary.append(
-    text("p", request.kind === "harvest" ? "One visual style harvest." : `${quote.clips} clips · ${quote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
+    text("p", request.kind === "storyboard" ? "Interpret storyboard images for review." : request.kind === "harvest" ? "One visual style harvest." : `${quote.clips} clips · ${quote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
     text("h2", `Estimated provider cost: $${Number(quote.estimate_usd).toFixed(2)}`),
     text("p", quote.note, "muted")
   );
+  if (quote.storyboard) {
+    summary.append(text('h3', 'Storyboard alignment'));
+    for (const [passage, panels] of Object.entries(quote.storyboard.passages)) {
+      for (const panel of panels) summary.append(text('p', `${panel.start_seconds.toFixed(2)}s · Panel ${panel.panel} · ${panel.direction}`));
+    }
+  }
   if (quote.dance) {
     const dancing = Object.values(quote.dance.passages).filter(item => item.dancing).length;
     const left = [...new Set(Object.values(quote.dance.passages).flatMap(item => item.not_choreographed || []))];
@@ -407,7 +427,7 @@ export async function applyStatus(status) {
     }
   }
   if (state.lastState && state.lastState !== status.state && !busy) {
-    await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds()]);
+    await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds(), refreshStoryboards()]);
   }
   state.lastState = status.state;
 }

@@ -38,10 +38,10 @@ def test_singing_and_dancing_combine_without_weakening_the_singing_rules(tmp_pat
     assert 'singing' in [c['name'] for c in actual['validation']]
 
 
-def test_merely_standing_is_rejected_and_nothing_is_cached(tmp_path, monkeypatch):
-    with pytest.raises(ValueError, match='validation failed'):
-        capture(tmp_path, monkeypatch, 'sealed', dance_settings=DANCE, body='<Subject 1> stands there.')
-    assert not list((tmp_path / 'home' / 'cache' / 'prompts').glob('*.json'))
+def test_merely_standing_is_advice_for_laya_not_a_rewrite(tmp_path, monkeypatch):
+    actual, _, directory, *_ = capture(tmp_path, monkeypatch, 'sealed', dance_settings=DANCE, body='<Subject 1> stands there.')
+    assert len(actual['calls']) == 1 and actual['validation'][-1]['name'] == 'laya'          # one writer call, then Laya reviews it
+    assert any('merely standing' in x for x in read_json(directory / 'seg000.advice.json')['advice'])
 
 
 def test_dance_cache_hits_are_revalidated_and_use_a_versioned_key(tmp_path, monkeypatch):
@@ -50,15 +50,29 @@ def test_dance_cache_hits_are_revalidated_and_use_a_versioned_key(tmp_path, monk
     assert first['cache_keys'] and first['cache_keys'] != sealed_keys
     second, *_ = capture(tmp_path, monkeypatch, 'sealed', dance_settings=DANCE, body=GOOD)
     assert not second['calls']                                                         # reused from the cache
-    monkeypatch.setattr(dance, 'dance_problems', lambda *a, **k: ['rejected'])
+    monkeypatch.setattr(dance, 'dance_problems', lambda *a, **k: ['Expected 1 shot descriptions but found 0.'])
     with pytest.raises(ValueError, match='validation failed'):                          # the cached prompt is refused, the rewrite too
         capture(tmp_path, monkeypatch, 'sealed', dance_settings=DANCE, body=GOOD)
 
 
-def test_a_draft_with_only_style_advice_left_is_kept_and_recorded(tmp_path, monkeypatch):
+def test_style_advice_is_recorded_and_the_draft_goes_to_laya(tmp_path, monkeypatch):
     advice = ['Shot 1 has a downbeat; give the dancers an accent, a hit or a deliberate hold there.']
     monkeypatch.setattr(dance, 'dance_problems', lambda *a, **k: advice)
     actual, home, directory, *_ = capture(tmp_path, monkeypatch, 'sealed', dance_settings=DANCE, body=GOOD)
-    assert read_json(directory / 'seg000.dance-advice-kept.json') == advice
+    assert read_json(directory / 'seg000.advice.json')['advice'] == advice
     assert read_json(directory / 'prompts.json')['seg000']
 
+
+
+def test_strict_prompt_checks_restore_rewrites_for_wording_and_default_does_not(tmp_path, monkeypatch):
+    standing = '<Subject 1> stands there.'
+    default, _, directory, *_ = capture(tmp_path / 'default', monkeypatch, 'sealed', dance_settings=DANCE, body=standing)
+    assert len(default['calls']) == 1 and read_json(directory / 'seg000.advice.json')['advice']
+    with pytest.raises(ValueError, match='validation failed'):
+        capture(tmp_path / 'strict', monkeypatch, 'sealed', dance_settings=DANCE, body=standing, strict_prompt_checks=True)
+
+
+def test_strict_flag_is_not_stored_unless_on():
+    from webapp.mondo_web import ProductionRequest, request_dict
+    assert 'strict_prompt_checks' not in request_dict(ProductionRequest(backend='wavespeed'))
+    assert request_dict(ProductionRequest(backend='wavespeed', strict_prompt_checks=True))['strict_prompt_checks'] is True

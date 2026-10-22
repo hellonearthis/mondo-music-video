@@ -115,8 +115,10 @@ export function setupLlamaGuide() {
   $("#apply-writer-tuning").onclick = handle(async () => {
     const command = commandPreview();
     if (!command) throw new Error("Configure a writer launch command first.");
-    $("input[name=writer_launch]").value = command;
-    notice("Writer tuning applied to the field. Save settings to persist it.");
+    const field = $("input[name=writer_launch]");
+    field.value = command;
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    notice("Writer tuning applied to the launch field and saved automatically.");
     dialog.close();
   });
 }

@@ -23,20 +23,22 @@ class _PollingAccessFilter(logging.Filter):
         return not any(p in msg for p in ("/api/status", "/api/events", "/api/log/", "/api/services"))
 
 logging.getLogger("uvicorn.access").addFilter(_PollingAccessFilter())
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import HTTPException, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from mmv import actors, agreements, instrument_assets, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
 from mmv.services import check_services
+from mmv.storyboard import Storyboard
+from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.2"
+MGL_APP_VERSION = "1.10.9"
 WEB = Path(__file__).parent
 
 
@@ -277,7 +279,7 @@ class CaptionSettings(StrictModel):
 
 
 class ProductionRequest(StrictModel):
-    kind: Literal["video", "ident", "harvest", "world_harvest"] = "video"
+    kind: Literal["video", "ident", "harvest", "world_harvest", "storyboard"] = "video"
     title: str = Field(default="", max_length=160)
     song: str = Field(default="", max_length=128)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
@@ -313,6 +315,8 @@ class ProductionRequest(StrictModel):
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
     on_screen: int = Field(default=1, ge=1, le=9)
     ident_mode: Literal["standard", "harvest", "scenographic"] = "standard"
+    storyboard: Storyboard = Field(default_factory=Storyboard)
+    ident_all_references: bool = False
     ident_seconds: float = Field(default=5, ge=4, le=12)
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
@@ -322,6 +326,7 @@ class ProductionRequest(StrictModel):
     subliminal: SubliminalSettings = Field(default_factory=SubliminalSettings)
     captions: CaptionSettings = Field(default_factory=CaptionSettings)
     compact_prompts: bool = False
+    strict_prompt_checks: bool = False
     score_edits: ScoreEdits = Field(default_factory=ScoreEdits)
     analysis_driver: Literal["mix", "drums", "bass", "vocals", "other", "guitar", "piano"] = "mix"
     stem_quality: Literal["standard", "high"] = "standard"
@@ -331,6 +336,9 @@ class ProductionRequest(StrictModel):
     vocab_selection: Literal["legacy", "contextual"] = "legacy"
     world_id: str = Field(default="", max_length=64)
     world_pool_mode: Literal["append", "replace"] = "replace"
+    world_contrast: dict[Literal["mirror", "opposite", "tangent"], str] = Field(default_factory=dict)
+    world_contrast_strength: int = Field(default=50, ge=0, le=100)
+    world_departures: dict[Literal["mirror", "opposite", "tangent"], dict[str, list[str]]] = Field(default_factory=dict)
     world_mode: Literal["", "create", "grow"] = ""
     world_images: list[str] = Field(default_factory=list, max_length=worlds.MAX_IMAGES)
     world_videos: list[str] = Field(default_factory=list, max_length=3)
@@ -341,6 +349,26 @@ class ProductionRequest(StrictModel):
     @classmethod
     def valid_world_id(cls, value):
         return identifier(value) if value else ""
+
+    @field_validator("world_contrast")
+    @classmethod
+    def valid_world_contrast(cls, value):
+        return {role: identifier(world) for role, world in value.items() if world}
+
+    @field_validator("world_departures")
+    @classmethod
+    def valid_world_departures(cls, value):
+        """The resolved contrast pools saved with a run, so resume and retry replay the same terms."""
+        if any(table not in worlds.WORLD_TABLES or len(terms) > worlds.MAX_POOL or any(len(t) > 300 for t in terms)
+               for pools in value.values() for table, terms in pools.items()):
+            raise ValueError("Invalid contrast pools")
+        return value
+
+    @model_validator(mode="after")
+    def contrast_differs_from_world(self):
+        if self.world_id and self.world_id in self.world_contrast.values():
+            raise ValueError("A contrast world must differ from the main world")
+        return self
 
     @field_validator("vocabulary_profile")
     @classmethod
@@ -368,8 +396,25 @@ DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead", "dance
 def request_dict(value):
     """The stored production request. A request without dancing or captions is stored exactly as it was before they existed."""
     request = value.model_dump()
+    if request['kind'] != 'storyboard' and not request['storyboard']['enabled']:
+        request.pop('storyboard')
+    elif request['kind'] not in ('storyboard', 'video', 'ident'):
+        raise ValueError('Storyboards are available for music videos and idents')
+    if not request['ident_all_references']:
+        request.pop('ident_all_references')
+    elif request['kind'] != 'ident':
+        raise ValueError('Use all ident references is only available for idents')
     if request.get("captions", {}).get("mode", "off") == "off":
         request.pop("captions", None)
+    if not request.get("strict_prompt_checks"):
+        request.pop("strict_prompt_checks", None)
+    if request["kind"] != "video" or not request.get("world_id") or not request.get("world_contrast") or not request.get("world_contrast_strength"):
+        for key in ("world_contrast", "world_contrast_strength", "world_departures"):
+            request.pop(key, None)
+    elif not request.get("world_departures"):
+        request.pop("world_departures", None)
+    if request.get("vocab_selection", "legacy") == "legacy":
+        request.pop("vocab_selection", None)
     if request.get("dance_mode", "off") == "off":
         for key in DANCE_FIELDS:
             request.pop(key, None)
@@ -400,8 +445,12 @@ def with_world(store, request):
     if request.get("kind") != "video" or not request.get("world_id"):
         return request
     ledger = worlds.load(store, request["world_id"])
-    return {**request, "custom_vocabulary": {**request["custom_vocabulary"], **worlds.custom_vocabulary(
+    merged = {**{k: v for k, v in request.items() if k != "world_departures"}, "custom_vocabulary": {**request["custom_vocabulary"], **worlds.custom_vocabulary(
         ledger, request["world_pool_mode"])}}
+    contrast = {role: worlds.load(store, world) for role, world in request.get("world_contrast", {}).items()}
+    pools = {role: {table: pool["include"] for table, pool in ledger["pools"].items() if pool.get("include")}
+             for role, ledger in contrast.items()}
+    return {**merged, "world_departures": {role: terms for role, terms in pools.items() if terms}} if any(pools.values()) else merged
 
 
 def instrument_preview(plan):
@@ -450,7 +499,9 @@ class Settings(StrictModel):
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
     topaz_models: str = ""
+    topaz_backend: Literal["local", "cloud"] = "local"
     h3_models: dict[str, str] = Field(default_factory=dict)
+    workflow_preset: str = ""
 
     @field_validator("writer_api_profile", "vision_api_profile", "video_api_profile")
     @classmethod
@@ -505,7 +556,7 @@ class StarterRequest(StrictModel):
 
 
 class KeyRequest(StrictModel):
-    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"]
+    name: Literal["WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY", "MMV_TOPAZ_API_KEY"]
     value: str = Field(max_length=1000)
 
 
@@ -530,6 +581,8 @@ def style_payload(value, style_id):
     """The stored style card. An optional vocabulary is validated like a custom vocabulary and kept as data only;
     it is never applied unless the user chooses it on the video form."""
     vocabulary = {key: spec.model_dump() for key, spec in value.vocabulary.items()}
+    if any(len(term) > 300 for spec in vocabulary.values() for key in ("add", "exclude") for term in spec[key]):
+        raise ValueError("Style vocabulary entries must be 300 characters or fewer")
     if vocabulary:
         apply_vocabulary_overrides(load_vocabulary("full"), vocabulary)
     return {"id": style_id, "name": value.name.strip(), "direction": value.direction.strip(),
@@ -558,10 +611,34 @@ class AgreementSignRequest(StrictModel):
     role: Literal["agent", "director"]
 
 
+class TopazInterpolation(StrictModel):
+    model: Literal["apo-8", "apf-2", "chr-2", "chf-3", "aion-1"]
+    fps: float | None = Field(default=None, ge=15, le=240)
+    slowmo: int | None = Field(default=None, ge=1, le=16)
+    duplicate: bool = False
+
+
+class TopazOptions(StrictModel):
+    mode: Literal["Auto", "Relative", "Manual"] = "Auto"
+    tuning: dict[str, float] = Field(default_factory=dict)
+    interpolation: TopazInterpolation | None = None
+
+    @field_validator("tuning")
+    @classmethod
+    def known_tuning(cls, value):
+        from mmv.topaz_models import TUNING_RANGE
+        for key, number in value.items():
+            if key not in TUNING_RANGE or not TUNING_RANGE[key][0] <= number <= TUNING_RANGE[key][1]:
+                raise ValueError(f"Unknown or out-of-range Topaz tuning value: {key}")
+        return value
+
+
 class UpscaleRequest(StrictModel):
     source: str
-    model: str = Field(default="ahq-12", pattern=r"^[a-z][a-z0-9]*-\d+$")
-    scale: Literal[2, 4] = 2
+    model: str = Field(default="ahq-12", pattern=r"^([a-z][a-z0-9]*-\d+(\.\d+)?|none)$")
+    scale: Literal[1, 2, 4] = 2
+    options: TopazOptions | None = None
+    max_credits: int | None = Field(default=None, ge=1, le=1000000)
 
 
 class CaptionVideoRequest(StrictModel):
@@ -812,9 +889,11 @@ def create_app(home=None, *, test_hosts=False):
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
+                "workflow_presets": workflow_presets(),
                 "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
-                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY")}}
+                ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY",
+                 "MMV_TOPAZ_API_KEY")}}
 
     @app.put("/api/settings")
     def settings(value: Settings):
@@ -823,6 +902,8 @@ def create_app(home=None, *, test_hosts=False):
             dump = value.model_dump()
             from mmv.api_profiles import resolve, save_settings
             dump = Settings(**resolve(store, dump)).model_dump()
+            if dump.pop("workflow_preset", ""):
+                dump["workflow_map_path"] = preset_path(value.workflow_preset)
             h3_models = dump.pop("h3_models", None)
             if h3_models:
                 _update_h3_models(store, dump, h3_models)
@@ -968,6 +1049,13 @@ def create_app(home=None, *, test_hosts=False):
         if kind in ("song", "video", "lore"):
             write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or kind).replace("\\", "/")).name})
         return {"file": name, "name": file.filename}
+
+    @app.get("/api/uploads/reference/{filename}")
+    def uploaded_reference(filename: str):
+        path = inside(store.home / 'uploads', filename)
+        if path.suffix != '.png' or not path.is_file():
+            raise HTTPException(404, 'Reference image not found')
+        return FileResponse(path, media_type='image/png')
 
     @app.get("/api/uploads/song/{filename}")
     def get_uploaded_song(filename: str):
@@ -1331,12 +1419,38 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"), "world_contrast": prepared.get("world_contrast"), "storyboard": prepared.get("storyboard"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
+
+    @app.get("/api/quick-start")
+    def quick_start_plan():
+        from mmv import quick_start
+        return quick_start.plan([a["id"] for a in list_actors()], [s["id"] for s in styles()])
+
+    @app.get("/api/storyboards")
+    def storyboard_results():
+        paths = {p.parent: p for name in ('storyboard-response.txt', 'storyboard.json')
+                 for p in (store.home / 'runs').glob('*/' + name)}
+        return [{'run_id': p.parent.name} for p in sorted(paths.values(), key=lambda p: p.stat().st_mtime, reverse=True)]
+
+    @app.get("/api/storyboards/{run_id}/response")
+    def storyboard_response(run_id: str):
+        path = inside(store.home / 'runs', identifier(run_id)) / 'storyboard-response.txt'
+        if not path.is_file():
+            raise HTTPException(404, 'No saved vision response for this operation')
+        return {'response': path.read_text(encoding='utf-8')}
+
+    @app.get("/api/storyboards/{run_id}")
+    def storyboard_result(run_id: str):
+        directory = inside(store.home / 'runs', identifier(run_id))
+        result = read_json(directory / 'storyboard.json') if (directory / 'storyboard.json').is_file() else None
+        if result is None:
+            raise HTTPException(404, 'Storyboard result not found; inspect operation status and logs')
+        return Storyboard(**result).model_dump()
 
     @app.post("/api/quote")
     def quote(value: ProductionRequest):
@@ -1355,7 +1469,7 @@ def create_app(home=None, *, test_hosts=False):
             if not retryable_prompt_run(snapshot, request):
                 raise ValueError('Only an unrendered production stopped by prompt validation can be tried again')
             result = build_quote(ProductionRequest(**request))
-            result.update(kind='video', request=request)
+            result.update(kind='video', request={key: value for key, value in request.items() if key != 'world_departures'})
             return result
 
     @app.get("/api/lyrics")
@@ -1757,12 +1871,38 @@ def create_app(home=None, *, test_hosts=False):
             content = content.replace(secret, "[redacted]")
         return {"log": content or "No operation or server log recorded yet."}
 
+    quoted_upscales = {}
+
+    def upscale_options(value):
+        return value.options.model_dump(exclude_none=True) if value.options else None
+
+    def upscale_key(value):
+        return (value.source, value.model, value.scale, json.dumps(upscale_options(value), sort_keys=True))
+
+    @app.post("/api/upscale/estimate")
+    def upscale_estimate(value: UpscaleRequest):
+        """Free Topaz cloud quote (credits and time). Reserves nothing and starts no job."""
+        if store.settings().get("topaz_backend") != "cloud":
+            raise ValueError("Choose the Topaz cloud service in Settings to get an estimate")
+        quote = production.upscale_estimate(store, value.source, value.model, value.scale, upscale_options(value))
+        quoted_upscales[upscale_key(value)] = quote["credits"][1]
+        return quote
+
+    @app.get("/api/upscale/models")
+    def upscale_models():
+        """Topaz cloud models and frame-rate/tuning options (free; narrowed to what Topaz accepts now)."""
+        return production.upscale_models()
+
     @app.post("/api/upscale")
     def upscale(value: UpscaleRequest):
         with jobs.lock:
             jobs.require_idle()
+            if (store.settings().get("topaz_backend") == "cloud"
+                    and quoted_upscales.get(upscale_key(value)) != value.max_credits):
+                raise ValueError("Get a Topaz estimate for these exact settings and approve its credits first")
             title = read_json(inside(store.home / "runs", value.source).parent / "output.json", {}).get("title") or ""
-            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale, context),
+            return jobs.start("upscale", lambda context: production.upscale(store, value.source, value.model, value.scale,
+                                                                              context, value.max_credits, options=upscale_options(value)),
                               run_id=job_run_id(store, "upscale", title))
 
     @app.get("/api/captions/fonts")

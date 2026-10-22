@@ -1,12 +1,228 @@
 # Releases
 
-## 1.10.2 - Contextual vocabulary selection (opt-in)
+## 1.10.9 — One final encode from original clips
 
-- Styles can carry an optional `vocabulary` (`custom_vocabulary` format). Import, create, CLI `import-style` and the MCP style tools accept it; it is validated against the real vocabulary rules and stored as data. It is never applied automatically: choosing the style on the music-video form shows a one-click `Use this style's vocabulary` button, and nothing changes until it is pressed. Open Prop Protocol packages are unchanged (no vocabulary from packages).
-- New request setting `vocab_selection` (`legacy` default, `contextual`). Contextual mode narrows rotation tables before planning and performs deterministic shot-position hash selection (`sha256(seed:section:shot)`).
-- Tangent juxtaposition support: models mirror, opposite, and tangent departures along world cluster vectors during high-energy passages and structural shifts (governed by $\kappa$), anchored back to the primary world canon on lower-energy/resolution passages.
-- The protected planner, prompts, pins and golden fixtures are unchanged; `legacy` requests are byte-identical to before.
-- Agent: `vocab_selection` is accepted in production requests via the API, CLI and MCP request objects; skill updated. GUI control not added. No real before/after render comparison has been run.
+- Subliminal flashes and burned captions now run inside final assembly, at the same
+  H.264 CRF-6 / slow quality as the clean version. Each variant reads original clips;
+  neither a clean export nor a flashed export becomes another render's video input.
+- Final assembly trims and joins the original clips, adds effects and encodes in one
+  FFmpeg invocation per variant. Attached idents/videos resolve their original
+  clips too, including their saved effects. The optional PCM editing stem is retained.
+- Adding captions later rebuilds from saved source provenance, retaining flashes and
+  replacing captions. Old runs can reconstruct from plan/render/request/prepared
+  records. Missing originals fail clearly; restoring sources is required, never
+  a fallback to recompressing the final. Existing final files are not modified by
+  this upgrade. Sidecars still require no video encode.
+- Topaz remains the owner-approved exception, operating on the selected finished
+  video. No paid/GPU work, provider retry or prompt changes are part of this fix.
+- GUI, existing caption API/client/MCP and production preview/start/resume retain
+  their interfaces and consent guards. Source provenance stays local; no new tool
+  is required. Legacy per-clip video assembly intermediates are no longer generated.
+- Validation: 713 full-suite tests + 141 subtests, then two added timing/source
+  regression tests passed using synthetic media and mock services. Live 1.10.9
+  and the served UI verified; no real production render performed.
+- Fork task-start HEAD: `56d9f04027dab5e2cc9c9e2860a614e1190d75fd`,
+  unchanged since the completed collaborator review.
+
+## 1.10.8 — One-click "Just do the thing!"
+
+- A big red button at the top of 01 Music Video. With a song already chosen it fills
+  the blanks and opens the usual preview; without one it opens a "Select a song to
+  begin" dialog with browse and drag-and-drop. The preview's consent step is unchanged:
+  nothing is rendered or charged until the person accepts it.
+- The random plan (`GET /api/quick-start`, `mmv/quick_start.py`) prefers the bundled
+  starter cast, sometimes chooses no cast at all, and when it casts, sometimes adds
+  group dancing. Instruments, subliminal flashes and captions are never chosen.
+  Anything the person already filled in (direction, style, cast) is kept.
+- A quiet **Start fresh** link beside it clears the panel (song, references, storyboard,
+  vocabulary choices and all fields) after a confirmation; renderer and resolution are kept.
+  GUI-only by design: agents build each request from scratch, so there is nothing to clear.
+- Settings (09) now save automatically a moment after each change (or on Enter); the
+  Save settings button is gone. Choosing an API profile or workflow redraws the form so
+  the fields it fills in are shown. A failed save (for example while a production is
+  running) says so beside the form. Agents already persist settings with PATCH, so no
+  agent change was needed.
+- Agents: `inspect_studio` kind `quick-start`, CLI `quick-start`; merge the plan into a
+  `preview_production` request. No consent guard changed.
+
+## 1.10.7 — Optional storyboards for music videos and idents
+
+- Ordered storyboard images, narrative/visual interpretation, editable panels,
+  reordering, source thumbnails, separate saved video/ident drafts and timing preview.
+- Interpretation uses one configured vision call behind the existing quote/consent
+  flow; results persist for review and recovery. No automatic retry or new services.
+- Reviewed storyboard direction is optional writer job data / ident user notes.
+  Protected system prompts, planner files and pins remain unchanged.
+- Ident can explicitly use all attached references through existing ensemble
+  controls; single-reference behavior remains the default.
+- REST, client, CLI and MCP coverage (54 tools), documentation and mock checks.
+  Actual visual adherence has not been verified with real renders. Visual mode
+  describes composition; it does not promise pixel replication or inject board images
+  into actor slots. Music timing remains authoritative.
+- Claude Code reviewed the design; implementation adapts the user's proposal to
+  existing MMV services. No Redis/vector database/Remotion additions.
+- Collaborator task-start head: `56d9f04027dab5e2cc9c9e2860a614e1190d75fd`,
+  unchanged since the substantive review recorded for 1.10.6.
+
+See [Storyboards](STORYBOARDS.md).
+
+
+## 1.10.6 — Style vocabulary and contextual selection (fork contribution)
+
+- Adapted from hellonearthis's fork commit `56d9f04`. Styles may carry an optional
+  `vocabulary` (`custom_vocabulary` format). Import, create, CLI `import-style`,
+  the MCP style tools and the Style JSON import accept it; it is validated with
+  the real vocabulary rules and stored as data. It is never applied automatically:
+  picking the style on the music-video form shows a **Use this style's vocabulary**
+  button, and nothing changes until it is pressed.
+- New request setting `vocab_selection` (`legacy` default, `contextual`).
+  `contextual` narrows the rotation tables (settings, lighting, mechanisms,
+  costume, practical effects) to the terms that best match the direction,
+  title and custom additions, with seeded hash tie-breaks, before planning. The
+  planner, prompts and pins are untouched and `legacy` requests are identical to
+  before. No GUI control yet (API, CLI and MCP request objects only); no real
+  before/after render has been compared.
+- **Contrast worlds (opt-in).** Adapting the fork's mirror / opposite / tangent
+  juxtaposition to our Worlds: a video may name contrast worlds and a departure
+  strength; intense, high-energy shots borrow settings, lighting, mechanisms and tonal
+  registers from them (request fields `world_contrast`, `world_contrast_strength`;
+  video-form "Contrast worlds" section; agent, CLI and MCP request objects; see
+  `docs/WORLDS.md`). Off by default and off-identical. Planner, prompts and pins are
+  untouched. Not yet compared on real renders.
+- Fixed in the port: the fork's unclosed `<div>` in the video form.
+- Not adopted: the fork's blanket per-shot term override (see
+  `docs/COLLABORATOR_REVIEW.md`).
+
+## 1.10.5 — FastH3 Omni workflows
+
+- Two new bundled workflows for the FastVideo FastH3 Omni 8-step model
+  (`FastVideo/FastH3-Omni-Comfy`), selectable from a **Bundled H3 workflow**
+  picker above the workflow path in Settings or by the agent setting
+  `workflow_preset` (`standard`, `fasth3_int8`, `fasth3_bf16`):
+  - **FastH3 Omni INT8**: `fasth3_omniref_8step_pruned_int8_convrot` with the
+    `qwen3vl_32b_h3_ultra_uncensored_heretic_int8_convrot` text encoder.
+  - **FastH3 Omni BF16**: `fasth3_omniref_8step_pruned_bf16` with the
+    `qwen3vl_32b_h3_ultra_uncensored_heretic_bf16` text encoder.
+  Neither has a LoRA option. The standard 20-step workflow and map are untouched
+  and remain the default.
+- A map may now set `default_steps`; the new maps use 8 (the model card's step
+  count). Local and SDK renders read it, otherwise stay at 20. Guidance 1.0 is
+  what the graph's BasicGuider already applies; the card's video/audio shift
+  values (12.0 / 3.0) are not set by the graph and rely on ComfyUI's native
+  MiniMax-H3 handling. Sampler/scheduler are unchanged (`res_multistep`/`simple`),
+  as the card does not specify them. Real inference is not verified here.
+- Instrument performance no longer requires a named player to be playing in every
+  shot they appear in. The check (`mmv/instruments.py`) now rejects a shot only for
+  a vague attempt to play ("strikes the guitar"), another instrument's gesture, or
+  playing during a paused shot; the instrument reference must be cited at the first
+  shot where the player plays. The matching sentence in the instrument writer rules
+  (appended only when instruments are on) says players may also stand, move or react.
+  Cause: with dancing on, four runs failed because every shot naming the keyboard
+  player demanded keys and a picture-tag link. Known gap: a player's instrument being
+  played by a different named actor in a shot where the owner does not play is no
+  longer caught by that shot's check.
+- Local-writer retries for dancing and instrument passages are sturdier
+  (`mmv/worker.py`, `mmv/writer_json.py`; the pinned `writer.py`/`schema.py` are
+  untouched): raw newlines/tabs inside a JSON string are escaped before parsing;
+  a reply that is not valid JSON is asked again with the same feedback and does not
+  use up one of the four attempts (at most two such free retries per passage); and a
+  retry now includes the previous draft's shots so the writer revises instead of
+  rewriting every shot. Passages without dancing or instruments are unchanged.
+- Dance check (`mmv/dance.py`): "lunge" and "footwork" count as moves, a few more
+  downbeat accent words are accepted, and in group mode a move in the same sentence
+  as a mouth clause now counts (the mouth clause is dropped, face-only sentences are
+  still ignored). Evidence: Codex read-only review of runs 160410-172316.
+  Independent mode's assigned-movement-family check also accepts natural wording
+  (vertical: "vertical sway", "flexes and extends", "rising and falling"; lateral:
+  "weight shifted", "slides"; rotation: "spins", "twirls", "torso"). Run 180005 failed
+  all four attempts on shots that already showed the assigned vertical movement.
+  The "prompt validation failed" message no longer blames Laya alone.
+- **Dance and instrument wording checks are advice, not rewrites.** Before, any
+  word-list finding (a dancer "not described moving", a movement family, a downbeat
+  accent, "must visibly play", a pronoun) sent the passage back to the local writer,
+  up to four times, before Laya ever saw it. Runs 163328-181732 used 9-12 writer
+  calls for 3-5 passages and several died on these checks. Now only integrity
+  problems force a rewrite: a wrong shot count, a missing instrument player, and an
+  uncited instrument reference (`dance.is_blocking`, `instruments.is_blocking`),
+  plus the existing schema, quality and lip-sync checks. All other findings are
+  written to `segNNN.advice.json` (with the prompt's SHA-256) and the draft goes
+  straight to Laya. Cached prompts are no longer refused for advice-level findings.
+  A new video option, **Strict dance & instrument checks** (`strict_prompt_checks`,
+  off by default, in the form under Dancing and in the preview request), restores the
+  earlier send-back-to-the-writer behaviour for every finding; cached prompts made
+  under it are kept separate. Compare the two on the same song and seed by eye.
+  The advice receipt is in the run folder and in production packages; the Agent
+  API/CLI/MCP are otherwise unchanged. Known limit: Laya's questions do not yet
+  include the dance or instrument job, so it cannot judge whether each dancer
+  follows their assigned cues or each player plays the right instrument. Teaching
+  Laya that means editing the protected `validators/` folder and needs the owner's
+  explicit approval and a before/after render comparison; it was not done here.
+- No protected prompts, pins or banner changed.
+
+## 1.10.4 — Mondo favicon
+
+- The app now has a browser-tab icon: `/favicon.svg` (green badge with an italic
+  "M") and a multi-size `/favicon.ico`, linked from the page head and included
+  in the package data. Adopted unchanged from hellonearthis's fork revision
+  `c699179` with its endpoint test. Credit: hellonearthis.
+- Reviewed fork head `c699179`. Not adopted: `5ca5eb9` (Thematic Worlds "Process"
+  button and keyword cluster matching). It builds on the deferred
+  `vocab-worlds.js` work from `79d8515`, so it waits on that foundation; no new
+  defect was found in the diff. See `docs/COLLABORATOR_REVIEW.md`.
+- No protected prompts, pins or banner changed. The icon is a static asset;
+  Agent API, CLI and MCP are unchanged.
+
+## 1.10.3 — Topaz cloud upscale
+
+- Provider keys in Settings are now one paste-and-save row per key (WaveSpeed,
+  writer, vision, ComfyUI proxy, Topaz) with saved / not set status, and the
+  upscale dialog offers the same row in place when the Topaz key is missing.
+- New Settings choice **Topaz upscale service**: installed program (default,
+  unchanged) or **Topaz cloud** (`api.topazlabs.com`), so upscaling works without
+  a local Topaz install. Save the Topaz API key as `MMV_TOPAZ_API_KEY` in
+  Provider keys (private, redacted from logs like the other keys).
+- The upscale dialog has an **Upscale service** dropdown (installed or cloud) that
+  saves on selection, and the running status shows Topaz's own wording (for example
+  "Queued - waiting for resources (0%, about 21 min once running)") instead of
+  its raw state names; unchanged statuses are no longer logged every 5 seconds.
+  A first real cloud export (2×, with audio) was verified by the operator.
+- Paid-consent flow: the dialog first asks Topaz for a free estimate (credits,
+  time, output size), then requires a credit-approval tick. The job re-prices and
+  stops before reserving anything if the price rose above the approved figure.
+  Reserving credits is never retried; a failure or cancel before the result is
+  ready asks Topaz to cancel and refund unused credits, and the request id is
+  logged. The finished video downloads to a new `upscale` output; the source is
+  untouched. Output is H.264 (H.265 above 4096 px) with audio copied.
+- Cloud model and frame-rate choices: the dialog has a grouped model picker
+  (Proteus/Artemis/Gaia/Iris/Theia/Dione, Starlight, Astra 2, Nyx denoise, Themis,
+  stabilization, Hyperion) from `mmv/topaz_models.py`, narrowed to what Topaz's
+  public `/video/status` list accepts now (new Topaz models appear as "Other").
+  Frame rate section: interpolation model (Apollo, Chronos, Aion), target fps
+  15–240, slow-motion factor, duplicate-frame removal; "no upscale" gives
+  frame-rate-only jobs and 1× enhances without enlarging. A Tuning section
+  (parameter mode Auto/Relative/Manual plus compression, detail, noise, halo,
+  anti-aliasing, sharpness, original-detail, grain) applies to Precision models.
+  The credit approval is bound to the exact model, scale and options estimated.
+- Agents: MCP `list_topaz_models`, `estimate_upscale` and `upscale_video` take
+  `options` (53 tools), CLI `upscale-models` and `--options JSON`;
+  earlier: MCP `estimate_upscale` (53 tools), `upscale_video(max_credits=…)`,
+  `AgentClient.upscale_estimate`, CLI `upscale-estimate` and `upscale --max-credits`, REST `POST /api/upscale/estimate` and
+  `max_credits` on `/api/upscale`; skill, AGENT_SETUP, interface guide, platform
+  and scope documents updated.
+- Limitations: cloud models are chosen by Topaz model ID (for example `prob-4`,
+  `ahq-12`); model tuning parameters, frame interpolation and Topaz's
+  external-storage and webhook options are not exposed. The cloud key is not part
+  of the writer/vision/video API profiles. Uploads read the file into memory in
+  segments of up to 500 MB. Automated tests use a mock service; a real cloud export
+  spends credits and needs the operator's deliberate go-ahead.
+
+## 1.10.2 — Panel heading numbers
+
+- Panel headings (the small "07 / WORLDS" line) now match the sidebar numbers
+  introduced in 1.10.1; a test checks them. `docs/interface-guide.md` gains a
+  Worlds section and the new panel numbers. No new agent tool was needed: the
+  Worlds MCP tools, CLI commands and skill text already shipped in 1.10.0, and
+  agents address panels by tool, not by sidebar number.
 
 ## 1.10.1 — Sidebar tab order
 

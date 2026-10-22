@@ -1,5 +1,17 @@
 # Collaborator review record
 
+## Fork `56d9f04` reviewed (release 1.10.6, 2026-10-22)
+
+Reviewed from an isolated clone of `hellonearthis/mondo-music-video` at exact head `56d9f04` (one commit after the previously reviewed `c699179`), by [hellonearthis](https://github.com/hellonearthis). The fork labels it 1.10.2, which collides with our 1.10.2, so it ships here as 1.10.6.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Optional style `vocabulary`, validated and stored as data, with a never-automatic "Use this style's vocabulary" offer | Adopted. Agent, CLI, MCP, skill and tests included. Defect fixed: the fork's `index.html` opened `<div class="style-vocab-offer">` and never closed it, which would swallow the rest of the video form. |
+| `vocab_selection: contextual` table narrowing (`contextual_vocabulary`) | Adopted, `legacy` stays the default. Dropped the fork's use of `thematic_worlds` (absent here; our Worlds feed `custom_vocabulary`, whose additions are already in the context words). |
+| `apply_contextual_shot_vocabulary` per-shot override | Not adopted as written. It rewrites setting, subject, mechanism, lighting, tonal register and costume on every shot, including shots whose values the planner deliberately holds steady across a segment (standard and fragmentation montages) or fixes from an anchor, and it mutates the plan in place although documented as pure. Compatible alternative: re-pick only keys a shot already has, and only for the montage types that rotate per shot, after a real before/after render. |
+| `THEMATIC_JUXTAPOSITION_MAP` and tangent departures | Adapted (owner asked for it). The ten fixed archetype clusters are replaced by the owner's own Worlds: a video names mirror / opposite / tangent worlds and a strength; the fork's thresholds (0.65 / 0.85), role odds and `0.5*energy + 0.5*passage energy*strength` score are kept. Differences: pure function returning replacements; only slots a shot already has are swapped (no `juxtaposition_departure` key reaches the writer job); subject and costume slots untouched; held-steady passages depart as a whole; thematic-anchor mechanism kept; contrast pools and ids stripped from shared receipts. Opt-in, protected files untouched. |
+| Version 1.10.2 | Not matched (collision); released as 1.10.6. |
+
 ## Fork `5e2bba4` integrated (release 1.9.8, 2026-10-20)
 
 Reviewed from an isolated clone of `hellonearthis/mondo-music-video` at `5e2bba4f945d02f7c825e2002d83c2d084819c2e`; the only change beyond the previously reviewed `e6ef03e`.
@@ -26,6 +38,17 @@ interface batch so the labels can cover the final OPP UI and receive focused
 keyboard, accessibility and agent-surface review. This is a scope/version
 conflict, not a demonstrated defect in the collaborator's contribution. No
 fork files, private assets or Git object stores were imported into this tree.
+
+## October 21, 2026 — fork head c699179 (release 1.10.4)
+
+Reviewed isolated clone at exact revision `c699179db724b6b292c63594dc03d48351cfdd5f`.
+The fork merged our releases through 1.10.1 in `54f1ba2`; the new contributions
+by [hellonearthis](https://github.com/hellonearthis) are `5ca5eb9` and `c699179`.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Mondo favicon (`c699179`) | Adopted unchanged. The `.ico` is a valid four-size icon, the routes serve static files only, and its endpoint test passes here. |
+| Thematic Worlds Process button and keyword cluster scoring (`5ca5eb9`) | Deferred. Client-side only and stacked on the deferred `vocab-worlds.js` (see the `79d8515` entry), whose mode/kappa consumer and three defects remain open. No new defect found. Remaining work: land that foundation, then revisit. |
 
 ## October 21, 2026 — fork head 79d8515 (release 1.9.10)
 

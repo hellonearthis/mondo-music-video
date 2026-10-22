@@ -262,7 +262,7 @@ class ComfySdkH3Backend(LocalH3Backend):
                 images.append(name)
             files['passage.wav'] = audio
             graph, _ = self.builder.build(prompt=job['prompt'], duration_input=job['duration_input'],
-                seed=job['seed'], width=job['width'], height=job['height'], steps=20,
+                seed=job['seed'], width=job['width'], height=job['height'], steps=int(self.builder.map.get('default_steps', 20)),
                 image_files=images, audio_files=['passage.wav'],
                 video_prefix=f"mondo/{job['slug']}/{seg_id}", audio_prefix=f"mondo/{job['slug']}/{seg_id}_diegetic")
             graph = studio_graph(graph, self.builder.map, self.clip_quality)

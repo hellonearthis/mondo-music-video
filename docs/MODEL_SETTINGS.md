@@ -59,3 +59,14 @@ acknowledgment and upstream verification.
 Run the checks with `python -m pytest -q` (four workers), or use
 `python -m pytest -q -n 0` for serial execution. The optional test extra installs
 both pytest and pytest-xdist. Existing unittest discovery also remains supported.
+
+## Bundled H3 workflows (1.10.5)
+
+Settings has a **Bundled H3 workflow** picker above the workflow path: the
+standard 20-step graph, **FastH3 Omni INT8** (8 steps, INT8 ConvRot diffusion
+model and text encoder) and **FastH3 Omni BF16** (8 steps, BF16 pair). The FastH3
+models come from `FastVideo/FastH3-Omni-Comfy`; their filenames must exist in
+ComfyUI's `diffusion_models` and `text_encoders`. Neither has a LoRA option.
+Agents choose one with `update_studio_settings({"workflow_preset": "fasth3_int8"})`
+(`standard`, `fasth3_int8`, `fasth3_bf16`) while idle; `inspect_studio("settings")`
+lists them as `workflow_presets`. A map's `default_steps` sets the sampler steps.

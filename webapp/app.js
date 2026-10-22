@@ -4,6 +4,8 @@ import { $, $$, api, initThemeToggle, notice, option, state, text } from "./js/c
 import { setupLlamaGuide, setupOapGuide, setupVocabGuide } from "./js/guides.js";
 import { initComponentLabeling } from "./js/component_labeling.js";
 import { initFileDropTargets } from "./js/file_drop.js";
+import { initQuickStart } from "./js/quick_start.js";
+import { initStoryboards, restoreStoryboards, refreshStoryboards } from "./js/storyboard.js";
 import { initWorlds, loadWorlds } from "./js/worlds.js";
 import { initInstrumentLibrary } from "./js/instruments.js";
 import { initLibraryForms, loadActors, loadAgreements, loadStyles } from "./js/library.js";
@@ -89,11 +91,13 @@ async function initialize() {
 
   initNavigation();
   initProductionForms();
+  initQuickStart();
   initSubliminalControls();
   initOperationControls();
   initLibraryForms();
   await initInstrumentLibrary();
   initWorlds();
+  initStoryboards();
   initFileDropTargets();
   initSettingsAndPicker();
   initUpscaleForm();
@@ -101,6 +105,8 @@ async function initialize() {
   // Custom presets must be in the profile select before a saved choice is restored.
   await loadVocabularyCatalog().catch(() => {});
   await restoreProject();
+  restoreStoryboards();
+  await refreshStoryboards();
   initCaptionControls();
   setupEventStream();
   await refreshServices();

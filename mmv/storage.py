@@ -171,7 +171,7 @@ DEFAULTS = {
     "laya_model_dir": "", "laya_device": "cuda",
     "vision_url": "http://127.0.0.1:8080/v1", "vision_model": "",
     "vision_key_env": "MMV_VISION_API_KEY", "vision_call_estimate": 0.0,
-    "topaz_executable": "", "topaz_models": "",
+    "topaz_executable": "", "topaz_models": "", "topaz_backend": "local",
 }
 
 
@@ -213,7 +213,7 @@ class Storage:
         return os.environ.get(name) or read_json(self.home / "secrets.json", {}).get(name, "")
 
     def save_key(self, name, value):
-        if name not in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"):
+        if name not in ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY", "MMV_TOPAZ_API_KEY"):
             raise ValueError("Unknown credential")
         from .api_profiles import KEYS, records
         for role, credential in KEYS.items():
@@ -235,7 +235,8 @@ class Storage:
         values = list(read_json(self.home / "secrets.json", {}).values())
         values.extend(item.get("key", "") for item in records(self).values())
         values.extend(os.environ.get(name, "") for name in
-                      ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY"))
+                      ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY",
+                       "MMV_TOPAZ_API_KEY"))
         return sorted({v for v in values if isinstance(v, str) and v}, key=len, reverse=True)
 
     def actor(self, actor_id):

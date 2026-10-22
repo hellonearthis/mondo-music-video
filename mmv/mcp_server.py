@@ -26,8 +26,8 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds"] = "status") -> dict[str, Any]:
-        """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"] = "status") -> dict[str, Any]:
+        """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, settings (no secret values), or a random one-click "quick-start" plan to merge into a preview_production request."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
     @server.tool()
@@ -65,6 +65,17 @@ def create_server(base_url=None):
     def select_opp_sheet(prop_id: str, use: str = "") -> dict[str, Any]:
         """Preview which base or interaction sheet an imported prop would use for free-form shot intent."""
         return invoke(client.select_opp_sheet, prop_id, use)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def inspect_storyboard(run_id: str, raw_response: bool = False) -> dict[str, Any]:
+        """Read an interpreted storyboard for review, or raw_response=true for failed-response diagnosis. Edit panels before including it in a video or ident preview.
+
+        Interpretation: preview_production kind storyboard with storyboard {mode: narrative|visual, images: upload IDs}.
+        Start the accepted quote, poll status, then inspect here. No automatic retry. Apply the edited result as
+        storyboard {enabled: true, mode, images, panels: [{image, direction}]} in a video/ident request.
+        Preview returns per-shot alignment. An ident may also set ident_all_references true (renderer limits apply).
+        """
+        return invoke(client.storyboard_result, run_id, raw_response)
 
     @server.tool()
     def preview_production(request: dict) -> dict[str, Any]:
@@ -105,11 +116,15 @@ def create_server(base_url=None):
         `mouth_mode` unchanged; a singer can also dance. The preview returns `dance` (who dances where). Stillness is allowed
         only as a described, deliberate hold.
 
+        Strict checks: `strict_prompt_checks` true (default false) makes every dance/instrument wording finding send the passage back to the
+        writer (up to 4 attempts) like earlier releases; by default only integrity problems do and wording findings are saved as
+        segNNN.advice.json for Laya's review. Enable only when the user asks.
+
         Subliminal flash: `subliminal` {mode: off|image|text, text, image (an uploaded PNG/JPEG id), frames 1-12,
         placement manual|downbeats, times [seconds on the finished video's clock], count} flashes a picture or words
         for a few frames (flashes are kept 1 s apart); the preview returns the resolved times, the audio and length are
         untouched and the untouched video is kept as music-video-clean.mp4. Warn the user that flashing can affect
-        photosensitive viewers.
+        photosensitive viewers. Each variant is assembled directly from original clips in one CRF-6 encode; captions share this pass.
 
         Lyric captions: `captions` {mode: off|sidecar|burned, style classic|bold|neon|box, position bottom|middle|top, size small|medium|large,
         optional color/outline_color "#rrggbb" and font (see list_caption_fonts)} turns the timed `lyric_lines` into lyrics.srt (sidecar) and, for
@@ -355,7 +370,9 @@ def create_server(base_url=None):
                       position: Literal["bottom", "middle", "top"] = "bottom",
                       size: Literal["small", "medium", "large"] = "medium", color: str = "", outline_color: str = "",
                       font: str = "") -> dict[str, Any]:
-        """Burn lyric captions into a finished music video as a NEW output; the original is never changed. Free.
+        """Rebuild a music video with lyric captions from its original clips as a NEW output. Free.
+        One CRF-6 final encode, retaining flashes and replacing captions. Missing sources fail: restore original clips/song and run metadata,
+        then retry this job; never substitute the finished video. The original output is never changed.
 
         `source` is the output file ("<run id>/music-video.mp4"). Uses the timed lines saved with that video unless
         `lyric_lines` [{start, end, text, timing}] (seconds on the song clock; see detect_lyrics/align_lyrics) are given.
@@ -371,9 +388,34 @@ def create_server(base_url=None):
         return invoke(client.caption_fonts)
 
     @server.tool()
-    def upscale_video(source: str, model: str = "ahq-12", scale: Literal[2, 4] = 2) -> dict[str, Any]:
-        """Start a requested Topaz export of a finished output using the configured user-owned installation."""
-        return invoke(client.upscale, source, model, scale)
+    def list_topaz_models() -> dict[str, Any]:
+        """Topaz cloud models, frame interpolation models and tuning ranges, narrowed to what Topaz accepts now. Free, read-only.
+
+        Pass a model id as `model` (or "none" for frame rate only) and, for frame rate or tuning, `options` to
+        estimate_upscale / upscale_video: {"interpolation": {"model": "apo-8", "fps": 60, "slowmo": 2, "duplicate": true},
+        "mode": "Relative"|"Manual", "tuning": {"details": 0.3}}. Scale 1 only enhances or retimes without enlarging."""
+        return invoke(client.upscale_models)
+
+    @server.tool()
+    def estimate_upscale(source: str, model: str = "ahq-12", scale: Literal[1, 2, 4] = 2,
+                         options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Free Topaz cloud price quote for upscaling a finished output: credits [low, high], seconds and output size.
+
+        Only when Settings chooses the Topaz cloud service (topaz_backend "cloud") and a Topaz API key is saved. Reserves
+        nothing and starts no job. Show the quote to the user; the highest credits figure is what they approve."""
+        return invoke(client.upscale_estimate, source, model, scale, options)
+
+    @server.tool()
+    def upscale_video(source: str, model: str = "ahq-12", scale: Literal[1, 2, 4] = 2,
+                      max_credits: int | None = None, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Start a requested Topaz export of a finished output: the user's installed Topaz, or the Topaz cloud.
+
+        With the cloud service this spends the user's Topaz credits, so call estimate_upscale first, get the user's explicit
+        approval of that figure, and pass the highest credits as `max_credits` (omitting it is refused). Use the same
+        model, scale and options as the estimate; a different combination needs its own estimate. The job re-prices
+        before reserving and refuses if the price rose above `max_credits`. It is never retried automatically; if it fails
+        or is cancelled the app asks Topaz to refund unused credits and logs the request id. Poll inspect_studio status."""
+        return invoke(client.upscale, source, model, scale, max_credits, options)
 
     return server
 

@@ -1,6 +1,6 @@
 // Studio Settings, API Profiles, Credentials, and Filesystem Browser Picker.
 
-import { $, api, handle, json, notice, option, state, text } from "./core.js";
+import { $, api, handle, json, keyRow, notice, option, state, text } from "./core.js";
 import { refreshServices } from "./production.js";
 
 export const settingLabels = {
@@ -29,6 +29,7 @@ export const settingLabels = {
   vision_model: "Vision model name",
   vision_key_env: "Vision credential name",
   vision_call_estimate: "Vision estimate per call, USD (0 for local)",
+  topaz_backend: "Topaz upscale service: installed program or cloud",
   topaz_executable: "Installed Topaz FFmpeg executable path",
   topaz_models: "Installed Topaz models folder",
   h3_video_vae: "H3 video VAE model",
@@ -60,6 +61,7 @@ export const settingTooltips = {
   vision_model: "Model identifier for your vision service",
   vision_key_env: "Environment variable name storing your vision API key",
   vision_call_estimate: "Estimated cost in USD per vision style-harvest call",
+  topaz_backend: "Use your installed Topaz Video AI, or the Topaz cloud service (needs a Topaz API key under Provider keys; Topaz charges credits)",
   topaz_executable: "Path to Topaz Video AI ffmpeg.exe binary for upscaling",
   topaz_models: "Folder path containing installed Topaz AI model weight files",
   h3_video_vae: "Video VAE safetensors filename for MiniMax H3 (node 119)",
@@ -243,6 +245,9 @@ export async function loadSettings() {
     } else if (name === "writer_mode") {
       input = document.createElement("select");
       input.append(option("local", "Local", "Local writer engine"), option("api", "API", "Hosted cloud API provider"));
+    } else if (name === "topaz_backend") {
+      input = document.createElement("select");
+      input.append(option("local", "Installed Topaz", "Run your own Topaz Video AI install"), option("cloud", "Topaz cloud (credits)", "Upscale on Topaz servers using your Topaz API key; charges Topaz credits"));
     } else if (name === "backend") {
       input = document.createElement("select");
       input.append(...Object.entries(state.catalog.backends).map(([key, card]) => option(key, card.name, `${card.name}: ${card.description || key}`)));
@@ -292,6 +297,18 @@ export async function loadSettings() {
         });
       };
       group.append(input, btn);
+      if (name === "workflow_map_path") {
+        const presets = data.workflow_presets || [];
+        const picker = document.createElement("select");
+        picker.title = picker.dataset.tooltip = "Bundled H3 workflows: standard (20 steps) or FastH3 Omni (8 steps, INT8 or BF16)";
+        picker.append(option("", "Custom path", "Use the path typed below"), ...presets.map(p => option(p.path, p.name)));
+        picker.value = presets.some(p => p.path === value) ? value : "";
+        picker.onchange = () => {
+          if (picker.value) { input.value = picker.value; input.dispatchEvent(new Event("change", { bubbles: true })); }
+        };
+        input.addEventListener("input", () => { picker.value = presets.some(p => p.path === input.value) ? input.value : ""; });
+        label.append(picker);
+      }
       label.append(group);
     } else {
       label.append(input);
@@ -358,43 +375,70 @@ export async function loadSettings() {
       if (!name) return;
       await json("/api/api-profiles", { name, role }, "POST");
       await loadSettings();
-      notice("API profile saved privately. Select it and save Settings to activate it.");
+      notice("API profile saved privately. Select it to activate it.");
     });
     fields.push(button);
   }
   $("#settings-fields").replaceChildren(...fields);
-  $("#key-status").textContent = Object.entries(data.keys).map(([name, set]) => `${name}: ${set ? "configured" : "not set"}`).join(" · ");
+  $("#key-list").replaceChildren(...Object.entries(data.keys).map(([name, set]) =>
+    keyRow(name, set, async () => { await loadSettings(); await refreshServices(true); })));
   return data.settings;
 }
 
-export function initSettingsAndPicker() {
-  $("#settings-form").onsubmit = handle(async event => {
-    const raw = Object.fromEntries(new FormData(event.target));
-    const h3_models = {};
-    for (const key of ["video_vae", "audio_vae", "diffusion_model", "text_encoder"]) {
-      const field = event.target.elements["h3_" + key];
-      const value = raw["h3_" + key];
-      if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
-      delete raw["h3_" + key];
-    }
-    raw.auto_updates = event.target.elements.auto_updates.checked;
-    raw.vision_call_estimate = Number(raw.vision_call_estimate);
-    raw.writer_call_estimate = Number(raw.writer_call_estimate);
-    raw.render_timeout_minutes = Math.max(0, Math.round(Number(raw.render_timeout_minutes) || 0));
-    if (Object.keys(h3_models).length) raw.h3_models = h3_models;
-    await json("/api/settings", raw, "PUT");
-    await loadSettings();
-    await refreshServices(true);
-    notice("Settings saved.");
-  });
+// The PUT body for the whole settings form; h3 loaders are sent only when they differ from what is installed now.
+function settingsPayload(form) {
+  const raw = Object.fromEntries(new FormData(form));
+  const h3_models = {};
+  for (const key of ["video_vae", "audio_vae", "diffusion_model", "text_encoder"]) {
+    const field = form.elements["h3_" + key];
+    const value = raw["h3_" + key];
+    if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
+    delete raw["h3_" + key];
+  }
+  raw.auto_updates = form.elements.auto_updates.checked;
+  raw.vision_call_estimate = Number(raw.vision_call_estimate);
+  raw.writer_call_estimate = Number(raw.writer_call_estimate);
+  raw.render_timeout_minutes = Math.max(0, Math.round(Number(raw.render_timeout_minutes) || 0));
+  if (Object.keys(h3_models).length) raw.h3_models = h3_models;
+  return raw;
+}
 
-  $("#key-form").onsubmit = handle(async event => {
-    await json("/api/key", Object.fromEntries(new FormData(event.target)), "PUT");
-    event.target.elements.value.value = "";
-    await loadSettings();
-    await refreshServices(true);
-    notice("Key saved locally. The settings API does not return it.");
+// Choosing a profile, a workflow or an H3 model changes other fields on the server, so only those redraw the form.
+const redrawsForm = name => name.endsWith("_api_profile") || name === "workflow_map_path" || name.startsWith("h3_");
+function initSettingsAutosave(form) {
+  const status = form.querySelector("#settings-autosave-status");
+  let timer = null, saving = false, queued = false, redraw = false;
+  const show = message => { status.textContent = message; };
+  const flush = async () => {
+    if (saving) { queued = true; return; }
+    saving = true;
+    const refresh = redraw;
+    redraw = false;
+    try {
+      await json("/api/settings", settingsPayload(form), "PUT");
+      if (refresh) await loadSettings();
+      refreshServices(true);   // a probe can be slow; never hold up the next save
+      show("Saved automatically at " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    } catch (error) {
+      show("Not saved: " + error.message + " Change the setting again to retry.");
+    } finally {
+      saving = false;
+      if (queued) { queued = false; timer = setTimeout(flush, 0); }
+    }
+  };
+  const schedule = delay => { clearTimeout(timer); show("Saving…"); timer = setTimeout(flush, delay); };
+  form.addEventListener("change", event => {
+    if (!event.target.name) return;
+    redraw ||= redrawsForm(event.target.name);
+    schedule(600);
   });
+  form.onsubmit = event => { event.preventDefault(); schedule(0); };   // Enter in a field saves right away
+}
+
+export function initSettingsAndPicker() {
+  initSettingsAutosave($("#settings-form"));
+
+  $("#key-form").onsubmit = event => event.preventDefault();
 
   const pickerFilter = $("#picker-filter");
   if (pickerFilter) pickerFilter.oninput = () => renderPickerEntries();

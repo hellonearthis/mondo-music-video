@@ -14,7 +14,7 @@ from pathlib import Path
 
 AGENT_SETTINGS = {
     "auto_updates", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
-    "vision_url", "vision_model", "vision_call_estimate", "laya_model_dir", "laya_device", "h3_models",
+    "vision_url", "vision_model", "vision_call_estimate", "laya_model_dir", "laya_device", "h3_models", "workflow_preset",
     "writer_api_profile", "vision_api_profile", "video_api_profile", "comfy_url", "comfy_sdk_url",
 }
 
@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -75,9 +75,12 @@ class AgentClient:
         return result
 
     def preview(self, request):
-        if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest", "world_harvest"):
-            raise ValueError("Preview requires a music video, ident, style harvest or world harvest request object")
+        if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest", "world_harvest", "storyboard"):
+            raise ValueError("Preview requires a music video, ident, style harvest, world harvest or storyboard request object")
         return self._json("POST", "/api/quote", request)
+
+    def storyboard_result(self, run_id, raw_response=False):
+        return self._json("GET", "/api/storyboards/" + urllib.parse.quote(run_id, safe="") + ("/response" if raw_response else ""))
 
     def detect_lyrics(self, song, model="large-v3", use_vocals=True):
         """Start free local lyrics detection for an uploaded song; poll status, the lines arrive in its result."""
@@ -362,19 +365,35 @@ class AgentClient:
 
     def caption_video(self, source, lyric_lines=None, style="classic", position="bottom", size="medium",
                       color="", outline_color="", font=""):
+        """Rebuild captions from original sources; missing sources fail without re-encoding a final."""
         return self._json("POST", "/api/captions", {"source": source, "lyric_lines": lyric_lines or [], "style": style,
                                                     "position": position, "size": size, "color": color,
                                                     "outline_color": outline_color, "font": font})
 
-    def upscale(self, source, model="ahq-12", scale=2):
-        return self._json("POST", "/api/upscale", {"source": source, "model": model, "scale": scale})
+    def upscale_models(self):
+        return self._json("GET", "/api/upscale/models")
+
+    def upscale_estimate(self, source, model="ahq-12", scale=2, options=None):
+        return self._json("POST", "/api/upscale/estimate",
+                          {"source": source, "model": model, "scale": scale, **({"options": options} if options else {})})
+
+    def upscale(self, source, model="ahq-12", scale=2, max_credits=None, options=None):
+        body = {"source": source, "model": model, "scale": scale}
+        if options:
+            body["options"] = options
+        if max_credits:
+            body["max_credits"] = max_credits
+        return self._json("POST", "/api/upscale", body)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
+    storyboard_parser = sub.add_parser("storyboard-result")
+    storyboard_parser.add_argument("run_id")
+    storyboard_parser.add_argument("--raw-response", action="store_true")
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
@@ -412,6 +431,17 @@ def main(argv=None):
         confirmed = sub.add_parser(name)
         confirmed.add_argument("id")
         confirmed.add_argument("--confirm", action="store_true")
+    sub.add_parser("upscale-models")
+    for name in ("upscale-estimate", "upscale"):
+        topaz = sub.add_parser(name)
+        topaz.add_argument("source", help="Finished output file, e.g. <run id>/music-video.mp4")
+        topaz.add_argument("--model", default="ahq-12")
+        topaz.add_argument("--scale", type=int, choices=(1, 2, 4), default=2)
+        topaz.add_argument("--options", default=None, metavar="JSON",
+                           help='Topaz cloud only, e.g. \'{"interpolation": {"model": "apo-8", "fps": 60}}\'; model "none" = frame rate only')
+        if name == "upscale":
+            topaz.add_argument("--max-credits", type=int, default=None,
+                               help="Topaz cloud only: the highest credits the user approved from upscale-estimate")
     profile = sub.add_parser("select-api-profile")
     profile.add_argument("name")
     download = sub.add_parser("download")
@@ -436,7 +466,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         client = AgentClient(args.url)
-        if args.command == "upload":
+        if args.command == "storyboard-result":
+            result = client.storyboard_result(args.run_id, args.raw_response)
+        elif args.command == "upload":
             result = client.upload(args.kind, args.path)
         elif args.command == "preview":
             result = client.preview(json.loads(Path(args.request_file).read_text(encoding="utf-8")))
@@ -450,6 +482,12 @@ def main(argv=None):
             result = client.log(args.run_id)
         elif args.command == "download":
             result = client.download(args.output_file, args.destination)
+        elif args.command == "upscale-estimate":
+            result = client.upscale_estimate(args.source, args.model, args.scale, json.loads(args.options or "null"))
+        elif args.command == "upscale":
+            result = client.upscale(args.source, args.model, args.scale, args.max_credits, json.loads(args.options or "null"))
+        elif args.command == "upscale-models":
+            result = client.upscale_models()
         elif args.command == "cancel":
             result = client.cancel()
         elif args.command == "delete-actor":

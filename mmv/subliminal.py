@@ -1,7 +1,7 @@
 """Subliminal message mode: a few frames of a chosen picture or of words flashed into the finished video.
 
-Applied after assembly with FFmpeg, outside the original engine. The finished video keeps its exact frame count, duration and
-audio (the audio stream is copied, never re-encoded); the untouched video is kept next to it as music-video-clean.mp4.
+Each variant is assembled from original clips with the same export settings.
+The version without flashes is kept next to it as music-video-clean.mp4.
 Flashes are brief by design, so they are kept at least a second apart and at most MAX_FRAMES long (photosensitivity).
 """
 from __future__ import annotations
@@ -142,43 +142,18 @@ def _count_frames(path):
     return _probe(path)[:3]
 
 
-def apply(source, target, picture, starts, frames):
-    """Overlay the picture on the given frame ranges. Audio is copied; frame count and duration are unchanged."""
-    enable = '+'.join(f'between(n,{s},{s + frames - 1})' for s in starts)
-    _, width, height, rate = _probe(source)
-    graph = (f'[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},format=yuv420p[flash];'
-             f"[0:v][flash]overlay=enable='{enable}':shortest=1[v]")
-    done = subprocess.run(['ffmpeg', '-nostdin', '-y', '-v', 'error', '-i', str(source), '-framerate', rate, '-loop', '1', '-i', str(picture),      # the picture must run at the video's own rate
-                           '-filter_complex', graph,
-                           '-map', '[v]', '-map', '0:a?', '-c:v', 'libx264', '-crf', '12', '-preset', 'medium', '-pix_fmt', 'yuv420p',
-                           '-c:a', 'copy', str(target)], capture_output=True, text=True, timeout=1800)
-    if done.returncode:
-        raise ValueError('The subliminal flash could not be applied: ' + done.stderr[-300:])
-    return target
-
-
 def apply_to_run(store, directory, plan):
-    """Flash the finished video in place, keeping the untouched one as music-video-clean.mp4. Returns a short result record.
-
-    The finished video is never modified until the new one has passed a frame-count check, and then it is replaced atomically;
-    on any failure it is left exactly as it was."""
+    """Assemble a flashed variant from the saved sources; preserve the clean print."""
+    from . import final_assembly
+    from .storage import write_json
+    import tempfile
     final, clean_copy = directory / 'music-video.mp4', directory / 'music-video-clean.mp4'
-    work = directory / 'subliminal-work'
-    work.mkdir(exist_ok=True)
-    try:
-        before, width, height = _count_frames(final)
-        if plan['mode'] == 'text':
-            picture = text_png(plan['text'], width, height, work / 'flash.png')
-        else:
-            picture = inside(store.home / 'uploads', plan['image'])
-        out = apply(final, work / 'flashed.mp4', picture, plan['starts'], plan['frames'])
-        after, _, _ = _count_frames(out)
-        if after != before:
-            raise ValueError(f'The flashed video has {after} frames instead of {before}; keeping the clean video')
-        staged = work / 'clean.mp4'
+    recipe = final_assembly.with_flash(store, directory, final_assembly.load_recipe(store, directory), plan)
+    with tempfile.TemporaryDirectory(prefix='subliminal-', dir=directory) as temp:
+        out = final_assembly.render(recipe, Path(temp) / 'flashed.mp4')
+        staged = Path(temp) / 'clean.mp4'
         shutil.copy2(final, staged)
-        staged.replace(clean_copy)              # the untouched video first, atomically (same folder tree, so a plain rename)
+        staged.replace(clean_copy)
         out.replace(final)
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
+    write_json(directory / final_assembly.RECIPE, recipe)
     return {'mode': plan['mode'], 'frames': plan['frames'], 'times': plan['times'], 'clean_copy': clean_copy.name}

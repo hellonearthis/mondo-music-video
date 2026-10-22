@@ -138,6 +138,11 @@ To use a world in a video, add `"world_id": "salt-archive"` and optionally
 `"world_pool_mode": "replace"` (only the world's terms, the default) or
 `"append"` (add to the standard pools) to a video request.
 
+Optional contrast worlds: `"world_contrast": {"mirror": "id", "opposite": "id", "tangent": "id"}` (any subset) and
+`"world_contrast_strength": 0-100` (default 50). High-energy shots then take settings, lighting, mechanisms and tonal
+registers from those worlds; cast, wardrobe and subject slots are never changed. Requires `world_id`. Off by default.
+The preview reports `world_contrast` (shots that depart and the roles used).
+
 ## Start, observe, export
 
 The preview returns `id`, `estimate_usd`, `paid`, clip count, duration and notes.
@@ -178,3 +183,30 @@ string/fret contact before normal schema, motion, instrument and Laya checks.
 The private operation log and `segNNN.instrument-repair-N.json` identify edited
 shots; the original writer JSON is preserved. Wrong-instrument gestures and
 ambiguous clauses still fail validation. No extra paid writer call is made.
+
+## Storyboarding
+
+Storyboards are optional for music videos and idents. Upload source images as
+`reference`, preview `kind: "storyboard"` with `storyboard: {mode: "narrative", images: [UPLOAD_ID]}`,
+review cost and start only with authorization. Poll status, list `storyboards`, then
+read `inspect_storyboard(run_id)` (CLI `storyboard-result RUN_ID`). Edit/reorder
+`panels: [{image, direction}]` before adding the result as `storyboard` with
+`enabled: true` to a video/ident preview. Modes are `narrative` (default) and `visual`.
+Text-only panels use empty image IDs. Inspect returned `storyboard.passages` timing
+before start. No automatic interpretation retry; recover completed results by run ID,
+and inspect logs before making another call. Inspect raw model output with
+`inspect_storyboard(run_id, raw_response=true)` or CLI `storyboard-result RUN_ID --raw-response`. Existing video resume binds the saved
+alignment to prompts. Ident `ident_all_references: true` uses all attached references
+within renderer limits; false preserves one-reference casting. Source storyboards
+remain private. See docs/STORYBOARDS.md in the checkout for the full workflow.
+
+Final export quality: each clean, subliminal and captioned version is independently
+assembled from original clips in one FFmpeg video encode (H.264 CRF 6, slow).
+Flashes and captions share that assembly pass. `caption_video` / the existing caption
+API rebuilds from saved original sources, retaining flashes and replacing caption
+filters. Missing originals cause an error; restore the clips, song and saved run
+metadata, then submit the caption job again. It never regenerates clips or makes paid
+calls. Inspect job status and `output.json` for warnings and download names; production
+preview/start/resume and consent remain unchanged. Keep `assembly-source.json`,
+`assembly-assets/`, original clips and the song for later reconstruction. Topaz
+upscaling is the explicit user-requested exception and still uses the selected final.

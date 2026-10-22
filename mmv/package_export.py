@@ -86,8 +86,9 @@ def public_instrument_receipt(value):
         return value
     result = {key: public_instrument_receipt(item) for key, item in value.items()}
     if result.get('world_id'):
-        for key in ('world_id', 'world_pool_mode', 'custom_vocabulary'):
+        for key in ('world_id', 'world_pool_mode', 'custom_vocabulary', 'world_contrast', 'world_contrast_strength', 'world_departures'):
             result.pop(key, None)  # A private world's identity and its derived pools stay out of shared receipts.
+    result.pop('storyboard', None)  # Private board text and uploaded source filenames are not demo receipts.
     result.pop('instrument_props', None)
     result.pop('instrument_prop_uses', None)
     if isinstance(result.get('instruments'), dict):
@@ -293,7 +294,8 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
         pack.put(file, f'01_final/assembly_{file.name}')
     for file in sorted((run / 'assembly').glob('*.wav')):
         pack.put(file, f'01_final/assembly_{file.name}')
-    pack.put(run / 'assembly' / 'work' / 'picture.mp4', '01_final/picture_only_no_audio_mix.mp4')
+    if (run / 'assembly' / 'work' / 'picture.mp4').is_file():
+        pack.put(run / 'assembly' / 'work' / 'picture.mp4', '01_final/picture_only_no_audio_mix.mp4')
     if not list((out / '01_final').glob('music-video.mp4')):
         pack.absent.append('01_final/music-video.mp4 (run has no finished video)')
 

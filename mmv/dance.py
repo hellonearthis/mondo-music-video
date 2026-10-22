@@ -244,12 +244,12 @@ def refs(passage):
 MOVE = re.compile(r"\b(danc\w*|sway\w*|step\w*|spin\w*|spun|turn\w*|twirl\w*|jump\w*|hop\w*|bounc\w*|bob\w*|nod\w*|stomp\w*|"
                   r"shuffl\w*|groov\w*|rock\w*|shak\w*|wiggl\w*|kick\w*|clap\w*|snap\w*|pump\w*|lean\w*|swing\w*|roll\w*|"
                   r"strut\w*|mov\w*|thrust\w*|slid\w*|glid\w*|wav\w*|reach\w*|raise\w*|lift\w*|drop\w*|duck\w*|crouch\w*|squat\w*|"
-                  r"dip\w*|bend\w*|sink\w*|stretch\w*|float\w*|twist\w*|tilt\w*|bow\w*|flick\w*|stamp\w*|sweep\w*|whirl\w*)\b", re.I)
+                  r"dip\w*|bend\w*|sink\w*|stretch\w*|float\w*|twist\w*|tilt\w*|bow\w*|flick\w*|stamp\w*|sweep\w*|whirl\w*|lung\w*|footwork)\b", re.I)
 HOLD = re.compile(r"\b(hold\w*|held|freez\w*|froze|pose[sd]?|posing|paus\w*|slow\w*|sustain\w*|lock\w*)\b", re.I)
 STILL = re.compile(r"\b(stand\w*|stood|motionless|still|stationary|idle|static)\b", re.I)
 FOLLOW = re.compile(r"\b(follow\w*|mirror\w*|in step|in unison|together|same|repeat\w*|copy\w*|copies|match\w*|in sync)\b", re.I)
 EMPHASIS = re.compile(r"\b(hit|hits|snap\w*|drop\w*|jump\w*|stomp\w*|accent\w*|freez\w*|froze|frozen|hold\w*|held|pose[sd]?|pop\w*|burst\w*|slam\w*|big|"
-                      r"sharp|punch\w*|lock\w*)\b", re.I)
+                      r"sharp|punch\w*|lock\w*|lung\w*|sweep\w*|surg\w*|thrust\w*|kick\w*|stamp\w*|strik\w*)\b", re.I)
 FRANTIC = re.compile(r"\b(frantic\w*|violent\w*|wild\w*|furious\w*|manic|thrash\w*|flail\w*)\b", re.I)
 
 
@@ -260,13 +260,24 @@ MOUTH = re.compile(r"\b(lips?|jaws?|mouths?|snouts?|facial|lip-sync|babbling|bea
 PLURAL_START = re.compile(r"^(they|their|them)\b", re.I)
 _QUOTED = re.compile(r"\"[^\"]*\"|\u201c[^\u201d]*\u201d|(?<!\w)'[^']*'(?!\w)")
 MOVEMENT_WORDS = {
-    'vertical': re.compile(r'\b(bounc\w*|jump\w*|hop\w*|crouch\w*|squat\w*|rais\w*|lower\w*)\b', re.I),
-    'lateral': re.compile(r'\b(step\w*|shuffl\w*|sideways|lateral\w*|side[- ]to[- ]side|side[- ]lunge\w*)\b', re.I),
-    'rotation': re.compile(r'\b(twist\w*|rotat\w*|pivot\w*|swivel\w*|turn\w*|torsion)\b', re.I),
+    'vertical': re.compile(r'\b(bounc\w*|jump\w*|hop\w*|crouch\w*|squat\w*|rais\w*|lower\w*|vertical\w*|flex\w*|extend\w*|'
+                           r'ris(?:e|es|ing)|rose|fall\w*|sink\w*|dip\w*|pulse\w*|spring\w*|up and down)\b', re.I),
+    'lateral': re.compile(r'\b(step\w*|shuffl\w*|sideways|lateral\w*|side[- ]to[- ]side|side[- ]lunge\w*|slid\w*|glid\w*|'
+                          r'weight (?:shift\w*|transfer\w*)|shift\w* (?:her |his |their |the )?weight|cross\w*|travers\w*)\b', re.I),
+    'rotation': re.compile(r'\b(twist\w*|rotat\w*|pivot\w*|swivel\w*|turn\w*|torsion|spin\w*|twirl\w*|whirl\w*|torso)\b', re.I),
 }
 SHARED_CHOREOGRAPHY = re.compile(r'\b(in unison|identical (?:dance|moves?|groove|steps?)|same (?:dance|moves?|groove|steps?)|'
                                  r'dance lead(?:er)?|as (?:the )?lead(?:er)?)\b', re.I)
 COPY_ACTION = re.compile(r'\b(mirrors?|mirroring|mirrored|copy\w*|copies|follow\w*|in step with|together with)\s+', re.I)
+
+
+def _dancing_text(sentence, independent):
+    """The part of a sentence that can describe dancing. The sealed-lips clauses describe faces ("her face is perfectly still"), so they are
+    dropped; the rest of a group-mode sentence counts only if it shows a move or hold. Independent mode keeps a mouth sentence only if it has a move word."""
+    if not MOUTH.search(sentence) or (independent and MOVE.search(sentence)):
+        return sentence
+    rest = '' if independent else ', '.join(c.strip(' ,;') for c in re.split(r'(?<=[,;])\s+', sentence) if not MOUTH.search(c))
+    return rest if MOVE.search(rest) or HOLD.search(rest) else ''
 
 
 def _dancer_sentences(body, passage, independent=False):
@@ -281,8 +292,9 @@ def _dancer_sentences(body, passage, independent=False):
         body = re.sub(r'(?:[,;]\s*|\b(?:while|whereas)\s+)(?=(?:' + targets + '))', '\n', body)
     out, previous = {i: [] for i in range(len(keys))}, []
     for sentence in (s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", _QUOTED.sub(' ', body)) if s.strip()):
-        if MOUTH.search(sentence) and (not independent or not MOVE.search(sentence)):
-            continue                                       # the sealed-lips sentences describe faces, not dancing ("her face is perfectly still")
+        shown = _dancing_text(sentence, independent)
+        if not shown:
+            continue
         named = [i for i, refs in enumerate(keys) if any(r in sentence for r in refs)
                  or (passage['dancers'][i].get('display_name') and re.search(
                      r'(?<!\w)' + re.escape(passage['dancers'][i]['display_name']) + r'(?!\w)', sentence, re.I))]
@@ -292,8 +304,8 @@ def _dancer_sentences(body, passage, independent=False):
         if OUT.search(sentence):
             continue                                       # absent or off screen: not visible because of this sentence
         for i in named:
-            action = re.sub(r'\b(?:without|no) (?:stopping|paus\w*)\b', '', sentence, flags=re.I) if independent else sentence
-            out[i].append((sentence, not NEGATION.search(action)))      # a negated sentence shows the dancer but is no action
+            action = re.sub(r'\b(?:without|no) (?:stopping|paus\w*)\b', '', shown, flags=re.I) if independent else shown
+            out[i].append((shown, not NEGATION.search(action)))      # a negated sentence shows the dancer but is no action
     return out
 
 
@@ -304,6 +316,11 @@ def is_soft(problem):
     """Style advice (follow the lead, downbeat accent, calm wording): on the last attempt the writer may keep these. Missing body
     action, a dancer described as merely standing and a wrong shot count are never soft."""
     return bool(SOFT.search(problem)) and 'merely standing' not in problem and 'describe what' not in problem
+
+
+def is_blocking(problem):
+    """Only a wrong shot count stops a prompt. Everything else dance_problems finds is style advice for Laya's review, never a rewrite."""
+    return problem.startswith('Expected ')
 
 
 def dance_problems(prompt, shot_bodies, segment, passage, plan):

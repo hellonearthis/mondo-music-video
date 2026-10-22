@@ -1,0 +1,75 @@
+{
+  "_note": "FastH3 Omni 8-step reference-to-video (FastVideo/FastH3-Omni-Comfy). Same node layout as injection_map.json; no LoRA nodes. default_steps replaces the 20-step default.",
+  "workflow": "workflows/fasth3_omniref_bf16.json",
+  "targets": {
+    "prompt": {
+      "node": "138",
+      "field": "value"
+    },
+    "duration_input": {
+      "node": "132",
+      "field": "value"
+    },
+    "seed": {
+      "node": "129",
+      "field": "noise_seed"
+    },
+    "width": {
+      "node": "136",
+      "field": "width"
+    },
+    "height": {
+      "node": "136",
+      "field": "height"
+    },
+    "steps": {
+      "node": "124",
+      "field": "steps"
+    },
+    "sampler": {
+      "node": "123",
+      "field": "sampler_name"
+    },
+    "scheduler": {
+      "node": "124",
+      "field": "scheduler"
+    },
+    "video_prefix": {
+      "node": "148",
+      "field": "filename_prefix"
+    },
+    "audio_prefix": {
+      "node": "147",
+      "field": "filename_prefix"
+    },
+    "savevideo_prefix": {
+      "node": "92",
+      "field": "filename_prefix"
+    }
+  },
+  "reference_node": "136",
+  "audio_refs": {
+    "socket_prefix": "ref_audios.ref_audio_",
+    "loader_class": "LoadAudio",
+    "loader_field": "audio",
+    "template_node": "149",
+    "max": 3
+  },
+  "image_refs": {
+    "socket_prefix": "ref_images.ref_image_",
+    "loader_class": "LoadImage",
+    "loader_field": "image",
+    "template_node": "137",
+    "max": 9
+  },
+  "video_refs": {
+    "socket_prefix": "ref_videos.ref_video_",
+    "max": 3
+  },
+  "prune_nodes": [
+    "115"
+  ],
+  "_prune_note": "ResolutionSelector is orphaned once width/height are written as literals, which is what allows arbitrary aspect ratios instead of the dropdown's presets.",
+  "node_id_base": 9000,
+  "default_steps": 8
+}

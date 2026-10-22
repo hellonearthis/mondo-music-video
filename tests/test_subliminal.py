@@ -4,7 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mmv import subliminal
+from mmv import subliminal, final_assembly
+from assembly_fixtures import source_recipe
 
 FFMPEG = shutil.which('ffmpeg')
 
@@ -110,7 +111,10 @@ class SubliminalVideoTests(unittest.TestCase):
             video(source)
             from PIL import Image
             Image.new('RGB', (320, 180), (255, 0, 0)).save(flash)
-            subliminal.apply(source, out, flash, [48, 96], 2)
+            recipe = {'clips': [{'path': str(source), 'frames': 144}], 'frames': 144, 'width': 128, 'height': 72,
+                      'fps': 24, 'audio': [{'path': str(source), 'frames': 144}],
+                      'flash': {'picture': str(flash), 'starts': [48, 96], 'frames': 2}}
+            final_assembly.render(recipe, out)
             self.assertEqual(subliminal._count_frames(out)[0], subliminal._count_frames(source)[0])
             for index in (48, 49, 96, 97):
                 r, g, b = frame_color(out, index, temp)
@@ -133,7 +137,7 @@ class SubliminalVideoTests(unittest.TestCase):
             store = Storage(temp / 'data')
             run = temp / 'run'
             run.mkdir()
-            video(run / 'music-video.mp4')
+            source_recipe(run, video)
             original = (run / 'music-video.mp4').read_bytes()
             plan = subliminal.plan_run({'mode': 'text', 'text': 'GOOSE', 'times': [2.0], 'frames': 2}, 24, 144, [], 0, store.home / 'uploads')
             record = subliminal.apply_to_run(store, run, plan)
@@ -147,10 +151,8 @@ class SubliminalVideoTests(unittest.TestCase):
             (run / 'music-video-clean.mp4').unlink()
             (run / 'music-video.mp4').write_bytes(original)
             for failing in ({**plan, 'mode': 'image', 'image': 'gone.png'}, plan):
-                real = subliminal._count_frames
-                counts = iter([(144, 128, 72), (143, 128, 72)])               # the flashed video loses a frame
                 with self.subTest(failing=failing['mode']):
-                    with patch.object(subliminal, '_count_frames', side_effect=lambda path, real=real: next(counts) if failing is plan else real(path)):
+                    with patch('mmv.engine.assemble.probe_frames', return_value=143):
                         with self.assertRaises(Exception):
                             subliminal.apply_to_run(store, run, failing)
                     self.assertEqual((run / 'music-video.mp4').read_bytes(), original)

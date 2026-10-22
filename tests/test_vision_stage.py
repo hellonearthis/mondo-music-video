@@ -205,7 +205,7 @@ def production(tmp_path, monkeypatch):
     backend.cost_for.return_value = 0
     monkeypatch.setattr('mmv.render.get_backend', Mock(return_value=backend))
     monkeypatch.setattr('mmv.engine.assemble.probe_frames', Mock(return_value=48))
-    monkeypatch.setattr('mmv.engine.assemble.assemble_run', Mock(return_value={'video': str(video)}))
+    monkeypatch.setattr('mmv.final_assembly.assemble', Mock(return_value=video))
     monkeypatch.setattr('mmv.media.duration', Mock(return_value=2))
     monkeypatch.setattr('mmv.quality.inspect_clip', Mock(return_value={'status': 'pass', 'problems': []}))
     monkeypatch.setattr(runtime, 'http_ok', Mock(return_value=False))
@@ -334,7 +334,7 @@ def test_mcp_discovery_documents_vision_flag():
             client.return_value.preview.return_value = {'id': 'reviewed-quote'}
             server = create_server()
             tools = await server.list_tools()
-            assert len(tools) == 51
+            assert len(tools) == 54
             preview = next(t for t in tools if t.name == 'preview_production')
             assert 'vision_quality_check' in preview.description
             assert 'paid re-renders require consent' in preview.description

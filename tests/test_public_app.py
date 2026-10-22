@@ -426,25 +426,40 @@ class PublicAppTests(unittest.TestCase):
 
     def test_sidebar_tab_order_and_numbering(self):
         import re
-        html = (Path(__file__).resolve().parents[1] / "webapp" / "index.html").read_text(encoding="utf-8")
+        html = (Path(__file__).resolve().parents[1] / "webapp" / "index.html").read_text()
         tabs = re.findall(r'<button class="nav[^"]*" data-panel="(\w+)".*?<span>(\d\d)</span>', html)
         self.assertEqual([k for k, _ in tabs], ["video", "idents", "actors", "styles", "harvest", "vocab", "worlds", "outputs", "settings"])
         self.assertEqual([n for _, n in tabs], ["%02d" % i for i in range(1, len(tabs) + 1)])
+        eyebrows = dict(re.findall(r'<section id="panel-(\w+)"[^>]*><div[^>]*class="eyebrow"[^>]*>(\d\d) /', html))
+        self.assertEqual(eyebrows, dict(tabs))
 
     def test_version_matches_package_and_readme(self):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.2")
+        self.assertEqual(api_version()["version"], "1.10.9")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.2", (root / "README.md").read_text())
+        self.assertIn("1.10.9", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
+
+    def test_quick_start_button_dialog_and_endpoint(self):
+        html = self.client.get("/").text
+        self.assertIn('id="quick-start"', html)
+        self.assertIn('id="quick-start-dialog"', html)
+        self.assertIn("Select a song to begin", html)
+        self.assertLess(html.index('id="quick-start"'), html.index('class="song-input"'))
+        self.assertEqual(self.client.get("/js/quick_start.js").status_code, 200)
+        self.assertIn('id="start-fresh"', html)
+        self.assertIn('id="start-fresh-dialog"', html)
+        plan = self.client.get("/api/quick-start").json()
+        self.assertIn(plan["dance_mode"], ("off", "group"))
+        self.assertEqual(plan["dancers"], plan["actors"] if plan["dance_mode"] == "group" else [])
 
     def test_frontend_es_modules_served_and_protected(self):
         app_res = self.client.get("/app.js")
         self.assertEqual(app_res.status_code, 200)
         self.assertIn("text/javascript", app_res.headers["content-type"])
-        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocab-model.js", "vocabulary.js", "component_labeling.js", "markdown.js", "file_drop.js", "worlds.js", "vocab-worlds.js"):
+        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocab-model.js", "vocabulary.js", "component_labeling.js", "markdown.js"):
             res = self.client.get(f"/js/{mod}")
             self.assertEqual(res.status_code, 200, mod)
             self.assertIn("text/javascript", res.headers["content-type"])
@@ -617,7 +632,6 @@ class PublicAppTests(unittest.TestCase):
             "files": {"video-form": {"song": "test.wav", "references": []}},
             "details_open": True,
             "details_sections": {"director-camera": True, "director-render": False},
-            "thematic_worlds": {"mode": "guided", "slider": 50, "activeWorlds": ["Bureaucratic / Carceral"]},
             "log_open": False
         }
         res = self.client.put("/api/project", json=project)
@@ -628,7 +642,6 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(got["forms"]["video-form"]["title"], "My Track")
         self.assertTrue(got["details_open"])
         self.assertEqual(got["details_sections"], project["details_sections"])
-        self.assertEqual(got.get("thematic_worlds"), project["thematic_worlds"])
 
     def test_clear_log_endpoint(self):
         studio_log = self.home / "studio.log"
@@ -1251,8 +1264,8 @@ class PublicAppTests(unittest.TestCase):
                                               'uncaptioned_copy': 'music-video-uncaptioned.mp4'})
         self.assertEqual(output['subliminal']['clean_copy'], 'music-video-clean.mp4')
         self.assertNotIn('quality_warnings', output)
-        from mmv import captions as caption_module
-        self.assertEqual(caption_module._probe_size(run / 'music-video.mp4')[2], caption_module._probe_size(run / 'music-video-uncaptioned.mp4')[2])
+        from mmv.engine.assemble import probe_frames
+        self.assertEqual(probe_frames(run / 'music-video.mp4'), probe_frames(run / 'music-video-uncaptioned.mp4'))
         for name, kind in (('lyrics.srt', 'application/x-subrip'), ('music-video-uncaptioned.mp4', 'video/mp4'), ('music-video-clean.mp4', 'video/mp4')):
             served = self.client.get(f'/api/media/{run.name}/{name}')
             self.assertEqual((served.status_code, served.headers['content-type']), (200, kind), name)
@@ -1268,7 +1281,6 @@ class PublicAppTests(unittest.TestCase):
         run = self.home / 'runs' / started.json()['id']
         original = (run / 'music-video.mp4').read_bytes()
         self.assertNotIn('captions', read_json(run / 'output.json'))
-        from mmv import captions as caption_module
         done = self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'})
         done.raise_for_status()
         status = self.wait()
@@ -1278,7 +1290,8 @@ class PublicAppTests(unittest.TestCase):
         record = read_json(new / 'output.json')
         self.assertEqual((record['kind'], record['file'], record['captions']['cues']), ('captioned', 'captioned.mp4', 1))
         self.assertEqual((run / 'music-video.mp4').read_bytes(), original)                    # the original is untouched
-        self.assertEqual(caption_module._probe_size(new / 'captioned.mp4')[2], caption_module._probe_size(run / 'music-video.mp4')[2])
+        from mmv.engine.assemble import probe_frames
+        self.assertEqual(probe_frames(new / 'captioned.mp4'), probe_frames(run / 'music-video.mp4'))
         self.assertNotEqual((new / 'captioned.mp4').read_bytes(), original)
         self.assertEqual(self.client.get(f'/api/media/{new.name}/lyrics.srt').status_code, 200)
         self.assertIn(new.name + '/captioned.mp4', [item['file'] for item in self.client.get('/api/outputs').json()])
@@ -1288,7 +1301,7 @@ class PublicAppTests(unittest.TestCase):
                 self.client.post('/api/captions', json={'source': source})
                 self.assertEqual(self.wait()['state'], 'failed')
 
-    def test_captioning_a_video_made_with_captions_starts_from_its_uncaptioned_copy_and_needs_lines(self):
+    def test_captioning_a_video_made_with_captions_starts_from_original_clips_and_needs_lines(self):
         song = self.song_upload()
         lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk honk', 'timing': 'matched'}]
         _, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'}})
@@ -1296,11 +1309,13 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(self.wait()['state'], 'complete')
         run = self.home / 'runs' / started.json()['id']
         from unittest import mock
-        from mmv import captions as caption_module
+        from mmv import final_assembly as caption_module
         with mock.patch.object(caption_module, 'render', wraps=caption_module.render) as spy:
             self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'}).raise_for_status()
             self.assertEqual(self.wait()['state'], 'complete')
-        self.assertEqual(spy.call_args.args[0].name, 'music-video-uncaptioned.mp4')
+        recipe = spy.call_args.args[0]
+        self.assertTrue(recipe['clips'])
+        self.assertTrue(all(Path(c['path']).name not in ('music-video.mp4', 'music-video-uncaptioned.mp4') for c in recipe['clips']))
         _, bare = self.start({'song': song})
         bare.raise_for_status()
         self.assertEqual(self.wait()['state'], 'complete')
@@ -1308,6 +1323,17 @@ class PublicAppTests(unittest.TestCase):
         failed = self.wait()
         self.assertEqual(failed['state'], 'failed')
         self.assertIn('no timed lyric lines', failed['message'])
+
+    def test_missing_ident_originals_are_refused_during_preview(self):
+        directory = self.home / 'runs' / 'lost-ident'
+        directory.mkdir()
+        (directory / 'ident.mp4').write_bytes(b'finished output is not a source')
+        write_json(directory / 'output.json', {'kind': 'ident', 'file': 'ident.mp4', 'duration': 1})
+        song = self.song_upload()
+        for key in ('start_ident', 'end_ident'):
+            response = self.client.post('/api/quote', json={'song': song, key: 'lost-ident/ident.mp4'})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('Original assembly sources', response.json()['detail'])
 
     def test_subliminal_flashes_are_planned_in_the_preview_and_applied_to_the_finished_video_keeping_a_clean_copy(self):
         song = self.song_upload()
@@ -1484,6 +1510,73 @@ class PublicAppTests(unittest.TestCase):
             result = self.wait()
         self.assertEqual(result["state"], "complete", result)
         self.assertTrue(any("tvai_up=model=ahq-12:scale=2" in str(x) for x in commands[0]))
+        self.assertEqual((self.home / "runs" / source).read_bytes(), original)
+        self.assertEqual(self.client.get("/api/outputs").json()[0]["kind"], "upscale")
+
+    def test_topaz_cloud_estimate_consent_and_download(self):
+        _, started = self.start({"song": self.song_upload()})
+        started.raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        source = self.client.get("/api/outputs").json()[0]["file"]
+        original = (self.home / "runs" / source).read_bytes()
+        settings = self.store.settings()
+        settings.update(topaz_backend="cloud")
+        self.client.put("/api/settings", json=settings).raise_for_status()
+        self.assertEqual(self.client.post("/api/upscale/estimate", json={"source": source}).status_code, 400)
+        self.client.put("/api/key", json={"name": "MMV_TOPAZ_API_KEY", "value": "topaz-test-key-123"}).raise_for_status()
+        self.assertTrue(self.client.get("/api/settings").json()["keys"]["MMV_TOPAZ_API_KEY"])
+        calls, state = [], {"price": 3, "status": "complete"}
+
+        def send(method, url, headers, body):
+            calls.append((method, url.split("topazlabs.com")[-1], headers.get("X-API-Key"), body))
+            path = calls[-1][1]
+            if method == "POST" and path == "/video/":
+                return 200, {}, json.dumps({"requestId": "req-1", "estimates": {"cost": [2, state["price"]], "time": [10, 20]}}).encode()
+            if path.endswith("/accept"):
+                return 202, {}, json.dumps({"uploadId": "u", "urls": ["https://upload.invalid/part"]}).encode()
+            if method == "PUT":
+                return 200, {"ETag": '"abc"'}, b""
+            if path.endswith("/complete-upload"):
+                return 202, {}, b"{}"
+            if path.endswith("/status"):
+                return 200, {}, json.dumps({"status": state["status"], "progress": 100,
+                                            "download": {"url": "https://download.invalid/out.mp4"}}).encode()
+            return 200, {}, b"{}"
+
+        def fetch(url, destination):
+            Path(destination).write_bytes(MockService.video)
+
+        with patch("mmv.topaz_api.send_http", send), patch("mmv.topaz_api.download_http", fetch):
+            quote = self.client.post("/api/upscale/estimate", json={"source": source, "model": "prob-4", "scale": 2})
+            quote.raise_for_status()
+            self.assertEqual(quote.json()["credits"], [2, 3])
+            self.assertFalse(any(c[0] in ("PATCH", "PUT") for c in calls), "an estimate must not reserve or upload")
+            for credits in (None, 1000000):
+                refused = self.client.post("/api/upscale", json={"source": source, "model": "prob-4", "scale": 2,
+                                                                 **({"max_credits": credits} if credits else {})})
+                self.assertEqual(refused.status_code, 400, "approval must match a displayed estimate")
+            self.assertFalse(any(c[0] == "PATCH" for c in calls))
+            state["price"] = 9
+            self.client.post("/api/upscale", json={"source": source, "model": "prob-4", "scale": 2, "max_credits": 3}).raise_for_status()
+            self.assertEqual(self.wait()["state"], "failed", "a price above the approved credits must stop before reserving")
+            self.assertFalse(any(c[0] == "PATCH" for c in calls))
+            state["price"] = 3
+            self.client.post("/api/upscale", json={"source": source, "model": "prob-4", "scale": 2, "max_credits": 3}).raise_for_status()
+            result = self.wait()
+            motion = {"source": source, "model": "none", "scale": 1,
+                      "options": {"interpolation": {"model": "apo-8", "fps": 60}}}
+            self.client.post("/api/upscale/estimate", json=motion).raise_for_status()
+            sent = json.loads([c for c in calls if c[1] == "/video/"][-1][3])
+            self.assertEqual(sent["filters"], [{"model": "apo-8", "fps": 60}])
+            self.assertEqual(self.client.post("/api/upscale", json={**motion, "max_credits": 3,
+                             "options": {"interpolation": {"model": "apo-8", "fps": 24}}}).status_code, 400,
+                             "approval is bound to the exact options estimated")
+            self.assertEqual(self.client.post("/api/upscale/estimate", json={**motion, "options": {"tuning": {"x": 1}}}).status_code, 422)
+        self.assertEqual(result["state"], "complete", result)
+        self.assertEqual([c[0] for c in calls if c[1].startswith("/video/req-1")].count("PATCH"), 2)
+        self.assertTrue(all(c[2] == "topaz-test-key-123" for c in calls if "topazlabs" not in c[1] and c[1].startswith("/video")))
+        create = json.loads([c for c in calls if c[1] == "/video/" and b"prob-4" in c[3]][-1][3])
+        self.assertEqual(create["filters"], [{"model": "prob-4"}])
         self.assertEqual((self.home / "runs" / source).read_bytes(), original)
         self.assertEqual(self.client.get("/api/outputs").json()[0]["kind"], "upscale")
 
@@ -1910,8 +2003,30 @@ class UtilityTests(unittest.TestCase):
             for bad in ({"nonsense": {"add": ["x"]}}, {"settings": {"mode": "replace", "add": []}}):
                 refused = client.post("/api/styles/import", json={**base, "vocabulary": bad, "overwrite": True})
                 self.assertEqual(refused.status_code, 400, refused.text)
+            long = {"settings": {"mode": "append", "add": ["x" * 301], "exclude": []}}
+            self.assertEqual(client.post("/api/styles/import", json={**base, "vocabulary": long, "overwrite": True}).status_code, 400)
             plain = client.post("/api/styles/import", json={**base, "overwrite": True})
             self.assertNotIn("vocabulary", plain.json())
+
+    def test_world_contrast_resolves_pools_and_stays_out_of_defaults(self):
+        from mmv import worlds
+        from webapp.mondo_web import ProductionRequest, request_dict, with_world
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            for wid, place in (("home", "salt pan"), ("away", "glass atrium")):
+                worlds.create(store, wid, {"id": wid, "name": wid.title(), "pools": {"settings": {"include": [place], "exclude": []}}})
+            plain = request_dict(ProductionRequest(song="s.wav", direction="d", world_id="home", world_contrast={"tangent": "away"}, world_contrast_strength=80))
+            self.assertEqual(plain["world_contrast"], {"tangent": "away"})
+            resolved = with_world(store, plain)
+            self.assertEqual(resolved["world_departures"], {"tangent": {"settings": ["glass atrium"]}})
+            self.assertEqual(ProductionRequest(**resolved).world_departures, resolved["world_departures"])   # resume and retry re-validate the stored request
+            self.assertNotIn("world_contrast", request_dict(ProductionRequest(song="s.wav", direction="d", world_id="home", world_contrast={"tangent": "away"}, world_contrast_strength=0)))
+            with self.assertRaises(ValueError):
+                ProductionRequest(song="s.wav", direction="d", world_id="home", world_contrast={"mirror": "home"})
+            off = request_dict(ProductionRequest(song="s.wav", direction="d", world_id="home"))
+            self.assertNotIn("world_contrast", off)
+            self.assertNotIn("world_departures", with_world(store, off))
+            self.assertNotIn("world_contrast", request_dict(ProductionRequest(song="s.wav", direction="d", world_contrast={"tangent": "away"})))
 
     def test_style_export_import_and_validation(self):
         with tempfile.TemporaryDirectory() as temp:

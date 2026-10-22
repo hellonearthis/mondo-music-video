@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.10.2** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.10.9** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -52,8 +52,11 @@ passage to its planned frames, joins the picture, and restores your original son
 - Your own visual styles, including styles harvested from reference images, plus
   six optional [style presets](examples/style-presets/README.md).
 - Animated production idents and opening or closing credits.
-- Lyric captions: a `lyrics.srt` file, or the words burned into the video, from your timed lyric lines; also addable to a finished video later as a new copy.
-- Finished videos to play, download, or upscale with your installed Topaz tools.
+- A big red **Just do the thing!** button: pick a song and it chooses the rest (random starter cast, optional dancing) and opens the preview for your approval. A quiet **Start fresh** link clears the panel.
+- Optional [storyboards](docs/STORYBOARDS.md) for music videos and idents: interpret images, edit ordered panels, and preview their timing.
+- Lyric captions: a `lyrics.srt` file, or the words burned into the video, from your timed lyric lines; later caption copies are rebuilt from the saved original clips.
+- Every clean, subliminal and captioned version uses one final FFmpeg encode directly from original clips at the same CRF-6 quality. Topaz upscaling is the explicit exception.
+- Finished videos to play, download, or upscale with your installed Topaz tools or the Topaz cloud service (your own Topaz API key; Topaz charges credits).
 
 Use local models or supported API providers. One production runs at a time,
 with progress, logs and cancellation. You provide your media, models and API

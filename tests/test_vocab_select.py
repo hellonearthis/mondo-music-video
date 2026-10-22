@@ -1,16 +1,8 @@
-"""Deterministic contextual vocabulary selection and tangent juxtaposition: pure, no services, no real data."""
+"""Deterministic contextual vocabulary selection: pure, no services, no real data."""
 import copy
-from dataclasses import dataclass
 
 from mmv import vocab_select as vs
 from mmv.pipeline import load_vocabulary
-
-
-def test_select_term_is_deterministic_and_position_bound():
-    table = [f"t{i}" for i in range(20)]
-    assert vs.select_term(table, 7, 1, 2) == vs.select_term(table, 7, 1, 2)
-    assert len({vs.select_term(table, 7, 1, shot) for shot in range(40)}) > 5
-    assert vs.select_term([], 7, 0, 0) == ''
 
 
 def test_contextual_vocabulary_is_pure_stable_and_narrowed():
@@ -35,56 +27,51 @@ def test_seed_changes_tiebreaks_but_never_empties_a_table():
     assert any(a[n] != b[n] for n in vs.ROTATION_TABLES if isinstance(vocab.get(n), list))
 
 
-def test_resolve_cluster_departure_tangents_and_mirrors():
-    # Low energy remains firmly at the core anchor
-    world, dep = vs.resolve_cluster_departure("Industrial Decay", energy=0.2, kappa=0.2, seed=42, section_idx=0, shot_idx=0)
-    assert world == "Industrial Decay"
-    assert dep == "core"
-
-    # High energy + high kappa triggers tangent, opposite, or mirror departure
-    departures = [
-        vs.resolve_cluster_departure("Industrial Decay", energy=0.95, kappa=0.9, seed=seed, section_idx=1, shot_idx=i)
-        for seed in range(5) for i in range(4)
-    ]
-    departure_types = {d[1] for d in departures}
-    clusters = {d[0] for d in departures}
-
-    assert "core" not in departure_types
-    assert {"tangent", "opposite", "mirror"} & departure_types
-    # Clinical / Medical is the tangent for Industrial Decay
-    assert "Clinical / Medical" in clusters or "Brutalist Concrete" in clusters or "Pastoral Nature" in clusters
+def _segment(index, energy, montage, shot_vocabs, anchor=None):
+    from mmv.engine.plan import Segment, Shot
+    shots = [Shot(n=i + 1, start_frame=0, frames=24, cut_time=None, camera='', shot_scale='', energy=energy, vocab=dict(v))
+             for i, v in enumerate(shot_vocabs)]
+    return Segment(index=index, song_start_frame=0, musical_frames=0, gen_frames=0, trim_frames=0, duration_input=0.0,
+                   montage_type=montage, section_index=0, section_label='', energy=energy, thematic_anchor=anchor,
+                   ref_image_slots=0, footage_anchor='', practical_effects='', rigging='', audio_slice_start_s=0.0,
+                   audio_slice_end_s=0.0, shots=shots)
 
 
-@dataclass
-class DummyShot:
-    n: int
-    energy: float
-    vocab: dict
+DEPARTURES = {role: {'settings': [f'{role} place {i}' for i in range(6)], 'lighting': [f'{role} light {i}' for i in range(6)],
+                     'mechanisms': [f'{role} device {i}' for i in range(6)]} for role in vs.ROLES}
 
 
-@dataclass
-class DummySegment:
-    energy: float
-    shots: list
+def test_pick_role_calm_stays_home_and_peak_departs():
+    assert all(vs.pick_role(vs.departure_score(0.3, 0.4, 50), d) is None for d in range(100))
+    assert {vs.pick_role(0.95, d) for d in range(100)} == {'tangent', 'opposite', 'mirror'}
+    assert {vs.pick_role(0.7, d) for d in range(100)} == {'mirror', 'tangent', None}
+    assert vs.departure_score(0.9, 0.9, 0) < vs.departure_score(0.9, 0.9, 100)
 
 
-def test_apply_contextual_shot_vocabulary():
-    shots = [DummyShot(n=1, energy=0.2, vocab={}), DummyShot(n=2, energy=0.9, vocab={})]
-    segments = [DummySegment(energy=0.8, shots=shots)]
-    vocab = {
-        "settings": ["concrete vault", "operating room", "rust mill"],
-        "mechanisms": ["hydraulic piston", "scalpel tray", "clock gear"],
-    }
-    thematic_worlds = {
-        "mode": "guided",
-        "activeWorlds": ["Industrial Decay"],
-        "juxtapositionSlider": 80,
-    }
+def test_departures_are_pure_deterministic_and_keep_slots():
+    rotating = [{'setting': 'a', 'subject_type': 's', 'mechanism': 'm', 'lighting': 'l', 'costume': 'c'},
+                {'setting': 'b', 'subject_type': 's', 'mechanism': 'm', 'lighting': 'l', 'costume': 'c'}]
+    segments = [_segment(0, 0.95, 'chaotic', rotating), _segment(1, 0.2, 'chaotic', rotating)]
+    before = copy.deepcopy(segments)
+    first = vs.plan_world_departures(segments, DEPARTURES, 5, 100)
+    assert segments == before and first == vs.plan_world_departures(segments, DEPARTURES, 5, 100)
+    assert first and all(s_idx == 0 for s_idx, _ in first)           # the calm passage never departs
+    for (s_idx, sh_idx), (role, vocab) in first.items():
+        assert set(vocab) == set(rotating[0])                           # no keys added
+        assert vocab['subject_type'] == 's' and vocab['costume'] == 'c' # cast-facing slots untouched
+        assert vocab['setting'].startswith(role)
+    assert vs.plan_world_departures(segments, {}, 5, 100) == {}
 
-    refined = vs.apply_contextual_shot_vocabulary(segments, vocab, seed=123, thematic_worlds=thematic_worlds)
-    assert len(refined) == 1
-    # Check that shot vocab has been deterministically populated
-    assert "setting" in refined[0].shots[0].vocab
-    assert "mechanism" in refined[0].shots[0].vocab
-    # Higher energy shot 2 should have departure metadata
-    assert "juxtaposition_departure" in refined[0].shots[1].vocab
+
+def test_held_passage_keeps_one_setting_and_anchor_mechanism():
+    held = [{'setting': 'a', 'mechanism': 'm', 'lighting': f'l{i}'} for i in range(4)]
+    result = vs.plan_world_departures([_segment(0, 1.0, 'standard', held, anchor='clock')], DEPARTURES, 9, 100)
+    assert len(result) == 4 and len({v['setting'] for _, v in result.values()}) == 1
+    assert {v['mechanism'] for _, v in result.values()} == {'m'}
+
+
+def test_single_configured_role_still_departs_at_moderate_energy():
+    shots = [{'setting': f's{i}', 'lighting': 'l'} for i in range(8)]
+    segments = [_segment(i, 0.75, 'chaotic', shots) for i in range(6)]
+    result = vs.plan_world_departures(segments, {'opposite': DEPARTURES['opposite']}, 3, 50)
+    assert result and {role for role, _ in result.values()} == {'opposite'}

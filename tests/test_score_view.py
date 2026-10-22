@@ -65,6 +65,12 @@ class ScoreViewTests(unittest.TestCase):
         self.assertEqual((score["offset"], score["song_end"]), (1.5, 5.5))
         self.assertEqual(score["passages"][1]["start"], 3.5)
 
+    def test_saved_source_timing_survives_deleted_ident_metadata(self):
+        directory = self.run_dir('source-timing', request={'start_ident': 'gone/ident.mp4'})
+        write_json(directory / 'assembly-source.json', {'song_start_frame': 36, 'fps': 24})
+        score = self.client.get('/api/outputs/source-timing/score').json()
+        self.assertEqual((score['offset'], score['song_end']), (1.5, 5.5))
+
     def test_refuses_idents_missing_analysis_and_unsafe_ids(self):
         self.run_dir("ident_only", kind="ident", analysis=False)
         self.run_dir("no_analysis", analysis=False)

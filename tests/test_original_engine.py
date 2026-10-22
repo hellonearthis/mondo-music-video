@@ -116,9 +116,10 @@ class OriginalEngineTests(unittest.TestCase):
 
     def test_no_nsfw_workflow_or_controls(self):
         workflows=list((ROOT/'mmv/engine/workflows').glob('*.json'))
-        self.assertEqual(len(workflows),1)
-        graph=json.loads(workflows[0].read_text())
-        self.assertFalse(any('lora' in n.get('class_type','').lower() for n in graph.values()))
+        self.assertIn('h3_ref2video_audionodeadded.json',{w.name for w in workflows})
+        for workflow in workflows:
+            graph=json.loads(workflow.read_text())
+            self.assertFalse(any('lora' in n.get('class_type','').lower() for n in graph.values()),workflow.name)
         for file in ('webapp/index.html','webapp/mondo_web.py'):
             self.assertNotIn('nsfw_local',(ROOT/file).read_text(encoding='utf-8'))
 

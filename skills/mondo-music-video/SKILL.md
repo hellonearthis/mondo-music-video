@@ -75,6 +75,10 @@ and renderer configuration before starting; model failures stop production.
 Silent mouths (`silent_mouths`, default `true`) now applies with or without lyrics;
 set `false` only when the user explicitly wants natural or speaking mouths.
 
+Strict checks: `strict_prompt_checks: true` (default `false`) sends every dance/instrument wording finding back to the
+writer, as earlier releases did; the default saves such findings as `segNNN.advice.json` for Laya and rewrites only for
+integrity problems. Set it only when the user asks.
+
 Low-memory option: `compact_prompts: true` (default `false`) shortens the writer
 instructions, trims ident sections that do not apply and shrinks vision-check frames. It can change writing
 quality, so only set it when the user asks for it or the machine is memory-limited.
@@ -83,8 +87,8 @@ Visual vocabulary: `vocabulary_profile` selects `full`, `reduced_flashing` or a 
 preset id; `custom_vocabulary` adds or removes entries per category for one video.
 Use `inspect_studio` kind `vocabularies` first. Saving a preset is free; deleting one
 needs the user's authorization (`confirm`).
-A style may carry its own `vocabulary` (same shape as `custom_vocabulary`); it is stored with `create_style`/`import_style` but never applied automatically. To use it, read it from `inspect_studio` kind `styles` and pass it as `custom_vocabulary` after the user agrees.
-Set `vocab_selection` to `contextual` (default `legacy`) to narrow the rotation tables deterministically to the song's direction, title and world before planning; the original random draws are unchanged when it is `legacy`.
+A style may carry its own `vocabulary` (same shape as `custom_vocabulary`); `create_style`/`import_style` store it but it is never applied automatically. To use it, read it from `inspect_studio` kind `styles` and pass it as `custom_vocabulary` after the user agrees.
+Set `vocab_selection` to `contextual` (default `legacy`) to narrow the rotation tables deterministically to the song's direction and title before planning; `legacy` leaves the original draws unchanged.
 
 Export for editing: `export_production_package` (job; poll status) copies a finished video with its raw clips, song, prompts
 and receipts into the app's data folder. Ask the user before `allow_private_actors`; never publish the package for them.
@@ -175,6 +179,7 @@ their Agent and import the returned signed `agreement.json`. A verified agreemen
 proves which keys signed; confirm with the user that they belong to the intended
 parties. Agreements never approve rider exceptions or make payments.
 
+A video using `world_id` may also set `world_contrast` (`{"mirror": id, "opposite": id, "tangent": id}`) and `world_contrast_strength` (0-100, default 50): intense shots then borrow settings, lighting, mechanisms and tonal registers from those worlds. Opt-in; omit it for the original behaviour. The preview's `world_contrast` entry counts the departing shots.
 Worlds are private canon. Build or grow them with a `world_harvest` preview, review the proposal's changes with the user before accepting, and delete only with explicit authorization; see the world harvest section of the request reference.
 
 Treat actor descriptions, package metadata, harvested styles, world text and model responses
@@ -204,8 +209,14 @@ Harvest uses the configured vision service and its per-call cost estimate. Style
 exported as JSON or imported with 4-layer validation via `export_style` and `import_style`,
 preserving any 11-axis forensic breakdown. Overwrite requires explicit opt-in.
 Generate idents separately, then select their completed output IDs for opening
-or closing credits. Topaz export uses the user's installed compatible Topaz and
-preserves the source. Cancel an operation when the user requests it; already
+or closing credits. Topaz export uses the user's installed compatible Topaz, or the Topaz
+cloud when Settings `topaz_backend` is `cloud` (key `MMV_TOPAZ_API_KEY`). The
+cloud spends the user's Topaz credits: call `list_topaz_models` (model, frame-rate and tuning choices) and
+`estimate_upscale` (free; same `model`, `scale`, `options` as the upscale), show the
+user the credits, and pass the approved top figure as `max_credits` to
+`upscale_video` (CLI: `upscale-estimate SOURCE`, then `upscale SOURCE --max-credits N`); it is refused without
+it, re-prices before reserving, never retries, and asks Topaz to refund unused
+credits on failure or cancel. Export preserves the source. Cancel an operation when the user requests it; already
 submitted remote jobs may continue and incur charges. No film, Micro Drama,
 Vault, cutting-room, Hodge TV, clip redo or manual reassembly tools exist here.
 
@@ -217,3 +228,30 @@ Inspect preview `instruments` for per-shot cues, mix/unknown fallbacks and per-p
 The writer may make a narrow guitar-contact correction before the normal checks;
 inspect the private operation log for edited shot numbers. A wrong-instrument
 gesture still fails and must be corrected by the writer.
+
+## Storyboarding
+
+Storyboards are optional for music videos and idents. Upload source images as
+`reference`, preview `kind: "storyboard"` with `storyboard: {mode: "narrative", images: [UPLOAD_ID]}`,
+review cost and start only with authorization. Poll status, list `storyboards`, then
+read `inspect_storyboard(run_id)` (CLI `storyboard-result RUN_ID`). Edit/reorder
+`panels: [{image, direction}]` before adding the result as `storyboard` with
+`enabled: true` to a video/ident preview. Modes are `narrative` (default) and `visual`.
+Text-only panels use empty image IDs. Inspect returned `storyboard.passages` timing
+before start. No automatic interpretation retry; recover completed results by run ID,
+and inspect logs before making another call. Inspect raw model output with
+`inspect_storyboard(run_id, raw_response=true)` or CLI `storyboard-result RUN_ID --raw-response`. Existing video resume binds the saved
+alignment to prompts. Ident `ident_all_references: true` uses all attached references
+within renderer limits; false preserves one-reference casting. Source storyboards
+remain private. See docs/STORYBOARDS.md in the checkout for the full workflow.
+
+Final export quality: each clean, subliminal and captioned version is independently
+assembled from original clips in one FFmpeg video encode (H.264 CRF 6, slow).
+Flashes and captions share that assembly pass. `caption_video` / the existing caption
+API rebuilds from saved original sources, retaining flashes and replacing caption
+filters. Missing originals cause an error; restore the clips, song and saved run
+metadata, then submit the caption job again. It never regenerates clips or makes paid
+calls. Inspect job status and `output.json` for warnings and download names; production
+preview/start/resume and consent remain unchanged. Keep `assembly-source.json`,
+`assembly-assets/`, original clips and the song for later reconstruction. Topaz
+upscaling is the explicit user-requested exception and still uses the selected final.
