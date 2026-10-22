@@ -26,8 +26,8 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards"] = "status") -> dict[str, Any]:
-        """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"] = "status") -> dict[str, Any]:
+        """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, settings (no secret values), or a random one-click "quick-start" plan to merge into a preview_production request."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
     @server.tool()

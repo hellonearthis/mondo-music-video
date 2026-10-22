@@ -15,8 +15,8 @@ runs at a time. Accounts are never raced or used as automatic paid fallbacks.
 
 In **Settings**, configure a role and save its settings and key, then click
 **Save configured writer/vision/video API as a profile**. Give it a unique ID.
-The three API profile dropdowns select saved configurations; save Settings to
-activate them. Selecting **Manual configuration** restores that role's previous
+The three API profile dropdowns select saved configurations; choosing one
+activates it (Settings save automatically). Selecting **Manual configuration** restores that role's previous
 manual settings and credential. While a profile is selected, it supplies the
 role's endpoint/model/cost; use Manual configuration to edit individual fields
 for a new account. Saving a key updates the selected profile only. Saving a

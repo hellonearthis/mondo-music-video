@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.7 exposes **54 tools** and advertises the
+v1.10.8 exposes **54 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -125,6 +125,8 @@ saving is refused while an operation is running.
 `export_production_package` copies a finished production (video, raw clips, song, prompts, receipts, README) into an
 editing folder under the app's data folder; it publishes nothing and never copies keys. If the run used actors outside
 the four public starters, ask the user before passing `allow_private_actors`, and tell them not to publish that package.
+
+For a hands-off start, read `inspect_studio` kind `quick-start` (CLI `quick-start`): a random plan (`actors`, `dance_mode`, `dancers`, `direction`, `style_id`; it can choose no cast) to merge into `preview_production`. It never enables instruments, subliminal flashes or captions, and consent is still required.
 
 For dancing, pass `dance_mode: "group"` (optionally `dancers`, `dance_direction`, `dance_lead`) in `preview_production`; the preview returns
 the plan. Mouth rules are unchanged by dancing.

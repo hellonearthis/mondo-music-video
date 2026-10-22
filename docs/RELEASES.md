@@ -1,5 +1,26 @@
 # Releases
 
+## 1.10.8 — One-click "Just do the thing!"
+
+- A big red button at the top of 01 Music Video. With a song already chosen it fills
+  the blanks and opens the usual preview; without one it opens a "Select a song to
+  begin" dialog with browse and drag-and-drop. The preview's consent step is unchanged:
+  nothing is rendered or charged until the person accepts it.
+- The random plan (`GET /api/quick-start`, `mmv/quick_start.py`) prefers the bundled
+  starter cast, sometimes chooses no cast at all, and when it casts, sometimes adds
+  group dancing. Instruments, subliminal flashes and captions are never chosen.
+  Anything the person already filled in (direction, style, cast) is kept.
+- A quiet **Start fresh** link beside it clears the panel (song, references, storyboard,
+  vocabulary choices and all fields) after a confirmation; renderer and resolution are kept.
+  GUI-only by design: agents build each request from scratch, so there is nothing to clear.
+- Settings (09) now save automatically a moment after each change (or on Enter); the
+  Save settings button is gone. Choosing an API profile or workflow redraws the form so
+  the fields it fills in are shown. A failed save (for example while a production is
+  running) says so beside the form. Agents already persist settings with PATCH, so no
+  agent change was needed.
+- Agents: `inspect_studio` kind `quick-start`, CLI `quick-start`; merge the plan into a
+  `preview_production` request. No consent guard changed.
+
 ## 1.10.7 — Optional storyboards for music videos and idents
 
 - Ordered storyboard images, narrative/visual interpretation, editable panels,

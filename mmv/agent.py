@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -392,7 +392,7 @@ def main(argv=None):
     storyboard_parser = sub.add_parser("storyboard-result")
     storyboard_parser.add_argument("run_id")
     storyboard_parser.add_argument("--raw-response", action="store_true")
-    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "cancel"):
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))

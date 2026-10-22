@@ -27,6 +27,14 @@ def _cached_chromium():
     return found
 
 
+
+def autosaved(page, action):
+    """Run a settings change and wait for its own automatic save (the status line is cleared first)."""
+    page.evaluate('() => { document.querySelector("#settings-autosave-status").textContent = ""; }')
+    action()
+    page.wait_for_function('() => document.querySelector("#settings-autosave-status").textContent.includes("Saved automatically")')
+
+
 @unittest.skipUnless(importlib.util.find_spec('playwright') and importlib.util.find_spec('comfy_sdk')
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
@@ -62,6 +70,93 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 browser.close()
 
 
+    def test_quick_start_asks_for_a_song_then_opens_the_preview_without_instruments(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 17')
+                page.locator('#quick-start').click()
+                expect(page.locator('#quick-start-dialog')).to_be_visible()
+                expect(page.locator('#quick-start-dialog')).to_contain_text('Select a song to begin')
+                page.locator('#quick-start-song').set_input_files({'name': 'my song.wav', 'mimeType': 'audio/wav', 'buffer': self.song.read_bytes()})
+                expect(page.locator('#preview-dialog')).to_be_visible(timeout=60000)
+                self.assertEqual(page.locator('#video-form [name=title]').input_value(), 'my song')
+                self.assertTrue(page.locator('#video-form [name=direction]').input_value())
+                self.assertEqual(page.locator('#video-form [name=instrument_mode]').input_value(), 'off')
+                self.assertEqual(page.locator('#video-form [name=subliminal_mode]').input_value(), 'off')
+                expect(page.locator('#consent')).not_to_be_checked()
+                page.locator('#preview-dialog .dialog-close').click()
+                direction = page.locator('#video-form [name=direction]').input_value()
+                page.locator('#quick-start').click()          # song already chosen: no dialog, same plan, kept direction
+                expect(page.locator('#preview-dialog')).to_be_visible(timeout=60000)
+                expect(page.locator('#quick-start-dialog')).not_to_be_visible()
+                self.assertEqual(page.locator('#video-form [name=direction]').input_value(), direction)
+                self.assertFalse(errors, errors)
+            finally:
+                browser.close()
+
+    def test_start_fresh_confirms_then_clears_the_video_panel_but_keeps_the_renderer(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 17')
+                page.locator('#video-form .song-input').set_input_files({'name': 'keep.wav', 'mimeType': 'audio/wav', 'buffer': self.song.read_bytes()})
+                expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded: keep.wav')
+                page.locator('#video-form [name=title]').fill('Old title')
+                page.locator('#video-form [name=direction]').fill('Old direction')
+                backend = page.locator('#video-form [name=backend]').input_value()
+                page.locator('#start-fresh').click()
+                expect(page.locator('#start-fresh-dialog')).to_be_visible()
+                page.locator('#start-fresh-cancel').click()
+                self.assertEqual(page.locator('#video-form [name=title]').input_value(), 'Old title')
+                page.locator('#start-fresh').click()
+                page.locator('#start-fresh-confirm').click()
+                expect(page.locator('#video-form [name=title]')).to_have_value('')
+                expect(page.locator('#video-form [name=direction]')).to_have_value('')
+                expect(page.locator('#video-form .song-receipt')).not_to_contain_text('keep.wav')
+                expect(page.locator('#video-form .song-preview-wrap')).to_be_hidden()
+                self.assertEqual(page.locator('#video-form [name=backend]').input_value(), backend)
+                page.locator('#quick-start').click()          # no song any more: asks for one again
+                expect(page.locator('#quick-start-dialog')).to_be_visible()
+                self.assertFalse(errors, errors)
+            finally:
+                browser.close()
+
+    def test_settings_save_automatically_without_a_save_button(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('.nav[data-panel=settings]').click()
+                expect(page.get_by_role('button', name='Save settings', exact=True)).to_have_count(0)
+                page.locator('input[name=render_timeout_minutes]').fill('45')
+                page.locator('input[name=render_timeout_minutes]').press('Tab')
+                expect(page.locator('#settings-autosave-status')).to_contain_text('Saved automatically')
+                self.assertEqual(self.fixture.store.settings()['render_timeout_minutes'], 45)
+                page.locator('input[name=render_timeout_minutes]').fill('50')
+                page.locator('input[name=render_timeout_minutes]').press('Enter')
+                page.wait_for_function('() => document.querySelector("#settings-autosave-status").textContent.includes("Saved automatically")')
+                page.wait_for_timeout(300)
+                self.assertEqual(self.fixture.store.settings()['render_timeout_minutes'], 50)
+                self.assertFalse(errors, errors)
+            finally:
+                browser.close()
+
     def test_file_drop_uses_existing_upload_handlers_and_rejects_bad_files(self):
         from test_public_app import picture
         from playwright.sync_api import sync_playwright, expect
@@ -84,7 +179,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page = browser.new_page()
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 16')
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 17')
                 song = {'name': 'dropped.wav', 'type': 'audio/wav', 'bytes': list(self.song.read_bytes())}
                 result = drop(page, '#video-form .song-input', [song])
                 self.assertTrue(result['hovered'] and result['cleared'])
@@ -319,8 +414,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('.nav[data-panel=settings]').click()
                 page.locator('select[name=topaz_backend]').select_option('cloud')
-                page.get_by_role('button', name='Save settings', exact=True).click()
-                expect(page.locator('#notice')).to_contain_text('Settings saved')
+                expect(page.locator('#settings-autosave-status')).to_contain_text('Saved automatically')
                 self.assertEqual(self.fixture.store.settings()['topaz_backend'], 'cloud')
                 expect(page.locator('select[name=topaz_backend]')).to_have_value('cloud')
                 page.evaluate("""() => { const s = document.querySelector('#upscale-service'); s.value = 'local'; s.dispatchEvent(new Event('change')); }""")
@@ -365,11 +459,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(writer).to_have_value('')
                 writer.select_option('account-a')
                 page.locator('select[name=vision_api_profile]').select_option('vision-account')
-                page.get_by_role('button', name='Save settings', exact=True).click()
                 expect(page.locator('input[name=writer_model]')).to_have_value('account-a')
                 expect(page.locator('input[name=vision_model]')).to_have_value('vision-model')
                 page.locator('select[name=writer_api_profile]').select_option('account-b')
-                page.get_by_role('button', name='Save settings', exact=True).click()
                 expect(page.locator('input[name=writer_model]')).to_have_value('account-b')
                 self.assertEqual(store.key('MMV_WRITER_API_KEY'), 'private-account-b')
                 self.assertEqual(store.key('MMV_VISION_API_KEY'), 'private-vision')
@@ -378,7 +470,6 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('select[name=writer_api_profile] option[value=saved-copy]')).to_have_count(1)
                 page.locator('select[name=writer_api_profile]').select_option('')
                 page.locator('select[name=vision_api_profile]').select_option('')
-                page.get_by_role('button', name='Save settings', exact=True).click()
                 expect(page.locator('input[name=writer_model]')).to_have_value(original['writer_model'])
                 self.assertEqual(store.settings()['writer_url'], original['writer_url'])
                 self.assertNotIn('private-account', page.locator('body').inner_text())
@@ -413,9 +504,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 model = page.locator('select[name=h3_diffusion_model]')
                 expect(model).to_have_value('my-current-model.safetensors')
                 self.assertIn('test_diffusion.safetensors', model.locator('option').evaluate_all('(items) => items.map(o => o.value)'))
-                model.select_option('test_diffusion.safetensors')
-                page.locator('#settings-form > button').click()
-                expect(page.locator('#notice')).to_have_text('Settings saved.')
+                autosaved(page, lambda: model.select_option('test_diffusion.safetensors'))
                 expect(page.locator('select[name=h3_diffusion_model]')).to_have_value('test_diffusion.safetensors')
                 self.assertEqual(Path(mapping['workflow']).read_bytes(), source_bytes)
                 # Choose another binding map through the file picker. Unchanged model
@@ -426,10 +515,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('#picker-confirm')).to_be_disabled()
                 page.locator('#picker-breadcrumbs').get_by_role('button', name='Up').click()
                 page.locator('#picker-filter').fill('operator-map.json')
-                page.locator('#picker-entries .picker-entry').filter(has_text='operator-map.json').dblclick()
+                with page.expect_response(lambda r: r.url.endswith('/api/settings') and r.request.method == 'PUT') as saved:
+                    page.locator('#picker-entries .picker-entry').filter(has_text='operator-map.json').dblclick()
                 expect(map_input).to_have_value(str(map_path))
-                with page.expect_response('**/api/settings') as saved:
-                    page.locator('#settings-form > button').click()
                 self.assertEqual(saved.value.status, 200)
                 expect(page.locator('select[name=h3_diffusion_model]')).to_have_value('my-current-model.safetensors')
                 self.assertEqual(self.fixture.store.settings()['workflow_map_path'], str(map_path))
@@ -494,7 +582,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.7')
+                expect(page.locator('#version')).to_have_text('1.10.8')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1238,14 +1326,10 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('.nav[data-panel=settings]').click()
                 choice = page.locator('input[name=auto_updates]')
                 expect(choice).not_to_be_checked()
-                choice.check()
-                page.locator('#settings-form > button').click()
-                expect(page.locator('#notice')).to_have_text('Settings saved.')
+                autosaved(page, choice.check)
                 expect(choice).to_be_checked()
                 self.assertTrue(self.fixture.store.settings()['auto_updates'])
-                choice.uncheck()
-                page.locator('#settings-form > button').click()
-                expect(page.locator('#notice')).to_have_text('Settings saved.')
+                autosaved(page, choice.uncheck)
                 expect(choice).not_to_be_checked()
                 self.assertFalse(self.fixture.store.settings()['auto_updates'])
             finally:
@@ -1264,7 +1348,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.7')
+                expect(page.locator('#version')).to_have_text('1.10.8')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -4,6 +4,7 @@ import { $, $$, api, initThemeToggle, notice, option, state, text } from "./js/c
 import { setupLlamaGuide, setupOapGuide, setupVocabGuide } from "./js/guides.js";
 import { initComponentLabeling } from "./js/component_labeling.js";
 import { initFileDropTargets } from "./js/file_drop.js";
+import { initQuickStart } from "./js/quick_start.js";
 import { initStoryboards, restoreStoryboards, refreshStoryboards } from "./js/storyboard.js";
 import { initWorlds, loadWorlds } from "./js/worlds.js";
 import { initInstrumentLibrary } from "./js/instruments.js";
@@ -89,6 +90,7 @@ async function initialize() {
 
   initNavigation();
   initProductionForms();
+  initQuickStart();
   initSubliminalControls();
   initOperationControls();
   initLibraryForms();

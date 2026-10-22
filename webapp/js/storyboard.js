@@ -51,6 +51,12 @@ function render(form) {
   });
 }
 
+export function clearStoryboard(form) {
+  save(form, {images: [], panels: []});
+  form.elements.storyboard_enabled.checked = false;
+  render(form);
+}
+
 export async function refreshStoryboards() {
   const runs = await (await api('/api/storyboards')).json();
   $$('.storyboard-results').forEach(select => {
@@ -100,7 +106,7 @@ export function initStoryboards() {
       const request = {kind: 'storyboard', title: form.elements.title.value, direction: form.elements.direction.value,
         storyboard: {mode: form.elements.storyboard_mode.value, images: board.images}};
       showQuote(request, await json('/api/quote', request));
-    }), button('Clear storyboard', () => { save(form, {images: [], panels: []}); form.elements.storyboard_enabled.checked = false; render(form); }));
+    }), button('Clear storyboard', () => clearStoryboard(form)));
     section.querySelector('.storyboard-result-actions').append(button('Refresh interpretations', refreshStoryboards), button('Load for review', async () => {
       const id = section.querySelector('.storyboard-results').value;
       if (!id) throw new Error('Choose a saved interpretation');

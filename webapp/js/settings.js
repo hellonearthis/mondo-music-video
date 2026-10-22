@@ -375,7 +375,7 @@ export async function loadSettings() {
       if (!name) return;
       await json("/api/api-profiles", { name, role }, "POST");
       await loadSettings();
-      notice("API profile saved privately. Select it and save Settings to activate it.");
+      notice("API profile saved privately. Select it to activate it.");
     });
     fields.push(button);
   }
@@ -385,26 +385,58 @@ export async function loadSettings() {
   return data.settings;
 }
 
-export function initSettingsAndPicker() {
-  $("#settings-form").onsubmit = handle(async event => {
-    const raw = Object.fromEntries(new FormData(event.target));
-    const h3_models = {};
-    for (const key of ["video_vae", "audio_vae", "diffusion_model", "text_encoder"]) {
-      const field = event.target.elements["h3_" + key];
-      const value = raw["h3_" + key];
-      if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
-      delete raw["h3_" + key];
+// The PUT body for the whole settings form; h3 loaders are sent only when they differ from what is installed now.
+function settingsPayload(form) {
+  const raw = Object.fromEntries(new FormData(form));
+  const h3_models = {};
+  for (const key of ["video_vae", "audio_vae", "diffusion_model", "text_encoder"]) {
+    const field = form.elements["h3_" + key];
+    const value = raw["h3_" + key];
+    if (value && value !== field?.dataset.initialValue) h3_models[key] = value;
+    delete raw["h3_" + key];
+  }
+  raw.auto_updates = form.elements.auto_updates.checked;
+  raw.vision_call_estimate = Number(raw.vision_call_estimate);
+  raw.writer_call_estimate = Number(raw.writer_call_estimate);
+  raw.render_timeout_minutes = Math.max(0, Math.round(Number(raw.render_timeout_minutes) || 0));
+  if (Object.keys(h3_models).length) raw.h3_models = h3_models;
+  return raw;
+}
+
+// Choosing a profile, a workflow or an H3 model changes other fields on the server, so only those redraw the form.
+const redrawsForm = name => name.endsWith("_api_profile") || name === "workflow_map_path" || name.startsWith("h3_");
+function initSettingsAutosave(form) {
+  const status = form.querySelector("#settings-autosave-status");
+  let timer = null, saving = false, queued = false, redraw = false;
+  const show = message => { status.textContent = message; };
+  const flush = async () => {
+    if (saving) { queued = true; return; }
+    saving = true;
+    const refresh = redraw;
+    redraw = false;
+    try {
+      await json("/api/settings", settingsPayload(form), "PUT");
+      if (refresh) await loadSettings();
+      refreshServices(true);   // a probe can be slow; never hold up the next save
+      show("Saved automatically at " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    } catch (error) {
+      show("Not saved: " + error.message + " Change the setting again to retry.");
+    } finally {
+      saving = false;
+      if (queued) { queued = false; timer = setTimeout(flush, 0); }
     }
-    raw.auto_updates = event.target.elements.auto_updates.checked;
-    raw.vision_call_estimate = Number(raw.vision_call_estimate);
-    raw.writer_call_estimate = Number(raw.writer_call_estimate);
-    raw.render_timeout_minutes = Math.max(0, Math.round(Number(raw.render_timeout_minutes) || 0));
-    if (Object.keys(h3_models).length) raw.h3_models = h3_models;
-    await json("/api/settings", raw, "PUT");
-    await loadSettings();
-    await refreshServices(true);
-    notice("Settings saved.");
+  };
+  const schedule = delay => { clearTimeout(timer); show("Saving…"); timer = setTimeout(flush, delay); };
+  form.addEventListener("change", event => {
+    if (!event.target.name) return;
+    redraw ||= redrawsForm(event.target.name);
+    schedule(600);
   });
+  form.onsubmit = event => { event.preventDefault(); schedule(0); };   // Enter in a field saves right away
+}
+
+export function initSettingsAndPicker() {
+  initSettingsAutosave($("#settings-form"));
 
   $("#key-form").onsubmit = event => event.preventDefault();
 

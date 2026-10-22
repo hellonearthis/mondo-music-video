@@ -437,10 +437,23 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.7")
+        self.assertEqual(api_version()["version"], "1.10.8")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.7", (root / "README.md").read_text())
+        self.assertIn("1.10.8", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
+
+    def test_quick_start_button_dialog_and_endpoint(self):
+        html = self.client.get("/").text
+        self.assertIn('id="quick-start"', html)
+        self.assertIn('id="quick-start-dialog"', html)
+        self.assertIn("Select a song to begin", html)
+        self.assertLess(html.index('id="quick-start"'), html.index('class="song-input"'))
+        self.assertEqual(self.client.get("/js/quick_start.js").status_code, 200)
+        self.assertIn('id="start-fresh"', html)
+        self.assertIn('id="start-fresh-dialog"', html)
+        plan = self.client.get("/api/quick-start").json()
+        self.assertIn(plan["dance_mode"], ("off", "group"))
+        self.assertEqual(plan["dancers"], plan["actors"] if plan["dance_mode"] == "group" else [])
 
     def test_frontend_es_modules_served_and_protected(self):
         app_res = self.client.get("/app.js")

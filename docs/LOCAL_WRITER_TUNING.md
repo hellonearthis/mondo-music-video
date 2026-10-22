@@ -14,8 +14,8 @@ preset does not save settings or launch anything.
   corresponding long-form flags too, so duplicate context/batch settings do
   not accumulate.
 
-Inspect the preview, choose **Apply tuning to launch field**, and explicitly
-**Save settings** to persist it. Your installed model and llama.cpp version must
+Inspect the preview, choose **Apply tuning to launch field**; Settings
+save automatically, so it is persisted at once. Your installed model and llama.cpp version must
 support the selected options. Larger contexts and batches use more memory;
 this preset is an option, not a claim that it suits every model or machine.
 A local writer must expose OpenAI-compatible `/models` and `/chat/completions`

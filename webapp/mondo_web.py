@@ -38,7 +38,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.7"
+MGL_APP_VERSION = "1.10.8"
 WEB = Path(__file__).parent
 
 
@@ -1419,6 +1419,11 @@ def create_app(home=None, *, test_hosts=False):
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
+
+    @app.get("/api/quick-start")
+    def quick_start_plan():
+        from mmv import quick_start
+        return quick_start.plan([a["id"] for a in list_actors()], [s["id"] for s in styles()])
 
     @app.get("/api/storyboards")
     def storyboard_results():
