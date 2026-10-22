@@ -1,8 +1,7 @@
 """Lyric captions: the timed lyric lines as a subtitle file, optionally burned into the finished video.
 
-Applied after assembly with FFmpeg, outside the original engine, and never touches a prompt: the lines come from the lyrics the user
-already supplied. `sidecar` writes lyrics.srt next to the video and re-encodes nothing; `burned` also draws the words with libass.
-The burned video keeps its exact frame count, duration and audio (copied); the video without captions is kept next to it.
+Burned variants are assembled directly from original clips in the final FFmpeg pass.
+Sidecars re-encode nothing; a separately assembled uncaptioned video is kept.
 """
 from __future__ import annotations
 
@@ -169,28 +168,6 @@ def downloads(record):
     return [name for name in extras if name]
 
 
-def _probe_size(path):
-    done = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,nb_read_frames',
-                           '-count_frames', '-of', 'csv=p=0', str(path)], capture_output=True, text=True, timeout=300)
-    width, height, frames = done.stdout.strip().split(',')[:3]
-    return int(width), int(height), int(frames)
-
-
-def _run_ffmpeg(argv, cwd):
-    done = subprocess.run(argv, capture_output=True, text=True, timeout=1800, cwd=cwd)
-    if done.returncode:
-        raise ValueError('The captions could not be burned in: ' + done.stderr[-300:])
-
-
-def burn(source, target, script, run=_run_ffmpeg):
-    """Draw the ASS script on the video. Audio is copied. The script is passed by bare name from its own folder so no path needs
-    escaping in the filter, on any platform. `run(argv, cwd)` runs FFmpeg (a job passes its cancellable runner)."""
-    run(['ffmpeg', '-nostdin', '-y', '-v', 'error', '-i', str(Path(source).resolve()), '-vf', f'ass={script.name}',
-         '-map', '0:v', '-map', '0:a?', '-c:v', 'libx264', '-crf', '12', '-preset', 'medium', '-pix_fmt', 'yuv420p',
-         '-c:a', 'copy', str(Path(target).resolve())], script.parent)
-    return target
-
-
 def apply_to_run(directory, plan):
     """Write lyrics.srt and, for burned mode, replace the finished video once the captioned one passes a frame-count check.
 
@@ -208,29 +185,21 @@ def apply_to_run(directory, plan):
         return {**result, 'burn_error': str(exc)}
 
 
-def render(source, target, items, work, chosen=None, run=_run_ffmpeg):
-    """Burn the cues into a copy of the video at `target`, in the scratch folder `work`, and check the frame count is unchanged."""
-    width, height, before = _probe_size(source)
-    script = work / 'captions.ass'
-    script.write_text(to_ass(items, width, height, chosen), encoding='utf-8')
-    out = burn(source, target, script, run)
-    after = _probe_size(out)[2]
-    if after != before:
-        raise ValueError(f'The captioned video has {after} frames instead of {before}; keeping the original')
-    return out
-
-
 def _burn_in(directory, final, items, chosen):
-    work = directory / 'captions-work'
-    work.mkdir(exist_ok=True)
-    try:
-        out = render(final, work / 'captioned.mp4', items, work, chosen)
-        staged = work / 'original.mp4'
+    from . import final_assembly
+    from .storage import read_json, write_json
+    import tempfile
+    recipe = read_json(directory / final_assembly.RECIPE, {})
+    if not recipe:
+        raise ValueError('Original assembly sources are unavailable; a finished video cannot be re-encoded instead')
+    recipe = {**recipe, 'captions': {**chosen, 'cues': items}}
+    with tempfile.TemporaryDirectory(prefix='captions-', dir=directory) as temp:
+        out = final_assembly.render(recipe, Path(temp) / 'captioned.mp4')
+        staged = Path(temp) / 'original.mp4'
         shutil.copy2(final, staged)
         staged.replace(directory / UNCAPTIONED_NAME)
         out.replace(final)
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
+    write_json(directory / final_assembly.RECIPE, recipe)
     return {'uncaptioned_copy': UNCAPTIONED_NAME}
 
 
@@ -246,7 +215,7 @@ def caption_finished(store, source, lines, context, appearance=None):
     """Caption an already finished music video as a new output; the original is never touched.
 
     `source` is "<run id>/<file>" of a completed video. The lines are the ones given, or else those saved with that video's request.
-    A video that was captioned when made is captioned again from its uncaptioned copy, so words are never drawn twice."""
+    Every captioned version is rebuilt from original clips; saved caption filters are replaced, never drawn twice."""
     from .lipsync import clean_lines
     from .media import duration
     from .score_view import _opening_offset
@@ -259,29 +228,20 @@ def caption_finished(store, source, lines, context, appearance=None):
     chosen = clean_lines(lines or request.get('lyric_lines'))
     if not chosen or not plan.get('segments'):
         raise ValueError('This video has no timed lyric lines saved; detect or paste the lyrics and pass them as lyric_lines')
-    original = path.parent / UNCAPTIONED_NAME
-    if (output.get('captions') or {}).get('uncaptioned_copy') and not original.is_file():
-        raise ValueError('This video was captioned when it was made and its uncaptioned copy is gone; captioning it again would draw the words twice')
-    video = original if original.is_file() else path
-    opening = request.get('start_ident')
-    if opening and not (inside(store.home / 'runs', opening).parent / 'output.json').is_file():
-        raise ValueError('This video has an opening ident that was deleted, so the caption timing cannot be worked out')
-    fps = float(plan['fps'])
-    song_s = min(plan['total_frames'], sum(s['trim_frames'] for s in plan['segments'])) / fps
-    items = cues(chosen, _opening_offset(store, request), song_s, duration(video))
+    from . import final_assembly
+    recipe = final_assembly.load_recipe(store, path.parent)
+    fps = float(recipe['fps'])
+    song_s = recipe.get('song_frames', min(plan['total_frames'], sum(s['trim_frames'] for s in plan['segments']))) / fps
+    opening_s = recipe['song_start_frame'] / fps if 'song_start_frame' in recipe else _opening_offset(store, request)
+    items = cues(chosen, opening_s, song_s, recipe['frames'] / fps)
     if not items:
         raise ValueError('None of the lyric lines falls inside the song, or all of them have guessed timing; confirm their timing first')
     directory = context.log_path.parent
-    context.update('Burning the lyric captions', 20)
-    work = directory / 'captions-work'
-    work.mkdir(exist_ok=True)
-    try:
-        out = render(video, work / 'captioned.mp4', items, work, look(appearance),
-                     lambda argv, cwd: context.command(argv, cwd=cwd))
-        context.check()                          # a cancelled job publishes nothing
-        out.replace(directory / 'captioned.mp4')
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
+    context.update('Assembling captions from original clips', 20)
+    recipe = {**recipe, 'captions': {**look(appearance), 'cues': items}}
+    final_assembly.render(recipe, directory / 'captioned.mp4',
+                          run=lambda argv, cwd: context.command(argv, cwd=cwd), check=context.check)
+    write_json(directory / final_assembly.RECIPE, recipe)
     (directory / SRT_NAME).write_text(to_srt(items), encoding='utf-8')
     measured = duration(directory / 'captioned.mp4')
     write_json(directory / 'output.json', {'file': 'captioned.mp4', 'duration': measured, 'kind': 'captioned',

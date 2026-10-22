@@ -57,6 +57,12 @@ verify the assets appear in the app. Never import other local/private assets.
   user enabled them, then verify the live `/api/version` and served UI. Give the
   user the local URL and say whether a browser refresh is needed. Starting the
   UI does not authorize generation, paid calls or GPU work.
+- Final video variants must each be assembled directly from original renderer clips in
+  one final FFmpeg video encode, at the same quality settings. Apply subliminal flashes
+  and burned captions inside that assembly graph; never feed a finished final into
+  another final render. Attached productions and later caption jobs must recover
+  their original sources or fail clearly. Keep originals and assembly-source.json
+  for recovery. Operator-requested Topaz upscaling is the explicit exception.
 - Keep one active operation, no production queue, explicit paid consent and
   upstream OAP verification. Do not retry paid submissions automatically.
 - Use temporary data and mock services for automated tests. Real paid/GPU/Topaz

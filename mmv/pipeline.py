@@ -271,6 +271,7 @@ def prepare(store, request, *, saved_prepared=None):
             score = drive_score(store, song, score_path, digest, driver, request.get('stem_quality') or 'standard')
         detected = detected_view(score)
         score = apply_score_edits(score, request.get('score_edits'))
+        attached_sources = {}
         for key in ('start_ident', 'end_ident'):
             if request.get(key):
                 try:
@@ -280,6 +281,9 @@ def prepare(store, request, *, saved_prepared=None):
                 record = read_json(p.parent / 'output.json', {})
                 if not p.is_file() or record.get('kind') not in ('ident', 'video') or record.get('file') != p.name:
                     raise ValueError('Choose a completed ident or video clip')
+                from .final_assembly import load_recipe, validate_sources
+                attached_sources[key] = load_recipe(store, p.parent)
+                validate_sources(attached_sources[key])
     else:
         detected = None
         seconds = request['ident_seconds']
@@ -339,12 +343,9 @@ def prepare(store, request, *, saved_prepared=None):
     wants_captions = (request.get('captions') or {}).get('mode', 'off') != 'off'
     if kind == 'video' and (wants_sub or wants_captions):
         from . import captions, subliminal
-        from .score_view import _opening_offset
         fps = p.fps or 24
-        opening = _opening_offset(store, request)
-        closing = 0.0
-        if request.get('end_ident'):
-            closing = float((read_json(inside(store.home / 'runs', request['end_ident']).parent / 'output.json', {}) or {}).get('duration') or 0.0)
+        opening, closing = (attached_sources[key]['frames'] / attached_sources[key]['fps']
+                            if key in attached_sources else 0.0 for key in ('start_ident', 'end_ident'))
         song_seconds = min(p.total_frames, sum(s.trim_frames for s in p.segments)) / fps      # what assembly actually joins
         total_seconds = song_seconds + opening + closing
         if wants_sub:

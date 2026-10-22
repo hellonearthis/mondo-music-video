@@ -1,4 +1,28 @@
-# Verification — 1.9.7
+# Verification — 1.10.9
+
+## 1.10.9 — Source-only final assembly
+
+The full temporary-data/mock-service/browser suite passed: **713 tests + 141
+subtests**, 124.83 seconds. Two subsequently added regression tests also passed:
+missing ident originals are rejected during preview, and saved frame offsets keep
+the score aligned after attached-ident metadata disappears. No product code
+changed after the passing full-suite run.
+
+Real CPU FFmpeg checks used only small synthetic media. They verify exact flash
+frames across source/ident joins, matching frame counts and audio packet hashes
+between variants, combined flash/caption graphs, independent source inputs and
+one CRF-6/slow video encode per variant, old-run source reconstruction, caption
+replacement, and preserving the previous final on frame-count failure or cancellation.
+The app/API tests exercise both production effects and later caption jobs; agent
+and MCP transport/discovery checks remain current. Topaz retains its explicitly
+approved finished-video input; no Topaz/GPU/provider generation was exercised.
+
+A fresh handler import reported 1.10.9; `protected_scheme.check()` returned `[]`.
+JavaScript syntax and `git diff --check` passed. The idle local app was restarted
+with its existing data on port 8091 and `--no-auto-update`; live `/api/version`
+reported 1.10.9, `/api/status` remained complete, and `/` served the new source
+assembly tooltip. A browser refresh is needed. No commit or push was performed.
+
 
 ## 1.9.7 — Open Prop Protocol compatibility
 

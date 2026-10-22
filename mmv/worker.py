@@ -617,31 +617,11 @@ def run(home, directory, *, resume=False):
     finally:
         backend.close_render()
     progress('Assembling frame-exact music video', 85)
-    if request['kind'] == 'ident':
-        output = directory / 'ident.mp4'
-        assemble.trim_to_frames(rendered[plan.segments[0].segment_id]['video'], output, plan.total_frames)
-    else:
-        opening, closing = request.get('start_ident'), request.get('end_ident')
-        if opening and closing:
-            # Original primitives, one encode per raw clip, stream-copy join and song mux.
-            work=directory/'assembly/work';work.mkdir(parents=True,exist_ok=True)
-            clips=[assemble.trim_to_frames(rendered[s.segment_id]['video'],work/(s.segment_id+'.mp4'),s.trim_frames) for s in plan.segments]
-            first=inside(store.home/'runs',opening);last=inside(store.home/'runs',closing)
-            clips=[assemble.normalize_clip(first,work/'opening.mp4')]+clips+[assemble.normalize_clip(last,work/'closing.mp4')]
-            picture=assemble.concat_video(clips,work/'picture.mp4',work)
-            audio=[assemble.extract_audio(first,work/'opening.wav'),assemble.extract_audio(song,work/'song.wav'),assemble.extract_audio(last,work/'closing.wav')]
-            track=assemble.concat_audio(audio,work/'song-with-idents.wav',work)
-            output=assemble.mux(picture,track,directory/'music-video.mp4')
-        else:
-            if opening or closing:
-                result=assemble.assemble_run_with_ident(plan,rendered,song,inside(store.home/'runs',opening or closing),
-                      'start' if opening else 'end',directory/'assembly')
-            else:
-                result=assemble.assemble_run(plan,rendered,song,directory/'assembly')
-            output=directory/'music-video.mp4';shutil.copy2(result['video'],output)
+    from . import final_assembly
+    output = final_assembly.assemble(store, directory, request, read_json(directory / 'plan.json'), rendered)
     sub_result = sub_error = None
     if request['kind'] == 'video' and prepared.get('subliminal'):
-        progress('Adding the subliminal flashes', 96)
+        progress('Assembling the subliminal version from original clips', 96)
         from . import subliminal
         try:
             sub_result = subliminal.apply_to_run(store, directory, prepared['subliminal'])
@@ -649,7 +629,7 @@ def run(home, directory, *, resume=False):
             sub_error = str(exc)
     caption_result = caption_error = None
     if request['kind'] == 'video' and (prepared.get('captions') or {}).get('cues'):
-        progress('Adding the lyric captions', 97)
+        progress('Assembling the captioned version from original clips', 97)
         from . import captions
         try:
             caption_result = captions.apply_to_run(directory, prepared['captions'])

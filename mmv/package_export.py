@@ -294,7 +294,8 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
         pack.put(file, f'01_final/assembly_{file.name}')
     for file in sorted((run / 'assembly').glob('*.wav')):
         pack.put(file, f'01_final/assembly_{file.name}')
-    pack.put(run / 'assembly' / 'work' / 'picture.mp4', '01_final/picture_only_no_audio_mix.mp4')
+    if (run / 'assembly' / 'work' / 'picture.mp4').is_file():
+        pack.put(run / 'assembly' / 'work' / 'picture.mp4', '01_final/picture_only_no_audio_mix.mp4')
     if not list((out / '01_final').glob('music-video.mp4')):
         pack.absent.append('01_final/music-video.mp4 (run has no finished video)')
 

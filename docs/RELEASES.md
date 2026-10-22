@@ -1,5 +1,29 @@
 # Releases
 
+## 1.10.9 — One final encode from original clips
+
+- Subliminal flashes and burned captions now run inside final assembly, at the same
+  H.264 CRF-6 / slow quality as the clean version. Each variant reads original clips;
+  neither a clean export nor a flashed export becomes another render's video input.
+- Final assembly trims and joins the original clips, adds effects and encodes in one
+  FFmpeg invocation per variant. Attached idents/videos resolve their original
+  clips too, including their saved effects. The optional PCM editing stem is retained.
+- Adding captions later rebuilds from saved source provenance, retaining flashes and
+  replacing captions. Old runs can reconstruct from plan/render/request/prepared
+  records. Missing originals fail clearly; restoring sources is required, never
+  a fallback to recompressing the final. Existing final files are not modified by
+  this upgrade. Sidecars still require no video encode.
+- Topaz remains the owner-approved exception, operating on the selected finished
+  video. No paid/GPU work, provider retry or prompt changes are part of this fix.
+- GUI, existing caption API/client/MCP and production preview/start/resume retain
+  their interfaces and consent guards. Source provenance stays local; no new tool
+  is required. Legacy per-clip video assembly intermediates are no longer generated.
+- Validation: 713 full-suite tests + 141 subtests, then two added timing/source
+  regression tests passed using synthetic media and mock services. Live 1.10.9
+  and the served UI verified; no real production render performed.
+- Fork task-start HEAD: `56d9f04027dab5e2cc9c9e2860a614e1190d75fd`,
+  unchanged since the completed collaborator review.
+
 ## 1.10.8 — One-click "Just do the thing!"
 
 - A big red button at the top of 01 Music Video. With a song already chosen it fills

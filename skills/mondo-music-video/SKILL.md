@@ -244,3 +244,14 @@ and inspect logs before making another call. Inspect raw model output with
 alignment to prompts. Ident `ident_all_references: true` uses all attached references
 within renderer limits; false preserves one-reference casting. Source storyboards
 remain private. See docs/STORYBOARDS.md in the checkout for the full workflow.
+
+Final export quality: each clean, subliminal and captioned version is independently
+assembled from original clips in one FFmpeg video encode (H.264 CRF 6, slow).
+Flashes and captions share that assembly pass. `caption_video` / the existing caption
+API rebuilds from saved original sources, retaining flashes and replacing caption
+filters. Missing originals cause an error; restore the clips, song and saved run
+metadata, then submit the caption job again. It never regenerates clips or makes paid
+calls. Inspect job status and `output.json` for warnings and download names; production
+preview/start/resume and consent remain unchanged. Keep `assembly-source.json`,
+`assembly-assets/`, original clips and the song for later reconstruction. Topaz
+upscaling is the explicit user-requested exception and still uses the selected final.

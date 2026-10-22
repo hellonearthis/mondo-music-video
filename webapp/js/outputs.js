@@ -458,7 +458,7 @@ export async function loadOutputs() {
       openUpscaleDialog();
     };
 
-    const caption = text("button", "Add lyric captions", "secondary", `Burn ${output.title}'s lyric lines into a new copy; the original is kept`);
+    const caption = text("button", "Add lyric captions", "secondary", `Rebuild ${output.title} with lyrics from its original clips; the original output is kept`);
     caption.onclick = () => {
       state.captionSource = output.file;
       $("#caption-dialog").showModal();

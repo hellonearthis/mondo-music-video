@@ -35,7 +35,9 @@ def music_score(store, run_id):
     score, plan = read_json(directory / "score.json"), read_json(directory / "plan.json")
     if not isinstance(score, dict) or not isinstance(plan, dict):
         raise ValueError("This video has no saved musical analysis")
-    offset = _opening_offset(store, read_json(directory / "request.json", {}))
+    source = read_json(directory / "assembly-source.json", {})
+    offset = (source["song_start_frame"] / source["fps"] if "song_start_frame" in source
+              else _opening_offset(store, read_json(directory / "request.json", {})))
     return build_score(score, plan, offset=offset, title=output.get("title"), duration=output.get("duration"))
 
 

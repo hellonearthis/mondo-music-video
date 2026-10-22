@@ -365,6 +365,7 @@ class AgentClient:
 
     def caption_video(self, source, lyric_lines=None, style="classic", position="bottom", size="medium",
                       color="", outline_color="", font=""):
+        """Rebuild captions from original sources; missing sources fail without re-encoding a final."""
         return self._json("POST", "/api/captions", {"source": source, "lyric_lines": lyric_lines or [], "style": style,
                                                     "position": position, "size": size, "color": color,
                                                     "outline_color": outline_color, "font": font})

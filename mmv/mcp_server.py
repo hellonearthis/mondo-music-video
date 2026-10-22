@@ -124,7 +124,7 @@ def create_server(base_url=None):
         placement manual|downbeats, times [seconds on the finished video's clock], count} flashes a picture or words
         for a few frames (flashes are kept 1 s apart); the preview returns the resolved times, the audio and length are
         untouched and the untouched video is kept as music-video-clean.mp4. Warn the user that flashing can affect
-        photosensitive viewers.
+        photosensitive viewers. Each variant is assembled directly from original clips in one CRF-6 encode; captions share this pass.
 
         Lyric captions: `captions` {mode: off|sidecar|burned, style classic|bold|neon|box, position bottom|middle|top, size small|medium|large,
         optional color/outline_color "#rrggbb" and font (see list_caption_fonts)} turns the timed `lyric_lines` into lyrics.srt (sidecar) and, for
@@ -370,7 +370,9 @@ def create_server(base_url=None):
                       position: Literal["bottom", "middle", "top"] = "bottom",
                       size: Literal["small", "medium", "large"] = "medium", color: str = "", outline_color: str = "",
                       font: str = "") -> dict[str, Any]:
-        """Burn lyric captions into a finished music video as a NEW output; the original is never changed. Free.
+        """Rebuild a music video with lyric captions from its original clips as a NEW output. Free.
+        One CRF-6 final encode, retaining flashes and replacing captions. Missing sources fail: restore original clips/song and run metadata,
+        then retry this job; never substitute the finished video. The original output is never changed.
 
         `source` is the output file ("<run id>/music-video.mp4"). Uses the timed lines saved with that video unless
         `lyric_lines` [{start, end, text, timing}] (seconds on the song clock; see detect_lyrics/align_lyrics) are given.

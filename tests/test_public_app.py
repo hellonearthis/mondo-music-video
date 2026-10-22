@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.8")
+        self.assertEqual(api_version()["version"], "1.10.9")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.8", (root / "README.md").read_text())
+        self.assertIn("1.10.9", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -1264,8 +1264,8 @@ class PublicAppTests(unittest.TestCase):
                                               'uncaptioned_copy': 'music-video-uncaptioned.mp4'})
         self.assertEqual(output['subliminal']['clean_copy'], 'music-video-clean.mp4')
         self.assertNotIn('quality_warnings', output)
-        from mmv import captions as caption_module
-        self.assertEqual(caption_module._probe_size(run / 'music-video.mp4')[2], caption_module._probe_size(run / 'music-video-uncaptioned.mp4')[2])
+        from mmv.engine.assemble import probe_frames
+        self.assertEqual(probe_frames(run / 'music-video.mp4'), probe_frames(run / 'music-video-uncaptioned.mp4'))
         for name, kind in (('lyrics.srt', 'application/x-subrip'), ('music-video-uncaptioned.mp4', 'video/mp4'), ('music-video-clean.mp4', 'video/mp4')):
             served = self.client.get(f'/api/media/{run.name}/{name}')
             self.assertEqual((served.status_code, served.headers['content-type']), (200, kind), name)
@@ -1281,7 +1281,6 @@ class PublicAppTests(unittest.TestCase):
         run = self.home / 'runs' / started.json()['id']
         original = (run / 'music-video.mp4').read_bytes()
         self.assertNotIn('captions', read_json(run / 'output.json'))
-        from mmv import captions as caption_module
         done = self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'})
         done.raise_for_status()
         status = self.wait()
@@ -1291,7 +1290,8 @@ class PublicAppTests(unittest.TestCase):
         record = read_json(new / 'output.json')
         self.assertEqual((record['kind'], record['file'], record['captions']['cues']), ('captioned', 'captioned.mp4', 1))
         self.assertEqual((run / 'music-video.mp4').read_bytes(), original)                    # the original is untouched
-        self.assertEqual(caption_module._probe_size(new / 'captioned.mp4')[2], caption_module._probe_size(run / 'music-video.mp4')[2])
+        from mmv.engine.assemble import probe_frames
+        self.assertEqual(probe_frames(new / 'captioned.mp4'), probe_frames(run / 'music-video.mp4'))
         self.assertNotEqual((new / 'captioned.mp4').read_bytes(), original)
         self.assertEqual(self.client.get(f'/api/media/{new.name}/lyrics.srt').status_code, 200)
         self.assertIn(new.name + '/captioned.mp4', [item['file'] for item in self.client.get('/api/outputs').json()])
@@ -1301,7 +1301,7 @@ class PublicAppTests(unittest.TestCase):
                 self.client.post('/api/captions', json={'source': source})
                 self.assertEqual(self.wait()['state'], 'failed')
 
-    def test_captioning_a_video_made_with_captions_starts_from_its_uncaptioned_copy_and_needs_lines(self):
+    def test_captioning_a_video_made_with_captions_starts_from_original_clips_and_needs_lines(self):
         song = self.song_upload()
         lines = [{'start': 0.2, 'end': 0.9, 'text': 'Honk honk', 'timing': 'matched'}]
         _, started = self.start({'song': song, 'lyric_lines': lines, 'captions': {'mode': 'burned'}})
@@ -1309,11 +1309,13 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(self.wait()['state'], 'complete')
         run = self.home / 'runs' / started.json()['id']
         from unittest import mock
-        from mmv import captions as caption_module
+        from mmv import final_assembly as caption_module
         with mock.patch.object(caption_module, 'render', wraps=caption_module.render) as spy:
             self.client.post('/api/captions', json={'source': run.name + '/music-video.mp4'}).raise_for_status()
             self.assertEqual(self.wait()['state'], 'complete')
-        self.assertEqual(spy.call_args.args[0].name, 'music-video-uncaptioned.mp4')
+        recipe = spy.call_args.args[0]
+        self.assertTrue(recipe['clips'])
+        self.assertTrue(all(Path(c['path']).name not in ('music-video.mp4', 'music-video-uncaptioned.mp4') for c in recipe['clips']))
         _, bare = self.start({'song': song})
         bare.raise_for_status()
         self.assertEqual(self.wait()['state'], 'complete')
@@ -1321,6 +1323,17 @@ class PublicAppTests(unittest.TestCase):
         failed = self.wait()
         self.assertEqual(failed['state'], 'failed')
         self.assertIn('no timed lyric lines', failed['message'])
+
+    def test_missing_ident_originals_are_refused_during_preview(self):
+        directory = self.home / 'runs' / 'lost-ident'
+        directory.mkdir()
+        (directory / 'ident.mp4').write_bytes(b'finished output is not a source')
+        write_json(directory / 'output.json', {'kind': 'ident', 'file': 'ident.mp4', 'duration': 1})
+        song = self.song_upload()
+        for key in ('start_ident', 'end_ident'):
+            response = self.client.post('/api/quote', json={'song': song, key: 'lost-ident/ident.mp4'})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('Original assembly sources', response.json()['detail'])
 
     def test_subliminal_flashes_are_planned_in_the_preview_and_applied_to_the_finished_video_keeping_a_clean_copy(self):
         song = self.song_upload()
