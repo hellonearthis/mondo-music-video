@@ -161,6 +161,9 @@ def prepare(store, request, *, saved_prepared=None):
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise ValueError('Install FFmpeg and FFprobe; run the setup doctor')
     kind = request['kind']
+    if kind == 'storyboard':
+        from . import storyboard
+        return storyboard.prepare(store, request, settings)
     if kind == 'world_harvest':
         return prepare_world_harvest(store, request, settings)
     if kind == 'harvest':
@@ -291,6 +294,10 @@ def prepare(store, request, *, saved_prepared=None):
             request.get('direction', ''), request.get('title', ''),
             [t for spec in (request.get('custom_vocabulary') or {}).values() for t in spec.get('add', [])]))
     roster = roster_for(store, request, refs)
+    if kind == 'ident' and request.get('ident_all_references'):
+        if len(refs) > backend.capabilities()['max_reference_images']:
+            raise ValueError('The selected renderer cannot accept all ident reference images')
+        request = {**request, 'ref_policy': 'all', 'ensemble_mode': 'always', 'on_screen': max(1, len(refs))}
     p = plan(score, width=width, height=height, vocab=vocab, seed=request['seed'], slug='music-video',
              bars_per_phrase=request['bars_per_phrase'], ref_policy=request['ref_policy'],
              cast_size=len(roster), on_screen=request['on_screen'], ensemble_mode=request['ensemble_mode'], backend=backend)
@@ -395,6 +402,10 @@ def prepare(store, request, *, saved_prepared=None):
             'analysis': {'tempo_bpm': score.tempo_bpm, 'beats': len(score.beat_frames),
                          'downbeats': len(score.downbeat_frames), 'sections': len(score.sections),
                          'shots': sum(len(s.shots) for s in p.segments), 'width': width, 'height': height}}
+    if request.get('storyboard', {}).get('enabled'):
+        from . import storyboard
+        storyboard.image_paths(store, request['storyboard']['images'])
+        prepared['storyboard'] = storyboard.align(request['storyboard'], p.segments, p.fps, kind)
     if departures:
         prepared['world_contrast'] = {'shots': len(departures), 'roles': sorted({role for role, _ in departures.values()})}  # absent when off
     if caption_plan:
@@ -405,6 +416,8 @@ def prepare(store, request, *, saved_prepared=None):
         prepared['instruments'] = instrument_plan
     if dance_plan is not None:
         prepared['dance'] = dance_plan             # absent when off, so existing fingerprints are unchanged
+    if replay_plans and prepared.get('storyboard') != saved_prepared.get('storyboard'):
+        raise ValueError('Storyboard differs from the saved prompt alignment; restore the original request or start a new production')
     return passage_plans.restore(prepared, saved_prepared) if replay_plans else prepared
 
 
@@ -412,13 +425,16 @@ def fingerprint(store, request, prepared):
     payload = {k:v for k,v in prepared.items() if k not in ('references', 'passage_plan_binding', 'voice')}
     digest = hashlib.sha256(json.dumps({'request': request, 'prepared': payload}, sort_keys=True).encode())
     files = list(prepared['references'])
+    if request.get('storyboard'):
+        from . import storyboard
+        files.extend(storyboard.image_paths(store, request['storyboard']['images']))
     files.extend(Path(asset['path']) for asset in (prepared.get('instruments') or {}).get('assets', {}).values())
     files.extend(Path(asset['bundle_path']) for asset in (prepared.get('instruments') or {}).get('assets', {}).values()
                  if asset.get('bundle_path'))
     if request.get('song'): files.append(inside(store.home / 'uploads', request['song']))
     for key in ('start_ident', 'end_ident'):
         if request.get(key): files.append(inside(store.home / 'runs', request[key]))
-    if request['backend'] in ('local_h3', 'comfy_sdk_h3') and request['kind'] not in ('harvest', 'world_harvest'):
+    if request['backend'] in ('local_h3', 'comfy_sdk_h3') and request['kind'] not in ('harvest', 'world_harvest', 'storyboard'):
         from .engine.comfy import WorkflowBuilder
         builder = WorkflowBuilder.load(prepared['settings']['workflow_map_path'], ENGINE)
         digest.update(json.dumps(builder.base, sort_keys=True).encode())
@@ -456,6 +472,11 @@ def produce(store, request, prepared, context, *, resume=False):
     data = {**prepared, 'references': [str(p) for p in prepared['references']]}
     write_json(directory / 'prepared.json', data)
     from .jobs import Cancelled
+    if request['kind'] == 'storyboard':
+        context.update('Starting storyboard interpretation', 1)
+        context.command([sys.executable, '-u', '-m', 'mmv.storyboard', str(store.home), str(directory)],
+                        progress_path=directory / 'progress.json')
+        return read_json(directory / 'result.json')
     if request['kind'] == 'world_harvest':
         context.update('Starting the world harvest', 1)
         context.command([sys.executable, '-u', '-m', 'mmv.worlds', 'harvest', str(store.home), str(directory)],

@@ -31,6 +31,37 @@ def _cached_chromium():
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_storyboard_drafts_reorder_reload_and_keep_forms_independent(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_selector('#video-form .storyboard-editor')
+                editor = page.locator('#video-form .storyboard-editor')
+                editor.locator('summary').click()
+                editor.get_by_role('button', name='Add text panel').click()
+                editor.locator('textarea').fill('Walk toward the trees')
+                editor.get_by_role('button', name='Add text panel').click()
+                editor.locator('textarea').nth(1).fill('Turn toward the moon')
+                editor.get_by_role('button', name='Move up').nth(1).click()
+                expect(editor.locator('textarea').first).to_have_value('Turn toward the moon')
+                editor.locator('[name=storyboard_enabled]').check()
+                page.wait_for_timeout(1200)
+                page.reload()
+                page.wait_for_function("() => document.querySelector('#video-form [name=storyboard_draft]')?.value.includes('Turn toward the moon')")
+                page.locator('#video-form .storyboard-editor summary').click()
+                expect(editor.locator('textarea').first).to_have_value('Turn toward the moon')
+                expect(editor.locator('[name=storyboard_enabled]')).to_be_checked()
+                expect(page.locator('#ident-form .storyboard-panel')).to_have_count(0)
+                self.assertFalse(errors, errors)
+            finally:
+                browser.close()
+
+
     def test_file_drop_uses_existing_upload_handlers_and_rejects_bad_files(self):
         from test_public_app import picture
         from playwright.sync_api import sync_playwright, expect
@@ -53,7 +84,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page = browser.new_page()
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 14')
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 16')
                 song = {'name': 'dropped.wav', 'type': 'audio/wav', 'bytes': list(self.song.read_bytes())}
                 result = drop(page, '#video-form .song-input', [song])
                 self.assertTrue(result['hovered'] and result['cleared'])
@@ -463,7 +494,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.6')
+                expect(page.locator('#version')).to_have_text('1.10.7')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -577,11 +608,11 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 self.assertTrue(page.evaluate('window.otherCard === document.querySelector(".vocab-summary-cat-card[data-category=lighting]")'))
                 page.locator('#vocab-apply-btn').click()
                 expect(page.locator('#panel-video')).to_be_visible()
-                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False])
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False, False])
                 page.wait_for_function('() => JSON.parse(localStorage.getItem("mmv_project_draft") || "{}").panel === "video"')
                 page.reload()
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
-                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False])
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False, False])
                 page.locator('.nav[data-panel=vocab]').click()
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
@@ -1233,7 +1264,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.6')
+                expect(page.locator('#version')).to_have_text('1.10.7')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

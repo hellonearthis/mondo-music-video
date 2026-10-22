@@ -23,7 +23,7 @@ class _PollingAccessFilter(logging.Filter):
         return not any(p in msg for p in ("/api/status", "/api/events", "/api/log/", "/api/services"))
 
 logging.getLogger("uvicorn.access").addFilter(_PollingAccessFilter())
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import HTTPException, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -33,11 +33,12 @@ from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
 from mmv.services import check_services
+from mmv.storyboard import Storyboard
 from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.6"
+MGL_APP_VERSION = "1.10.7"
 WEB = Path(__file__).parent
 
 
@@ -278,7 +279,7 @@ class CaptionSettings(StrictModel):
 
 
 class ProductionRequest(StrictModel):
-    kind: Literal["video", "ident", "harvest", "world_harvest"] = "video"
+    kind: Literal["video", "ident", "harvest", "world_harvest", "storyboard"] = "video"
     title: str = Field(default="", max_length=160)
     song: str = Field(default="", max_length=128)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
@@ -314,6 +315,8 @@ class ProductionRequest(StrictModel):
     ensemble_mode: Literal["off", "always", "mixed"] = "off"
     on_screen: int = Field(default=1, ge=1, le=9)
     ident_mode: Literal["standard", "harvest", "scenographic"] = "standard"
+    storyboard: Storyboard = Field(default_factory=Storyboard)
+    ident_all_references: bool = False
     ident_seconds: float = Field(default=5, ge=4, le=12)
     start_ident: str = Field(default="", max_length=128)
     end_ident: str = Field(default="", max_length=128)
@@ -392,6 +395,14 @@ DANCE_FIELDS = ("dance_mode", "dancers", "dance_direction", "dance_lead", "dance
 def request_dict(value):
     """The stored production request. A request without dancing or captions is stored exactly as it was before they existed."""
     request = value.model_dump()
+    if request['kind'] != 'storyboard' and not request['storyboard']['enabled']:
+        request.pop('storyboard')
+    elif request['kind'] not in ('storyboard', 'video', 'ident'):
+        raise ValueError('Storyboards are available for music videos and idents')
+    if not request['ident_all_references']:
+        request.pop('ident_all_references')
+    elif request['kind'] != 'ident':
+        raise ValueError('Use all ident references is only available for idents')
     if request.get("captions", {}).get("mode", "off") == "off":
         request.pop("captions", None)
     if not request.get("strict_prompt_checks"):
@@ -1033,6 +1044,13 @@ def create_app(home=None, *, test_hosts=False):
             write_json(target.with_name(name + ".metadata.json"), {"name": Path((file.filename or kind).replace("\\", "/")).name})
         return {"file": name, "name": file.filename}
 
+    @app.get("/api/uploads/reference/{filename}")
+    def uploaded_reference(filename: str):
+        path = inside(store.home / 'uploads', filename)
+        if path.suffix != '.png' or not path.is_file():
+            raise HTTPException(404, 'Reference image not found')
+        return FileResponse(path, media_type='image/png')
+
     @app.get("/api/uploads/song/{filename}")
     def get_uploaded_song(filename: str):
         path = inside(store.home / "uploads", filename)
@@ -1395,12 +1413,33 @@ def create_app(home=None, *, test_hosts=False):
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"), "world_contrast": prepared.get("world_contrast"),
+                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"), "world_contrast": prepared.get("world_contrast"), "storyboard": prepared.get("storyboard"),
                     "offline_engines": offline_engines,
                     "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
                     else prepared["estimate"] > 0,
                     "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
                     "Cancellation cannot undo charges for submitted work."}
+
+    @app.get("/api/storyboards")
+    def storyboard_results():
+        paths = {p.parent: p for name in ('storyboard-response.txt', 'storyboard.json')
+                 for p in (store.home / 'runs').glob('*/' + name)}
+        return [{'run_id': p.parent.name} for p in sorted(paths.values(), key=lambda p: p.stat().st_mtime, reverse=True)]
+
+    @app.get("/api/storyboards/{run_id}/response")
+    def storyboard_response(run_id: str):
+        path = inside(store.home / 'runs', identifier(run_id)) / 'storyboard-response.txt'
+        if not path.is_file():
+            raise HTTPException(404, 'No saved vision response for this operation')
+        return {'response': path.read_text(encoding='utf-8')}
+
+    @app.get("/api/storyboards/{run_id}")
+    def storyboard_result(run_id: str):
+        directory = inside(store.home / 'runs', identifier(run_id))
+        result = read_json(directory / 'storyboard.json') if (directory / 'storyboard.json').is_file() else None
+        if result is None:
+            raise HTTPException(404, 'Storyboard result not found; inspect operation status and logs')
+        return Storyboard(**result).model_dump()
 
     @app.post("/api/quote")
     def quote(value: ProductionRequest):

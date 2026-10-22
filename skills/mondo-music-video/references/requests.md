@@ -183,3 +183,19 @@ string/fret contact before normal schema, motion, instrument and Laya checks.
 The private operation log and `segNNN.instrument-repair-N.json` identify edited
 shots; the original writer JSON is preserved. Wrong-instrument gestures and
 ambiguous clauses still fail validation. No extra paid writer call is made.
+
+## Storyboarding
+
+Storyboards are optional for music videos and idents. Upload source images as
+`reference`, preview `kind: "storyboard"` with `storyboard: {mode: "narrative", images: [UPLOAD_ID]}`,
+review cost and start only with authorization. Poll status, list `storyboards`, then
+read `inspect_storyboard(run_id)` (CLI `storyboard-result RUN_ID`). Edit/reorder
+`panels: [{image, direction}]` before adding the result as `storyboard` with
+`enabled: true` to a video/ident preview. Modes are `narrative` (default) and `visual`.
+Text-only panels use empty image IDs. Inspect returned `storyboard.passages` timing
+before start. No automatic interpretation retry; recover completed results by run ID,
+and inspect logs before making another call. Inspect raw model output with
+`inspect_storyboard(run_id, raw_response=true)` or CLI `storyboard-result RUN_ID --raw-response`. Existing video resume binds the saved
+alignment to prompts. Ident `ident_all_references: true` uses all attached references
+within renderer limits; false preserves one-reference casting. Source storyboards
+remain private. See docs/STORYBOARDS.md in the checkout for the full workflow.

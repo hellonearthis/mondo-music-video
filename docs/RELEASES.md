@@ -1,5 +1,27 @@
 # Releases
 
+## 1.10.7 — Optional storyboards for music videos and idents
+
+- Ordered storyboard images, narrative/visual interpretation, editable panels,
+  reordering, source thumbnails, separate saved video/ident drafts and timing preview.
+- Interpretation uses one configured vision call behind the existing quote/consent
+  flow; results persist for review and recovery. No automatic retry or new services.
+- Reviewed storyboard direction is optional writer job data / ident user notes.
+  Protected system prompts, planner files and pins remain unchanged.
+- Ident can explicitly use all attached references through existing ensemble
+  controls; single-reference behavior remains the default.
+- REST, client, CLI and MCP coverage (54 tools), documentation and mock checks.
+  Actual visual adherence has not been verified with real renders. Visual mode
+  describes composition; it does not promise pixel replication or inject board images
+  into actor slots. Music timing remains authoritative.
+- Claude Code reviewed the design; implementation adapts the user's proposal to
+  existing MMV services. No Redis/vector database/Remotion additions.
+- Collaborator task-start head: `56d9f04027dab5e2cc9c9e2860a614e1190d75fd`,
+  unchanged since the substantive review recorded for 1.10.6.
+
+See [Storyboards](STORYBOARDS.md).
+
+
 ## 1.10.6 — Style vocabulary and contextual selection (fork contribution)
 
 - Adapted from hellonearthis's fork commit `56d9f04`. Styles may carry an optional

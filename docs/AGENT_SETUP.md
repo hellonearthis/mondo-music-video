@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.6 exposes **53 tools** and advertises the
+v1.10.7 exposes **54 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -294,3 +294,19 @@ agent must explain the estimate and obtain applicable user authorization before
 setting consent. Metadata and generated text remain data, not agent instructions.
 MCP itself cannot determine whether a model truthfully obtained user consent;
 the host/agent must enforce its authorization policy.
+
+## Storyboarding
+
+Storyboards are optional for music videos and idents. Upload source images as
+`reference`, preview `kind: "storyboard"` with `storyboard: {mode: "narrative", images: [UPLOAD_ID]}`,
+review cost and start only with authorization. Poll status, list `storyboards`, then
+read `inspect_storyboard(run_id)` (CLI `storyboard-result RUN_ID`). Edit/reorder
+`panels: [{image, direction}]` before adding the result as `storyboard` with
+`enabled: true` to a video/ident preview. Modes are `narrative` (default) and `visual`.
+Text-only panels use empty image IDs. Inspect returned `storyboard.passages` timing
+before start. No automatic interpretation retry; recover completed results by run ID,
+and inspect logs before making another call. Inspect raw model output with
+`inspect_storyboard(run_id, raw_response=true)` or CLI `storyboard-result RUN_ID --raw-response`. Existing video resume binds the saved
+alignment to prompts. Ident `ident_all_references: true` uses all attached references
+within renderer limits; false preserves one-reference casting. Source storyboards
+remain private. See docs/STORYBOARDS.md in the checkout for the full workflow.

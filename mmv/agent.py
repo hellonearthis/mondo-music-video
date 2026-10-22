@@ -66,7 +66,7 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards"):
             raise ValueError("Unknown inspection kind")
         result = self._json("GET", "/api/" + kind)
         if kind == "outputs":
@@ -75,9 +75,12 @@ class AgentClient:
         return result
 
     def preview(self, request):
-        if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest", "world_harvest"):
-            raise ValueError("Preview requires a music video, ident, style harvest or world harvest request object")
+        if not isinstance(request, dict) or request.get("kind", "video") not in ("video", "ident", "harvest", "world_harvest", "storyboard"):
+            raise ValueError("Preview requires a music video, ident, style harvest, world harvest or storyboard request object")
         return self._json("POST", "/api/quote", request)
+
+    def storyboard_result(self, run_id, raw_response=False):
+        return self._json("GET", "/api/storyboards/" + urllib.parse.quote(run_id, safe="") + ("/response" if raw_response else ""))
 
     def detect_lyrics(self, song, model="large-v3", use_vocals=True):
         """Start free local lyrics detection for an uploaded song; poll status, the lines arrive in its result."""
@@ -386,7 +389,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Operate a running local Mondo Music Video app")
     parser.add_argument("--url", default=None, help="Local app URL (or MMV_URL)")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "cancel"):
+    storyboard_parser = sub.add_parser("storyboard-result")
+    storyboard_parser.add_argument("run_id")
+    storyboard_parser.add_argument("--raw-response", action="store_true")
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
@@ -459,7 +465,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         client = AgentClient(args.url)
-        if args.command == "upload":
+        if args.command == "storyboard-result":
+            result = client.storyboard_result(args.run_id, args.raw_response)
+        elif args.command == "upload":
             result = client.upload(args.kind, args.path)
         elif args.command == "preview":
             result = client.preview(json.loads(Path(args.request_file).read_text(encoding="utf-8")))

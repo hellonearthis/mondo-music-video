@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, or settings (no secret values)."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -65,6 +65,17 @@ def create_server(base_url=None):
     def select_opp_sheet(prop_id: str, use: str = "") -> dict[str, Any]:
         """Preview which base or interaction sheet an imported prop would use for free-form shot intent."""
         return invoke(client.select_opp_sheet, prop_id, use)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def inspect_storyboard(run_id: str, raw_response: bool = False) -> dict[str, Any]:
+        """Read an interpreted storyboard for review, or raw_response=true for failed-response diagnosis. Edit panels before including it in a video or ident preview.
+
+        Interpretation: preview_production kind storyboard with storyboard {mode: narrative|visual, images: upload IDs}.
+        Start the accepted quote, poll status, then inspect here. No automatic retry. Apply the edited result as
+        storyboard {enabled: true, mode, images, panels: [{image, direction}]} in a video/ident request.
+        Preview returns per-shot alignment. An ident may also set ident_all_references true (renderer limits apply).
+        """
+        return invoke(client.storyboard_result, run_id, raw_response)
 
     @server.tool()
     def preview_production(request: dict) -> dict[str, Any]:

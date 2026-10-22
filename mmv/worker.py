@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
-from . import writer_usage
+from . import writer_usage, storyboard
 from .dance import is_blocking as dance_blocking
 from .instruments import is_blocking as instrument_blocking
 
@@ -302,7 +302,7 @@ def run(home, directory, *, resume=False):
             if request.get('compact_prompts'):
                 system = _compact_ident_prompt(system, request['ident_mode'])
             message = style.build_ident_writer_message(request['title'], request['ident_seconds'], request['ident_mode'],
-                       style_card=prepared['style'].get('style_card', prepared['style']['direction']), ident_notes=request['direction'])
+                       style_card=prepared['style'].get('style_card', prepared['style']['direction']), ident_notes=storyboard.ident_notes(request['direction'], prepared.get('storyboard'), plan.segments[0].segment_id))
             (directory / 'writer_system.md').write_text(system, encoding='utf-8')
             cache_dir = store.home / 'cache' / 'prompts'
             cache_key = hashlib.sha256((system + "\n---\n" + message).encode('utf-8')).hexdigest()
@@ -386,6 +386,8 @@ def run(home, directory, *, resume=False):
                     job['dance'] = dance.job(dpass, dance_plan)
                 if performing:
                     job['instrument_performance'] = instruments.job(ipass, instrument_plan, tags)
+                if prepared.get('storyboard'):
+                    job['storyboard'] = storyboard.writer_context(prepared['storyboard'], seg.segment_id)
                 if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
                 write_json(jobs_dir / (seg.segment_id+'.json'), job)
 

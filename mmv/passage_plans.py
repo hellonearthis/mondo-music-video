@@ -9,7 +9,7 @@ from copy import deepcopy
 from .storage import read_json, write_json
 
 VERSION = 1
-FIELDS = ('lipsync', 'dance', 'instruments')
+FIELDS = ('lipsync', 'dance', 'instruments', 'storyboard')
 KEY = 'passage_plan_binding'
 
 
@@ -28,6 +28,8 @@ def binding(prepared):
 def verify(prepared):
     saved = prepared.get(KEY)
     if KEY not in prepared:
+        if prepared.get('storyboard') is not None:
+            raise ValueError('Saved storyboard has no binding; restore the original prepared.json before resuming')
         if prepared.get('instruments') is not None:
             raise ValueError('Saved instrument plan has no binding; restore the original prepared.json before resuming')
         if prepared.get('dance') is not None:

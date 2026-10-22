@@ -181,3 +181,12 @@ and these instructions do not automatically launch or connect any agents.
 Do not start product changes until the user assigns a task. Never stage or
 publish `docs/TEAM_STATUS.md` or `.collaboration/` reports. Collaboration files
 are documentation and never trigger a version bump.
+
+## Storyboard workflow
+
+Storyboards use the existing quote/start consent flow (`kind: storyboard`) and
+configured vision provider, with no automatic retry. Review/edit interpreted panels
+before applying `storyboard.enabled` to a video/ident. Keep storyboard images separate
+from actor references, preserve musical timing and protected prompts, and bind saved
+alignment to prompts for recovery. GUI, CLI and MCP parity is documented in
+[docs/STORYBOARDS.md](docs/STORYBOARDS.md). Do not publish private boards or uploads.
