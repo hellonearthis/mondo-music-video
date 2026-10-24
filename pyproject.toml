@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mondo-music-video"
-version = "1.10.9"
+version = "1.10.10"
 description = "A focused music-video studio with Open Actor Protocol built in"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,7 +14,7 @@ dependencies = [
   "Pillow>=11,<13", "numpy>=1.26,<3", "scipy>=1.12,<2", "librosa>=0.11,<2",
   "torch>=2.6,<3", "transformers>=5.17,<6", "safetensors>=0.5,<1",
   "open-actor-protocol @ git+https://github.com/hodgemann/oap@35902b1916b7f85be92b0efd3a96e462cf5d82d3",
-  "open-prop-protocol[crypto] @ git+https://github.com/hodgemann/opp@1e1bc6caec529b0f9bb0509dbe3d47a646af3fb1",
+  "open-prop-protocol[crypto] @ git+https://github.com/hodgemann/opp@ec097e132b1af8af4d0be38338aa542c337b2e42",
 ]
 
 [project.optional-dependencies]
@@ -40,7 +40,7 @@ include = ["mmv*", "webapp*"]
 
 [tool.setuptools.package-data]
 webapp = ["*.html", "*.js", "*.css", "*.ico", "*.svg", "js/*.js", "vendor/wavesurfer/*.js", "vendor/wavesurfer/LICENSE", "vendor/wavesurfer/plugins/*.js"]
-mmv = ["assets/instruments/*/instrument.json", "assets/instruments/*/reference.png", "assets/instruments/README.md"]
+mmv = ["assets/props/*/manifest.json", "assets/props/*/references/*/*.png", "assets/props/README.md"]
 "mmv.engine" = ["config/*.json", "prompts/*.md", "workflows/*.json"]
 "mmv.engine.validators" = ["laya/*.py", "laya/*.md"]
 

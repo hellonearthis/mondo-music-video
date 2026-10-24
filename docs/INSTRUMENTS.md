@@ -3,9 +3,14 @@
 Choose **Instrument performance → Actors play assigned instruments** in the video
 form and assign drums, bass, guitar or keyboards to selected actors. The mode is
 off by default. **Consistent instrument references** is checked by default within
-this opt-in mode. Open **Cast & OAP → Instrument reference library** to inspect
-the sheets or import a local one with its license and provenance. Imports do not
-overwrite existing local sheets; they override the bundled design on that machine.
+this opt-in mode. Instrument sheets are Open Prop Protocol props: open
+**Cast & OAP → Open Prop Protocol library** to see them. The bundled guitar and
+keyboards are installed there automatically as `mmv-guitar` and `mmv-keyboards`
+and are each role's default; import an `.opp` package for drums, bass or a
+different design, and choose it per role in the video form. There is no separate
+instrument library. Sheets saved by earlier releases under `data/instruments/` are
+carried into the props library as `mmv-local-<role>` props (the old files stay) and
+take precedence as that role's default.
 
 The owner approved this extension using the BONK pattern: additional rules are
 inserted outside the original engine, before the existing quality rules. The
@@ -52,11 +57,11 @@ and prompt/cache behavior. Start a new production to add instruments to an old r
 
 ## Assets and OAP
 
-Props use a small `mmv.instrument` version 1 record, separate from the Open Actor
+Instrument sheets are Open Prop Protocol props, separate from the Open Actor
 Protocol. They do not become actors, consume actor cast positions or bypass OAP
-rider/signature verification. Metadata contains instrument ID, design description,
-PNG dimensions, SHA-256, original-image SHA-256, license and provenance. A future
-OAP prop extension can adapt this format without relabeling props as people now.
+rider/signature verification. The library record keeps the prop ID, description,
+license, sheet hashes, signer report and the preserved original bundle; the bundled
+starters (`mmv/assets/props/`) are unsigned source trees packed on first use.
 
 Bundled public assets live under `mmv/assets/instruments/`. Local imports live
 under the application's private `instruments/` folder. Original local import bytes
@@ -84,7 +89,7 @@ Public source/wheel packages include only the explicitly bundled public sheets.
 
 ## Open Prop Protocol packages (1.9.7)
 
-MMV accepts Open Prop Protocol v0.1 `.opp` bundles. Open **Cast & OAP → Open
+MMV accepts Open Prop Protocol v0.1 and v0.2 `.opp` bundles (v0.2.0 is pinned; unknown minor versions are rejected). Open **Cast & OAP → Open
 Prop Protocol library**, inspect a package, review its owner, sheets, clearance,
 hash and signature report, then import it. Signed packages require an explicit
 signer acceptance using the inspected public key; unsigned local drafts require the separate unsigned choice.
@@ -118,13 +123,12 @@ review the package's license and clearance before using it.
 
 ## API and agent use
 
-`GET /api/instruments` lists all four designs and availability;
-`GET /api/instruments/{id}/reference` serves the selected sheet.
-`POST /api/instruments/{id}` accepts multipart `reference`, `license`, `provenance`
-while the app is idle. This imports locally and never publishes anything.
+`GET /api/instruments` lists the four roles with their default props and availability.
 
-Use `AgentClient.import_instrument(id, path, license, provenance)` or the MCP
-`import_instrument` tool, and `inspect_studio(kind="instruments")` for discovery.
+Import props with `upload_media(kind="opp")`, `inspect_opp` and `import_opp`
+(the former `import_instrument` tool and `POST /api/instruments/{id}` are removed);
+`inspect_studio(kind="instruments")` lists each role and its default prop and
+`inspect_studio(kind="props")` lists the library.
 MCP exposes 42 tools. The shell supports `mondo-music-video-agent instruments`
 and `props`, plus `upload opp`, `inspect-opp`, `import-opp`, and
 `select-opp-sheet`. `inspect_studio(kind="props")`, `inspect_opp`, `import_opp`,

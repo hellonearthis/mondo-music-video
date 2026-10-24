@@ -174,7 +174,7 @@ Independent dancing: `dance_mode: "independent"`, `dance_parts: {"actor_id": "ba
 
 ## Instrument performance (1.9.0)
 
-Use `instrument_mode: "perform"` only when requested (default off), with `instrument_assignments` mapping selected actor IDs to `drums`, `bass`, `guitar` or `keyboards`. `instrument_references: true` uses the instrument library; inspect `instruments` first. Guitar/keyboard sheets are bundled; import missing sheets with `import_instrument(instrument_id, reference_path, license, provenance)` or use `instrument_references: false` for text guidance. Local imports never overwrite or publish.
+Use `instrument_mode: "perform"` only when requested (default off), with `instrument_assignments` mapping selected actor IDs to `drums`, `bass`, `guitar` or `keyboards`. `instrument_references: true` uses OPP props; inspect `instruments` and `props` first. Guitar/keyboard props are bundled; import missing ones (drums, bass) as `.opp` with `upload_media(kind="opp")`, `inspect_opp` and `import_opp`, or use `instrument_references: false` for text guidance. Local imports never overwrite or publish.
 
 Inspect preview `instruments` for per-shot cues, mix/unknown fallbacks and per-passage reference counts. Players do not dance; other actors may. Approved singers may sing while playing. Only existing stem caches/audio are used (CPU analysis may run); no separation or downloads start. Keyboards use piano as a proxy. Slot overflow stops preview. Saved plans and sheet hashes are checked on resume. Same-song/seed operator comparison is still pending; do not promise precise finger/note sync or verified visual consistency. Existing OAP, single-operation, quote consent and no paid retry rules apply.
 

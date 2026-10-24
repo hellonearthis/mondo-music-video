@@ -1,4 +1,14 @@
-# Verification — 1.10.9
+# Verification — 1.10.10
+
+## 1.10.10 — OPP v0.2
+
+Focused tests (`tests/test_opp_props.py`, 5 passed) cover a v0.2 signed import,
+a v0.1 signed import, generic-asset recording, and rejection of an unknown 0.3
+minor, plus preview-tier inspection. Final full suite after the inspection and instrument-to-props changes: **719 passed + 141
+subtests**, 218.74 s. Live 1.10.10 on 8091 (restarted while idle, existing data, --no-auto-update) lists `mmv-guitar` and `mmv-keyboards` in `/api/props` and no longer serves the instrument library.
+The instrument-library-to-props change was covered by new tests (starter install, once-only install, default role resolution, legacy migration, changed-sheet detection) and updated browser/agent/public-app tests. Codex (read-only) reviewed the diff; its two findings were adopted. No paid, GPU or real
+generation was run.
+
 
 ## 1.10.9 — Source-only final assembly
 

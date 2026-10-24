@@ -1,0 +1,35 @@
+{
+  "opp_version": "0.2.0",
+  "kind": "opp.prop.manifest",
+  "prop": {
+    "id": "mmv-keyboards",
+    "name": "Stage keyboards",
+    "description": "Charcoal electronic stage keyboard, a row of rotary knobs, centered blank display, two left-side wheels, black X stand and one sustain pedal.",
+    "license": "Apache-2.0",
+    "provenance": "Owner-supplied AI instrument reference sheet for public distribution with Mondo Music Video, 2026-10-20. Generation model not independently verified; native dimensions preserved.",
+    "owner": {
+      "name": "Mondo Music Video",
+      "did": null,
+      "public_key": null
+    }
+  },
+  "sheets": [
+    {
+      "file": "references/public/base.png",
+      "kind": "base",
+      "label": "Overview",
+      "tags": [
+        "stage keyboards"
+      ],
+      "prompt_modifier": null,
+      "clearance": "public",
+      "sha256": null
+    }
+  ],
+  "assets": [],
+  "signature": {
+    "algorithm": "ed25519",
+    "value": null,
+    "signed_at": null
+  }
+}

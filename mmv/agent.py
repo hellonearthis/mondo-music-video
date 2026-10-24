@@ -143,12 +143,6 @@ class AgentClient:
             raise ValueError("Choose song, reference, oap, opp, agreement, video or lore")
         return self._multipart("/api/upload/" + kind, {}, "file", path)
 
-    def import_instrument(self, instrument_id, reference_path, license, provenance):
-        from .instrument_assets import valid_kind
-        valid_kind(instrument_id)
-        return self._multipart("/api/instruments/" + instrument_id, {"license": license, "provenance": provenance},
-                               "reference", reference_path)
-
     def inspect_opp(self, filename, allow_unsigned=False):
         return self._json("GET", "/api/opp/inspect/" + urllib.parse.quote(filename, safe="") +
                           "?allow_unsigned=" + str(bool(allow_unsigned)).lower())

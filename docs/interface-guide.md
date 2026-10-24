@@ -118,11 +118,11 @@ To toggle Component Labeling Mode in the web interface:
 - **Code**: `webapp/index.html`, `webapp/js/actors.js`, `webapp/js/oap.js`
 - **Design rules**: Cast management, reference portrait binding, and Open Actor Protocol packaging.
 
-### Instrument Reference Library
-- **ID**: `instrument-library-fold`
-- **Used in**: Top of `panel-actors`
-- **Code**: `webapp/index.html`, `webapp/js/actors.js`
-- **Design rules**: Collapsible card displaying drum, bass, guitar, and keyboard reference sheets with an import form.
+### Open Prop Protocol Library
+- **ID**: `opp-library-fold`
+- **Used in**: `panel-actors`
+- **Code**: `webapp/index.html`, `webapp/js/instruments.js`
+- **Design rules**: Collapsible card listing all props, including the bundled guitar and keyboards that serve as instrument references, with OPP inspect/import. There is no separate instrument library.
 
 ### Actor Creation Form
 - **ID**: `actor-create-form`

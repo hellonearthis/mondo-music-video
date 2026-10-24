@@ -79,7 +79,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda error: errors.append(str(error)))
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 17')
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 16')
                 page.locator('#quick-start').click()
                 expect(page.locator('#quick-start-dialog')).to_be_visible()
                 expect(page.locator('#quick-start-dialog')).to_contain_text('Select a song to begin')
@@ -109,7 +109,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda error: errors.append(str(error)))
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 17')
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 16')
                 page.locator('#video-form .song-input').set_input_files({'name': 'keep.wav', 'mimeType': 'audio/wav', 'buffer': self.song.read_bytes()})
                 expect(page.locator('#video-form .song-receipt')).to_contain_text('Uploaded: keep.wav')
                 page.locator('#video-form [name=title]').fill('Old title')
@@ -179,7 +179,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page = browser.new_page()
             try:
                 page.goto(self.url)
-                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 17')
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 16')
                 song = {'name': 'dropped.wav', 'type': 'audio/wav', 'bytes': list(self.song.read_bytes())}
                 result = drop(page, '#video-form .song-input', [song])
                 self.assertTrue(result['hovered'] and result['cleared'])
@@ -212,13 +212,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 drop(page, '#actor-form [name=reference]', [image])
                 page.locator('#actor-form button').click()
                 expect(page.locator('#actor-list')).to_contain_text('Drop Actor')
-                page.locator('#instrument-library-fold summary').click()
-                page.locator('#instrument-import-form [name=instrument_id]').select_option('bass')
-                page.locator('#instrument-import-form [name=license]').fill('Test license')
-                page.locator('#instrument-import-form [name=provenance]').fill('Test fixture')
-                drop(page, '#instrument-import-form [name=reference]', [image])
-                page.locator('#instrument-import-form button').click()
-                expect(page.locator('#instrument-library')).to_contain_text('Electric bass')
+                expect(page.locator('#instrument-library-fold')).to_have_count(0)
+                page.locator('#opp-library-fold summary').click()
+                expect(page.locator('#opp-library')).to_contain_text('Electric guitar')
                 page.evaluate('''() => {
                   document.querySelector('#oap-import-form').hidden = false;
                   document.querySelector('#oap-report-card').hidden = false;
@@ -582,7 +578,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.9')
+                expect(page.locator('#version')).to_have_text('1.10.10')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1348,7 +1344,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.9')
+                expect(page.locator('#version')).to_have_text('1.10.10')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

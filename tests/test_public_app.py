@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.9")
+        self.assertEqual(api_version()["version"], "1.10.10")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.9", (root / "README.md").read_text())
+        self.assertIn("1.10.10", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -1144,16 +1144,13 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(comfy_sdk.media_suffix(make('application/octet-stream', 'clip.webm'), '.mp4'), '.webm')
         self.assertEqual(comfy_sdk.media_suffix(make('', ''), '.mp4'), '.mp4')
 
-    def test_instrument_import_preview_validation_and_mock_render_reference_order(self):
+    def test_bundled_props_preview_validation_and_mock_render_reference_order(self):
         from mmv import instrument_assets
-        for actor_id, kind in (('guitar_actor', 'guitar'), ('keys_actor', 'keyboards')):
+        for actor_id in ('guitar_actor', 'keys_actor'):
             actors.create_actor(self.store, actor_id, actor_id, 'Overview', picture())
-            imported = self.client.post('/api/instruments/' + kind,
-                data={'license': 'synthetic test', 'provenance': 'private test provenance'},
-                files={'reference': ('test.png', picture(), 'image/png')})
-            imported.raise_for_status()
         self.assertTrue(next(i for i in self.client.get('/api/instruments').json() if i['id'] == 'guitar')['available'])
-        self.assertEqual(self.client.get('/api/instruments/guitar/reference').status_code, 200)
+        self.assertEqual(self.client.get('/api/props/mmv-guitar/reference').status_code, 200)
+        self.assertEqual(self.client.post('/api/instruments/guitar').status_code, 404)
         song = self.song_upload()
         request = {'song': song, 'actors': ['guitar_actor', 'keys_actor'], 'on_screen': 2, 'ensemble_mode': 'always',
                    'instrument_mode': 'perform', 'instrument_assignments': {'guitar_actor': 'guitar', 'keys_actor': 'keyboards'}}

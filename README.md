@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.10.9** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.10.10** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -270,7 +270,7 @@ model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
 
 **Open Prop Protocol:** Import verified `.opp` packages into a private, general
-prop library. For now, a selected OPP base or interaction sheet can serve as an
+prop library (OPP v0.1 and v0.2; v0.2 generic assets such as stems are recorded but not rendered). For now, a selected OPP base or interaction sheet can serve as an
 instrument reference in an opt-in music video. The prop format and library are
 not limited to the four current musical roles; see [instrument and OPP use](docs/INSTRUMENTS.md).
 

@@ -265,7 +265,7 @@ money as part of an installation request.
 
 ### Open Prop Protocol
 
-Open Prop Protocol v0.1 support is part of the application dependency set. It
+Open Prop Protocol v0.2 support (v0.1 packages also import) is part of the application dependency set. It
 does not require model weights or automatic prop downloads. Verify that the app
 catalog reports `opp_version` and that `GET /api/props` works. The owner may
 later choose a `.opp` file; inspect its manifest, hashes and signer, obtain

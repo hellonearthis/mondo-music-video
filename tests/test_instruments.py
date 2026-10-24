@@ -81,27 +81,6 @@ def test_text_only_and_empty_stem_samples_do_not_invent_silence():
     assert all(s['activity'] == 'unknown' and not s['paused'] for s in guitar['shots'])
 
 
-def test_local_asset_import_preserves_original_checks_hash_and_never_overwrites(tmp_path, monkeypatch):
-    monkeypatch.setattr(assets, 'BUNDLED', tmp_path / 'empty')
-    store = Storage(tmp_path / 'home')
-    assert not any(item['available'] for item in assets.catalog(store))
-    data = picture()
-    record = assets.import_sheet(store, 'guitar', data, license='test only', provenance='synthetic fixture')
-    assert (store.home / 'instruments/guitar/original.image').read_bytes() == data
-    assert (record['width'], record['height']) == (64, 80)
-    current = assets.locate(store, 'guitar')
-    with pytest.raises(ValueError, match='never overwrite'):
-        assets.import_sheet(store, 'guitar', data, license='test', provenance='test')
-    with pytest.raises(ValueError, match='license'):
-        assets.import_sheet(store, 'bass', data, license='', provenance='test')
-    inst.verify_assets({'assets': {'guitar': current}})
-    (store.home / 'instruments/guitar/reference.png').write_bytes(b'changed')
-    with pytest.raises(ValueError, match='checksum'):
-        assets.locate(store, 'guitar')
-    with pytest.raises(ValueError, match='changed'):
-        inst.verify_assets({'assets': {'guitar': current}})
-
-
 def test_asset_bytes_change_consent_fingerprint_and_plan_binding(tmp_path):
     path = tmp_path / 'reference.png'
     path.write_bytes(picture())
