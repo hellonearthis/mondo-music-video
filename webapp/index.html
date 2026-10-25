@@ -11,8 +11,8 @@
   <title>🪿 Mondo Music Video — Maximum Goose Laboratories</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" href="/favicon.ico"><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
 </head>
 <body>
-<header data-component="Studio Header" data-component-id="studio-header" data-component-source="webapp/index.html"><a class="brand" href="/" data-tooltip="Mondo Music Video — Return to the main studio"><span class="brand-mark">M</span><span>MONDO<small>MUSIC VIDEO</small></span></a>
-  <div class="edition" data-tooltip="Mondo Music Video application version">A LITTLE STUDIO. A BIG PICTURE.<span>Community edition <span id="version"></span></span></div>
+<header data-component="Studio Header" data-component-id="studio-header" data-component-source="webapp/index.html"><a class="brand" href="/"><span class="brand-mark">M</span><span>MONDO<small>MUSIC VIDEO</small></span></a>
+  <div class="edition">A LITTLE STUDIO. A BIG PICTURE.<span>Community edition <span id="version"></span></span></div>
   <div class="header-actions">  <button type="button" id="theme-toggle" class="secondary" aria-label="Dark mode" aria-pressed="true">Dark mode</button>
   <button type="button" class="oap-badge oap-help-btn" data-tooltip="Open Actor Protocol specification version supported by this studio — Click for guide and details">OAP BUILT IN <span id="oap-version"></span> <span class="oap-badge-info">&#x2139;&#xFE0F;</span></button></div></header>
 <div class="shell">
@@ -42,14 +42,14 @@
 </details><div class="sidebar-note">You can do anything<br>MAXIMUM GOOSE LABORATORY</div></aside>
 <main><div id="scheme-notice" class="scheme-notice" role="alert" hidden></div><div id="update-banner" class="update-banner" role="status" hidden><span id="update-message"></span> <a id="update-repository" target="_blank" rel="noopener noreferrer" hidden>Open repository ↗</a></div>
 <div id="notice" role="alert" hidden></div>
-<section id="operation" data-component="Operation Control Bar" data-component-id="operation-bar" data-component-source="webapp/index.html" aria-live="polite"><div><span id="status-dot" data-tooltip="Pipeline engine status indicator"></span><strong id="status-title" data-tooltip="Current status of the studio engine">READY WHEN YOU ARE</strong><span id="status-message" data-tooltip="Detailed operation state or error report">One idea. One production at a time.</span></div>
-  <progress id="progress" max="100" value="0" aria-label="Operation progress" data-tooltip="Progress percentage of active production"></progress><button id="cancel" class="quiet" hidden data-tooltip="Stop the currently active production run">Cancel operation</button><button id="resume-production" class="quiet operation-action" hidden>Review resume</button><button id="retry-prompts" class="quiet operation-action" hidden>Try again</button><button id="show-log" class="quiet" data-tooltip="Toggle the live operation log stream">View log</button><button id="copy-log" class="quiet" data-tooltip="Copy the operation log and diagnostics to your clipboard">Copy log</button><button id="clear-log" class="quiet" data-tooltip="Clear log history and reset the diagnostic log view">Clear log</button>
+<section id="operation" data-component="Operation Control Bar" data-component-id="operation-bar" data-component-source="webapp/index.html" aria-live="polite"><div data-tooltip="Current status and real-time execution report of the studio engine."><span id="status-dot"></span><strong id="status-title">READY WHEN YOU ARE</strong><span id="status-message">One idea. One production at a time.</span></div>
+  <progress id="progress" max="100" value="0" aria-label="Operation progress" data-tooltip="Progress percentage of active production"></progress><button id="cancel" class="quiet" hidden data-tooltip="Stop the currently active production run">Cancel operation</button><button id="resume-production" class="quiet operation-action" hidden>Review resume</button><button id="retry-prompts" class="quiet operation-action" hidden>Try again</button><button id="show-log" class="quiet">View log</button><button id="copy-log" class="quiet" data-tooltip="Copy the operation log and diagnostics to your clipboard">Copy log</button><button id="clear-log" class="quiet" data-tooltip="Clear log history and reset the diagnostic log view">Clear log</button>
   <pre id="operation-log" hidden data-tooltip="Real-time studio operation log output"></pre></section>
 
 <section id="service-dock" class="service-dock" data-component="Service Dock" data-component-id="service-dock" data-component-source="webapp/index.html" aria-label="Local AI engines and hardware status">
   <div class="service-dock-header">
     <div class="service-dock-caption"><span class="service-dock-icon">⚡</span> <strong class="service-dock-title">LOCAL ENGINES &amp; HARDWARE</strong> <span class="service-dock-sub">Live availability and active/sleeping state</span></div>
-    <button type="button" id="refresh-services" class="service-dock-refresh" data-tooltip="Probe local AI engines, hardware GPUs, and loaded models now">↻ Refresh status</button>
+    <button type="button" id="refresh-services" class="service-dock-refresh">↻ Refresh status</button>
   </div>
   <div class="service-cards-grid">
     <div id="service-card-laya" class="service-card" data-service="laya" data-tooltip="Laya: Local semantic prompt validator and consistency reviewer">

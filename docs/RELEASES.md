@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.13 - Tooltip Theming & Operation Bar Polish
+
+- **Polished Tooltip Theming**: Upgraded studio tooltips with an emerald forest dark mode (`#0e201b` background, `#224b3d` border, `#e8f4ec` text) and a clean soft-blue light mode (`#f0f5fc` background, `#0d233a` text, `#b8d1ea` border).
+- **Consolidated Operation Bar Tooltip**: Merged redundant individual status tooltips into a unified tooltip on the studio status container (`Current status and real-time execution report of the studio engine.`).
+- **Sidebar & Tooltip Refinements**: Retained right-side offset positioning for sidebar items and cleaned duplicate attributes across the application header.
+
 ## 1.10.12 - GUI Decluttering, Accessible Tooltips & Studio Polish
 
 - **Streamlined Service Dock & Form Cards**: Slimmed the service dock into a compact single-line horizontal status strip with informative tooltips; organized Card 1 & Card 2 secondary parameters into collapsible `.sub-fold` accordions while keeping all form input names, IDs, and tests 100% intact.
