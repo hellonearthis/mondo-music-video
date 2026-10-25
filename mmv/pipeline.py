@@ -474,6 +474,12 @@ def prepare_resume(store, request, directory):
 
 
 def produce(store, request, prepared, context, *, resume=False):
+    from . import vision_service
+    with vision_service.for_request(request, prepared, context):
+        return _produce(store, request, prepared, context, resume=resume)
+
+
+def _produce(store, request, prepared, context, *, resume=False):
     from . import passage_plans
     directory = context.log_path.parent
     if resume:

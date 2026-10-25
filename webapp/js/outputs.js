@@ -444,7 +444,7 @@ export async function loadOutputs() {
     const video = document.createElement("video");
     video.src = "/api/media/" + output.file;
     video.controls = true;
-    video.preload = "metadata";
+    video.preload = "none";
     video.dataset.tooltip = `Video player for ${output.title}`;
     video.title = video.dataset.tooltip;
 

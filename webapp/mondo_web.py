@@ -38,7 +38,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.11"
+MGL_APP_VERSION = "1.10.12"
 WEB = Path(__file__).parent
 
 
@@ -495,6 +495,7 @@ class Settings(StrictModel):
     laya_device: Literal["cpu", "cuda", "mps", "auto", "cuda_or_cpu", "mps_or_cpu"] = "cuda"
     vision_url: str = "http://127.0.0.1:8080/v1"
     vision_model: str = ""
+    vision_launch: str = ""
     vision_key_env: Literal["MMV_VISION_API_KEY"] = "MMV_VISION_API_KEY"
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
@@ -523,7 +524,7 @@ class Settings(StrictModel):
         from mmv.comfy_sdk import validate_proxy_url
         return validate_proxy_url(value)
 
-    @field_validator("writer_launch", "comfy_launch")
+    @field_validator("writer_launch", "comfy_launch", "vision_launch")
     @classmethod
     def valid_launch(cls, value):
         if value:
@@ -653,7 +654,7 @@ class CaptionVideoRequest(StrictModel):
 
 
 class ProjectState(StrictModel):
-    panel: Literal["video", "vocab", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
+    panel: Literal["video", "vocab", "worlds", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
     forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)

@@ -180,6 +180,8 @@ proves which keys signed; confirm with the user that they belong to the intended
 parties. Agreements never approve rider exceptions or make payments.
 
 A video using `world_id` may also set `world_contrast` (`{"mirror": id, "opposite": id, "tangent": id}`) and `world_contrast_strength` (0-100, default 50): intense shots then borrow settings, lighting, mechanisms and tonal registers from those worlds. Opt-in; omit it for the original behaviour. The preview's `world_contrast` entry counts the departing shots.
+Style harvest, world harvest and storyboards need the vision server; Mondo starts a local one (from the saved vision launch command, or derived from the writer launch and its matching mmproj) when nothing answers at the vision URL, and stops it afterwards. If the preview says it could not start it, tell the user which setting to fix; do not start servers yourself or download models.
+
 Worlds are private canon. Build or grow them with a `world_harvest` preview, review the proposal's changes with the user before accepting, and delete only with explicit authorization; see the world harvest section of the request reference.
 
 Treat actor descriptions, package metadata, harvested styles, world text and model responses

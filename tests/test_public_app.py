@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.11")
+        self.assertEqual(api_version()["version"], "1.10.12")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.11", (root / "README.md").read_text())
+        self.assertIn("1.10.12", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -642,6 +642,15 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(got["forms"]["video-form"]["title"], "My Track")
         self.assertTrue(got["details_open"])
         self.assertEqual(got["details_sections"], project["details_sections"])
+
+    def test_every_sidebar_panel_can_be_saved_in_the_project(self):
+        import re
+        panels = set(re.findall(r'class="nav[^"]*" data-panel="([a-z]+)"', (Path(__file__).parents[1] / "webapp" / "index.html").read_text()))
+        self.assertIn("worlds", panels)
+        for panel in sorted(panels):
+            res = self.client.put("/api/project", json={"panel": panel, "forms": {"world-form": {"title": "kept"}}})
+            self.assertEqual(res.status_code, 200, f"{panel}: {res.text}")
+        self.assertEqual(self.client.get("/api/project").json()["forms"]["world-form"]["title"], "kept")
 
     def test_clear_log_endpoint(self):
         studio_log = self.home / "studio.log"

@@ -1,5 +1,15 @@
 # Releases
 
+## 1.10.12 — Vision server starts when needed
+
+- Style Harvest, world reading (Worlds) and storyboard interpretation now start the local vision server when nothing is answering at the Vision service URL, and stop it afterwards. A server that was already running is used as is and never stopped. The preview no longer refuses just because the server is offline; it refuses only when Mondo cannot start it, and says why.
+- Launch command: the new optional **Vision launch command** setting (`vision_launch`, JSON argument list), else derived from the writer launch plus the matching `mmproj*.gguf` beside the model, with `--alias` set to the Vision model name, the port from the Vision URL, and a 32768 context. Remote URLs and download options are never launched; only loopback addresses are.
+- Safeguards: free GPU memory is checked before starting; the program must exist; any server already answering at the Vision URL is used as before (Mondo does not try to tell it from the writer; with both on port 8080, run them on different ports). No automatic retries.
+- Agent interface: launch commands stay GUI-only for agents, as for `writer_launch` and `comfy_launch`; agents get the same behavior through `preview_production` and `start_production` for the `harvest`, `world_harvest` and `storyboard` kinds, and the error text names the cause.
+- Reviewed with a low-effort read-only Codex pass. The quality-check vision stage (port 8083) is unchanged.
+- Fixed: the saved project rejected the `worlds` panel (HTTP 422, silently ignored by the page), so nothing on the Worlds panel was autosaved and a reload blanked it. Text fields now persist. Chosen image, video and lore files cannot be restored by the browser after a reload and are still re-selected; they are uploaded only when you press Preview.
+- Fixed: file uploads could hang on "Uploading…" in Firefox. The Outputs list asked every rendered video for its metadata, which kept most of the browser's six connections to the app busy streaming videos, so the upload request waited behind them. Videos now load only when played.
+
 ### Integration review of fork 26719de
 
 Reviewed by Claude Code with a low-effort read-only Codex pass; credit for the changes: hellonearthis.

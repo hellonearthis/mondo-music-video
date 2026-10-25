@@ -169,7 +169,7 @@ DEFAULTS = {
     "writer_url": "http://127.0.0.1:8080/v1", "writer_model": "", "writer_mode": "local", "writer_call_estimate": 0.0,
     "writer_launch": "", "writer_cwd": "", "comfy_launch": "", "comfy_cwd": "",
     "laya_model_dir": "", "laya_device": "cuda",
-    "vision_url": "http://127.0.0.1:8080/v1", "vision_model": "",
+    "vision_url": "http://127.0.0.1:8080/v1", "vision_model": "", "vision_launch": "",
     "vision_key_env": "MMV_VISION_API_KEY", "vision_call_estimate": 0.0,
     "topaz_executable": "", "topaz_models": "", "topaz_backend": "local",
 }

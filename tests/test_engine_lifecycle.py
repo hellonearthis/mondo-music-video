@@ -118,8 +118,9 @@ def test_matching_running_quality_vision_is_reused(env, monkeypatch):
 def test_style_harvest_stays_independent_of_launch_settings(env, monkeypatch):
     store, settings = env
     quality_port(monkeypatch, DEAD)
+    settings['writer_launch'] = ''  # nothing to derive a vision launch from, so an offline vision server is an error
     errors = services.check_required_services(store, {'kind': 'harvest'})
-    assert len(errors) == 1 and 'style harvesting' in errors[0]
+    assert len(errors) == 1 and 'style harvesting' in errors[0] and 'could not start it' in errors[0]
     with fake_server({'/v1/models': models('harvest')}) as url:
         settings['vision_url'] = url + '/v1'
         settings['writer_launch'] = ''  # harvest never needs the quality launch
