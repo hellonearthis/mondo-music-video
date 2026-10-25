@@ -137,7 +137,7 @@ const summaryCardHtml = (cat, activeItems) => {
 
 // --- Backwards-Compatible Model Wrapper ---
 
-export const buildPseudoRandomDraft = (rawKey, fallbackCount = 5, existingDraft = {}) =>
+export const buildPseudoRandomDraft = (rawKey, fallbackCount = 10, existingDraft = {}) =>
   computePseudoRandomDraft(vocabDataCache, rawKey, fallbackCount, existingDraft);
 
 // --- DOM Sync & Render Functions ---
@@ -553,7 +553,7 @@ export function setupVocabularyCustomizer() {
 
     "#roll-vocab-random-btn": handle(async () => {
       await loadVocabularyCatalog();
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
+      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
       const res = buildPseudoRandomDraft(generateRandomKey(count), count, state.currentCustomVocab || {});
       applyRandomToProject(res, `Rolled pseudo-random vocabulary key: ${res?.key}`);
     }),
@@ -561,15 +561,15 @@ export function setupVocabularyCustomizer() {
     "#vocab-quick-apply-key-btn": handle(async () => {
       await loadVocabularyCatalog();
       const raw = ($("#vocab-quick-key-input")?.value || "").trim();
-      if (!raw) throw new Error("Enter a pseudo-random key (e.g. 482910:5)");
-      const res = buildPseudoRandomDraft(raw, 5, state.currentCustomVocab || {});
-      if (!res) throw new Error("Invalid key format. Use seed:count (e.g. 482910:5)");
+      if (!raw) throw new Error("Enter a pseudo-random key (e.g. 482910:10)");
+      const res = buildPseudoRandomDraft(raw, 10, state.currentCustomVocab || {});
+      if (!res) throw new Error("Invalid key format. Use seed:count (e.g. 482910:10)");
       applyRandomToProject(res, `Applied pseudo-random key: ${res.key}`);
     }),
 
     "#vocab-quick-reroll-btn": handle(async () => {
       await loadVocabularyCatalog();
-      const count = parseRandomKey(state.currentVocabRandomKey || "", 5)?.count || 5;
+      const count = parseRandomKey(state.currentVocabRandomKey || "", 10)?.count || 10;
       const res = buildPseudoRandomDraft(generateRandomKey(count), count, state.currentCustomVocab || {});
       applyRandomToProject(res, `Rerolled pseudo-random key: ${res?.key}`);
     }),
@@ -599,7 +599,7 @@ export function setupVocabularyCustomizer() {
     }),
 
     "#vocab-roll-random-btn": handle(() => {
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
+      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
       const res = buildPseudoRandomDraft(generateRandomKey(count), count, vocabWorkingDraft);
       if (res) {
         if ($("#vocab-preset-id") && !$("#vocab-preset-id").value) {
@@ -614,8 +614,8 @@ export function setupVocabularyCustomizer() {
 
     "#vocab-apply-key-btn": handle(() => {
       const raw = ($("#vocab-random-key")?.value || "").trim();
-      if (!raw) throw new Error("Enter a key in format seed:count (e.g. 482910:5)");
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
+      if (!raw) throw new Error("Enter a key in format seed:count (e.g. 482910:10)");
+      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
       const res = buildPseudoRandomDraft(raw, count, vocabWorkingDraft);
       if (!res) throw new Error("Invalid key format. Expected seed:count");
       applyRandomToEditor(res, `Applied key "${res.key}".`);
@@ -640,7 +640,7 @@ export function setupVocabularyCustomizer() {
     "#vocab-load-saved-key-btn": handle(() => {
       const key = $("#vocab-saved-keys-select")?.value;
       if (!key) throw new Error("Select a saved key from the dropdown first.");
-      const res = buildPseudoRandomDraft(key, 5, vocabWorkingDraft);
+      const res = buildPseudoRandomDraft(key, 10, vocabWorkingDraft);
       applyRandomToEditor(res, `Loaded saved key "${key}".`, false);
     }),
 

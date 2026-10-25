@@ -20,6 +20,7 @@ def test_contextual_vocabulary_is_pure_stable_and_narrowed():
 
 def test_seed_changes_tiebreaks_but_never_empties_a_table():
     vocab = load_vocabulary('full')
+    assert vocab is not None
     a, b = vs.contextual_vocabulary(vocab, 1), vs.contextual_vocabulary(vocab, 2)
     for name in vs.ROTATION_TABLES:
         if isinstance(vocab.get(name), list):

@@ -372,6 +372,11 @@ export function renderServices(services) {
     if (card) {
       card.classList.toggle("card-processing", activity === "processing");
       card.classList.toggle("card-missing", activity === "missing");
+      const roleEl = card.querySelector(".service-role");
+      const roleText = roleEl ? ` (${roleEl.textContent})` : "";
+      const summary = `${id}${roleText}: ${badge ? badge.textContent : activity} — ${detailText}`;
+      card.dataset.tooltip = summary;
+      card.title = summary;
     }
   }
 }
@@ -549,7 +554,7 @@ export function initProductionForms() {
         try {
           fState.song = await upload(selected, "song");
           fState.songName = selected.name;
-          form.querySelector(".song-receipt").textContent = "Uploaded: " + selected.name;
+          form.querySelector(".song-receipt").textContent = "Current loaded track (Uploaded: " + selected.name + ")";
           song.required = false;
           scheduleSave();
         } catch (error) {
@@ -718,6 +723,7 @@ export function initOperationControls() {
     state.sessionLogs.length = 0;
     state.currentRun = null;
     await api("/api/log/clear", { method: "POST" });
+    applyStatus({ state: "idle", message: "One idea. One production at a time.", progress: 0 });
     $("#operation-log").textContent = "Log cleared. Waiting for new activity.";
     notice("Diagnostic log cleared.", false);
     setTimeout(() => { if ($("#notice").textContent === "Diagnostic log cleared.") notice("", false); }, 2000);

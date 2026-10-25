@@ -1,5 +1,14 @@
 # Releases
 
+## 1.10.12 - GUI Decluttering, Accessible Tooltips & Studio Polish
+
+- **Streamlined Service Dock & Form Cards**: Slimmed the service dock into a compact single-line horizontal status strip with informative tooltips; organized Card 1 & Card 2 secondary parameters into collapsible `.sub-fold` accordions while keeping all form input names, IDs, and tests 100% intact.
+- **Accessible & Tautology-Free Tooltip System**: Stripped over 200 redundant `title` attributes that caused double-tooltip flickers, consolidated nested label-input tooltips into single comprehensive triggers, added right-side placement for sidebar elements, enabled `white-space: pre-line` for line breaks (`&#10;`, `\n`), and expanded tooltip `max-width` to 480px.
+- **Button Styling Polish (`button.quiet`)**: Upgraded quiet actions from plain underlined text to modern tactile pill buttons with borders, hover transitions, and dark-mode styling.
+- **Interactive Full Studio Toggle**: Transformed "The Full Studio" preview section into a collapsible dropdown with animated directional indicators (`▶` to `▼`) and informative edition notes.
+- **Immediate Drag-and-Drop Area**: Styled the audio drop zone statically in CSS so it renders instantly on page load without layout shift; updated loaded track receipt display and balanced vertical spacing.
+- **Job Status Reset on Clear Log**: `POST /api/log/clear` now resets `FAILED` operation state and restores the idle status bar (`READY WHEN YOU ARE`).
+
 ## 1.10.11 - Semantic World Vector Clustering & Gaussian Dissonance
 
 - **Dynamic audio-scaled vocabulary windowing**: `select_term_for_energy` scales accessible table depth directly with `ScoreMap` energy ($0.20 \to 1.0$), keeping calm sections focused on the top canonical terms while opening full depth during peak sections.

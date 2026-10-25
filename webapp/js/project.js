@@ -188,7 +188,7 @@ export async function restoreProject() {
       fState.song = fileState.song;
       fState.songName = fileState.songName || fileState.song;
       const receipt = form.querySelector(".song-receipt");
-      if (receipt) receipt.textContent = "Uploaded: " + fState.songName;
+      if (receipt) receipt.textContent = "Current loaded track (Uploaded: " + fState.songName + ")";
       const songInput = form.querySelector(".song-input");
       if (songInput) songInput.required = false;
       updateSongPreview(form, "/api/uploads/song/" + encodeURIComponent(fState.song));

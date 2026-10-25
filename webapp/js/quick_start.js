@@ -56,7 +56,7 @@ export function resetVideoPanel(form) {
   Object.entries(HIDDEN_DEFAULTS).forEach(([name, value]) => { if (form.elements[name]) form.elements[name].value = value; });
   if (keep.backend) { backend.value = keep.backend; resolutionSelect(form); }
   if (keep.resolution) resolution.value = keep.resolution;
-  form.querySelector(".song-receipt").textContent = "WAV, MP3, FLAC, OGG, M4A, AAC or AIFF · up to 256 MB";
+  form.querySelector(".song-receipt").textContent = "Please load in your music.";
   form.querySelector(".song-input").required = true;
   updateSongPreview(form, "");
   form.querySelector(".refs-receipt").textContent = "No additional images";

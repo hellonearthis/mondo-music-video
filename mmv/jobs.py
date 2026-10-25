@@ -164,6 +164,16 @@ class Jobs:
         if self.active is not None:
             raise BusyError("An operation is active. Wait or cancel it; work is never queued.")
 
+    def reset(self):
+        with self.lock:
+            if self.active is not None:
+                return dict(self.last)
+            record = {"state": "idle", "message": "One idea. One production at a time.", "progress": 0}
+            self.last = record
+            write_json(self.status_path, record)
+        self.notify(record)
+        return dict(record)
+
     def status(self):
         with self.lock:
             return dict(self.last)
