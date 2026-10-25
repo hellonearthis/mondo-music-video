@@ -45,12 +45,6 @@ def create_server(base_url=None):
         """Upload a user-selected file from this machine into the local app; returns its upload ID."""
         return invoke(client.upload, kind, path)
 
-    @server.tool()
-    def import_instrument(instrument_id: Literal["drums", "bass", "guitar", "keyboards"], reference_path: str,
-                          license: str, provenance: str) -> dict[str, Any]:
-        """Import a user-selected instrument sheet with its license/provenance into the local app; never overwrites or publishes."""
-        return invoke(client.import_instrument, instrument_id, reference_path, license, provenance)
-
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def inspect_opp(filename: str, allow_unsigned: bool = False) -> dict[str, Any]:
         """Verify a previously uploaded .opp package and inspect its signer, clearance and sheets."""
@@ -102,8 +96,8 @@ def create_server(base_url=None):
         Independent mode gives each actor their own movement and musical part. `dance_parts` maps actor ids to `auto`, `beat`, `drums`, `bass` or `vocals`; auto cycles drums/bass/vocals/beat in cast order. No lead applies. Existing stem audio/analysis supplies per-part cues; unavailable parts explicitly fall back to the overall beat. This mode never downloads models or starts separation. Precise visual timing needs operator validation.
 
         Instruments: instrument_mode "perform" (default "off"), instrument_assignments {actor_id: drums|bass|guitar|keyboards},
-        instrument_references true (default) attaches imported/bundled sheets only for active cast players. Inspect kind "instruments" first;
-        import missing sheets with import_instrument or set instrument_references false for text-only guidance. Previews return instruments,
+        instrument_references true (default) attaches OPP prop sheets only for active cast players. Inspect kind "instruments" (roles and default props) and "props" first;
+        import missing props with upload_media(kind="opp") + inspect_opp + import_opp or set instrument_references false for text-only guidance. Previews return instruments,
         shot activity and fallback notes. Uses existing stems only, with CPU analysis if needed; no separation or downloads.
         Unknown activity follows the mix; guitar/piano need six-stem caches, keyboards follow piano only as a proxy. Players are excluded from
         dance choreography; other actors may dance and approved singers may sing while playing. Slot overflow stops preview. Note/finger sync

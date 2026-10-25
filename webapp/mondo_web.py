@@ -38,7 +38,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.9"
+MGL_APP_VERSION = "1.10.10"
 WEB = Path(__file__).parent
 
 
@@ -668,6 +668,10 @@ def create_app(home=None, *, test_hosts=False):
     store = Storage(home)
     jobs = Jobs(store)
     quotes = {}
+    try:
+        props.install_starter_props(store)
+    except (OSError, ValueError) as error:
+        logging.getLogger("uvicorn.error").warning("Starter props were not installed: %s", error)
     @asynccontextmanager
     async def lifespan(app):
         yield
@@ -843,7 +847,7 @@ def create_app(home=None, *, test_hosts=False):
         return {"backends": CATALOG, "ratings": oap.CONTENT_ENUMS, "price_checked": "2026-10-15",
                 "oap_version": oap.OAP_VERSION,
                 "instruments": {"kinds": instrument_assets.KINDS, "mode": ["off", "perform"]},
-                "opp_version": props.protocol_version(), "props": {"import": True, "instrument_selection": True}}
+                "opp_version": props.protocol_version(), "opp_accepts": ["0.1.x", "0.2.x"], "props": {"import": True, "instrument_selection": True}}
 
     @app.get("/api/project")
     def get_project():
@@ -1097,8 +1101,7 @@ def create_app(home=None, *, test_hosts=False):
         path = inside(store.home / "uploads", filename)
         if path.suffix != ".opp" or not path.is_file():
             raise ValueError("OPP upload not found")
-        manifest, verification = props.package_info(path, allow_unsigned=allow_unsigned)
-        return {"manifest": manifest, "verification": verification}
+        return props.inspection(path, allow_unsigned=allow_unsigned)
 
     @app.post("/api/opp/import")
     def import_opp(filename: str = Form(...), allow_unsigned: bool = Form(False),
@@ -1109,18 +1112,6 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             return props.import_package(store, path, allow_unsigned=allow_unsigned, accept_signer=accept_signer)
-
-    @app.post("/api/instruments/{instrument_id}")
-    def import_instrument(instrument_id: str, license: str = Form(...), provenance: str = Form(...),
-                          reference: UploadFile = File(...)):
-        with jobs.lock:
-            jobs.require_idle()
-            return instrument_assets.import_sheet(store, instrument_id, reference.file.read(25 * 1024 * 1024 + 1),
-                                                  license=license, provenance=provenance)
-
-    @app.get("/api/instruments/{instrument_id}/reference")
-    def instrument_reference(instrument_id: str):
-        return FileResponse(instrument_assets.locate(store, instrument_id)["path"], media_type="image/png")
 
     @app.get("/api/actors")
     def list_actors():

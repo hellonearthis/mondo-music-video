@@ -158,7 +158,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.10.9")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.10.10")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -166,7 +166,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.9")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.10")
 
     def test_world_management_guards_and_cli(self):
         ledger = {"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"],
@@ -273,7 +273,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 54)
+                self.assertEqual(len(names), 53)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score'} <= names)
                 self.assertTrue({'detect_lyrics', 'align_lyrics', 'export_production_package'} <= names)
@@ -291,7 +291,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertIn("preview_resume", names)
                 self.assertIn("preview_retry_prompts", names)
                 self.assertTrue({"caption_video", "list_caption_fonts"} <= names)
-                self.assertIn('import_instrument', names)
+                self.assertNotIn('import_instrument', names)
                 self.assertTrue({'inspect_opp', 'import_opp', 'select_opp_sheet'} <= names)
                 self.assertTrue({'get_world', 'world_versions', 'create_world', 'export_world', 'rollback_world', 'delete_world',
                                  'inspect_world_proposal', 'accept_world_proposal', 'reject_world_proposal'} <= names)
@@ -299,11 +299,8 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertTrue(refused.is_error)
                 refused = await client.call_tool('delete_world', {'world_id': 'none'})
                 self.assertTrue(refused.is_error)
-                imported = await client.call_tool('import_instrument', {'instrument_id': 'bass', 'reference_path': str(self.reference),
-                    'license': 'test only', 'provenance': 'synthetic test fixture'})
-                self.assertFalse(imported.is_error)
                 instruments = await client.call_tool('inspect_studio', {'kind': 'instruments'})
-                self.assertTrue(next(i for i in instruments.structured_content['data'] if i['id'] == 'bass')['available'])
+                self.assertTrue(next(i for i in instruments.structured_content['data'] if i['id'] == 'guitar')['available'])
                 self.assertIn("preview_production", names)
                 self.assertTrue({'delete_actor', 'delete_style', 'create_style', 'export_style', 'import_style',
                     'save_vocabulary_preset', 'delete_vocabulary_preset',
@@ -313,7 +310,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.10.9")
+                self.assertEqual(result.structured_content["data"]["version"], "1.10.10")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)

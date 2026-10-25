@@ -51,8 +51,8 @@ endpoint, with HTTPS required remotely and no redirects or generation.
 Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. See [Worlds](WORLDS.md).
 
 The browser's file drop areas are a selection shortcut. Agents use the existing
-`upload_media`/CLI `upload` for songs, references and packages, or the actor and
-instrument import tools for their image files. A new selection replaces the
+`upload_media`/CLI `upload` for songs, references and packages (including OPP props), or the actor
+import tools for their image files. A new selection replaces the
 files in that control; upload IDs are passed to the same preview, inspection,
 import and recovery calls. Package selection never accepts a signer or imports
 anything on its own. There is no separate drag action in the agent interfaces.
@@ -69,9 +69,9 @@ which shots changed. Wrong-instrument actions still require writer correction.
 
 ## Instrument-playing actors
 
-See [instrument performance](INSTRUMENTS.md). `inspect_studio(kind="instruments")` lists available sheets; `import_instrument` imports a user-selected sheet with license/provenance locally. Preview `instrument_mode: "perform"`, `instrument_assignments: {actor_id: "guitar"}` and optional `instrument_references` (true by default). Mode off preserves original prompts/fingerprints. Review passage activity and reference counts before consent. Private provenance never enters the writer job or demo receipts. Guitar/keyboard sheets are bundled; drums/bass sheets and operator render validation are pending.
+See [instrument performance](INSTRUMENTS.md). `inspect_studio(kind="instruments")` lists each role and its default OPP prop; instrument sheets are props, so import them with the OPP tools below (`import_instrument` was removed). Preview `instrument_mode: "perform"`, `instrument_assignments: {actor_id: "guitar"}` and optional `instrument_references` (true by default). Mode off preserves original prompts/fingerprints. Review passage activity and reference counts before consent. Private provenance never enters the writer job or demo receipts. Guitar/keyboard sheets are bundled; drums/bass sheets and operator render validation are pending.
 
-OPP v0.1 props are a separate, general local library. Upload a user-selected
+OPP v0.1 and v0.2 props are a separate, general local library. Upload a user-selected
 `.opp` with `upload_media(kind="opp")`, call `inspect_opp(filename)` to review
 the manifest and verification report, then call `import_opp(filename,
 accept_signer="PUBLIC_KEY_FROM_INSPECT")` for a signed package whose signer the user accepts. For

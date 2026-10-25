@@ -16,6 +16,8 @@ from .storage import inside, read_json, write_json
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_EXPANDED_BYTES = 256 * 1024 * 1024
 MAX_SHEET_BYTES = 25 * 1024 * 1024
+BUNDLED = Path(__file__).parent / 'assets' / 'props'
+DEFAULT_PROPS = {'guitar': 'mmv-guitar', 'keyboards': 'mmv-keyboards'}
 
 
 def prop_identifier(value):
@@ -91,6 +93,17 @@ def package_info(path, *, allow_unsigned=False):
         raise ValueError('Invalid OPP package') from exc
 
 
+def inspection(path, *, allow_unsigned=False):
+    """Review data: the verified manifest plus which listed files this bundle actually carries."""
+    manifest, verification = package_info(path, allow_unsigned=allow_unsigned)
+    with zipfile.ZipFile(path) as archive:
+        present = set(archive.namelist())
+    listed = manifest['sheets'] + (manifest.get('assets') or [])
+    return {'manifest': manifest, 'verification': verification, 'included': sorted(present - {'manifest.json'}),
+            'omitted': sorted(item['file'] for item in listed if item['file'] not in present),
+            'tier': 'full' if all(item['file'] in present for item in listed) else 'preview'}
+
+
 def import_package(store, path, *, allow_unsigned=False, accept_signer=''):
     """Keep the original bundle and cleaned visual sheets; never overwrite a prop."""
     source_hash = sha256(path)
@@ -131,10 +144,17 @@ def import_package(store, path, *, allow_unsigned=False, accept_signer=''):
                       'license': prop.get('license') or '', 'owner': {key: owner.get(key) for key in ('name', 'did', 'public_key')},
                       'opp_version': manifest['opp_version'], 'bundle_sha256': sha256(stage / 'original.opp'),
                       'signature_valid': verification['signature_valid'], 'signer_accepted': accept_signer == signer if signer else False,
-                      'sheets': sheet_records}
+                      'sheets': sheet_records, 'assets': _asset_summary(manifest, present)}
             write_json(stage / 'prop.json', record)
             stage.rename(target)
     return public_record(record)
+
+
+def _asset_summary(manifest, present):
+    """OPP v0.2 generic assets stay in the preserved bundle; MMV lists them but never renders them."""
+    return [{'file': asset['file'], 'role': asset['role'], 'clearance': asset['clearance'],
+             'sha256': asset.get('sha256'), 'included': asset['file'] in present}
+            for asset in manifest.get('assets') or []]
 
 
 def public_record(record):
@@ -178,3 +198,60 @@ def select(store, prop_id, use=''):
             'sheet_tags': sheet.get('tags', []), 'clearance': sheet['clearance'], 'use': use, 'path': str(path),
             'sha256': sheet['reference_sha256'], 'source_sha256': sheet['sha256'],
             'bundle_path': str(root / 'original.opp'), 'bundle_sha256': record['bundle_sha256']}
+
+
+def _protocol_id(source):
+    return read_json(Path(source) / 'manifest.json')['prop']['id']
+
+
+def _install_source(store, source):
+    """Pack an OPP source tree into an unsigned bundle and import it; an existing prop is left alone."""
+    with tempfile.TemporaryDirectory() as temp:
+        bundle = Path(temp) / 'starter.opp'
+        _protocol().package(source, bundle, tier='full')
+        try:
+            import_package(store, bundle, allow_unsigned=True)
+        except ValueError:
+            if not (store.home / 'props' / _protocol_id(source) / 'prop.json').is_file():
+                raise  # lost a race only if another installer finished the same prop
+
+
+def _legacy_source(root, record, stage):
+    """Wrap a pre-OPP instrument sheet (data/instruments/<kind>) as an OPP source tree."""
+    (stage / 'references/master').mkdir(parents=True)
+    shutil.copyfile(root / record['reference'], stage / 'references/master/base.png')
+    write_json(stage / 'manifest.json', {
+        'opp_version': _protocol().VERSION, 'kind': 'opp.prop.manifest',
+        'prop': {'id': 'mmv-local-' + record['id'], 'name': record['name'], 'description': record['description'],
+                 'license': record['license'], 'provenance': record['provenance'],
+                 'owner': {'name': '', 'did': None, 'public_key': None}},
+        'sheets': [{'file': 'references/master/base.png', 'kind': 'base', 'label': 'Overview', 'tags': [],
+                    'prompt_modifier': None, 'clearance': 'master', 'sha256': None}],
+        'assets': [], 'signature': {'algorithm': 'ed25519', 'value': None, 'signed_at': None}})
+
+
+def install_starter_props(store):
+    """Idempotently provide the bundled props and carry earlier local instrument sheets into the library."""
+    for manifest in sorted(BUNDLED.glob('*/manifest.json')):
+        if not (store.home / 'props' / manifest.parent.name / 'prop.json').is_file():
+            _install_source(store, manifest.parent)
+    for path in sorted((store.home / 'instruments').glob('*/instrument.json')):
+        record = read_json(path)
+        root = path.parent
+        if (not isinstance(record, dict) or record.get('kind') != 'mmv.instrument' or record.get('id') != root.name or
+                (store.home / 'props' / ('mmv-local-' + root.name) / 'prop.json').is_file()):
+            continue
+        reference = inside(root, record.get('reference', 'reference.png'))
+        if reference.is_file() and sha256(reference) == record.get('sha256'):
+            with tempfile.TemporaryDirectory() as temp:
+                _legacy_source(root, record, Path(temp) / 'tree')
+                _install_source(store, Path(temp) / 'tree')
+
+
+def default_prop_id(store, kind):
+    """The prop an instrument role uses when the request names none: an earlier local sheet, else the bundled one."""
+    for prop_id in filter(None, (f'mmv-local-{kind}', DEFAULT_PROPS.get(kind))):
+        if (store.home / 'props' / prop_id / 'prop.json').is_file():
+            return prop_id
+    raise ValueError(f'No {kind} prop is installed; import an OPP prop in the Open Prop Protocol library '
+                     'or turn consistent instrument references off')

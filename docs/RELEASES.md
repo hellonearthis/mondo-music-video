@@ -1,5 +1,37 @@
 # Releases
 
+## 1.10.10 — Open Prop Protocol v0.2
+
+- The pinned OPP dependency moves from v0.1.0 (`1e1bc6c`) to v0.2.0 (`ec097e1`).
+  v0.2 packages import and verify; v0.1 packages still do. Unknown minor versions
+  are rejected by the protocol verifier. `/api/catalog` reports `opp_version`
+  `0.2.0` and `opp_accepts` `0.1.x`, `0.2.x`.
+- v0.2 generic assets (audio stems, 3D files, LoRAs and similar) are listed in the
+  imported prop record (`assets`: file, role, clearance, hash, whether included)
+  and remain in the preserved `original.opp`. MMV does not render or extract them.
+- MMV already rewrites image sheets through its own cleaner on import, so OPP's new
+  author-side `clean_asset` helper is not needed by the importer. No GUI, CLI or MCP
+  change: the existing inspect/import/select tools carry the new field.
+- `GET /api/opp/inspect` (and the CLI/MCP `inspect_opp`) now also returns `tier`
+  (`full` or `preview`), `included` and `omitted` files, so a reviewer sees which
+  listed master sheets and assets a preview-tier bundle does not carry. The GUI
+  review panel shows tier, omitted files and generic assets; library cards count assets.
+  (From the Codex read-only review.)
+- **Instruments are now OPP props; the separate instrument reference library is gone.**
+  The bundled guitar and keyboards ship as OPP v0.2 source trees
+  (`mmv/assets/props/mmv-guitar`, `mmv-keyboards`), are packed unsigned and imported
+  into the props library at startup (never overwriting), and are those roles'
+  defaults. The GUI's Instrument reference library and import form are removed; the
+  Open Prop Protocol library lists everything. Sheets saved by earlier releases in
+  `data/instruments/` become `mmv-local-<role>` props (files kept) and are that role's
+  default. Removed: `POST /api/instruments/{id}`, `GET /api/instruments/{id}/reference`,
+  the agent `import_instrument` / MCP tool (import with the OPP tools). `GET /api/instruments`
+  and `inspect_studio(kind="instruments")` remain as a read-only role/default-prop view.
+  Drums and bass need an imported prop. Runs saved before this release that pointed at
+  the old bundled sheet files will ask for a fresh preview.
+- Agent surface audit: `inspect_opp`, `import_opp`, `select_opp_sheet`, the catalog
+  and project skill need no new tool; docs now say v0.1 and v0.2.
+
 ## 1.10.9 — One final encode from original clips
 
 - Subliminal flashes and burned captions now run inside final assembly, at the same

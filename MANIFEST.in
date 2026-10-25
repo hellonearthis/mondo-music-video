@@ -4,7 +4,7 @@ recursive-include skills *.md *.yaml
 
 recursive-include docs *.json
 recursive-include tests *.py *.json
-recursive-include mmv/assets/instruments instrument.json reference.png README.md
+recursive-include mmv/assets/props manifest.json base.png README.md
 recursive-include mmv/engine/config *.json
 recursive-include mmv/engine/prompts *.md
 recursive-include mmv/engine/workflows *.json

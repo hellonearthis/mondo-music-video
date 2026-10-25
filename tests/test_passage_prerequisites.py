@@ -47,16 +47,13 @@ def capture(tmp_path, monkeypatch, mode, *, reject_cached=None, dance_settings=N
         prepared['instruments'] = instruments.plan_passages([seg], prepared['casting'],
             {'tempo_bpm': 120.0, 'beat_frames': [0, 12, 24, 36], 'downbeat_frames': [0]}, request)
         if request.get('instrument_references', True):
-            from mmv import instrument_assets
+            from mmv import instrument_assets, props
             from mmv.storage import Storage
-            import io
-            from PIL import Image
+            from tests.test_opp_props import legacy_instrument
             store = Storage(home)
             for kind in dict.fromkeys(prepared['instruments']['assignments'].values()):
-                if not (home / 'instruments' / kind).exists():
-                    data = io.BytesIO()
-                    Image.new('RGB', (64, 96), 'teal').save(data, 'PNG')
-                    instrument_assets.import_sheet(store, kind, data.getvalue(), license='test', provenance='synthetic test fixture')
+                if kind not in props.DEFAULT_PROPS and not (home / 'instruments' / kind).exists():
+                    legacy_instrument(home, kind)
                 prepared['instruments']['assets'][kind] = instrument_assets.locate(store, kind)
         plan = instruments.apply_slots(plan, prepared['instruments'], 9)
         prepared['plan'] = asdict(plan)
