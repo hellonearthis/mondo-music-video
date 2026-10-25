@@ -13,6 +13,17 @@ import re
 ROTATION_TABLES = ('settings', 'lighting', 'mechanisms', 'costume', 'practical_effects')
 MIN_KEEP = 4
 KEEP_FRACTION = 0.5
+MIN_ENERGY_RATIO = 0.20
+STACK_ENERGY_THRESHOLD = 0.80
+ENERGY_VOCAB_MAP = {
+    'setting': 'settings',
+    'subject_type': 'subject_types',
+    'mechanism': 'mechanisms',
+    'lighting': 'lighting',
+    'tonal_register': 'tonal_registers',
+    'costume': 'costume',
+}
+STACKABLE_KEYS = ('mechanism', 'lighting')
 _WORD = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _STOP = frozenset('the and with from for into over under that this a an of in on at to is are as by'.split())
 
@@ -20,6 +31,58 @@ _STOP = frozenset('the and with from for into over under that this a an of in on
 def stable_hash(*parts) -> int:
     """Platform-independent integer hash of the parts (never Python's salted hash)."""
     return int.from_bytes(hashlib.sha256(':'.join(map(str, parts)).encode('utf-8')).digest()[:8], 'big')
+
+
+def select_term_for_energy(table, energy: float, seed: int, section_idx: int, shot_idx: int,
+                           salt: str = "", min_ratio: float = MIN_ENERGY_RATIO) -> str:
+    """Select a term where the accessible pool window scales deterministically with audio energy."""
+    if not table:
+        return ""
+    clamped = max(0.0, min(1.0, float(energy)))
+    active_ratio = min_ratio + (1.0 - min_ratio) * clamped
+    pool_size = max(1, min(len(table), int(math.ceil(len(table) * active_ratio))))
+    active_window = table[:pool_size]
+    idx = stable_hash(seed, "energy_pick", salt, section_idx, shot_idx) % len(active_window)
+    return active_window[idx]
+
+
+def apply_energy_scaled_vocabulary(segments, vocab: dict, seed: int) -> dict:
+    """Pure function: returns {(segment_idx, shot_idx): new_shot_vocab} scaled by audio energy.
+
+    Low energy (< 0.35) draws from a tight top slice (top 20%+ of ranked terms) for visual focus.
+    High energy (> 0.75) opens the full table depth and stacks secondary mechanisms/lighting at >= 0.80.
+    Preserves held-setting passages and thematic anchors established by the planner.
+    """
+    result = {}
+    for s_idx, seg in enumerate(segments):
+        held = len({sh.vocab.get('setting') for sh in seg.shots}) <= 1
+        for sh_idx, shot in enumerate(seg.shots):
+            shot_energy = float(getattr(shot, 'energy', getattr(seg, 'energy', 0.5)))
+            new_vocab = dict(shot.vocab)
+            for key, table_name in ENERGY_VOCAB_MAP.items():
+                if key not in new_vocab:
+                    continue
+                if key == 'mechanism' and getattr(seg, 'thematic_anchor', None):
+                    continue
+                table = vocab.get(table_name)
+                if not isinstance(table, list) or not table:
+                    continue
+                pos = 0 if (held and key != 'lighting') else sh_idx
+                eff_energy = float(getattr(seg, 'energy', shot_energy)) if (held and key != 'lighting') else shot_energy
+                primary = select_term_for_energy(table, eff_energy, seed, s_idx, pos, salt=key)
+                if not primary:
+                    continue
+                if eff_energy >= STACK_ENERGY_THRESHOLD and key in STACKABLE_KEYS and len(table) > 1:
+                    secondary = select_term_for_energy(table, eff_energy, seed, s_idx, pos, salt=f"{key}:stack")
+                    if secondary and secondary != primary:
+                        new_vocab[key] = f"{primary}, {secondary}"
+                    else:
+                        new_vocab[key] = primary
+                else:
+                    new_vocab[key] = primary
+            if new_vocab != shot.vocab:
+                result[(s_idx, sh_idx)] = new_vocab
+    return result
 
 
 def context_words(*texts) -> frozenset:
@@ -105,4 +168,92 @@ def plan_world_departures(segments, departures, seed, strength=50) -> dict:
                 new = _borrowed(shot.vocab, terms, role, seed, s_idx, sh_idx, held)
                 if new != shot.vocab:
                     result[(s_idx, sh_idx)] = (role, new)
+    return result
+
+
+def plan_gaussian_world_dissonance(
+    segments,
+    base_world: str,
+    world_pools: dict | None = None,
+    seed: int = 0,
+    slider_percent: float = 50.0,
+) -> dict:
+    """Apply percentile-calibrated Gaussian dissonance (kappa) and dimensional binding across segments.
+
+    Pure function: returns {(segment_idx, shot_idx): (target_world, new_shot_vocab)} for shots whose
+    effective dissonance kappa_eff > 0.20 triggers Soft Accent, Motivated Tension, Surreal Juxtaposition,
+    or Hot Bars (Maximal Collision) while respecting Montage Grammar rules (Standard holds setting steady;
+    Thematic preserves thematic_anchor mechanism).
+    """
+    from .world_vectors import (
+        BUILTIN_THEMATIC_WORLDS,
+        calibrate_distance_matrix,
+        compute_cluster_centroid,
+        compute_effective_kappa,
+        dimensional_binding_for_kappa,
+        gaussian_cluster_weights,
+    )
+
+    catalog = dict(world_pools) if world_pools else dict(BUILTIN_THEMATIC_WORLDS)
+    if base_world not in catalog or len(catalog) < 2:
+        return {}
+
+    centroids = {name: compute_cluster_centroid(pools) for name, pools in catalog.items()}
+    cal = calibrate_distance_matrix(centroids)
+    calibrated_dists = cal["calibrated"]
+
+    def pick_cluster_for_tier(tier: str, kappa_eff: float, s_idx: int, pos: int, key: str) -> str:
+        if tier == "base":
+            return base_world
+        target_k = {
+            "adjacent": 0.15,
+            "tension": max(0.55, kappa_eff),
+            "opposite": 0.85,
+            "maximal": 1.00,
+        }.get(tier, kappa_eff)
+        weights = gaussian_cluster_weights(
+            base_world, calibrated_dists, target_k, d_max=1.0, exclude_base=True
+        )
+        if not weights:
+            return base_world
+        ranked = sorted(weights.items(), key=lambda kv: (-kv[1], stable_hash(seed, tier, key, kv[0])))
+        top_n = ranked[:min(2, len(ranked))]
+        idx = stable_hash(seed, "gaussian_pick", tier, key, s_idx, pos) % len(top_n)
+        return top_n[idx][0]
+
+    result = {}
+    for s_idx, seg in enumerate(segments):
+        held = len({sh.vocab.get('setting') for sh in seg.shots}) <= 1
+        seg_energy = float(getattr(seg, 'energy', 0.5))
+        for sh_idx, shot in enumerate(seg.shots):
+            shot_energy = float(getattr(shot, 'energy', seg_energy))
+            base_k = 0.5 * shot_energy + 0.5 * seg_energy
+            kappa_eff = compute_effective_kappa(base_k, slider_percent)
+            draw = stable_hash(seed, "dim_bind", s_idx, 0 if held else sh_idx)
+            binding = dimensional_binding_for_kappa(kappa_eff, list(shot.vocab.keys()), seed_draw=draw)
+
+            new_vocab = dict(shot.vocab)
+            chosen_worlds = set()
+            for key, tier in binding.items():
+                if tier == "base":
+                    continue
+                if key == "mechanism" and getattr(seg, "thematic_anchor", None):
+                    continue
+                if held and key in ("setting", "subject_type", "costume") and kappa_eff < 0.90:
+                    pos = 0
+                else:
+                    pos = sh_idx
+                table_name = ENERGY_VOCAB_MAP.get(key)
+                if not table_name:
+                    continue
+                target_world = pick_cluster_for_tier(tier, kappa_eff, s_idx, pos, key)
+                terms = catalog.get(target_world, {}).get(table_name)
+                if terms:
+                    term_idx = stable_hash(seed, "dissonance_term", target_world, key, s_idx, pos) % len(terms)
+                    new_vocab[key] = terms[term_idx]
+                    chosen_worlds.add(target_world)
+
+            if new_vocab != shot.vocab and chosen_worlds:
+                primary_target = sorted(chosen_worlds)[0]
+                result[(s_idx, sh_idx)] = (primary_target, new_vocab)
     return result

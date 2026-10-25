@@ -75,3 +75,48 @@ def test_single_configured_role_still_departs_at_moderate_energy():
     segments = [_segment(i, 0.75, 'chaotic', shots) for i in range(6)]
     result = vs.plan_world_departures(segments, {'opposite': DEPARTURES['opposite']}, 3, 50)
     assert result and {role for role, _ in result.values()} == {'opposite'}
+
+
+def test_select_term_for_energy_scales_pool_depth():
+    table = [f'term_{i}' for i in range(20)]
+    low_picks = {vs.select_term_for_energy(table, 0.0, seed=7, section_idx=0, shot_idx=i) for i in range(50)}
+    high_picks = {vs.select_term_for_energy(table, 1.0, seed=7, section_idx=0, shot_idx=i) for i in range(50)}
+    # At energy 0.0, min_ratio=0.20 confines choices to the first 4 terms (20% of 20)
+    assert low_picks <= set(table[:4])
+    # At energy 1.0, full pool is accessible, including terms beyond index 4
+    assert any(p in set(table[4:]) for p in high_picks)
+    assert vs.select_term_for_energy([], 0.5, 7, 0, 0) == ''
+
+
+def test_apply_energy_scaled_vocabulary_stacks_at_high_energy_and_preserves_anchors():
+    vocab = {
+        'settings': [f'place_{i}' for i in range(10)],
+        'mechanisms': [f'mech_{i}' for i in range(10)],
+        'lighting': [f'light_{i}' for i in range(10)],
+    }
+    calm_shots = [{'setting': 's0', 'mechanism': 'm0', 'lighting': 'l0'},
+                  {'setting': 's1', 'mechanism': 'm1', 'lighting': 'l1'}]
+    peak_shots = [{'setting': 's0', 'mechanism': 'm0', 'lighting': 'l0'},
+                  {'setting': 's1', 'mechanism': 'm1', 'lighting': 'l1'}]
+    anchored_shots = [{'setting': 's0', 'mechanism': 'anchor_mech', 'lighting': 'l0'}]
+
+    segments = [
+        _segment(0, 0.15, 'chaotic', calm_shots),
+        _segment(1, 0.90, 'chaotic', peak_shots),
+        _segment(2, 0.90, 'standard', anchored_shots, anchor='anchor_mech'),
+    ]
+    before = copy.deepcopy(segments)
+    updates = vs.apply_energy_scaled_vocabulary(segments, vocab, seed=42)
+    assert segments == before  # Pure: does not mutate input segments
+
+    # Calm segment (index 0) draws single terms from the top 20-35% slice (no comma stacking)
+    assert ',' not in updates[(0, 0)]['mechanism']
+    assert updates[(0, 0)]['setting'] in vocab['settings'][:4]
+
+    # High-energy segment (index 1, energy 0.90 >= 0.80) stacks secondary mechanism/lighting tags
+    assert ',' in updates[(1, 0)]['mechanism'] or ',' in updates[(1, 1)]['mechanism']
+    assert ',' in updates[(1, 0)]['lighting'] or ',' in updates[(1, 1)]['lighting']
+
+    # Anchored segment (index 2) preserves its thematic_anchor mechanism
+    assert updates[(2, 0)]['mechanism'] == 'anchor_mech'
+

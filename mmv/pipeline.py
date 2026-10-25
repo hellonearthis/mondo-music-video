@@ -319,6 +319,18 @@ def prepare(store, request, *, saved_prepared=None):
             raise ValueError('This renderer needs a reference in every passage. Choose an actor/image and Reference policy: All')
         if s.ref_image_slots > backend.capabilities()['max_reference_images']:
             raise ValueError('The planned cast exceeds this renderer’s reference limit')
+    if request.get('vocab_selection') == 'contextual':
+        from .vocab_select import apply_energy_scaled_vocabulary, plan_gaussian_world_dissonance
+        for (s_idx, sh_idx), vocab_after in apply_energy_scaled_vocabulary(p.segments, vocab, request['seed']).items():
+            p.segments[s_idx].shots[sh_idx].vocab = vocab_after
+        worlds_ctx = request.get('thematic_worlds') or {}
+        if worlds_ctx.get('mode') in ('guided', 'strict') and worlds_ctx.get('activeWorlds'):
+            base_world = worlds_ctx['activeWorlds'][0]
+            slider_pct = float(worlds_ctx.get('juxtapositionSlider', 50))
+            for (s_idx, sh_idx), (_, vocab_after) in plan_gaussian_world_dissonance(
+                p.segments, base_world, seed=request['seed'], slider_percent=slider_pct
+            ).items():
+                p.segments[s_idx].shots[sh_idx].vocab = vocab_after
     departures = {}
     if request.get('world_departures'):
         from .vocab_select import plan_world_departures

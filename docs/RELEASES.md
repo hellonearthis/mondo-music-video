@@ -1,5 +1,13 @@
 # Releases
 
+## 1.10.11 - Semantic World Vector Clustering & Gaussian Dissonance
+
+- **Dynamic audio-scaled vocabulary windowing**: `select_term_for_energy` scales accessible table depth directly with `ScoreMap` energy ($0.20 \to 1.0$), keeping calm sections focused on the top canonical terms while opening full depth during peak sections.
+- **Multi-tag attribute stacking**: At energy $\ge 0.80$, stackable attributes (`mechanism`, `lighting`) deterministically draw a secondary complementary cue to increase prompt density during climaxes.
+- **Semantic world vector clustering (`mmv/world_vectors.py`)**: Canonical domain prefixing (`setting: ...`, `mechanism: ...`), normalized cluster centroids $c_k = \frac{1}{N}\sum \frac{E(t)}{\|E(t)\|}$, and percentile-calibrated distance matrices ($P_{15} \leftrightarrow P_{85}$) to resolve tight cosine clustering.
+- **Gaussian dissonance selection & five-band dimensional binding**: Continuous Gaussian dissonance sampling governed by $\kappa_{\text{eff}} \in [0.0, 1.0]$ with Montage Grammar preservation (Harmonic, Soft Accent, Motivated Tension, Surreal Juxtaposition, and Hot Bars maximal collision).
+- **Protected scheme preserved**: `mmv/engine/plan.py` remains untouched; all original engine golden plan fixtures and protected scheme checks pass cleanly.
+
 ## 1.10.10 — Open Prop Protocol v0.2
 
 - The pinned OPP dependency moves from v0.1.0 (`1e1bc6c`) to v0.2.0 (`ec097e1`).
