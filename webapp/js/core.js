@@ -13,6 +13,7 @@ export const state = {
   captionSource: null,
   currentCustomVocab: {},
   currentVocabRandomKey: "",
+  thematicWorlds: null,
   formFiles: new WeakMap(),
   sessionLogs: []
 };

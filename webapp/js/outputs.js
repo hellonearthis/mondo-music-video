@@ -530,7 +530,7 @@ const unfinishedRunRowHtml = (run) => {
     ? '<span style="color:#16a34a;font-weight:600;">Ready to finish</span>'
     : '<span class="muted">Draft / Partial</span>';
   const finishBtn = run.can_finish
-    ? `<button type="button" class="secondary" data-action="finish-run" style="padding:4px 8px;font-size:11px;margin-right:8px;" title="Resume generation for ${escTitle}">Finish / Resume</button>`
+    ? `<button type="button" class="secondary" data-action="finish-run" style="padding:4px 8px;font-size:13px;margin-right:8px;" title="Resume generation for ${escTitle}">Finish / Resume</button>`
     : "";
 
   return `
@@ -542,7 +542,7 @@ const unfinishedRunRowHtml = (run) => {
       <td style="padding:8px;" class="muted">${run.size_mb} MB</td>
       <td style="padding:8px;text-align:right;">
         ${finishBtn}
-        <button type="button" class="delete-btn" data-action="purge-run" style="padding:4px 8px;font-size:11px;" title="Delete draft ${escTitle}">Purge</button>
+        <button type="button" class="delete-btn" data-action="purge-run" style="padding:4px 8px;font-size:13px;" title="Delete draft ${escTitle}">Purge</button>
       </td>
     </tr>
   `;

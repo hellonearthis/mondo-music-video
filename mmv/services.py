@@ -31,6 +31,7 @@ def check_services(store, active_job=None, force: bool = False) -> dict:
     return _evaluate_service_activity(store, probed, active_job)
 
 
+@functools.lru_cache(maxsize=32)
 def _launch_problem(raw) -> str | None:
     """None when raw is a usable JSON argv launch command, otherwise why it is not (empty means unset)."""
     if not raw:

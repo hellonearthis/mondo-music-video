@@ -23,6 +23,7 @@ import { initNavigation, resolutionSelect, restoreProject, scheduleSave } from "
 import { initSettingsAndPicker, loadSettings } from "./js/settings.js";
 import { initTooltips } from "./js/tooltips.js";
 import { setupVocabularyCustomizer, loadVocabularyCatalog } from "./js/vocabulary.js";
+import { initVocabWorlds } from "./js/vocab-worlds.js";
 
 function populateCatalogControls() {
   const { catalog } = state;
@@ -110,6 +111,7 @@ async function initialize() {
   setupEventStream();
   await refreshServices();
   setupVocabularyCustomizer();
+  initVocabWorlds();
   setInterval(() => { refreshServices(); }, 8000);
 }
 

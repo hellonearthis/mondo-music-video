@@ -12,7 +12,7 @@ import uuid
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 import oap
@@ -38,7 +38,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.10"
+MGL_APP_VERSION = "1.10.11"
 WEB = Path(__file__).parent
 
 
@@ -332,6 +332,7 @@ class ProductionRequest(StrictModel):
     stem_quality: Literal["standard", "high"] = "standard"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+    thematic_worlds: dict[str, Any] | None = None
     vocab_selection: Literal["legacy", "contextual"] = "legacy"
     world_id: str = Field(default="", max_length=64)
     world_pool_mode: Literal["append", "replace"] = "replace"
@@ -432,6 +433,10 @@ def request_dict(value):
         if request["kind"] != "video" or not request["world_id"]:
             request.pop("world_id")
             request.pop("world_pool_mode")
+    if request.get("vocab_selection", "legacy") == "legacy":
+        request.pop("vocab_selection", None)
+    if not request.get("thematic_worlds") or request.get("thematic_worlds", {}).get("mode", "off") == "off":
+        request.pop("thematic_worlds", None)
     return request
 
 
@@ -653,6 +658,7 @@ class ProjectState(StrictModel):
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
     vocab_random_key: str = Field(default="", max_length=128)
+    thematic_worlds: dict[str, Any] | None = None
     details_open: bool = False
     details_sections: dict[str, bool] = Field(default_factory=dict)
     log_open: bool = False

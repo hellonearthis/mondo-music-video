@@ -32,7 +32,7 @@ const styleCardHtml = (style) => {
   const escId = escapeHtml(style.id);
   const escName = escapeHtml(style.name);
   const styleCardFold = style.style_card ? `
-    <details class="style-card-fold" style="margin-top:8px;font-size:12px;">
+    <details class="style-card-fold" style="margin-top:8px;font-size:14px;">
       <summary style="cursor:pointer;color:var(--accent,#d08770);font-weight:600;">View 11-Axis Forensic Card</summary>
       <pre style="white-space:pre-wrap;background:var(--card-bg,#1a1a1a);padding:8px;border-radius:4px;max-height:200px;overflow-y:auto;margin-top:6px;font-family:monospace;">${escapeHtml(style.style_card)}</pre>
     </details>

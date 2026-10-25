@@ -1,5 +1,47 @@
 # Releases
 
+### Integration review of fork 26719de
+
+Reviewed by Claude Code with a low-effort read-only Codex pass; credit for the changes: hellonearthis.
+- Adopted: all UI work, contextual vocabulary scaling, world vectors, lint and cluster tools, embedding launch script. No protected-scheme file is touched.
+- Fixed: `POST /api/log/clear` no longer resets a failed operation on the server; Thematic Worlds slider is read from the `slider` key the UI sends (was `juxtapositionSlider`, so ignored); malformed `thematic_worlds` now degrades safely; style sidecar names cannot leave the styles folder; narrow-screen header overflow; vocabulary guide test selector.
+- Agent-interface limitation (intentional for now): `thematic_worlds` is set from the GUI and saved project state only; the agent client, MCP tools and skill do not yet expose it. The earlier deferral in `docs/COLLABORATOR_REVIEW.md` (no consumer) is superseded: `mmv/pipeline.py` now consumes it, only under `vocab_selection: contextual`.
+- Accepted as authored: pseudo-random vocabulary key default raised 5 to 10. Changed: the Gaussian world pick now samples every candidate world by its weight (it only chose between the top two). Left as authored: `C:/llamaCPP` lookup fallback in `mmv/vision_check.py` (only if a relative model path is missing); `start-embedding.ps1` is Windows PowerShell, now hardened (see below).
+- `start-embedding.ps1`: reads the llama-server location from the app settings.json (writer launch) when the default folder is absent; new `-ModelPath`, `MMV_EMBEDDING_MODEL`, `-ServerExe`, PATH lookup for llama-server, a one-level (non-recursive) model lookup, and a clear message when the port answers.
+
+## 1.10.11 — Fork integration (hellonearthis)
+
+All fork releases 1.10.11–1.10.14 ship together as this one version.
+
+### Fork 1.10.14 - Static File Drop Targets & Staging Guidance Polish
+
+- **Static Drop Zone Markup**: Embedded drop zone hints (`Choose a file or drop it here`, `Choose files or drop up to N images here`) and error containers directly into the HTML body across all 16 file upload targets, eliminating post-load text insertion and visual shift.
+- **Idempotent File Drop Initialization**: Updated `initFileDropTargets` in `webapp/js/file_drop.js` to preserve existing static hint and error elements in the markup instead of appending duplicates dynamically.
+- **Cast & Staging Box Architecture**: Preserved clean `.oap-hint-box` layout and header badge semantics distinguishing character identities from scene reference images.
+
+### Fork 1.10.13 - Tooltip Theming & Operation Bar Polish
+
+- **Polished Tooltip Theming**: Upgraded studio tooltips with an emerald forest dark mode (`#0e201b` background, `#224b3d` border, `#e8f4ec` text) and a clean soft-blue light mode (`#f0f5fc` background, `#0d233a` text, `#b8d1ea` border).
+- **Consolidated Operation Bar Tooltip**: Merged redundant individual status tooltips into a unified tooltip on the studio status container (`Current status and real-time execution report of the studio engine.`).
+- **Sidebar & Tooltip Refinements**: Retained right-side offset positioning for sidebar items and cleaned duplicate attributes across the application header.
+
+### Fork 1.10.12 - GUI Decluttering, Accessible Tooltips & Studio Polish
+
+- **Streamlined Service Dock & Form Cards**: Slimmed the service dock into a compact single-line horizontal status strip with informative tooltips; organized Card 1 & Card 2 secondary parameters into collapsible `.sub-fold` accordions while keeping all form input names, IDs, and tests 100% intact.
+- **Accessible & Tautology-Free Tooltip System**: Stripped over 200 redundant `title` attributes that caused double-tooltip flickers, consolidated nested label-input tooltips into single comprehensive triggers, added right-side placement for sidebar elements, enabled `white-space: pre-line` for line breaks (`&#10;`, `\n`), and expanded tooltip `max-width` to 480px.
+- **Button Styling Polish (`button.quiet`)**: Upgraded quiet actions from plain underlined text to modern tactile pill buttons with borders, hover transitions, and dark-mode styling.
+- **Interactive Full Studio Toggle**: Transformed "The Full Studio" preview section into a collapsible dropdown with animated directional indicators (`▶` to `▼`) and informative edition notes.
+- **Immediate Drag-and-Drop Area**: Styled the audio drop zone statically in CSS so it renders instantly on page load without layout shift; updated loaded track receipt display and balanced vertical spacing.
+- **Clear Log (adapted on integration)**: the studio's status bar returns to idle in the browser after Clear Log; the server-side `FAILED` state is kept so recovery information is not lost.
+
+### Fork 1.10.11 - Semantic World Vector Clustering & Gaussian Dissonance
+
+- **Dynamic audio-scaled vocabulary windowing**: `select_term_for_energy` scales accessible table depth directly with `ScoreMap` energy ($0.20 \to 1.0$), keeping calm sections focused on the top canonical terms while opening full depth during peak sections.
+- **Multi-tag attribute stacking**: At energy $\ge 0.80$, stackable attributes (`mechanism`, `lighting`) deterministically draw a secondary complementary cue to increase prompt density during climaxes.
+- **Semantic world vector clustering (`mmv/world_vectors.py`)**: Canonical domain prefixing (`setting: ...`, `mechanism: ...`), normalized cluster centroids $c_k = \frac{1}{N}\sum \frac{E(t)}{\|E(t)\|}$, and percentile-calibrated distance matrices ($P_{15} \leftrightarrow P_{85}$) to resolve tight cosine clustering.
+- **Gaussian dissonance selection & five-band dimensional binding**: Continuous Gaussian dissonance sampling governed by $\kappa_{\text{eff}} \in [0.0, 1.0]$ with Montage Grammar preservation (Harmonic, Soft Accent, Motivated Tension, Surreal Juxtaposition, and Hot Bars maximal collision).
+- **Protected scheme preserved**: `mmv/engine/plan.py` remains untouched; all original engine golden plan fixtures and protected scheme checks pass cleanly.
+
 ## 1.10.10 — Open Prop Protocol v0.2
 
 - The pinned OPP dependency moves from v0.1.0 (`1e1bc6c`) to v0.2.0 (`ec097e1`).

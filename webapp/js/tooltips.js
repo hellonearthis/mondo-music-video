@@ -14,13 +14,40 @@ export const computeTooltipPosition = (
   padding = 10,
   preferredPlacement = "top"
 ) => {
-  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
-  left = Math.max(padding, Math.min(left, viewportWidth - tipRect.width - padding));
-
+  let left;
   let top;
   let placement = preferredPlacement;
 
-  if (preferredPlacement === "top") {
+  if (preferredPlacement === "right") {
+    left = rect.right + gap;
+    top = rect.top + (rect.height / 2) - (tipRect.height / 2);
+    // If overflowing right viewport boundary, flip to left if space permits, else clamp
+    if (left + tipRect.width > viewportWidth - padding) {
+      const leftPos = rect.left - tipRect.width - gap;
+      if (leftPos >= padding) {
+        left = leftPos;
+        placement = "left";
+      } else {
+        left = Math.max(padding, viewportWidth - tipRect.width - padding);
+      }
+    }
+    top = Math.max(padding, Math.min(top, viewportHeight - tipRect.height - padding));
+  } else if (preferredPlacement === "left") {
+    left = rect.left - tipRect.width - gap;
+    top = rect.top + (rect.height / 2) - (tipRect.height / 2);
+    if (left < padding) {
+      const rightPos = rect.right + gap;
+      if (rightPos + tipRect.width <= viewportWidth - padding) {
+        left = rightPos;
+        placement = "right";
+      } else {
+        left = padding;
+      }
+    }
+    top = Math.max(padding, Math.min(top, viewportHeight - tipRect.height - padding));
+  } else if (preferredPlacement === "top") {
+    left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+    left = Math.max(padding, Math.min(left, viewportWidth - tipRect.width - padding));
     top = rect.top - tipRect.height - gap;
     if (top < padding) {
       const bottomPos = rect.bottom + gap;
@@ -32,6 +59,8 @@ export const computeTooltipPosition = (
       }
     }
   } else {
+    left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+    left = Math.max(padding, Math.min(left, viewportWidth - tipRect.width - padding));
     top = rect.bottom + gap;
     if (top + tipRect.height > viewportHeight - padding) {
       top = Math.max(padding, rect.top - tipRect.height - gap);
@@ -64,6 +93,7 @@ export function showTooltip(target) {
   const preferredPlacement =
     target.dataset.tooltipPosition ||
     target.dataset.placement ||
+    (target.closest("aside") ? "right" : null) ||
     target.closest("[data-tooltip-position]")?.dataset.tooltipPosition ||
     "top";
   const pos = computeTooltipPosition(

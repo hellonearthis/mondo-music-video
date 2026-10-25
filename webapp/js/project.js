@@ -89,6 +89,7 @@ export function getProjectState() {
     files,
     custom_vocabulary: state.currentCustomVocab,
     vocab_random_key: state.currentVocabRandomKey || "",
+    thematic_worlds: state.thematicWorlds || null,
     details_open: Boolean($("#video-form details[open]")),
     details_sections: Object.fromEntries($$("#video-form details[id]").map(el => [el.id, el.open])),
     log_open: Boolean($("#operation-log") && !$("#operation-log").hidden)
@@ -137,6 +138,9 @@ export async function restoreProject() {
   if (saved.vocab_random_key) {
     state.currentVocabRandomKey = String(saved.vocab_random_key);
   }
+  if (saved.thematic_worlds && typeof saved.thematic_worlds === "object") {
+    state.thematicWorlds = saved.thematic_worlds;
+  }
   if (saved.custom_vocabulary && typeof saved.custom_vocabulary === "object") {
     state.currentCustomVocab = saved.custom_vocabulary;
     updateVocabCustomBadge();
@@ -184,7 +188,7 @@ export async function restoreProject() {
       fState.song = fileState.song;
       fState.songName = fileState.songName || fileState.song;
       const receipt = form.querySelector(".song-receipt");
-      if (receipt) receipt.textContent = "Uploaded: " + fState.songName;
+      if (receipt) receipt.textContent = "Current loaded track (Uploaded: " + fState.songName + ")";
       const songInput = form.querySelector(".song-input");
       if (songInput) songInput.required = false;
       updateSongPreview(form, "/api/uploads/song/" + encodeURIComponent(fState.song));

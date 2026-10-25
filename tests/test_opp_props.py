@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from opp import core as opp
+opp = pytest.importorskip("opp.core")
 
 from mmv import instrument_assets, instruments, props
 from mmv.storage import Storage

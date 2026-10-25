@@ -131,6 +131,9 @@ export async function preview(form) {
       request.content[category] = request["rating_" + category];
       delete request["rating_" + category];
     }
+    if (state.thematicWorlds && state.thematicWorlds.mode && state.thematicWorlds.mode !== "off") {
+      request.thematic_worlds = state.thematicWorlds;
+    }
     request.world_contrast = contrastFromRequest(request);
     request.world_contrast_strength = Number(request.world_contrast_strength);
     if (state.currentCustomVocab && Object.keys(state.currentCustomVocab).length) {
@@ -234,6 +237,13 @@ export function showQuote(request, quote) {
   if (quote.captions) {
     if (quote.captions.note) summary.append(text("p", quote.captions.note, "se-warn"));
     else summary.append(text("p", `Lyric captions: ${quote.captions.cues.length} line(s) ${quote.captions.mode === "burned" ? "burned into the video (a copy without captions is kept) and saved" : "saved"} as lyrics.srt.`, "muted"));
+  }
+  if (request.thematic_worlds && request.thematic_worlds.mode && request.thematic_worlds.mode !== "off") {
+    const tw = request.thematic_worlds;
+    const activeNames = (tw.activeWorlds && tw.activeWorlds.length) ? tw.activeWorlds.join(", ") : "Selected themes";
+    const modeLabel = tw.mode.charAt(0).toUpperCase() + tw.mode.slice(1);
+    const mult = (2 * ((tw.slider ?? 50) / 100)).toFixed(1);
+    summary.append(text("p", `🧭 Thematic Worlds active: ${modeLabel} mode (juxtaposition ${tw.slider ?? 50}% / x${mult}), anchored by ${activeNames}.`, "muted"));
   }
   if (request.clip_quality && request.clip_quality !== "standard") {
     summary.append(text("p", `Studio-quality raw clips (${request.clip_quality === "prores" ? "ProRes 4444" : "FFV1 lossless"}): each passage clip is saved near-lossless for editing. `
@@ -362,6 +372,11 @@ export function renderServices(services) {
     if (card) {
       card.classList.toggle("card-processing", activity === "processing");
       card.classList.toggle("card-missing", activity === "missing");
+      const roleEl = card.querySelector(".service-role");
+      const roleText = roleEl ? ` (${roleEl.textContent})` : "";
+      const summary = `${id}${roleText}: ${badge ? badge.textContent : activity} — ${detailText}`;
+      card.dataset.tooltip = summary;
+      card.title = summary;
     }
   }
 }
@@ -539,7 +554,7 @@ export function initProductionForms() {
         try {
           fState.song = await upload(selected, "song");
           fState.songName = selected.name;
-          form.querySelector(".song-receipt").textContent = "Uploaded: " + selected.name;
+          form.querySelector(".song-receipt").textContent = "Current loaded track (Uploaded: " + selected.name + ")";
           song.required = false;
           scheduleSave();
         } catch (error) {
@@ -708,6 +723,7 @@ export function initOperationControls() {
     state.sessionLogs.length = 0;
     state.currentRun = null;
     await api("/api/log/clear", { method: "POST" });
+    applyStatus({ state: "idle", message: "One idea. One production at a time.", progress: 0 });
     $("#operation-log").textContent = "Log cleared. Waiting for new activity.";
     notice("Diagnostic log cleared.", false);
     setTimeout(() => { if ($("#notice").textContent === "Diagnostic log cleared.") notice("", false); }, 2000);

@@ -91,8 +91,9 @@ class WorldDataTests(unittest.TestCase):
         import os, stat
         worlds.create(self.store, "salt", LEDGER)
         record = self.store.home / "worlds" / "salt" / "v0001.json"
-        self.assertEqual(stat.S_IMODE(record.stat().st_mode), 0o600)
-        self.assertEqual(stat.S_IMODE(record.parent.stat().st_mode), 0o700)
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE(record.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(record.parent.stat().st_mode), 0o700)
         outside = Path(self.temp.name) / "outside"
         outside.mkdir()
         (outside / "v0001.json").write_text(json.dumps({**worlds.normalize(LEDGER), "id": "linked", "version": 1}))
@@ -102,7 +103,8 @@ class WorldDataTests(unittest.TestCase):
                 call(self.store, "linked")
         self.assertEqual([item["id"] for item in worlds.listing(self.store)], ["salt"])
         worlds.write_proposal(self.store, "p-one", "salt", "grow", 1, {**worlds.normalize(LEDGER), "id": "salt"}, [], {})
-        self.assertEqual(stat.S_IMODE((self.store.home / "world-proposals" / "p-one.json").stat().st_mode), 0o600)
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE((self.store.home / "world-proposals" / "p-one.json").stat().st_mode), 0o600)
 
     def test_version_numbers_past_9999_stay_in_order(self):
         worlds.create(self.store, "salt", LEDGER)

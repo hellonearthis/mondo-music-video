@@ -56,6 +56,10 @@ Thumbs.db
 desktop.ini
 *.bak
 
+# research and development notes
+ideas_dev_notes.md
+overview.md
+
 # Local contest planning notes
 /docs/COMFY_CONTEST*.md
 

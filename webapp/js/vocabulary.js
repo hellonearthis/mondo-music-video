@@ -70,7 +70,9 @@ export const VOCAB_CATEGORY_TOOLTIPS = {
   shot_scales:
     "Framing distance (extreme wide to macro). In prompt generation, chosen by musical intensity: wide establishing shots during low energy, tightening to intimate close-ups at peak energy.",
   rigging:
-    "Facial movement suppression instructions ('lips firmly sealed shut'). In prompt generation, enforces sealed-lip realism when silent mouths is active to eliminate AI babble."
+    "Facial movement suppression instructions ('lips firmly sealed shut'). In prompt generation, enforces sealed-lip realism when silent mouths is active to eliminate AI babble.",
+  themes:
+    "Abstract thematic domain or conceptual world. In prompt generation, groups related locations, objects, and actions to preserve thematic continuity across cuts."
 };
 
 const tabsHtml = (categories, activeCat, catalog, draft) =>
@@ -135,7 +137,7 @@ const summaryCardHtml = (cat, activeItems) => {
 
 // --- Backwards-Compatible Model Wrapper ---
 
-export const buildPseudoRandomDraft = (rawKey, fallbackCount = 5, existingDraft = {}) =>
+export const buildPseudoRandomDraft = (rawKey, fallbackCount = 10, existingDraft = {}) =>
   computePseudoRandomDraft(vocabDataCache, rawKey, fallbackCount, existingDraft);
 
 // --- DOM Sync & Render Functions ---
@@ -162,10 +164,24 @@ export function updateVocabCustomBadge() {
   const quickKeyInput = $("#vocab-quick-key-input");
   const customCount = Object.keys(state.currentCustomVocab || {}).length;
   const randomKey = state.currentVocabRandomKey || "";
+  const worlds = state.thematicWorlds;
 
   if (badge) {
-    badge.textContent = randomKey ? `🎲 ${randomKey}` : `${customCount} customized`;
-    badge.hidden = !randomKey && customCount === 0;
+    if (worlds && worlds.mode && worlds.mode !== "off") {
+      const modeLabel = worlds.mode.charAt(0).toUpperCase() + worlds.mode.slice(1);
+      const mult = (2 * ((worlds.slider ?? 50) / 100)).toFixed(1);
+      badge.textContent = `🧭 Worlds: ${modeLabel} (x${mult})`;
+      badge.title = `Thematic Worlds active: ${modeLabel} mode, juxtaposition x${mult}`;
+      badge.hidden = false;
+    } else if (randomKey) {
+      badge.textContent = `🎲 ${randomKey}`;
+      badge.title = `Pseudo-random vocabulary key: ${randomKey}`;
+      badge.hidden = false;
+    } else {
+      badge.textContent = `${customCount} customized`;
+      badge.title = `${customCount} categories customized`;
+      badge.hidden = customCount === 0;
+    }
   }
   if (quickBar) {
     quickBar.hidden = !randomKey;
@@ -537,7 +553,7 @@ export function setupVocabularyCustomizer() {
 
     "#roll-vocab-random-btn": handle(async () => {
       await loadVocabularyCatalog();
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
+      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
       const res = buildPseudoRandomDraft(generateRandomKey(count), count, state.currentCustomVocab || {});
       applyRandomToProject(res, `Rolled pseudo-random vocabulary key: ${res?.key}`);
     }),
@@ -545,15 +561,15 @@ export function setupVocabularyCustomizer() {
     "#vocab-quick-apply-key-btn": handle(async () => {
       await loadVocabularyCatalog();
       const raw = ($("#vocab-quick-key-input")?.value || "").trim();
-      if (!raw) throw new Error("Enter a pseudo-random key (e.g. 482910:5)");
-      const res = buildPseudoRandomDraft(raw, 5, state.currentCustomVocab || {});
-      if (!res) throw new Error("Invalid key format. Use seed:count (e.g. 482910:5)");
+      if (!raw) throw new Error("Enter a pseudo-random key (e.g. 482910:10)");
+      const res = buildPseudoRandomDraft(raw, 10, state.currentCustomVocab || {});
+      if (!res) throw new Error("Invalid key format. Use seed:count (e.g. 482910:10)");
       applyRandomToProject(res, `Applied pseudo-random key: ${res.key}`);
     }),
 
     "#vocab-quick-reroll-btn": handle(async () => {
       await loadVocabularyCatalog();
-      const count = parseRandomKey(state.currentVocabRandomKey || "", 5)?.count || 5;
+      const count = parseRandomKey(state.currentVocabRandomKey || "", 10)?.count || 10;
       const res = buildPseudoRandomDraft(generateRandomKey(count), count, state.currentCustomVocab || {});
       applyRandomToProject(res, `Rerolled pseudo-random key: ${res?.key}`);
     }),
@@ -583,7 +599,7 @@ export function setupVocabularyCustomizer() {
     }),
 
     "#vocab-roll-random-btn": handle(() => {
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
+      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
       const res = buildPseudoRandomDraft(generateRandomKey(count), count, vocabWorkingDraft);
       if (res) {
         if ($("#vocab-preset-id") && !$("#vocab-preset-id").value) {
@@ -598,8 +614,8 @@ export function setupVocabularyCustomizer() {
 
     "#vocab-apply-key-btn": handle(() => {
       const raw = ($("#vocab-random-key")?.value || "").trim();
-      if (!raw) throw new Error("Enter a key in format seed:count (e.g. 482910:5)");
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
+      if (!raw) throw new Error("Enter a key in format seed:count (e.g. 482910:10)");
+      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
       const res = buildPseudoRandomDraft(raw, count, vocabWorkingDraft);
       if (!res) throw new Error("Invalid key format. Expected seed:count");
       applyRandomToEditor(res, `Applied key "${res.key}".`);
@@ -624,7 +640,7 @@ export function setupVocabularyCustomizer() {
     "#vocab-load-saved-key-btn": handle(() => {
       const key = $("#vocab-saved-keys-select")?.value;
       if (!key) throw new Error("Select a saved key from the dropdown first.");
-      const res = buildPseudoRandomDraft(key, 5, vocabWorkingDraft);
+      const res = buildPseudoRandomDraft(key, 10, vocabWorkingDraft);
       applyRandomToEditor(res, `Loaded saved key "${key}".`, false);
     }),
 

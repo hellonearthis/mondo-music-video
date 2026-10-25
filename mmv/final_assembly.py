@@ -3,6 +3,8 @@
 The saved recipe is local provenance, never an invitation to fall back to a final
 MP4. Topaz is the sole operator-authorized exception to this rule.
 """
+from functools import lru_cache
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,6 +12,19 @@ import tempfile
 from .storage import inside, read_json, write_json
 
 RECIPE = 'assembly-source.json'
+
+
+@lru_cache(maxsize=1)
+def _filter_script_flag():
+    try:
+        devnull = 'NUL' if os.name == 'nt' else '/dev/null'
+        res = subprocess.run(['ffmpeg', '-nostdin', '-y', '-v', 'error', '-filter_complex_script', devnull],
+                             capture_output=True, text=True, timeout=2)
+        if 'Unrecognized option' in res.stderr:
+            return '-/filter_complex'
+    except Exception:
+        pass
+    return '-filter_complex_script'
 
 
 def segment_id(segment):
@@ -193,7 +208,7 @@ def command(recipe, target, work, quality='high'):
     # Script file avoids OS command-line length limits on long productions.
     script = Path(work) / 'assembly.ffgraph'
     script.write_text(';\n'.join(graph), encoding='utf-8')
-    argv.extend(['-filter_complex_script', script.name, '-map', picture, '-map', audio,
+    argv.extend([_filter_script_flag(), script.name, '-map', picture, '-map', audio,
                  '-frames:v', str(recipe['frames']), '-r', str(fps), '-c:v', 'libx264', '-crf', '16' if quality == 'low' else '6',
                  '-preset', 'slow', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart', str(Path(target).resolve())])
     return argv

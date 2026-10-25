@@ -578,7 +578,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.10')
+                expect(page.locator('#version')).to_have_text('1.10.11')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -773,7 +773,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 self.assertGreaterEqual((light + .05) / (dark + .05), 4.5)
                 more.click()
                 expect(page.locator('#vocab-editor-pane')).to_be_visible()
-                page.locator('#panel-vocab .vocab-help-btn').click()
+                page.locator('#panel-vocab .vocab-help-btn >> nth=0').click()
                 expect(page.locator('#vocab-helper-dialog')).to_be_visible()
             finally:
                 browser.close()
@@ -1344,7 +1344,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.10')
+                expect(page.locator('#version')).to_have_text('1.10.11')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

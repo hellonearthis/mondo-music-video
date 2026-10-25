@@ -28,6 +28,7 @@ param(
     [string]$LlamaDir = "C:\llamaCPP",
     [switch]$NoLlama,
     [switch]$NoBrowser,
+    [switch]$WithEmbedding,
     [switch]$Help
 )
 
@@ -53,6 +54,7 @@ if ($Help) {
     Write-Host "  -LlamaDir <path>   llama.cpp installation directory (default: C:\llamaCPP)"
     Write-Host "  -NoLlama           Skip llama.cpp management (assume already running)"
     Write-Host "  -NoBrowser         Do not automatically open the browser"
+    Write-Host "  -WithEmbedding     Also start Qwen3-Embedding server on port 8092"
     Write-Host ""
     exit 0
 }
@@ -133,6 +135,7 @@ function Get-DiscoveredModels {
     if (-not (Test-Path $modelsDir)) { return @() }
     $allGgufs = Get-ChildItem -Path $modelsDir -Recurse -Filter "*.gguf" -File -ErrorAction SilentlyContinue
     if (-not $allGgufs) { return @() }
+    # Index projector paths by folder in a single pass to eliminate repetitive disk queries
     $projByDir = @{}
     foreach ($item in $allGgufs) {
         if ($item.Name -match "mmproj" -and -not $projByDir.ContainsKey($item.DirectoryName)) {
@@ -142,7 +145,7 @@ function Get-DiscoveredModels {
 
     $found = [System.Collections.Generic.List[PSCustomObject]]::new()
     foreach ($file in $allGgufs) {
-        if ($file.Name -match "mmproj") { continue }
+        if ($file.Name -match "mmproj|embed") { continue }
         $relPath = $file.FullName.Substring($LlamaDir.Length).TrimStart("\/")
         $projRel = if ($projByDir.ContainsKey($file.DirectoryName)) { $projByDir[$file.DirectoryName] } else { "" }
         $sizeGb = [Math]::Round($file.Length / 1GB, 2)
@@ -249,7 +252,7 @@ if ($selectedModel) {
     Write-Host "[+] Configuring Mondo Music Video for model: $($selectedModel.Name)" -ForegroundColor Cyan
     $launchArgs = @(
         "$serverExe",
-        "-m", "$($selectedModel.RelativePath)",
+        "-m", "$($selectedModel.FullPath)",
         "-ngl", "99",
         "-c", "$ContextSize",
         "--flash-attn", "on",
@@ -260,7 +263,7 @@ if ($selectedModel) {
     )
     $launchArgs += $SlotArgs
     if ($selectedModel.HasVision -and $selectedModel.MmprojRelPath) {
-        $launchArgs += @("--mmproj", "$($selectedModel.MmprojRelPath)")
+        $launchArgs += @("--mmproj", (Join-Path $LlamaDir $selectedModel.MmprojRelPath))
     }
     if ($BatchSize -gt 0) { $launchArgs += @("-b", "$BatchSize") }
     if ($MicroBatchSize -gt 0) { $launchArgs += @("-ub", "$MicroBatchSize") }
@@ -341,6 +344,14 @@ if (-not $NoLlama -and (Test-Path $serverExe)) {
         }
     } elseif ($isLlamaRunning) {
         Write-Host "[+] llama-server is already running on http://127.0.0.1:$LlamaPort" -ForegroundColor Green
+    }
+}
+
+# Optional: Launch Qwen3-Embedding server if requested
+if ($WithEmbedding) {
+    $embedScript = Join-Path $MmvProjectDir "start-embedding.ps1"
+    if (Test-Path $embedScript) {
+        & $embedScript -LlamaDir $LlamaDir
     }
 }
 
