@@ -27,14 +27,20 @@ export function initFileDropTargets() {
     const label = input.closest('label');
     if (!label) return;
     label.classList.add('file-drop-target');
-    const hint = document.createElement('small');
-    hint.className = 'file-drop-hint';
-    hint.textContent = input.multiple ? `Choose files or drop up to ${input.dataset.max || 9} ${input.dataset.max ? 'files' : 'images'} here` : 'Choose a file or drop it here';
-    label.append(hint);
-    const error = document.createElement('small');
-    error.className = 'file-drop-error';
-    error.setAttribute('role', 'alert');
-    label.append(error);
+    let hint = label.querySelector('.file-drop-hint');
+    if (!hint) {
+      hint = document.createElement('small');
+      hint.className = 'file-drop-hint';
+      hint.textContent = input.multiple ? `Choose files or drop up to ${input.dataset.max || 9} ${input.dataset.max ? 'files' : 'images'} here` : 'Choose a file or drop it here';
+      label.append(hint);
+    }
+    let error = label.querySelector('.file-drop-error');
+    if (!error) {
+      error = document.createElement('small');
+      error.className = 'file-drop-error';
+      error.setAttribute('role', 'alert');
+      label.append(error);
+    }
     input.addEventListener('change', () => { error.textContent = ''; });
     const clearHover = () => label.classList.remove('file-drop-hover');
     label.addEventListener('dragenter', event => {

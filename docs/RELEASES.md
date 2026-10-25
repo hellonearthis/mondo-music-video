@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.14 - Static File Drop Targets & Staging Guidance Polish
+
+- **Static Drop Zone Markup**: Embedded drop zone hints (`Choose a file or drop it here`, `Choose files or drop up to N images here`) and error containers directly into the HTML body across all 16 file upload targets, eliminating post-load text insertion and visual shift.
+- **Idempotent File Drop Initialization**: Updated `initFileDropTargets` in `webapp/js/file_drop.js` to preserve existing static hint and error elements in the markup instead of appending duplicates dynamically.
+- **Cast & Staging Box Architecture**: Preserved clean `.oap-hint-box` layout and header badge semantics distinguishing character identities from scene reference images.
+
 ## 1.10.13 - Tooltip Theming & Operation Bar Polish
 
 - **Polished Tooltip Theming**: Upgraded studio tooltips with an emerald forest dark mode (`#0e201b` background, `#224b3d` border, `#e8f4ec` text) and a clean soft-blue light mode (`#f0f5fc` background, `#0d233a` text, `#b8d1ea` border).
