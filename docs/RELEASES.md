@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.15 - Visual Direction Tooltip & Track Loading Receipt Polish
+
+- **Visual Direction Guidance**: Clarified the production-wide creative brief tooltip for `Visual direction` to detail settings, subject actions, mood, and recurring physical motifs across all generated scenes.
+- **Track Receipt Polish**: Updated the audio track drop zone receipt markup to feature clear upward indicator accents (`▲ ▲ ▲`).
+- **Start Fresh Tooltip Formatting**: Refined multi-line tooltip alignment for the "Start fresh" control.
+
 ## 1.10.14 - Static File Drop Targets & Staging Guidance Polish
 
 - **Static Drop Zone Markup**: Embedded drop zone hints (`Choose a file or drop it here`, `Choose files or drop up to N images here`) and error containers directly into the HTML body across all 16 file upload targets, eliminating post-load text insertion and visual shift.
