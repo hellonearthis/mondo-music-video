@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.17 - Dedicated Video Format Fold & Streamlined Cast Guidance
+
+- **Dedicated Video Format & Render Engine Fold**: Grouped picture shape (aspect ratio), local render megapixels, video generation engine (Renderer), and render resolution into a unified `.video-format-grid` container under its own fold in the Director's Control Room (`#director-fold-format`), open by default above post-processing.
+- **Streamlined Cast & Staging Guidance**: Replaced the verbose exposition and bullet points in Card 2 with a concise one-sentence guide while retaining one-click modal access to the comprehensive Open Actor Protocol and reference documentation.
+- **Updated Interface Guide & UI Tests**: Documented the new Video Format fold in `docs/interface-guide.md` and updated DOM details fold count expectations in browser test suites.
+
 ## 1.10.16 - Streamlined Visual Vocabulary UI
 
 - **Removed Pseudo-Random Vocabulary Toolbars**: Retired the pseudo-random key generation controls, seed toolbars, and quick bars from both the Main Video setup card and the Visual Vocabulary workspace (Tab 06).

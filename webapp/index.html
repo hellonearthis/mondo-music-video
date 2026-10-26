@@ -100,7 +100,7 @@
   </div>
 </section>
 
-<section id="panel-video" class="panel" data-component="Music Video Panel" data-component-id="panel-video" data-component-source="webapp/index.html"><div class="eyebrow">01 / THE MAIN EVENT</div><h1>Your song.<br><em>A world of its own.</em></h1><p class="intro">Your music drives the cuts. Beat and downbeat detection, energy-aware montage planning, and your chosen visual style shape a complete music video.</p>
+<section id="panel-video" class="panel" data-component="Music Video Panel" data-component-id="panel-video" data-component-source="webapp/index.html"><div class="eyebrow">01 / THE MAIN EVENT</div><h1>Your song.<br><em>A world of its own.</em></h1><p class="intro">Your music drives the cuts. Beat and downbeat detection, energy-aware montage planning and your chosen visual style shape a complete music video.</p>
 <form id="video-form" class="production-form" data-kind="video" data-component="Video Production Form" data-component-id="video-production-form" data-component-source="webapp/index.html"><div class="quick-start-bar"><button type="button" id="quick-start" class="quick-start-btn" data-tooltip="New here? One click picks sensible settings (and a random cast and dance if you have actors) and takes you to the preview. Nothing is rendered or charged until you accept the preview.">Just do the thing! <span>→</span></button><small>Pick a song, then Mondo does the rest. You still approve the preview before anything is made.</small><button type="button" id="start-fresh" class="quiet" data-tooltip="Clear this panel back to its defaults:
    song, direction, cast, references and storyboard">Start fresh</button></div><div class="form-grid">
   <!-- CARD 1: Core Track & Direction -->
@@ -113,7 +113,6 @@
     <label data-tooltip="Sets the production-wide creative brief for setting, subject action, mood, and recurring physical motifs across all generated scenes.">Visual direction<textarea name="direction" rows="5" maxlength="6000" placeholder="A rooftop performance at golden hour. Wind through the city. An electric blue jacket." required></textarea></label>
     <label data-tooltip="Visual style vocabulary card defining lenses, colors, and camera motion">Style<select class="style-select" name="style_id"></select></label>
     <div class="style-vocab-offer muted" hidden></div>
-    <div class="two-col"><label data-tooltip="Framing aspect ratio for the rendered video clips">Picture shape<select name="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>5:4</option><option>4:5</option><option>2:1</option><option>1:2</option><option>21:9</option><option>9:21</option><option>3:1</option><option>1:3</option></select></label><label data-tooltip="Resolution density per frame in megapixels for local ComfyUI H3 generation">Local render megapixels<input name="megapixels" type="number" min="0.15" max="4" step="0.05" value="0.6"></label></div>
 
     <div class="vocab-row">
       <label data-tooltip="Visual vocabulary rotation pools used by the music-video planner">Visual vocabulary
@@ -149,14 +148,13 @@
 
   <!-- CARD 2: Cast & Staging -->
   <div class="card" data-component="Cast & Staging Card" data-component-id="card-cast-staging" data-component-source="webapp/index.html"><div class="card-title"><span class="step">2</span> Cast &amp; Staging</div>
-    <label data-tooltip="Video generation engine: Local ComfyUI H3 or hosted cloud providers">Renderer<select class="backend-select" name="backend"></select></label><label data-tooltip="Target video resolution supported by the selected renderer">Render resolution<select class="resolution-select" name="resolution"></select></label>
-    <div class="oap-hint-box" data-tooltip="Understand the difference between Cast (character identities) and Scene Reference Images">
+    <div class="oap-hint-box" data-tooltip="Manage recurring actors or scene reference photos">
       <div class="oap-hint-header">
-        <span class="oap-hint-badge">Character identities vs. scene references:</span>
+        <span class="oap-hint-badge">Cast &amp; Reference Guide</span>
         <button type="button" class="quiet oap-help-btn" data-tooltip="Open the comprehensive Cast, References &amp; OAP guide">&#x2139;&#xFE0F; How Cast &amp; OAP work</button>
       </div>
       <div class="oap-hint-content">
-        <p>• <strong>Cast (Actors)</strong>: To feature recurring characters, singers, or performers, add them via <em>03. Actors &amp; OAP</em>. Their reference portrait binds to prompt slots (<code>&lt;Picture 1&gt;</code>) and enforces signed safety riders.<br>• <strong>Additional reference images</strong>: Upload loose photos below strictly for lighting, environment, color palette, or mood (not tied to character identity).</p>
+        <p>Select recurring characters from your cast library, or upload reference photos below for scene lighting and atmosphere.</p>
       </div>
       <div class="oap-hint-actions">
         <button type="button" class="secondary nav-to-actors-btn" data-tooltip="Switch to 03. Actors &amp; OAP to create or import character packages">Manage / Import Cast <span>↗</span></button>
@@ -216,7 +214,18 @@
         </div>
       </details>
 
-      <!-- FOLD C: Render Engine & Post-Processing -->
+      <!-- FOLD C: Video Format, Renderer & Resolution -->
+      <details id="director-format" class="director-fold" data-component="Video Format & Output Fold" data-component-id="director-fold-format" data-component-source="webapp/index.html" data-tooltip="Aspect ratio, resolution density, video generation engine, and render resolution" open>
+        <summary><span>📺 Video Format &amp; Render Engine</span><small class="muted">Aspect shape, megapixels, renderer &amp; resolution</small></summary>
+        <div class="fold-content">
+          <div class="video-format-grid">
+            <div class="two-col"><label data-tooltip="Framing aspect ratio for the rendered video clips">Picture shape<select name="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>5:4</option><option>4:5</option><option>2:1</option><option>1:2</option><option>21:9</option><option>9:21</option><option>3:1</option><option>1:3</option></select></label><label data-tooltip="Resolution density per frame in megapixels for local ComfyUI H3 generation">Local render megapixels<input name="megapixels" type="number" min="0.15" max="4" step="0.05" value="0.6"></label></div>
+            <div class="two-col"><label data-tooltip="Video generation engine: Local ComfyUI H3 or hosted cloud providers">Renderer<select class="backend-select" name="backend"></select></label><label data-tooltip="Target video resolution supported by the selected renderer">Render resolution<select class="resolution-select" name="resolution"></select></label></div>
+          </div>
+        </div>
+      </details>
+
+      <!-- FOLD D: Render Engine & Post-Processing -->
       <details id="director-render" class="director-fold" data-component="Render Engine Fold" data-component-id="director-fold-render" data-component-source="webapp/index.html" data-tooltip="Clip encoding format, subliminal flashes, vision quality checks, idents, and prompt caching">
         <summary><span>⚙️ Render Engine &amp; Post-Processing</span><small class="muted">Lossless clips, subliminal flash, vision checks &amp; title idents</small></summary>
         <div class="fold-content">
