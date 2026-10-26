@@ -8,6 +8,10 @@ Music Video cards and Director folds now show input progress in their headers. R
 
 Actors & OAP now has an on-demand public collection check. It lists missing actors, stages one selected package with index checksum, package hash and OAP signature verification, then presents the existing manifest/rider and explicit signer-acceptance import. Installed actors are preserved. REST, client, CLI and MCP expose the same check, stage, inspect and import sequence (56 MCP tools). The original four starter packages remain OAP v0.2; the five newer public collection packages are OAP v0.3 and are not automatically installed by this button.
 
+Also fixed in this release: the Outputs list showed blank players until you pressed play. Release 1.10.12 stopped videos preloading to keep the browser's connections free for uploads and autosave, which also removed the first-frame thumbnail. Thumbnails now load two at a time: each video asks for its first frame, and the next starts once the browser stops fetching (or after 5 seconds), so the connection pile-up behind the Firefox upload stall cannot return. GUI only; no agent-interface change.
+
+The header tagline now reads "FILMED IN MACHINE COLOUR" (it was "A LITTLE STUDIO. A BIG PICTURE.").
+
 See [collaborator review](COLLABORATOR_REVIEW.md) for the exact fork assessment and adaptations.
 
 ## 1.10.20 — Fork UI polish (hellonearthis 1.10.15–1.10.20)
