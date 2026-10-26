@@ -62,8 +62,8 @@ button.picker-crumb{border:0;padding:0;background:none;font-size:inherit;font-fa
 .brand small{white-space:nowrap}
 
 /* Cast picker container & checkbox list */
-.cast-picker{display:block;margin-top:8px}
-.cast-checkbox-list{display:flex;flex-direction:column;gap:4px;max-height:220px;min-height:80px;overflow-y:auto;padding:8px 10px;background:#fcfcf8;border:1px solid #d7dbd0;border-radius:5px}
+.cast-picker{display:block;margin-top:4px}
+.cast-checkbox-list{display:flex;flex-direction:column;gap:2px;max-height:200px;min-height:40px;overflow-y:auto;padding:4px 8px;margin:2px 0 4px;background:#fcfcf8;border:1px solid #d7dbd0;border-radius:5px}
 [data-theme=dark] .cast-checkbox-list{background:#1a2720;border-color:var(--line)}
 .cast-checkbox-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:400;user-select:none;transition:background .15s}
 .cast-checkbox-item:hover{background:#f0f4ea}
@@ -239,7 +239,25 @@ button[aria-busy="true"], button.processing {
 }
 
 .vocab-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.vocab-row label {
+  width: 100%;
+  margin-bottom: 0;
+}
+.vocab-btn-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
   flex-wrap: wrap;
+}
+#open-vocab-panel-btn {
+  justify-content: flex-start;
+  gap: 8px;
 }
 .vocab-random-summary {
   margin-top: 12px;

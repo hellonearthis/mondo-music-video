@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.20 - Visual Vocabulary Button Layout & Reference Image Tooltip Fix
+
+- **Left-Justified Vocabulary Button Row**: Placed the "Explore vocabulary" action button and Guide shortcut on their own line directly beneath the Visual Vocabulary selection menu, left-justifying button contents for clean scanability.
+- **Reference Image Chip Tooltips**: Configured explicit `data-tooltip` titles on individual reference image file chips in `.refs-receipt`, ensuring image hover previews render reliably.
+- **Compact Cast Checkbox Spacing**: Refined padding and vertical margins on the single-column cast checkbox container for a tighter layout footprint.
+
 ## 1.10.19 - Reference Images File List & Thumbnail Tooltips
 
 - **Structured Reference File List**: Rendered additional and harvest reference images as an organized vertical list (`ul.file-list`) of monospace chips, displaying one file per line.
