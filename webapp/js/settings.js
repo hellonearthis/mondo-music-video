@@ -2,12 +2,14 @@
 
 import { $, api, handle, json, keyRow, notice, option, state, text } from "./core.js";
 import { refreshServices } from "./production.js";
+import { setPanelAutoCollapse } from "./panel_progress.js";
 
 export const settingLabels = {
   writer_api_profile: "Writer API profile",
   vision_api_profile: "Vision API profile",
   video_api_profile: "Video API profile",
   auto_updates: "Automatic updates",
+  auto_collapse_panels: "Collapse completed panels automatically",
   comfy_sdk_url: "Local Comfy API proxy URL",
   backend: "Default renderer",
   comfy_url: "ComfyUI service URL",
@@ -41,6 +43,7 @@ export const settingLabels = {
 
 export const settingTooltips = {
   auto_updates: "At the next launch, install tracked repository updates automatically. Turn off to check and notify only.",
+  auto_collapse_panels: "Collapse a required panel when its last required field loses focus. Progress colours and labels stay visible when this is off.",
   comfy_sdk_url: "Official Comfy API v2 proxy on this machine, usually http://127.0.0.1:8189",
   backend: "Default video generation engine for music videos and idents",
   comfy_url: "HTTP URL for your running ComfyUI service instance (usually http://127.0.0.1:8188)",
@@ -227,6 +230,7 @@ export function openPicker(options) {
 
 export async function loadSettings() {
   const data = await (await api("/api/settings")).json();
+  setPanelAutoCollapse(data.settings.auto_collapse_panels);
   const currentH3 = data.settings.h3_models || {};
   const installedH3 = data.h3_models_installed || {};
   const entries = Object.entries(data.settings).filter(([k]) => k !== "h3_models");
@@ -240,7 +244,7 @@ export async function loadSettings() {
       input = document.createElement("select");
       input.append(option("", "Manual configuration", "Use the individual settings below"));
       input.append(...(data.api_profiles || []).filter(p => p.role === role).map(p => option(p.name, p.name)));
-    } else if (name === "auto_updates") {
+    } else if (name === "auto_updates" || name === "auto_collapse_panels") {
       input = document.createElement("input");
       input.type = "checkbox";
       input.checked = Boolean(value);
@@ -398,6 +402,7 @@ function settingsPayload(form) {
     delete raw["h3_" + key];
   }
   raw.auto_updates = form.elements.auto_updates.checked;
+  raw.auto_collapse_panels = form.elements.auto_collapse_panels.checked;
   raw.vision_call_estimate = Number(raw.vision_call_estimate);
   raw.writer_call_estimate = Number(raw.writer_call_estimate);
   raw.render_timeout_minutes = Math.max(0, Math.round(Number(raw.render_timeout_minutes) || 0));
@@ -418,6 +423,7 @@ function initSettingsAutosave(form) {
     redraw = false;
     try {
       await json("/api/settings", settingsPayload(form), "PUT");
+      setPanelAutoCollapse(form.elements.auto_collapse_panels.checked);
       if (refresh) await loadSettings();
       refreshServices(true);   // a probe can be slow; never hold up the next save
       show("Saved automatically at " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));

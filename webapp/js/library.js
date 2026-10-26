@@ -63,10 +63,11 @@ const actorCardHtml = (actor) => {
     <button type="button" class="quiet audition-button" data-action="export-audition" title="Export a signed audition package for ${escName}; cast-only assets are listed by hash but left out">Export audition package</button>
   `;
   return `
-    <article class="card" title="Cast member: ${escName}" data-id="${escId}" data-name="${escName}">
-      <img src="/api/actors/${encodeURIComponent(actor.id)}/reference" alt="${escName} reference" loading="lazy" data-tooltip="Reference portrait for ${escName}" title="Reference portrait for ${escName}">
+    <article class="card" data-id="${escId}" data-name="${escName}">
+      <img src="/api/actors/${encodeURIComponent(actor.id)}/reference" alt="${escName} reference" loading="lazy">
       <h2>${escName}</h2>
-      <p>${overview}</p>
+      <p class="actor-desc-text" ${actor.oap ? "" : 'data-tooltip="Double-click to edit visual description" title="Double-click to edit visual description"'}>${overview}</p>
+      ${actor.oap ? "" : '<button type="button" class="quiet actor-edit-btn" data-edit-description>Edit visual description</button>'}
       <p>${oapNote}</p>
       <button type="button" class="secondary" data-action="export-oap" title="Export signed OAP package for ${escName}">Export OAP package</button>
       ${auditionSection}
@@ -217,6 +218,7 @@ function renderCastCheckboxes(actors, selectedValues = new Set()) {
 
 export async function loadActors() {
   const actors = await (await api("/api/actors")).json();
+  state.actors = actors;
   $$(".actor-select").forEach((select) => {
     const old = [...select.selectedOptions].map((x) => x.value);
     if (!actors.length) {
@@ -340,6 +342,63 @@ export function initLibraryForms() {
       }
     }
   }));
+
+
+  // Double-click inline editor for Actor description
+  const editDescription = (e) => {
+    const card = e.target.closest("article[data-id]");
+    if (!card || (e.type === "dblclick" && !e.target.closest(".actor-desc-text")) ||
+        (e.type === "click" && !e.target.closest("[data-edit-description]"))) return;
+    const descP = card.querySelector(".actor-desc-text");
+    if (!descP || descP.querySelector("textarea")) return;
+    const { id, name } = card.dataset;
+    const existing = (state.actors || []).find((a) => a.id === id);
+    if (!existing || existing.oap) return;
+    const originalText = existing?.description || descP.textContent || "";
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "actor-inline-editor";
+    textarea.rows = 4;
+    textarea.maxLength = 6000;
+    textarea.value = originalText;
+    textarea.setAttribute("aria-label", `Edit visual description for ${name}`);
+
+    let saved = false;
+    const saveAndClose = async () => {
+      if (saved) return;
+      saved = true;
+      const newText = textarea.value.trim();
+      if (newText === originalText.trim()) {
+        descP.textContent = actorOverview({ description: originalText });
+        return;
+      }
+      try {
+        descP.textContent = "Saving description…";
+        const updated = await json(`/api/actors/${encodeURIComponent(id)}`, { description: newText }, "PATCH");
+        if (existing) existing.description = updated.description;
+        await loadActors();
+        notice(`Updated visual description for “${name}”.`);
+        scheduleSave();
+      } catch (err) {
+        descP.textContent = actorOverview({ description: originalText });
+        notice(`Failed to save description: ${err.message}`);
+      }
+    };
+
+    textarea.addEventListener("blur", saveAndClose);
+    textarea.addEventListener("keydown", (evt) => {
+      if (evt.key === "Escape") {
+        saved = true;
+        descP.textContent = actorOverview({ description: originalText });
+      }
+    });
+
+    descP.replaceChildren(textarea);
+    textarea.focus();
+    textarea.select();
+  };
+  $("#actor-list")?.addEventListener("dblclick", editDescription);
+  $("#actor-list")?.addEventListener("click", editDescription);
 
   // Delegated handler for Actor cards
   $("#actor-list")?.addEventListener("click", handle(async (e) => {
@@ -475,13 +534,14 @@ export function initLibraryForms() {
     body.set("filename", state.currentOap);
     body.set("allow_unsigned", String($("#allow-unsigned").checked));
     body.set("accept_unknown", String(event.target.elements.accept_unknown.checked));
-    await api("/api/oap/import", { method: "POST", body });
+    const imported = await (await api("/api/oap/import", { method: "POST", body })).json();
     event.target.hidden = true;
     $("#oap-report").hidden = true;
     if ($("#oap-report-card")) $("#oap-report-card").hidden = true;
     if ($("#oap-raw-toggle-wrap")) $("#oap-raw-toggle-wrap").hidden = true;
     notice("Actor successfully imported into your studio cast library.");
     await loadActors();
+    document.dispatchEvent(new CustomEvent("mmv:actor-imported", { detail: { id: imported.id } }));
   });
 
   $("#agreement-form").onsubmit = handle(async (event) => {

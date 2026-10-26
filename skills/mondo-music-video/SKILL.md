@@ -41,6 +41,14 @@ and review its signer, clearance and license before `import_opp`. Accept a
 verified signer explicitly or opt into an unsigned local draft. Use
 `select_opp_sheet(prop_id, use)` to preview a base or interaction sheet. Imported
 props stay private; current production use is limited to musical instruments.
+For public OAP actors, call `check_oap_collection` to see the current published
+index and installed IDs. If the operator selects a missing actor, call
+`stage_oap_collection(actor_id, index_sha256)`, inspect its verified manifest,
+signer, license and rider, then use the existing OAP import with explicit signer
+acceptance. The CLI equivalents are `oap-collection` and
+`oap-collection-stage ID INDEX_SHA256`. Staging does not import or overwrite.
+The original four starter actors are OAP v0.2; the newer collection may contain
+OAP v0.3 packages. Never treat a collection listing as signer acceptance.
 If the app is stopped, use the user's app environment to run
 `bash start.sh --background` from the project folder (`bash stop.sh` stops it; it refuses while a production runs), or `mondo-music-video serve`. Missing models/keys need configuration; do not silently
 switch providers or install/download model weights.
@@ -169,6 +177,8 @@ signature and signer first. A valid signature does not establish signer trust.
 Accept unsigned packages or unknown signers only according to the user's choice.
 Imports never overwrite actors. Imported voice/assets stay inert in the original
 package; this edition has no voice synthesis or audition rendering.
+
+To change a locally created actor's visual description, inspect actors first, then use `update_actor(actor_id, description)` or `mondo-music-video-agent update-actor ID DESCRIPTION`. Imported signed OAP actors need a revised package from their signer. Inspect OPP usage with `inspect_studio(kind="opp-guide")` or the `opp-guide` CLI command. The GUI's Done/Needs/Reviewed cues describe form inputs, not a successful quote. `auto_collapse_panels` defaults on and may be changed through `update_studio_settings` or `mondo-music-video-agent update-settings '{"auto_collapse_panels":false}'`; preview and paid start consent are unchanged.
 
 Audition exports (`export_oap` with `tier="audition"`) leave out cast-only assets.
 Mark a reference audition-cleared only when the user says it is a cleaned or

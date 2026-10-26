@@ -1,5 +1,19 @@
 # Collaborator review record
 
+## Fork `1e097874` reviewed (release 1.10.21, 2026-10-26)
+
+Reviewed an isolated clone of [hellonearthis](https://github.com/hellonearthis)'s fork at exact revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b`, one commit after last reviewed `db7bec7`. Claude Code Sonnet 5.5 supplied a bounded read-only peer review; Codex checked the patch and integrated it. The commit adds actor inline editing, a wider actor grid, an OPP guide, dark selection contrast and version assertions.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Inline actor description edit | Adopted with agent client, CLI and MCP parity. Restricted to locally created actors: changing the local description of an imported signed OAP actor would disagree with its preserved original export. Empty descriptions are refused. A visible Edit button makes the action keyboard accessible; double-click remains. |
+| Wider actor grid | Adopted with a responsive minimum so phone viewports do not overflow. |
+| OPP guide and dialog | Adopted. Corrected the guide's archive size wording to match `mmv/props.py`; package data includes the guide for installed apps. Missing guide returns an error instead of a successful empty guide. Agents can inspect it too. |
+| Dark text selection contrast | Adopted. |
+| Actor form textarea | Fixed malformed `maxlength`/placeholder markup in the fork patch. |
+
+The panel progress design in `.collaboration/PANEL_PROGRESS_DESIGN.md` was implemented in the same release at the owner's request. It is a GUI state view; the server's quote and consent checks remain authoritative. No fork history merge, private asset import, protected-prompt edit, paid/GPU work, commit or push was made during review.
+
 ## Fork `56d9f04` reviewed (release 1.10.6, 2026-10-22)
 
 Reviewed from an isolated clone of `hellonearthis/mondo-music-video` at exact head `56d9f04` (one commit after the previously reviewed `c699179`), by [hellonearthis](https://github.com/hellonearthis). The fork labels it 1.10.2, which collides with our 1.10.2, so it ships here as 1.10.6.

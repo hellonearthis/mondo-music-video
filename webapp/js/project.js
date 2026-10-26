@@ -5,6 +5,7 @@ import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 import { syncInstrumentControls } from "./instruments.js";
 import { syncDanceControls } from "./dance.js";
 import { renderReferenceReceipt } from "./production.js";
+import { panelProgressSnapshot, restorePanelProgress } from "./panel_progress.js";
 
 let saveDebounceTimer = null;
 
@@ -56,6 +57,7 @@ export function getProjectState() {
   const panelName = activeNav ? activeNav.dataset.panel : "video";
   const forms = {};
   const files = {};
+  const progress = panelProgressSnapshot();
 
   ["video-form", "harvest-form", "ident-form", "actor-form", "style-form", "world-form"].forEach(id => {
     const form = $("#" + id);
@@ -92,7 +94,10 @@ export function getProjectState() {
     vocab_random_key: state.currentVocabRandomKey || "",
     thematic_worlds: state.thematicWorlds || null,
     details_open: Boolean($("#video-form details[open]")),
-    details_sections: Object.fromEntries($$("#video-form details[id]").map(el => [el.id, el.open])),
+    details_sections: { ...Object.fromEntries($$("#video-form details[id]").map(el => [el.id, el.open])),
+      ...progress.details_sections },
+    details_reviewed: progress.details_reviewed,
+    details_partial: progress.details_partial,
     log_open: Boolean($("#operation-log") && !$("#operation-log").hidden)
   };
 }
@@ -215,6 +220,7 @@ export async function restoreProject() {
     state.formFiles.set(form, fState);
   });
   if (saved.panel) panel(saved.panel);
+  restorePanelProgress(saved);
 }
 
 export function initNavigation() {

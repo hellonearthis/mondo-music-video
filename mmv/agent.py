@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 AGENT_SETTINGS = {
-    "auto_updates", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
+    "auto_updates", "auto_collapse_panels", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
     "vision_url", "vision_model", "vision_call_estimate", "laya_model_dir", "laya_device", "h3_models", "workflow_preset",
     "writer_api_profile", "vision_api_profile", "video_api_profile", "comfy_url", "comfy_sdk_url",
 }
@@ -66,9 +66,9 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
             raise ValueError("Unknown inspection kind")
-        result = self._json("GET", "/api/" + kind)
+        result = self._json("GET", "/api/props/guide" if kind == "opp-guide" else "/api/" + kind)
         if kind == "outputs":
             for output in result:
                 output["play_url"] = self.base + "/api/media/" + urllib.parse.quote(output["file"], safe="/")
@@ -159,6 +159,17 @@ class AgentClient:
     def create_actor(self, actor_id, name, description, reference_path):
         return self._multipart("/api/actors", {"actor_id": actor_id, "name": name, "description": description},
                                "reference", reference_path)
+
+    def check_oap_collection(self):
+        return self.inspect("oap-collection")
+
+    def stage_oap_collection(self, actor_id, index_sha256):
+        return self._json("POST", "/api/oap-collection/stage",
+                          {"actor_id": actor_id, "index_sha256": index_sha256})
+
+    def update_actor(self, actor_id, description):
+        return self._json("PATCH", "/api/actors/" + urllib.parse.quote(actor_id, safe=""),
+                          {"description": description})
 
     def create_style(self, style_id, name, direction, style_card=None, vocabulary=None):
         payload = {"id": style_id, "name": name, "direction": direction}
@@ -387,7 +398,7 @@ def main(argv=None):
     storyboard_parser = sub.add_parser("storyboard-result")
     storyboard_parser.add_argument("run_id")
     storyboard_parser.add_argument("--raw-response", action="store_true")
-    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
@@ -407,6 +418,14 @@ def main(argv=None):
         delete = sub.add_parser(name)
         delete.add_argument("id")
         delete.add_argument("--confirm", action="store_true")
+    update_actor = sub.add_parser("update-actor")
+    update_actor.add_argument("id")
+    update_actor.add_argument("description")
+    update_settings = sub.add_parser("update-settings")
+    update_settings.add_argument("changes", help="JSON object of supported settings changes")
+    stage_collection = sub.add_parser("oap-collection-stage")
+    stage_collection.add_argument("actor_id")
+    stage_collection.add_argument("index_sha256")
     for name in ("world", "world-versions", "world-proposal", "reject-world-proposal"):
         world_cmd = sub.add_parser(name)
         world_cmd.add_argument("id")
@@ -486,6 +505,12 @@ def main(argv=None):
             result = client.cancel()
         elif args.command == "delete-actor":
             result = client.delete_actor(args.id, args.confirm)
+        elif args.command == "update-actor":
+            result = client.update_actor(args.id, args.description)
+        elif args.command == "update-settings":
+            result = client.update_settings(json.loads(args.changes))
+        elif args.command == "oap-collection-stage":
+            result = client.stage_oap_collection(args.actor_id, args.index_sha256)
         elif args.command == "delete-style":
             result = client.delete_style(args.id, args.confirm)
         elif args.command == "delete-vocabulary":

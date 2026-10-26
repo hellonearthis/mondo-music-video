@@ -1,4 +1,22 @@
-# Verification — 1.10.10
+# Verification — 1.10.21
+
+## 1.10.21 — Fork UI, panel progress and public OAP collection
+
+The full temporary-data/mock-service/browser suite passed: **770 tests and 141
+subtests**, 230.33 seconds. Focused OAP collection checks covered explicit index
+checking, checksum and signature verification, changed-index rejection, unsafe
+path rejection, and the separate signer-acceptance import. The browser check
+confirmed that the collection is not queried on page load. JavaScript syntax,
+`git diff --check`, a fresh version-handler import and protected-scheme check
+passed (`[]`). A wheel contained the new Python and JavaScript modules and OPP
+guide; its bundled OAP packages were still exactly the original four.
+
+The previously idle app was restarted with its existing data on port 8091 and
+automatic installation disabled. Live `/api/version` reported 1.10.21 and the
+served OAP collection module returned HTTP 200. In a live Playwright browser,
+Actors & OAP found five missing OAP 0.3.0 packages on request, with sizes and
+CC BY 4.0 attribution. No package was imported, no paid or GPU work ran, and
+the protected prompts were not changed. Browser refresh is required.
 
 ## 1.10.10 — OPP v0.2
 

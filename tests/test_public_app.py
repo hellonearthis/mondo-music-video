@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.20")
+        self.assertEqual(api_version()["version"], "1.10.21")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.20", (root / "README.md").read_text())
+        self.assertIn("1.10.21", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -632,6 +632,8 @@ class PublicAppTests(unittest.TestCase):
             "files": {"video-form": {"song": "test.wav", "references": []}},
             "details_open": True,
             "details_sections": {"director-camera": True, "director-render": False},
+            "details_reviewed": {"director-render": True},
+            "details_partial": {"card-track-direction": True},
             "log_open": False
         }
         res = self.client.put("/api/project", json=project)
@@ -642,6 +644,29 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(got["forms"]["video-form"]["title"], "My Track")
         self.assertTrue(got["details_open"])
         self.assertEqual(got["details_sections"], project["details_sections"])
+        self.assertEqual(got["details_reviewed"], project["details_reviewed"])
+        self.assertEqual(got["details_partial"], project["details_partial"])
+
+    def test_actor_description_edit_keeps_signed_imports_immutable(self):
+        actors.create_actor(self.store, "local_actor", "Local actor", "Blue jacket", picture())
+        edited = self.client.patch("/api/actors/local_actor", json={"description": "Green coat"})
+        self.assertEqual(edited.status_code, 200, edited.text)
+        self.assertEqual(self.store.actor("local_actor")["description"], "Green coat")
+        self.assertEqual(self.client.patch("/api/actors/local_actor", json={"description": ""}).status_code, 400)
+        (self.home / "actors/local_actor/original.oap").write_bytes(b"signed package placeholder")
+        blocked = self.client.patch("/api/actors/local_actor", json={"description": "Different"})
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn("signed identity", blocked.json()["detail"])
+        self.assertEqual(self.store.actor("local_actor")["description"], "Green coat")
+
+    def test_panel_auto_collapse_setting_and_prop_guide(self):
+        self.assertTrue(self.client.get("/api/settings").json()["settings"]["auto_collapse_panels"])
+        changed = self.client.patch("/api/settings", json={"auto_collapse_panels": False})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertFalse(self.client.get("/api/settings").json()["settings"]["auto_collapse_panels"])
+        guide = self.client.get("/api/props/guide")
+        self.assertEqual(guide.status_code, 200)
+        self.assertIn("Open Prop Protocol", guide.json()["markdown"])
 
     def test_every_sidebar_panel_can_be_saved_in_the_project(self):
         import re

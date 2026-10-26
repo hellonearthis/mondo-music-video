@@ -1,5 +1,15 @@
 # Releases
 
+## 1.10.21 — EGG's actor and prop UI, with music-video panel progress
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` (one commit after reviewed `db7bec7`). The actor cards have a wider responsive grid and an inline description editor for locally created actors; the OPP library has a readable in-app guide, and dark-theme text selection has better contrast. The fork's malformed actor textarea was repaired. Imported signed OAP actors are deliberately read-only in this editor, because their original package is preserved on export. Agents can edit local descriptions through API, CLI and MCP; OPP guide text is available by inspection.
+
+Music Video cards and Director folds now show input progress in their headers. Required inputs shade toward the existing GO! green; completion is labelled **Done** and collapses after the last required field loses focus. The Settings switch, on by default, can stop auto-collapse. Optional panels tint faintly as choices change and show **Reviewed** after a manual close. A collapsed complete card offers **Options available** to show unchanged optional groups; its header opens the whole card. Drafts save open, reviewed and partial states. A completed-input cue never replaces the preview quote, renderer checks or explicit paid consent. No protected prompts, private assets, paid operations or automatic retries changed.
+
+Actors & OAP now has an on-demand public collection check. It lists missing actors, stages one selected package with index checksum, package hash and OAP signature verification, then presents the existing manifest/rider and explicit signer-acceptance import. Installed actors are preserved. REST, client, CLI and MCP expose the same check, stage, inspect and import sequence (56 MCP tools). The original four starter packages remain OAP v0.2; the five newer public collection packages are OAP v0.3 and are not automatically installed by this button.
+
+See [collaborator review](COLLABORATOR_REVIEW.md) for the exact fork assessment and adaptations.
+
 ## 1.10.20 — Fork UI polish (hellonearthis 1.10.15–1.10.20)
 
 Credit: hellonearthis. Reviewed fork head `db7bec7` (six commits after `26719de`); UI and documentation only, no backend or protected-scheme change.

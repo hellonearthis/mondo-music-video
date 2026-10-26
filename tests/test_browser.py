@@ -46,6 +46,120 @@ def pick_cast(page, ids):
 
 
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_public_oap_collection_is_on_demand_and_stages_for_review(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            requests = []
+            listing = {"source": "https://github.com/hodgemann/oap-actors", "license": "CC-BY-4.0",
+                       "attribution": "Maximum Goose Laboratory", "index_sha256": "a" * 64,
+                       "actors": [{"id": "human_female_baker_01", "name": "Baker", "bytes": 4064775,
+                                   "oap_version": "0.3.0", "signer": {"public_key": "test-signer"}, "installed": False}]}
+            staged = {"filename": "checked.oap", "manifest": {
+                "identity": {"actor_id": "human_female_baker_01", "display_name": "Baker"},
+                "agent": {"public_key": "test-signer"}, "rider": {"content": {"violence": "action"}}},
+                "verification": {"ok": True, "signature_valid": True, "agent_known": False}}
+            page.route('**/api/oap-collection/stage', lambda route: (requests.append('stage'), route.fulfill(json=staged)))
+            page.route('**/api/oap-collection', lambda route: (requests.append('check'), route.fulfill(json=listing)))
+            try:
+                page.goto(self.url)
+                expect(page.locator('#oap-collection-fold')).to_have_count(1)
+                self.assertEqual(requests, [])
+                page.locator('.nav[data-panel="actors"]').click()
+                page.locator('#oap-collection-fold summary').click()
+                page.locator('#check-oap-collection').click()
+                expect(page.locator('#oap-collection-list')).to_contain_text('OAP 0.3.0')
+                self.assertEqual(requests, ['check'])
+                page.locator('#oap-collection-list button').click()
+                expect(page.locator('#oap-report-card')).to_contain_text('test-signer')
+                expect(page.locator('#oap-import-form')).to_be_visible()
+                expect(page.locator('#oap-import-form [name=accept_unknown]')).not_to_be_checked()
+                self.assertEqual(requests, ['check', 'stage'])
+            finally:
+                browser.close()
+
+    def test_music_video_panel_progress_blur_partial_review_and_restore(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                first = page.locator('[data-component-id="card-track-direction"]')
+                second = page.locator('[data-component-id="card-cast-staging"]')
+                expect(first.locator('.progress-cue')).to_have_text('Needs 2')
+                expect(second.locator('.progress-cue')).to_have_text('Optional')
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('#video-form textarea[name=direction]').fill('A sunlit coastline in motion.')
+                expect(first.locator('.progress-cue')).to_have_text('Needs 1')
+                page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(first.locator('.song-receipt')).to_contain_text('Uploaded:')
+                page.locator('#panel-video h1').click()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'false')
+                expect(first.locator('.progress-cue')).to_have_text('✓ Done')
+                first.locator('.progress-options').click()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'true')
+                expect(first.locator('textarea[name=direction]')).to_be_hidden()
+                expect(first.locator('input[name=title]')).to_be_visible()
+                first.locator('.progress-toggle').click()
+                first.locator('.progress-toggle').click()
+                first.locator('input[name=title]').fill('Optional title')
+                page.locator('#panel-video h1').click()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'true')
+                first.locator('textarea[name=direction]').fill('')
+                expect(first.locator('.progress-cue')).to_have_text('Needs 1')
+                first.locator('.progress-toggle').click()
+                expect(first.locator('.progress-cue')).to_have_text('Needs 1')
+                page.evaluate('''async () => (await import('/js/panel_progress.js')).showPanelForQuoteError('This renderer needs a reference in every passage. Choose an actor/image and Reference policy: All')''')
+                self.assertTrue(page.evaluate('document.querySelector("#director-camera").open'))
+                second.locator('.progress-toggle').click()
+                expect(second.locator('.progress-cue')).to_have_text('✓ Reviewed')
+                page.locator('#director-format summary').click()
+                expect(page.locator('#director-format .progress-cue')).to_have_text('✓ Reviewed')
+                expect(page.locator('[data-component-id="director-control-room"] .progress-cue').first).to_have_text('1 of 4 reviewed')
+                page.wait_for_timeout(500)
+                page.reload()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'false')
+                expect(second.locator('.progress-cue')).to_have_text('✓ Reviewed')
+                expect(page.locator('#director-format .progress-cue')).to_have_text('✓ Reviewed')
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_panel_progress_setting_and_renderer_requirement(self):
+        from playwright.sync_api import sync_playwright, expect
+        self.fixture.client.patch('/api/settings', json={'auto_collapse_panels': False}).raise_for_status()
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                first = page.locator('[data-component-id="card-track-direction"]')
+                page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(first.locator('.song-receipt')).to_contain_text('Uploaded:')
+                first.locator('textarea[name=direction]').fill('A moving coast at sunrise.')
+                page.locator('#panel-video h1').click()
+                expect(first.locator('.progress-cue')).to_have_text('✓ Done')
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'true')
+                page.locator('#director-camera summary').click()
+                page.locator('#director-camera [name=ref_policy]').select_option('single_subject')
+                page.locator('#video-form [name=backend]').select_option('wavespeed')
+                expect(page.locator('[data-component-id="card-cast-staging"] .progress-cue')).to_have_text('Needs 1')
+                expect(page.locator('#director-camera .progress-cue')).to_have_text('Needs 1')
+                page.locator('#director-camera [name=ref_policy]').select_option('all')
+                expect(page.locator('#director-camera .progress-cue')).to_have_text('✓ Done')
+                page.locator('#panel-video h1').click()
+                self.assertTrue(page.evaluate('document.querySelector("#director-camera").open'))
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_storyboard_drafts_reorder_reload_and_keep_forms_independent(self):
         from playwright.sync_api import sync_playwright, expect
         with sync_playwright() as p:
@@ -586,7 +700,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.20')
+                expect(page.locator('#version')).to_have_text('1.10.21')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1354,7 +1468,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.20')
+                expect(page.locator('#version')).to_have_text('1.10.21')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

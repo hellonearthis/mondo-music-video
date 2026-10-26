@@ -6,6 +6,7 @@ import { clearStoryboard } from "./storyboard.js";
 import { syncCastPickerUi } from "./library.js";
 import { renderReferenceReceipt } from "./production.js";
 import { resolutionSelect, scheduleSave, updateSongPreview } from "./project.js";
+import { resetPanelProgress } from "./panel_progress.js";
 
 const fillIfEmpty = (field, value) => { if (field && !field.value.trim()) field.value = value; };
 const setSelect = (field, value) => {
@@ -68,6 +69,7 @@ export function resetVideoPanel(form) {
   state.currentCustomVocab = {};
   state.currentVocabRandomKey = "";
   updateVocabCustomBadge();
+  resetPanelProgress();
   form.dispatchEvent(new Event("change", { bubbles: true }));
   scheduleSave();
 }

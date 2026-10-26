@@ -1,7 +1,7 @@
 // Mondo Music Video — Application Entry Point & Orchestrator.
 
 import { $, $$, api, initThemeToggle, notice, option, state, text } from "./js/core.js";
-import { setupLlamaGuide, setupOapGuide, setupVocabGuide } from "./js/guides.js";
+import { setupLlamaGuide, setupOapGuide, setupOppGuide, setupVocabGuide } from "./js/guides.js";
 import { initComponentLabeling } from "./js/component_labeling.js";
 import { initFileDropTargets } from "./js/file_drop.js";
 import { initQuickStart } from "./js/quick_start.js";
@@ -22,6 +22,8 @@ import {
 import { initNavigation, resolutionSelect, restoreProject, scheduleSave } from "./js/project.js";
 import { initSettingsAndPicker, loadSettings } from "./js/settings.js";
 import { initTooltips } from "./js/tooltips.js";
+import { initOapCollection } from "./js/oap_collection.js";
+import { initPanelProgress } from "./js/panel_progress.js";
 import { setupVocabularyCustomizer, loadVocabularyCatalog } from "./js/vocabulary.js";
 import { initVocabWorlds } from "./js/vocab-worlds.js";
 
@@ -63,6 +65,7 @@ async function initialize() {
   initTooltips();
   initComponentLabeling();
   setupOapGuide();
+  setupOppGuide();
   setupLlamaGuide();
   setupVocabGuide();
   loadUpdateStatus();
@@ -95,6 +98,7 @@ async function initialize() {
   initSubliminalControls();
   initOperationControls();
   initLibraryForms();
+  initOapCollection();
   await initInstrumentLibrary();
   initWorlds();
   initStoryboards();
@@ -105,6 +109,7 @@ async function initialize() {
   // Custom presets must be in the profile select before a saved choice is restored.
   await loadVocabularyCatalog().catch(() => {});
   await restoreProject();
+  initPanelProgress(settings, scheduleSave);
   restoreStoryboards();
   await refreshStoryboards();
   initCaptionControls();

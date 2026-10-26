@@ -158,7 +158,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.10.20")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.10.21")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
@@ -166,7 +166,7 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.20")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.21")
 
     def test_world_management_guards_and_cli(self):
         ledger = {"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"],
@@ -228,6 +228,22 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
 
 
 class ClientBoundaryTests(unittest.TestCase):
+    def test_actor_edit_and_panel_setting_use_local_api(self):
+        client = AgentClient()
+        with patch.object(client, '_json', return_value={'ok': True}) as request:
+            client.update_actor('local_actor', 'Green coat')
+            request.assert_called_once_with('PATCH', '/api/actors/local_actor', {'description': 'Green coat'})
+        with patch.object(client, '_json', return_value={'ok': True}) as request:
+            client.update_settings({'auto_collapse_panels': False})
+            request.assert_called_once_with('PATCH', '/api/settings', {'auto_collapse_panels': False})
+        with patch.object(client, '_json', return_value={'actors': []}) as request:
+            client.check_oap_collection()
+            request.assert_called_once_with('GET', '/api/oap-collection')
+        with patch.object(client, '_json', return_value={'filename': 'checked.oap'}) as request:
+            client.stage_oap_collection('human_female_baker_01', 'a' * 64)
+            request.assert_called_once_with('POST', '/api/oap-collection/stage',
+                                            {'actor_id': 'human_female_baker_01', 'index_sha256': 'a' * 64})
+
     def test_prompt_retry_preview_uses_quote_route_without_starting(self):
         client = AgentClient()
         with patch.object(client, '_json', return_value={'id': 'fresh-quote'}) as request:
@@ -273,7 +289,8 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 53)
+                self.assertEqual(len(names), 56)
+                self.assertTrue({'check_oap_collection', 'stage_oap_collection'} <= names)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score'} <= names)
                 self.assertTrue({'detect_lyrics', 'align_lyrics', 'export_production_package'} <= names)
@@ -310,7 +327,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.10.20")
+                self.assertEqual(result.structured_content["data"]["version"], "1.10.21")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)

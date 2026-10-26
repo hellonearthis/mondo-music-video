@@ -196,3 +196,9 @@ before applying `storyboard.enabled` to a video/ident. Keep storyboard images se
 from actor references, preserve musical timing and protected prompts, and bind saved
 alignment to prompts for recovery. GUI, CLI and MCP parity is documented in
 [docs/STORYBOARDS.md](docs/STORYBOARDS.md). Do not publish private boards or uploads.
+
+## Panel progress and actor editing
+
+Music Video panel Done/Needs/Reviewed cues describe form inputs only. They do not replace preview, quote validation or explicit start consent. `auto_collapse_panels` is a normal setting, on by default; drafts save card/fold open, reviewed and partial states. Agents can inspect and change the setting through the settings API, client, CLI and MCP. Local actor visual descriptions can be edited through those surfaces while idle; imported signed OAP actors keep their original package and require an updated package from their signer. The OPP guide is available in the GUI and through agent inspection.
+
+The Actors & OAP public collection button checks the current `oap-actors` index only when pressed. A selected package is staged and verified before the existing signer-acceptance import. Agents have matching `check_oap_collection` and `stage_oap_collection` actions (CLI and MCP), and must review the returned manifest and obtain explicit signer acceptance before import. OAP v0.3 collection packages coexist with the original four OAP v0.2 packages. Checking or staging does not expand the authorized public starter roster.

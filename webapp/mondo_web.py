@@ -7,6 +7,7 @@ import math
 import os
 import secrets
 import shutil
+import sys
 import time
 import uuid
 import asyncio
@@ -28,7 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from mmv import actors, agreements, instrument_assets, production, props, score_view, worlds
+from mmv import actors, agreements, instrument_assets, oap_collection, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
@@ -38,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.20"
+MGL_APP_VERSION = "1.10.21"
 WEB = Path(__file__).parent
 
 
@@ -476,6 +477,7 @@ class Settings(StrictModel):
     vision_api_profile: str = ""
     video_api_profile: str = ""
     auto_updates: bool = False
+    auto_collapse_panels: bool = True
     render_timeout_minutes: int = Field(default=120, ge=0, le=1440)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
@@ -554,6 +556,15 @@ class ApiProfileRequest(StrictModel):
 class StarterRequest(StrictModel):
     accept_starter_signer: bool = False
     restore_removed: bool = False
+
+
+class ActorUpdateRequest(StrictModel):
+    description: str = Field(max_length=6000)
+
+
+class CollectionStageRequest(StrictModel):
+    actor_id: str
+    index_sha256: str
 
 
 class KeyRequest(StrictModel):
@@ -662,6 +673,8 @@ class ProjectState(StrictModel):
     thematic_worlds: dict[str, Any] | None = None
     details_open: bool = False
     details_sections: dict[str, bool] = Field(default_factory=dict)
+    details_reviewed: dict[str, bool] = Field(default_factory=dict)
+    details_partial: dict[str, bool] = Field(default_factory=dict)
     log_open: bool = False
 
 
@@ -1127,6 +1140,25 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             return actors.create_actor(store, actor_id, name, description, reference.file.read(25 * 1024 * 1024 + 1))
 
+    @app.patch("/api/actors/{actor_id}")
+    def update_actor(actor_id: str, value: ActorUpdateRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            actor_id = identifier(actor_id)
+            target = inside(store.home / "actors", actor_id)
+            json_path = target / "actor.json"
+            if not target.is_dir() or not json_path.is_file():
+                raise ValueError("Actor not found")
+            record = read_json(json_path)
+            if record.get("oap") or (target / "original.oap").exists():
+                raise ValueError("Imported OAP actors keep their signed identity; request a revised package from its signer")
+            if not value.description.strip():
+                raise ValueError("Visual description cannot be empty")
+            record["description"] = value.description
+            write_json(json_path, record)
+            quotes.clear()
+        return record
+
     @app.get("/api/actors/{actor_id}/reference")
     def actor_reference(actor_id: str):
         record = store.actor(actor_id)
@@ -1176,6 +1208,22 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             return actors.import_actor(store, path, actor_id, allow_unsigned=allow_unsigned, accept_unknown=accept_unknown)
+
+    @app.get("/api/oap-collection")
+    def check_oap_collection():
+        return oap_collection.check(store)
+
+    @app.post("/api/oap-collection/stage")
+    def stage_oap_collection(value: CollectionStageRequest):
+        with jobs.lock:
+            jobs.require_idle()
+
+        def publish(source, destination):
+            with jobs.lock:
+                jobs.require_idle()
+                source.replace(destination)
+
+        return oap_collection.stage(store, value.actor_id, value.index_sha256, publish=publish)
 
     @app.get("/api/agreements")
     def list_agreements():
@@ -1351,6 +1399,15 @@ def create_app(home=None, *, test_hosts=False):
         if not guide_path.exists():
             return {"title": "Vocabulary Architecture Guide", "markdown": "Guide not found on disk."}
         return {"title": "Visual Vocabulary Architecture & Customization Guide", "markdown": guide_path.read_text(encoding="utf-8")}
+
+    @app.get("/api/props/guide")
+    def get_props_guide():
+        guide_path = Path(__file__).parent.parent / "docs" / "OPEN_PROP_PROTOCOL.md"
+        if not guide_path.exists():
+            guide_path = Path(sys.prefix) / "share/mondo-music-video/docs/OPEN_PROP_PROTOCOL.md"
+        if not guide_path.exists():
+            raise HTTPException(status_code=404, detail="Open Prop Protocol guide is not installed")
+        return {"title": "What is Open Prop Protocol", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
     def list_vocabularies():

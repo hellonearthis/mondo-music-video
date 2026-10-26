@@ -55,6 +55,7 @@ To toggle Component Labeling Mode in the web interface:
 - **Used in**: Inside `panel-video`
 - **Code**: `webapp/index.html`, `webapp/js/app.js`
 - **Design rules**: Grid of production configuration cards culminating in the `#start-production` action bar.
+- **Progress**: Numbered cards and Director folds expose keyboard-operable headers with Done, Needs N, Optional or Reviewed cues. Header tint reflects inputs only; a production preview and consent are still required. A completed mixed card's **Options available** button opens only optional groups left at their defaults. The adjacent header opens every field. The Settings switch `auto_collapse_panels` stops automatic collapse only. Open, reviewed and partial states are saved in the project draft.
 
 ### Track & Direction Card
 - **ID**: `card-track-direction`
@@ -121,8 +122,9 @@ To toggle Component Labeling Mode in the web interface:
 ### Actors & OAP Panel
 - **ID**: `panel-actors`
 - **Used in**: Section 03 navigation
-- **Code**: `webapp/index.html`, `webapp/js/actors.js`, `webapp/js/oap.js`
+- **Code**: `webapp/index.html`, `webapp/js/library.js`, `webapp/js/guides.js`
 - **Design rules**: Cast management, reference portrait binding, and Open Actor Protocol packaging.
+- **Actor editing**: Locally created actor cards expose an Edit visual description button and double-click inline editor. Imported signed OAP actors remain read-only, since export preserves their original package. The OPP help button opens the local guide; inspection and explicit signer acceptance remain separate from import.
 
 ### Open Prop Protocol Library
 - **ID**: `opp-library-fold`
@@ -139,8 +141,8 @@ To toggle Component Labeling Mode in the web interface:
 ### OAP Import Card
 - **ID**: `oap-import-card`
 - **Used in**: Inside `panel-actors`
-- **Code**: `webapp/index.html`, `webapp/js/oap.js`
-- **Design rules**: `.oap` bundle upload, unsigned package override, signature verification inspector, and trust confirmation checkbox.
+- **Code**: `webapp/index.html`, `webapp/js/library.js`, `webapp/js/oap_collection.js`
+- **Design rules**: `.oap` bundle upload, unsigned package override, signature verification inspector, and trust confirmation checkbox. The public collection fold checks the published index only on button press, lists missing packages with OAP versions, and stages one selected package for signature and rider review. Import remains a separate explicit signer-acceptance action; installed IDs are preserved.
 
 ### Role Agreements Manager
 - **ID**: `role-agreements-card`
