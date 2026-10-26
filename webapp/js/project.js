@@ -4,6 +4,7 @@ import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 
 import { syncInstrumentControls } from "./instruments.js";
 import { syncDanceControls } from "./dance.js";
+import { renderReferenceReceipt } from "./production.js";
 
 let saveDebounceTimer = null;
 
@@ -207,8 +208,7 @@ export async function restoreProject() {
     if (Array.isArray(fileState.references) && fileState.references.length) {
       fState.references = fileState.references;
       fState.referenceNames = fileState.referenceNames || fileState.references;
-      const receipt = form.querySelector(".refs-receipt");
-      if (receipt) receipt.textContent = fState.referenceNames.join(" · ");
+      renderReferenceReceipt(form, fState.referenceNames, fState.references);
       const refsInput = form.querySelector(".refs-input");
       if (refsInput && form.dataset.kind === "harvest") refsInput.required = false;
     }

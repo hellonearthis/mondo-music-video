@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.19 - Reference Images File List & Thumbnail Tooltips
+
+- **Structured Reference File List**: Rendered additional and harvest reference images as an organized vertical list (`ul.file-list`) of monospace chips, displaying one file per line.
+- **Reference Image Hover Previews**: Integrated image thumbnail tooltips (`.tooltip-thumb`) into each reference item in the receipt, enabling instant visual preview on hover.
+- **Robust Draft Synchronization**: Ensured full restoration and reset handling across draft saves, quick-start, and harvest forms.
+
 ## 1.10.18 - Interactive Cast Checkbox List & Thumbnail Tooltips
 
 - **Single-Column Cast Checkbox List**: Replaced the native multi-select box with a single-column, scrollable checkbox list with distinct hover and checked highlight states, keeping selection synchronized with the underlying form draft.

@@ -27,6 +27,22 @@ const escapeHtml = (s = "") =>
     .replaceAll('"', "&quot;");
 
 // The form has flat subliminal_* fields; the request carries them as one nested object.
+
+export function renderReferenceReceipt(form, names = [], hashes = []) {
+  const receipt = form?.querySelector(".refs-receipt");
+  if (!receipt) return;
+  if (!names.length) {
+    receipt.innerHTML = form.id === "video-form" ? "No additional images" : "No reference images";
+    return;
+  }
+  const items = names.map((name, i) => {
+    const hash = hashes[i];
+    const imgAttr = hash ? ` data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"` : "";
+    return `<li><code${imgAttr}>${escapeHtml(name)}</code></li>`;
+  }).join("");
+  receipt.innerHTML = `<ul class="file-list">${items}</ul>`;
+}
+
 export function subliminalFromForm(request) {
   const mode = request.subliminal_mode || "off";
   const times = String(request.subliminal_times || "").split(/[\s,;]+/).filter(Boolean).map(Number);
@@ -586,7 +602,7 @@ export function initProductionForms() {
           fState.references.push(await upload(file, "reference"));
           fState.referenceNames.push(file.name);
         }
-        form.querySelector(".refs-receipt").textContent = files.map(file => file.name).join(" · ") || "No reference images";
+        renderReferenceReceipt(form, fState.referenceNames, fState.references);
         if (form.dataset.kind === "harvest") event.target.required = false;
         scheduleSave();
       } catch (error) {
@@ -605,7 +621,7 @@ export function initProductionForms() {
       fState.references = [];
       fState.referenceNames = [];
       form.querySelector(".refs-input").value = "";
-      form.querySelector(".refs-receipt").textContent = "No reference images";
+      renderReferenceReceipt(form, [], []);
       if (form.dataset.kind === "harvest") form.querySelector(".refs-input").required = true;
       scheduleSave();
     };

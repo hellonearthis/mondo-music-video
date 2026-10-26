@@ -1534,3 +1534,37 @@ html[data-theme=dark] .world-diff-add{background:#223a29;color:#c5dfb9}html[data
   padding: 6px 10px;
   font-size: 12px;
 }
+
+/* Reference images file list */
+.file-list {
+  list-style: none;
+  margin: 6px 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-list li {
+  margin: 0;
+  padding: 0;
+}
+.file-list code {
+  display: inline-block;
+  background: #eef2e7;
+  color: var(--ink);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid #d4ded0;
+}
+[data-theme=dark] .file-list code {
+  background: #1e2e25;
+  color: #dce8a2;
+  border-color: var(--line);
+}
