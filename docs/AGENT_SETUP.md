@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.22 exposes **56 tools** and advertises the
+v1.10.23 exposes **58 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -61,7 +61,7 @@ operator explicitly accepts that signer. The original four packages are OAP
 v0.2; newer collection packages can be v0.3. This flow does not change the
 built-in starter roster or overwrite an installed actor.
 
-Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. See [Worlds](WORLDS.md).
+Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. To change a world by hand, read it with `get_world`, edit the ledger, show the user `preview_world_edit(world_id, world)` (or CLI `world-edit-preview ID FILE`), then call `edit_world(world_id, world, confirm=true)` (CLI `edit-world ID FILE --confirm`) only after they have reviewed the changes; it saves a new version and fails if the world changed since it was read. See [Worlds](WORLDS.md).
 
 The browser's file drop areas are a selection shortcut. Agents use the existing
 `upload_media`/CLI `upload` for songs, references and packages (including OPP props), or the actor

@@ -39,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.22"
+MGL_APP_VERSION = "1.10.23"
 WEB = Path(__file__).parent
 
 
@@ -187,6 +187,11 @@ class WorldRequest(StrictModel):
     moral_ambiguities: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
     open_threads: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
     do_not_contradict: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+
+
+class WorldEditRequest(WorldRequest):
+    id: str = Field(default="", max_length=64)
+    base_version: int = Field(ge=1, le=9999)
 
 
 class WorldRollbackRequest(StrictModel):
@@ -1355,6 +1360,23 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/worlds/{world_id}")
     def get_world(world_id: str, version: int | None = None):
         return world_or_error(world_id, version)
+
+    def edit_fields(world_id, value):
+        if value.id and identifier(value.id) != identifier(world_id):
+            raise ValueError("The edit names a different world")
+        return value.model_dump(exclude={"id", "base_version"})
+
+    @app.post("/api/worlds/{world_id}/edit-preview")
+    def preview_world_edit(world_id: str, value: WorldEditRequest):
+        return worlds.preview_edit(store, identifier(world_id), edit_fields(world_id, value))
+
+    @app.put("/api/worlds/{world_id}")
+    def edit_world(world_id: str, value: WorldEditRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.edit(store, identifier(world_id), edit_fields(world_id, value), value.base_version)
+            quotes.clear()
+        return ledger
 
     @app.get("/api/worlds/{world_id}/versions")
     def get_world_versions(world_id: str):

@@ -552,7 +552,7 @@ button[aria-busy="true"], button.processing {
   padding-top: 12px;
   border-top: 1px dashed var(--line);
 }
-.output-actions .secondary {
+.output-actions .secondary, .world-actions .secondary {
   padding: 8px 12px;
   font-size:13px;
   font-weight: 600;
@@ -565,18 +565,18 @@ button[aria-busy="true"], button.processing {
   gap: 6px;
   transition: all 0.15s ease;
 }
-.output-actions .secondary:hover {
+.output-actions .secondary:hover, .world-actions .secondary:hover {
   background: #d8e4c7;
   border-color: #b2c29e;
 }
-[data-theme=dark] .output-actions .secondary {
+[data-theme=dark] .output-actions .secondary, [data-theme=dark] .world-actions .secondary {
   border-color: #506b4b;
 }
-[data-theme=dark] .output-actions .secondary:hover {
+[data-theme=dark] .output-actions .secondary:hover, [data-theme=dark] .world-actions .secondary:hover {
   background: #38533f;
   border-color: #729568;
 }
-.output-actions .delete-btn {
+.output-actions .delete-btn, .world-actions .delete-btn {
   margin-left: auto;
   padding: 8px 12px;
   font-size:13px;
@@ -588,20 +588,23 @@ button[aria-busy="true"], button.processing {
   border: 1px solid #f87171;
   transition: all 0.15s ease;
 }
-.output-actions .delete-btn:hover {
+.output-actions .delete-btn:hover, .world-actions .delete-btn:hover {
   background: #fee2e2;
   color: #991b1b;
   border-color: #ef4444;
 }
-[data-theme=dark] .output-actions .delete-btn {
+[data-theme=dark] .output-actions .delete-btn, [data-theme=dark] .world-actions .delete-btn {
   color: #fca5a5;
   border-color: #7f1d1d;
 }
-[data-theme=dark] .output-actions .delete-btn:hover {
+[data-theme=dark] .output-actions .delete-btn:hover, [data-theme=dark] .world-actions .delete-btn:hover {
   background: #450a0a;
   color: #fecaca;
   border-color: #b91c1c;
 }
+/* Worlds panel button groups share the Output card button look */
+.world-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.world-actions .primary{padding:8px 12px;font-size:13px;font-weight:600;border-radius:4px}
 
 
 
@@ -1470,6 +1473,10 @@ html[data-theme=dark] .file-drop-error{color:#ffb8aa}
 html[data-theme=dark] .world-diff-add{background:#223a29;color:#c5dfb9}html[data-theme=dark] .world-diff-remove{background:#43261f;color:#ffb8aa}html[data-theme=dark] .world-diff-change{background:#3d3719;color:#e8dc9f}
 .world-runs{border:1px solid var(--line);border-radius:8px;margin:12px 0;padding:8px 12px}.world-runs label.inline{display:block}
 .world-row-select{display:grid}
+.world-edit-field{display:block;margin:10px 0}.world-edit-field>span{display:block;font-size:13px;margin-bottom:4px}.world-edit-field textarea,.world-edit-field input{width:100%;font-weight:400}
+.world-subject-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(200px,3fr) auto;gap:8px;margin-bottom:6px;align-items:center}
+.world-edit-pools{margin:12px 0}.world-edit-preview{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:8px}
+@media(max-width:650px){.world-subject-row{grid-template-columns:1fr}}
 
 .key-row { display: flex; gap: 10px; align-items: flex-end; margin: 8px 0; }
 .key-row label { flex: 1; display: grid; gap: 4px; }

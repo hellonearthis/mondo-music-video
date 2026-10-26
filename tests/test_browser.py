@@ -700,7 +700,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.22')
+                expect(page.locator('#version')).to_have_text('1.10.23')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -850,8 +850,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('#world-proposals-card')).to_be_visible()
                 expect(page.locator('#world-proposals .world-diff-add')).to_contain_text('<b>Nothing leaves unfiled</b>')
                 self.assertEqual(page.locator('#world-proposals b').count(), 0)
-                page.locator('#worlds-list button', has_text='Open').click()
+                page.locator('#worlds-list button:text-is("Open")').click()
                 expect(page.locator('#world-detail')).to_contain_text('version 1')
+                expect(page.locator('#world-detail button:text-is("Edit")')).to_have_count(2)
                 page.locator('#world-proposals button', has_text='Accept').click()
                 expect(page.locator('#world-proposals-card')).to_be_hidden()
                 self.assertEqual(self.agent.get_world('salt')['version'], 2)
@@ -866,6 +867,58 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('.nav[data-panel="worlds"]').click()
                 expect(page.locator('#world-form select[name="world_existing"]')).to_be_visible()
                 expect(page.locator('#world-form input[name="world_new_id"]')).to_be_hidden()
+            finally:
+                browser.close()
+
+    def test_world_editor_previews_before_saving_a_new_version(self):
+        from playwright.sync_api import sync_playwright, expect
+        self.agent.create_world({"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"],
+                                 "subjects": [{"designation": "the Graft Clerk", "canon": "Stamps wounds as forms"}]})
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector(".nav[data-panel=worlds]").onclick !== null')
+                page.locator('.nav[data-panel="worlds"]').click()
+                page.locator('#worlds-list button:text-is("Edit")').click()
+                expect(page.locator('#world-detail h3')).to_contain_text('Edit Salt Archive')
+                save = page.locator('#world-detail button:text-is("Save as new version")')
+                expect(save).to_be_disabled()
+                page.locator('#world-detail textarea[name="core_laws"]').fill('<b>Ink is never dry</b>')
+                page.locator('#world-detail .world-subject-canon').fill('Stamps wounds as forms and files the scars')
+                page.locator('#world-detail summary', has_text='Vocabulary pools').click()
+                page.locator('#world-detail .vocab-tab-btn', has_text='Lighting').click()
+                standard = page.locator('#world-detail .vocab-item-label').first
+                kept_out = standard.inner_text()
+                standard.locator('input').uncheck()
+                page.locator('#world-detail textarea[name="own"]').fill('lamp oil glow')
+                expect(save).to_be_disabled()
+                page.locator('#world-detail button:text-is("Preview changes")').click()
+                expect(page.locator('#world-detail .world-diff-remove')).to_contain_text('The record outlives the person')
+                expect(page.locator('#world-detail .world-diff-add', has_text='<b>Ink is never dry</b>')).to_have_count(1)
+                expect(page.locator('#world-detail .world-diff-change')).to_contain_text('the Graft Clerk')
+                expect(page.locator('#world-detail .world-diff-add', has_text='lamp oil glow')).to_have_count(1)
+                expect(page.locator('#world-detail .world-diff-add', has_text=kept_out)).to_have_count(1)
+                self.assertEqual(page.locator('#world-detail b').count(), 0)
+                self.assertEqual(self.agent.get_world('salt')['version'], 1)
+                expect(save).to_be_enabled()
+                page.locator('#world-detail textarea[name="seed_sentence"]').fill('A filing system.')
+                expect(save).to_be_disabled()
+                page.locator('#world-detail button:text-is("Preview changes")').click()
+                expect(save).to_be_enabled()
+                save.click()
+                expect(page.locator('#world-detail')).to_contain_text('version 2')
+                edit_top = page.locator('#world-detail button:text-is("Edit")').first
+                expect(edit_top).to_be_visible()
+                self.assertLess(edit_top.bounding_box()['y'] - page.locator('#world-detail').bounding_box()['y'], 120)
+                world = self.agent.get_world('salt')
+                self.assertEqual((world['version'], world['core_laws'], world['seed_sentence']), (2, ['<b>Ink is never dry</b>'], 'A filing system.'))
+                self.assertEqual(world['pools']['lighting'], {'include': ['lamp oil glow'], 'exclude': [kept_out]})
+                self.assertEqual(self.agent.get_world('salt', 1)['core_laws'], ['The record outlives the person'])
+                self.assertEqual(errors, [])
             finally:
                 browser.close()
 
@@ -1468,7 +1521,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.22')
+                expect(page.locator('#version')).to_have_text('1.10.23')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

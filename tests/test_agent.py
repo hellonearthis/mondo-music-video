@@ -158,15 +158,41 @@ class AgentTests(LiveAppFixture, unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "version"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["version"], "1.10.22")
+        self.assertEqual(json.loads(result.stdout)["version"], "1.10.23")
         result = subprocess.run([sys.executable, "-m", "mmv.agent", "start", "unknown"], env=env,
                                 capture_output=True, text=True, timeout=10)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("authorization", result.stderr)
 
+    def test_world_editing_previews_then_needs_confirmation_through_client_and_cli(self):
+        self.agent.create_world({"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"]})
+        world = self.agent.get_world("salt")
+        world["core_laws"] = ["Nothing leaves unfiled"]
+        preview = self.agent.preview_world_edit("salt", world)
+        self.assertEqual(preview["changes"][0]["added"], ["Nothing leaves unfiled"])
+        self.assertEqual(self.agent.get_world("salt")["version"], 1)
+        with self.assertRaisesRegex(ValueError, "reviewed the changes"):
+            self.agent.edit_world("salt", world)
+        with self.assertRaisesRegex(ValueError, "base_version"):
+            self.agent.edit_world("salt", {"name": "x"}, confirm=True)
+        self.assertEqual(self.agent.edit_world("salt", world, confirm=True)["version"], 2)
+        with self.assertRaises(ValueError):
+            self.agent.edit_world("salt", world, confirm=True)
+        edited = {**self.agent.get_world("salt"), "locations": ["The lamplit registry"]}
+        (self.home / "edit.json").write_text(json.dumps(edited))
+        env = {**os.environ, "MMV_URL": self.url, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+        run = lambda *args: subprocess.run([sys.executable, "-m", "mmv.agent", *args], env=env, capture_output=True, text=True, timeout=20)
+        self.assertEqual(json.loads(run("world-edit-preview", "salt", str(self.home / "edit.json")).stdout)["changes"][0]["added"],
+                         ["The lamplit registry"])
+        refused = run("edit-world", "salt", str(self.home / "edit.json"))
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("reviewed", refused.stderr)
+        self.assertEqual(json.loads(run("edit-world", "salt", str(self.home / "edit.json"), "--confirm").stdout)["version"], 3)
+        self.assertEqual(self.agent.rollback_world("salt", 1)["version"], 4)
+
     def test_proxy_environment_is_not_used_for_local_calls(self):
         with patch.dict(os.environ, {"HTTP_PROXY": "http://example.invalid:1", "NO_PROXY": "", "no_proxy": ""}):
-            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.22")
+            self.assertEqual(AgentClient(self.url).inspect("version")["version"], "1.10.23")
 
     def test_world_management_guards_and_cli(self):
         ledger = {"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"],
@@ -289,7 +315,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 56)
+                self.assertEqual(len(names), 58)
                 self.assertTrue({'check_oap_collection', 'stage_oap_collection'} <= names)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score'} <= names)
@@ -311,7 +337,10 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn('import_instrument', names)
                 self.assertTrue({'inspect_opp', 'import_opp', 'select_opp_sheet'} <= names)
                 self.assertTrue({'get_world', 'world_versions', 'create_world', 'export_world', 'rollback_world', 'delete_world',
-                                 'inspect_world_proposal', 'accept_world_proposal', 'reject_world_proposal'} <= names)
+                                 'inspect_world_proposal', 'accept_world_proposal', 'reject_world_proposal',
+                                 'preview_world_edit', 'edit_world'} <= names)
+                refused = await client.call_tool('edit_world', {'world_id': 'none', 'world': {'name': 'x'}, 'base_version': 1})
+                self.assertTrue(refused.is_error)
                 refused = await client.call_tool('accept_world_proposal', {'proposal_id': 'none', 'confirm': False})
                 self.assertTrue(refused.is_error)
                 refused = await client.call_tool('delete_world', {'world_id': 'none'})
@@ -327,7 +356,7 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
                 self.assertNotIn("set_key", names)
                 result = await client.call_tool("inspect_studio", {"kind": "version"})
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["data"]["version"], "1.10.22")
+                self.assertEqual(result.structured_content["data"]["version"], "1.10.23")
                 result = await client.call_tool("start_production", {"quote_id": "fabricated", "consent": False})
                 self.assertTrue(result.is_error)
                 self.assertIn("authorization", result.content[0].text)

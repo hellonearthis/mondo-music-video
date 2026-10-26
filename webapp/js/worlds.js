@@ -1,6 +1,8 @@
 // Worlds: build, grow, review and use persistent world canon. Text from the server is only ever shown with textContent.
 
 import { $, $$, api, handle, json, notice, option, saveDownload, text, upload } from "./core.js";
+import { cloneDraft, withCustomLines, withToggledBuiltinItem } from "./vocab-model.js";
+import { loadVocabularyCatalog } from "./vocabulary.js";
 
 const LIST_LABELS = {
   core_laws: "Core laws", locations: "Locations", practices: "Practices and rituals", objects: "Objects and anomalies",
@@ -24,6 +26,16 @@ export const changeLines = changes => changes.flatMap(change => [
   ...change.removed.map(item => ({ sign: "−", field: fieldLabel(change.field), item })),
   ...change.changed.map(item => ({ sign: "~", field: fieldLabel(change.field), item }))
 ]);
+
+// One entry per line, blanks dropped: how the editor turns a textarea into a ledger list.
+export const linesOf = value => value.split("\n").map(line => line.trim()).filter(Boolean);
+
+// A world's pools are a custom vocabulary: the Visual Vocabulary editor's draft is {table: {mode, add, exclude}}, here
+// add = the world's own terms and exclude = terms kept out.
+export const poolsToDraft = pools => Object.fromEntries(Object.entries(pools).map(([table, pool]) =>
+  [table, { mode: "replace", add: pool.include, exclude: pool.exclude }]));
+export const draftToPools = draft => Object.fromEntries(Object.keys(POOL_LABELS).map(table =>
+  [table, { include: draft[table]?.add || [], exclude: draft[table]?.exclude || [] }]));
 
 export const runIdOf = outputFile => String(outputFile).split("/")[0];
 
@@ -69,12 +81,12 @@ function ledgerView(ledger) {
     .filter(Boolean);
 }
 
-function diffView(changes) {
+const NOTHING_NEW = "Nothing new: the model found nothing in these references that the world does not already hold. " +
+  "Dismiss this, then try again with a direction that names what to look for, or with different material.";
+
+function diffView(changes, empty = NOTHING_NEW) {
   const lines = changeLines(changes);
-  if (!lines.length) {
-    return text("p", "Nothing new: the model found nothing in these references that the world does not already hold. " +
-      "Dismiss this, then try again with a direction that names what to look for, or with different material.", "muted");
-  }
+  if (!lines.length) return text("p", empty, "muted");
   return node("ul", "world-diff", lines.map(line => {
     const row = node("li", `world-diff-${line.sign === "+" ? "add" : line.sign === "−" ? "remove" : "change"}`);
     row.append(text("strong", `${line.sign} ${line.field}: `), document.createTextNode(line.item));
@@ -82,31 +94,147 @@ function diffView(changes) {
   }));
 }
 
-async function showDetail(id) {
+// --- Editor ---
+
+const field = (label, control) => { const wrap = node("label", "world-edit-field", [text("span", label)]); wrap.append(control); return wrap; };
+
+function textArea(name, items, rows) {
+  const area = node("textarea");
+  Object.assign(area, { name, rows, value: items.join("\n") });
+  return area;
+}
+
+function subjectRow(subject, onChange) {
+  const designation = node("input", "world-subject-name");
+  const canon = node("input", "world-subject-canon");
+  designation.value = subject.designation;
+  designation.placeholder = "Name";
+  designation.setAttribute("aria-label", "Subject name");
+  canon.value = subject.canon;
+  canon.placeholder = "What is established about them";
+  canon.setAttribute("aria-label", "Subject canon");
+  const row = node("div", "world-subject-row", [designation, canon]);
+  row.append(button("Remove", () => { row.remove(); onChange(); }, "quiet", "Remove this subject from the edit"));
+  return row;
+}
+
+const readEditor = (form, version, draft) => ({
+  name: form.elements.world_name.value.trim(), seed_sentence: form.elements.seed_sentence.value.trim(),
+  ...Object.fromEntries(Object.keys(LIST_LABELS).map(key => [key, linesOf(form.elements[key].value)])),
+  subjects: [...form.querySelectorAll(".world-subject-row")].map(row => ({
+    designation: row.querySelector(".world-subject-name").value.trim(), canon: row.querySelector(".world-subject-canon").value.trim()
+  })).filter(subject => subject.designation),
+  pools: draftToPools(draft),
+  base_version: version
+});
+
+// The Visual Vocabulary editor's look and logic, for one world: a tab per table, the standard terms as checkboxes
+// (untick to keep one out), and the world's own terms as text.
+function poolsEditor(catalog, pools) {
+  let draft = cloneDraft(poolsToDraft(pools));
+  let active = Object.keys(POOL_LABELS)[0];
+  const element = node("details", "world-edit-pools", [text("summary", "Vocabulary pools: places, light, wardrobe and more")]);
+  const body = node("div", "world-pool-body");
+  const render = () => {
+    const standard = catalog.base[active] || [];
+    const known = new Set(standard);
+    const entry = draft[active] || { add: [], exclude: [] };
+    const tabs = node("div", "vocab-tabs-container", Object.entries(POOL_LABELS).map(([table, label]) => {
+      const tab = node("button", `vocab-tab-btn${table === active ? " active" : ""}`, [document.createTextNode(label)]);
+      tab.type = "button";
+      tab.onclick = () => { active = table; render(); };
+      return tab;
+    }));
+    const grid = node("div", "vocab-checkbox-grid", standard.map(term => {
+      const box = node("input");
+      Object.assign(box, { type: "checkbox", value: term, checked: !entry.exclude.includes(term) });
+      box.onchange = () => { draft = withToggledBuiltinItem(draft, active, term, box.checked, "replace"); };
+      return node("label", "vocab-item-label", [box, document.createTextNode(term)]);
+    }));
+    const own = Object.assign(textArea("own", entry.add, 4), { oninput: () => { draft = withCustomLines(draft, active, own.value, "replace"); } });
+    const extra = Object.assign(textArea("extra", entry.exclude.filter(term => !known.has(term)), 2), {
+      oninput: () => {
+        const current = draft[active] || { mode: "replace", add: [], exclude: [] };
+        draft = { ...draft, [active]: { ...current, exclude: [...current.exclude.filter(term => known.has(term)), ...linesOf(extra.value)] } };
+      }
+    });
+    body.replaceChildren(tabs,
+      text("p", "Untick a standard term to keep it out of this world.", "muted"), grid,
+      field("This world's own terms (one per line)", own),
+      field("Other terms to keep out (one per line)", extra));
+  };
+  render();
+  element.append(body);
+  return { element, read: () => draft };
+}
+
+function editorView(ledger, catalog, close) {
+  const id = encodeURIComponent(ledger.id);
+  const preview = node("div", "world-edit-preview");
+  preview.hidden = true;
+  const save = button("Save as new version", async () => {
+    const saved = await json(`/api/worlds/${id}`, readEditor(form, ledger.version, pools.read()), "PUT");
+    notice(`Saved as version ${saved.version}. Earlier versions can still be restored.`);
+    await loadWorlds();
+    await showDetail(ledger.id);
+  }, "primary", "Save these edits as the world's next version");
+  const stale = () => { save.disabled = true; preview.hidden = true; };
+  save.disabled = true;
+  const subjects = node("div", "world-subjects", ledger.subjects.map(subject => subjectRow(subject, stale)));
+  const addSubject = button("Add subject", () => { subjects.append(subjectRow({ designation: "", canon: "" }, stale)); stale(); }, "quiet", "Add a person or being to this world");
+  const check = button("Preview changes", async () => {
+    const result = await json(`/api/worlds/${id}/edit-preview`, readEditor(form, ledger.version, pools.read()));
+    preview.replaceChildren(text("h4", "What saving would change"), diffView(result.changes, "No changes yet."));
+    preview.hidden = false;
+    save.disabled = !result.changes.length;
+  }, "secondary", "Review exactly what will change before anything is saved");
+  const pools = poolsEditor(catalog, ledger.pools);
+  const form = node("form", "world-edit", [
+    text("h3", `Edit ${ledger.name} — version ${ledger.version}`),
+    text("p", "Edits are saved as a new version; the version you started from stays and can be restored.", "muted"),
+    field("Name", Object.assign(node("input"), { name: "world_name", value: ledger.name, maxLength: 160 })),
+    field("What governs this world", Object.assign(node("textarea"), { name: "seed_sentence", rows: 2, value: ledger.seed_sentence })),
+    ...Object.entries(LIST_LABELS).map(([key, label]) => field(`${label} (one per line)`, textArea(key, ledger[key], 4))),
+    text("h4", "Subjects"), subjects, addSubject, pools.element, preview,
+    node("div", "buttons world-actions", [check, save, button("Cancel", close, "secondary", "Leave without saving and read the world with its earlier versions")])
+  ]);
+  form.addEventListener("input", stale);
+  form.addEventListener("submit", event => event.preventDefault());
+  return form;
+}
+
+async function showDetail(id, editing = false) {
   const [ledger, versions] = await Promise.all(
     [`/api/worlds/${id}`, `/api/worlds/${id}/versions`].map(path => api(path).then(response => response.json())));
   const detail = $("#world-detail");
-  const rollbacks = versions.slice(0, -1).reverse().map(item => button(`Restore v${item.version}`, async () => {
+  const rollbacks = () => versions.slice(0, -1).reverse().map(item => button(`Restore v${item.version}`, async () => {
     await json(`/api/worlds/${id}/rollback`, { version: item.version });
     notice(`Restored v${item.version} as a new version.`);
     await loadWorlds();
     await showDetail(id);
-  }, "quiet", "Save this earlier version as the newest one"));
-  detail.replaceChildren(text("h3", `${ledger.name} — version ${ledger.version}`), ...ledgerView(ledger),
-    node("div", "buttons", rollbacks), button("Close", () => { detail.hidden = true; }));
+  }, "secondary", "Save this earlier version as the newest one"));
+  const catalog = await loadVocabularyCatalog();
+  const actions = () => node("div", "buttons world-actions", [
+    button("Edit", edit, "secondary", "Change this world's canon; saved as a new version"), ...rollbacks(),
+    button("Close", () => { detail.hidden = true; }, "secondary", "Close this view")]);
+  const view = () => detail.replaceChildren(text("h3", `${ledger.name} — version ${ledger.version}`), actions(), ...ledgerView(ledger), actions());
+  const edit = () => detail.replaceChildren(editorView(ledger, catalog, view));
+  editing ? edit() : view();
   detail.hidden = false;
+  detail.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 function worldRow(world) {
-  const buttons = node("div", "buttons", [
+  const buttons = node("div", "buttons world-actions", [
     button("Open", () => showDetail(world.id), "secondary", "Read this world"),
-    button("Export", async () => saveDownload(await api(`/api/worlds/${world.id}/export`), `${world.id}.world.json`), "quiet", "Save a copy of this world"),
+    button("Edit", () => showDetail(world.id, true), "secondary", "Change this world's canon; saved as a new version"),
+    button("Export", async () => saveDownload(await api(`/api/worlds/${world.id}/export`), `${world.id}.world.json`), "secondary", "Save a copy of this world"),
     button("Delete", async () => {
       if (!confirm(`Delete the world "${world.name}" and all of its versions? Your videos are kept.`)) return;
       await api(`/api/worlds/${world.id}`, { method: "DELETE" });
       notice(`Deleted ${world.name}.`);
       await loadWorlds();
-    }, "quiet", "Delete this world and its versions")
+    }, "delete-btn", "Delete this world and its versions")
   ]);
   return node("div", "world-row", [
     node("div", "", [text("strong", world.name), text("span", `  v${world.version} · ${world.terms} terms · ${world.sources} sources`, "muted")]),

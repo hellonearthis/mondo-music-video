@@ -1,4 +1,12 @@
-# Verification — 1.10.22
+# Verification — 1.10.23
+
+## 1.10.23 — World editor
+
+Focused tests added for the edit rules (next version, sources kept, stale base, no-op and oversize refusals), the REST routes,
+the agent client, CLI and MCP (confirmation guard, 58 tools), and a browser test that edits a world, previews, saves and
+checks that the earlier version is intact. The full temporary-data/mock-service/browser suite passed on the final code: **776 tests and 141 subtests**, 228.28 seconds (an earlier
+run caught a stale 56-tool assertion in `tests/test_vision_stage.py`, now 58). The live app was restarted idle on port 8091 and
+reported 1.10.23; the Worlds buttons were checked against the Outputs cards in the dark theme.
 
 ## 1.10.22 — Growing a world
 

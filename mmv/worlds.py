@@ -301,6 +301,22 @@ def revise(store, world_id, raw, *, models=None, fit=False, new_sources=()):
     return _write_version(store, ledger)
 
 
+def preview_edit(store, world_id, raw):
+    """What saving a hand-edited ledger would change, without saving it. User data is validated strictly."""
+    current = load(store, world_id)
+    return {"version": current["version"], "changes": diff(current, normalize(raw))}
+
+
+def edit(store, world_id, raw, base_version):
+    """The next version from a hand-edited ledger. It must start from the version the editor was opened on, and change something."""
+    current = load(store, world_id)
+    if current["version"] != base_version:
+        raise ValueError("The world changed after you opened it. Open it again to edit the latest version")
+    if not diff(current, normalize(raw)):
+        raise ValueError("Nothing was changed")
+    return revise(store, world_id, raw)
+
+
 def rollback(store, world_id, version):
     old = load(store, world_id, version)
     current = load(store, world_id)

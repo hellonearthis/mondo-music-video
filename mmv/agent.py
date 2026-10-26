@@ -24,6 +24,18 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError("The local application redirected the request; verify MMV_URL")
 
 
+WORLD_EDIT_KEYS = ("name", "seed_sentence", "subjects", "pools", "core_laws", "locations", "practices", "objects", "factions",
+                   "ecology_rules", "moral_ambiguities", "open_threads", "do_not_contradict")
+
+
+def world_edit_body(world, base_version):
+    """The editable fields of a ledger plus the version it was read at (a ledger read with get_world carries its own)."""
+    version = base_version if base_version is not None else world.get("version")
+    if not isinstance(version, int):
+        raise ValueError("Give base_version, the version of the world the edit starts from")
+    return {**{key: world[key] for key in WORLD_EDIT_KEYS if key in world}, "base_version": version}
+
+
 class AgentClient:
     def __init__(self, base_url=None):
         parsed = urllib.parse.urlparse(base_url or os.environ.get("MMV_URL", "http://127.0.0.1:8091"))
@@ -214,6 +226,17 @@ class AgentClient:
     def create_world(self, world):
         """Save a world written by hand or by an agent; a harvest instead proposes one through preview and start."""
         return self._json("POST", "/api/worlds", world)
+
+    def preview_world_edit(self, world_id, world, base_version=None):
+        """What saving an edited ledger would change; nothing is saved. `world` may be a ledger read with get_world."""
+        return self._json("POST", "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/edit-preview",
+                          world_edit_body(world, base_version))
+
+    def edit_world(self, world_id, world, base_version=None, confirm=False):
+        """Save an edited ledger as the world's next version (restorable with rollback_world)."""
+        if not confirm:
+            raise ValueError("Editing a world changes its canon; set confirm only after the user has reviewed the changes from preview_world_edit")
+        return self._json("PUT", "/api/worlds/" + urllib.parse.quote(world_id, safe=""), world_edit_body(world, base_version))
 
     def export_world(self, world_id, destination=None):
         path = "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/export"
@@ -434,6 +457,13 @@ def main(argv=None):
     sub.add_parser("world-proposals")
     create_world = sub.add_parser("create-world")
     create_world.add_argument("file", help="Path to world JSON file")
+    for name in ("world-edit-preview", "edit-world"):
+        edit_cmd = sub.add_parser(name)
+        edit_cmd.add_argument("id")
+        edit_cmd.add_argument("file", help="Path to the edited world JSON (a ledger read with `world`)")
+        edit_cmd.add_argument("--base-version", type=int, default=None, help="Version the edit starts from; default: the file's own version")
+        if name == "edit-world":
+            edit_cmd.add_argument("--confirm", action="store_true")
     export_world = sub.add_parser("export-world")
     export_world.add_argument("id")
     export_world.add_argument("--destination", default=None)
@@ -541,6 +571,10 @@ def main(argv=None):
             result = client.reject_world_proposal(args.id)
         elif args.command == "create-world":
             result = client.create_world(json.loads(Path(args.file).read_text(encoding="utf-8")))
+        elif args.command in ("world-edit-preview", "edit-world"):
+            edited = json.loads(Path(args.file).read_text(encoding="utf-8"))
+            result = (client.preview_world_edit(args.id, edited, args.base_version) if args.command == "world-edit-preview"
+                      else client.edit_world(args.id, edited, args.base_version, args.confirm))
         elif args.command == "export-world":
             result = client.export_world(args.id, args.destination)
         elif args.command == "rollback-world":

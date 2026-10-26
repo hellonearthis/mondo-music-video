@@ -1,5 +1,12 @@
 # Releases
 
+## 1.10.23 — World editor
+
+- New: **Edit** next to Open on each world's row, and at the top and bottom of an opened world. Names, rules, lists, subjects and vocabulary pools can be changed or removed in place. The pools reuse the Visual Vocabulary editor's tabs, standard-term checkboxes and `vocab-model.js` draft logic (a world's pools are a custom vocabulary: its own terms plus kept-out terms). Changes are previewed field by field before **Save as new version** is enabled, and any further edit requires a new preview. Saving writes the next version, keeps the world's sources and earlier versions, and is refused when the world changed after the editor was opened or nothing changed.
+- Agent parity: `PUT /api/worlds/{id}` and `POST /api/worlds/{id}/edit-preview`, `AgentClient.preview_world_edit` / `edit_world`, CLI `world-edit-preview` / `edit-world`, MCP `preview_world_edit` / `edit_world` (58 tools), the project skill reference and agent setup guide. Saving through the agent requires `confirm` after the user has reviewed the previewed changes, like accepting a proposal; `rollback_world` is the recovery path.
+- Changed text: the Visual Vocabulary "Add custom entries" suggestion no longer includes "neon" ("abandoned bowling alley").
+- No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.10.22 — Growing a world adds what the new material says
 
 Fixed: growing a world could report "No changes to the world" although new lore was supplied. The grow prompt asked the vision model to return the complete updated ledger, and a local model simply copied the ledger back (2,499 output tokens, every entry word for word, in a real run with five new backstories and a finished video). Growth now asks only for additions and merges them in code (`worlds.grow`): new entries are appended without case-sensitive duplicates, an existing subject's non-empty canon line replaces its old one, pools are unioned, and the world's name and seed sentence are kept unless the reply gives a new seed sentence. An echoed or empty reply still adds nothing, but the proposal now says why and offers Dismiss instead of Accept. Growth no longer removes entries; there is no in-place world editor, so dropping one means saving a hand-edited copy as a new world (a limitation, recorded here). The REST, client, CLI and MCP proposal results are unchanged (`changes` is simply empty when nothing is new). This touches only the Worlds module's own prompt, not the protected writer, ident or sealed-lips scheme.

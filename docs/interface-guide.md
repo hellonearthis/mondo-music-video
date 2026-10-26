@@ -238,7 +238,7 @@ To toggle Component Labeling Mode in the web interface:
 - **IDs**: `world-form`, `world-builder-form`, `world-images`, `world-videos`, `world-lore`, `world-runs`, `world-preview`, `world-clear`, `world-quote`, `world-consent`, `world-start`
 - **Used in**: Inside `panel-worlds`
 - **Code**: `webapp/index.html`, `webapp/js/worlds.js`
-- **Design rules**: Start a new world or grow an existing one from pictures (up to 24), video clips (up to 3), lore text (up to 5 files) and finished runs. Preview first; starting follows the usual quote and paid-consent flow when an API vision profile is used.
+- **Design rules**: Start a new world or grow an existing one from pictures (up to 24), video clips (up to 3), lore text (up to 5 files) and finished runs. Preview first; starting follows the usual quote and paid-consent flow when an API vision profile is used. Each world row has **Open** (read-only view with Restore buttons) and **Edit** buttons, and the opened view has Edit at its top and bottom: names, rules, subjects and the vocabulary pools (the Visual Vocabulary editor's tabs and checkboxes) are edited in place, **Preview changes** shows exactly what would change, and only then can **Save as new version** be pressed. Earlier versions can be restored.
 
 ### World Selector
 - **ID**: `world-select`

@@ -134,6 +134,15 @@ them (or `reject_world_proposal`). Growing is reviewed the same way; a stale
 proposal must be harvested again. `rollback_world` restores an earlier version as
 a new one.
 
+To change a world by hand (remove or reword entries, edit subjects, adjust the
+vocabulary pools), call `get_world`, edit the ledger, and call
+`preview_world_edit(world_id, world)`; show the user its field-level changes and
+call `edit_world(world_id, world, confirm=true)` only after they have reviewed
+them. The edit starts from the ledger's own `version` (or `base_version`) and
+fails if the world changed since; it is saved as a new version, so
+`rollback_world` undoes it. CLI: `world-edit-preview ID FILE`,
+`edit-world ID FILE --confirm`.
+
 To use a world in a video, add `"world_id": "salt-archive"` and optionally
 `"world_pool_mode": "replace"` (only the world's terms, the default) or
 `"append"` (add to the standard pools) to a video request.

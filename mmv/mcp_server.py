@@ -222,6 +222,18 @@ def create_server(base_url=None):
         grow a world from images, video, lore text or finished runs, use preview_production with kind world_harvest."""
         return invoke(client.create_world, world)
 
+    @server.tool()
+    def preview_world_edit(world_id: str, world: dict, base_version: int | None = None) -> dict[str, Any]:
+        """Show what an edited world ledger would change (field-level additions, removals and changes) without saving. Pass the
+        ledger from get_world with your edits; base_version defaults to its own version. Show the changes to the user first."""
+        return invoke(client.preview_world_edit, world_id, world, base_version)
+
+    @server.tool()
+    def edit_world(world_id: str, world: dict, base_version: int | None = None, confirm: bool = False) -> dict[str, Any]:
+        """Save an edited ledger as the world's next version, only after the user reviewed preview_world_edit (confirm=true).
+        Fails if the world changed since base_version. rollback_world restores any earlier version."""
+        return invoke(client.edit_world, world_id, world, base_version, confirm)
+
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def export_world(world_id: str) -> dict[str, Any]:
         """Read a world's current ledger as JSON for backup or sharing; it is private user data."""

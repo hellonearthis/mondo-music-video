@@ -66,6 +66,26 @@ class WorldDataTests(unittest.TestCase):
         crowded = worlds.normalize({**LEDGER, "core_laws": [f"law {n}" for n in range(worlds.MAX_LIST)]})
         self.assertEqual(worlds.grow(crowded, worlds.normalize({**LEDGER, "core_laws": ["one more"]}))["core_laws"], crowded["core_laws"])
 
+    def test_editing_makes_the_next_version_from_a_known_base_and_keeps_sources(self):
+        worlds.create(self.store, "salt", LEDGER, new_sources=[("lore", "a.md")])
+        edited = {**LEDGER, "name": "Salt Archive II", "core_laws": ["A new law"]}
+        preview = worlds.preview_edit(self.store, "salt", edited)
+        self.assertEqual(preview["version"], 1)
+        self.assertEqual({item["field"]: (item["added"], item["removed"]) for item in preview["changes"] if item["field"] == "core_laws"},
+                         {"core_laws": (["A new law"], ["The record outlives the person"])})
+        self.assertEqual(worlds.load(self.store, "salt")["version"], 1)
+        saved = worlds.edit(self.store, "salt", edited, 1)
+        self.assertEqual((saved["version"], saved["name"], saved["core_laws"]), (2, "Salt Archive II", ["A new law"]))
+        self.assertEqual(saved["sources"], [{"type": "lore", "ref": "a.md", "added_in_version": 1}])
+        self.assertEqual(worlds.load(self.store, "salt", 1)["core_laws"], LEDGER["core_laws"])
+        with self.assertRaisesRegex(ValueError, "changed after you opened"):
+            worlds.edit(self.store, "salt", edited, 1)
+        with self.assertRaisesRegex(ValueError, "Nothing was changed"):
+            worlds.edit(self.store, "salt", edited, 2)
+        with self.assertRaises(ValueError):
+            worlds.edit(self.store, "salt", {**edited, "core_laws": ["x" * 401]}, 2)
+        self.assertEqual(worlds.load(self.store, "salt")["version"], 2)
+
     def test_pools_become_the_existing_custom_vocabulary_shape(self):
         ledger = worlds.normalize(LEDGER)
         replace = worlds.custom_vocabulary(ledger, "replace")
@@ -335,6 +355,22 @@ class WorldApiTests(unittest.TestCase):
         self.assertEqual({item["field"] for item in grown["changes"]}, {"subjects", "locations"})
         self.assertEqual(grown["proposed"]["name"], "Salt Archive")
         self.assertEqual(grown["proposed"]["core_laws"], LEDGER["core_laws"])
+
+    def test_the_edit_routes_preview_then_save_and_refuse_a_stale_or_foreign_edit(self):
+        self.client.post("/api/worlds", json={"id": "salt", **LEDGER}).raise_for_status()
+        edit = {**LEDGER, "core_laws": ["Ink is never dry"], "base_version": 1}
+        self.assertEqual(self.client.put("/api/worlds/salt", json={**edit, "base_version": None}).status_code, 422)
+        preview = self.client.post("/api/worlds/salt/edit-preview", json=edit)
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertIn("core_laws", [item["field"] for item in preview.json()["changes"]])
+        self.assertEqual(self.client.get("/api/worlds/salt").json()["version"], 1)
+        self.assertEqual(self.client.put("/api/worlds/salt", json={**edit, "id": "other"}).status_code, 400)
+        saved = self.client.put("/api/worlds/salt", json=edit)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual((saved.json()["version"], saved.json()["core_laws"]), (2, ["Ink is never dry"]))
+        self.assertEqual([item["version"] for item in self.client.get("/api/worlds/salt/versions").json()], [1, 2])
+        self.assertEqual(self.client.put("/api/worlds/salt", json=edit).status_code, 400)
+        self.assertEqual(self.client.put("/api/worlds/missing", json=edit).status_code, 400)
 
     def test_a_finished_run_can_seed_a_world(self):
         run = self.home / "runs" / "my_video"
