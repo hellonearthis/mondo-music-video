@@ -233,103 +233,6 @@ button[aria-busy="true"], button.processing {
 .vocab-row {
   flex-wrap: wrap;
 }
-.vocab-random-quick-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  background: #eef2de;
-  border: 1px solid #c3cdb3;
-  border-radius: 5px;
-  padding: 8px 12px;
-  margin: 4px 0 8px;
-}
-.vocab-random-pill {
-  font-size:11px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  color: var(--green);
-  background: #dce8a2;
-  padding: 3px 7px;
-  border-radius: 3px;
-}
-.vocab-quick-key-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 0;
-  font-size:13px;
-}
-.vocab-quick-key-label input {
-  margin-top: 0 !important;
-  width: 145px;
-  padding: 6px 9px;
-  font-family: monospace;
-  font-size:13px;
-}
-.vocab-random-quick-bar .secondary {
-  padding: 7px 11px;
-  font-size:12px;
-}
-.vocab-random-toolbar {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.vocab-random-controls {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.vocab-random-key-field {
-  flex: 1;
-  min-width: 170px;
-  margin-bottom: 0;
-}
-.vocab-random-key-field input {
-  margin-top: 5px !important;
-  padding: 8px 10px;
-  font-family: monospace;
-  font-size:13px;
-}
-.vocab-random-count-field {
-  width: 96px;
-  margin-bottom: 0;
-}
-.vocab-random-count-field input {
-  margin-top: 5px !important;
-  padding: 8px 10px;
-  font-size:13px;
-}
-.vocab-random-controls .secondary {
-  padding: 9px 12px;
-  font-size:13px;
-  white-space: nowrap;
-}
-.vocab-saved-keys-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.vocab-saved-keys-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-  flex: 1;
-  min-width: 220px;
-}
-.vocab-saved-keys-label select {
-  margin-top: 0 !important;
-  padding: 6px 10px;
-  font-family: monospace;
-  font-size:13px;
-}
 .vocab-random-summary {
   margin-top: 12px;
   padding-top: 10px;
@@ -463,14 +366,6 @@ button[aria-busy="true"], button.processing {
   background: rgba(255, 255, 255, 0.05);
 }
 [data-theme=dark] .vocab-chip-more:hover { background: #354e3e; color: var(--lime); }
-[data-theme=dark] .vocab-random-quick-bar {
-  background: #1f2e25;
-  border-color: #354e3e;
-}
-[data-theme=dark] .vocab-random-pill {
-  background: #315c43;
-  color: #f4f8f1;
-}
 [data-theme=dark] .vocab-summary-cat-card {
   background: #15201a;
   border-color: var(--line);

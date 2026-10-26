@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.16 - Streamlined Visual Vocabulary UI
+
+- **Removed Pseudo-Random Vocabulary Toolbars**: Retired the pseudo-random key generation controls, seed toolbars, and quick bars from both the Main Video setup card and the Visual Vocabulary workspace (Tab 06).
+- **Cleaned Summary Cards & Filter Actions**: Simplified vocabulary summary cards to focus on direct category inspection, count badges, and chip removals, eliminating obsolete per-category re-roll actions.
+- **Pruned Unused CSS**: Removed all redundant styling rules associated with pseudo-random bars, key fields, and bookmark dropdowns.
+
 ## 1.10.15 - Visual Direction Tooltip & Track Loading Receipt Polish
 
 - **Visual Direction Guidance**: Clarified the production-wide creative brief tooltip for `Visual direction` to detail settings, subject actions, mood, and recurring physical motifs across all generated scenes.
