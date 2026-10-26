@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.18 - Interactive Cast Checkbox List & Thumbnail Tooltips
+
+- **Single-Column Cast Checkbox List**: Replaced the native multi-select box with a single-column, scrollable checkbox list with distinct hover and checked highlight states, keeping selection synchronized with the underlying form draft.
+- **Cast Portrait Tooltip Previews**: Enhanced tooltips to render image previews when hovering over cast actors (`.tooltip-thumb`), allowing instant visual character inspection.
+- **Polished Cast & Reference Guidance Strip**: Replaced the bulky hint box in Card 2 with a sleek inline banner (`.oap-hint-strip`) featuring an aligned title, right-justified guide button, and direct navigation to Tab 03.
+
 ## 1.10.17 - Dedicated Video Format Fold & Streamlined Cast Guidance
 
 - **Dedicated Video Format & Render Engine Fold**: Grouped picture shape (aspect ratio), local render megapixels, video generation engine (Renderer), and render resolution into a unified `.video-format-grid` container under its own fold in the Director's Control Room (`#director-fold-format`), open by default above post-processing.

@@ -86,6 +86,14 @@ export function showTooltip(target) {
   const tip = $("#studio-tooltip");
   if (!tip) return;
   tip.textContent = tipText;
+  if (target.dataset.tooltipImage) {
+    const img = document.createElement("img");
+    img.className = "tooltip-thumb";
+    img.src = target.dataset.tooltipImage;
+    img.alt = "";
+    img.loading = "eager";
+    tip.appendChild(img);
+  }
   tip.hidden = false;
 
   const rect = target.getBoundingClientRect();

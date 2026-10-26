@@ -175,6 +175,17 @@ export async function restoreProject() {
     });
     syncDanceControls(form);
     syncInstrumentControls(form);
+    if (form.querySelector('.actor-select')) {
+      const container = document.getElementById('cast-checkbox-list');
+      const select = form.querySelector('.actor-select');
+      if (container && select) {
+        const selectedValues = new Set([...select.selectedOptions].map(o => o.value));
+        container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+          cb.checked = selectedValues.has(cb.value);
+          cb.closest('.cast-checkbox-item')?.classList.toggle('checked', cb.checked);
+        });
+      }
+    }
     form.querySelector(".style-select")?.dispatchEvent(new Event("change"));
   });
   $("#world-form")?.elements.world_mode.dispatchEvent(new Event("change"));

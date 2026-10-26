@@ -148,19 +148,19 @@
 
   <!-- CARD 2: Cast & Staging -->
   <div class="card" data-component="Cast & Staging Card" data-component-id="card-cast-staging" data-component-source="webapp/index.html"><div class="card-title"><span class="step">2</span> Cast &amp; Staging</div>
-    <div class="oap-hint-box" data-tooltip="Manage recurring actors or scene reference photos">
+    <div class="oap-hint-strip">
       <div class="oap-hint-header">
-        <span class="oap-hint-badge">Cast &amp; Reference Guide</span>
-        <button type="button" class="quiet oap-help-btn" data-tooltip="Open the comprehensive Cast, References &amp; OAP guide">&#x2139;&#xFE0F; How Cast &amp; OAP work</button>
+        <strong class="oap-hint-title">Cast &amp; Reference Guide</strong>
+        <button type="button" class="quiet oap-help-btn" data-tooltip="Open the comprehensive Cast, References &amp; OAP guide">&#x2139;&#xFE0F; Cast Guide</button>
       </div>
       <div class="oap-hint-content">
-        <p>Select recurring characters from your cast library, or upload reference photos below for scene lighting and atmosphere.</p>
-      </div>
-      <div class="oap-hint-actions">
-        <button type="button" class="secondary nav-to-actors-btn" data-tooltip="Switch to 03. Actors &amp; OAP to create or import character packages">Manage / Import Cast <span>↗</span></button>
+        <span class="oap-hint-text">Select the characters from your OAP cast library.<br>or upload reference photos below for scene lighting and atmosphere.</span>
+        <div class="oap-hint-links">
+          <button type="button" class="quiet nav-to-actors-btn" data-tooltip="Switch to 03. Actors &amp; OAP to create or import character packages">Open Cast &amp; OAP ↗</button>
+        </div>
       </div>
     </div>
-    <label data-tooltip="Cast actors whose references and riders are bound to prompt <Picture> slots. Create or import characters in 03. Actors &amp; OAP." title="Cast actors whose references and riders are bound to prompt <Picture> slots. Create or import characters in 03. Actors &amp; OAP.">Cast<span class="cast-picker"><select class="actor-select" name="actors" multiple size="3" aria-label="Select actors"></select></span></label><small>Drag the lower-right corner of the cast list to resize it. Use Ctrl / Command to select several actors. No cast is required unless your renderer needs a reference. Need to add a character? <button type="button" class="quiet nav-to-actors-btn" style="display:inline;padding:0;">Open Cast &amp; OAP ↗</button></small>
+    <label data-tooltip="Select recurring characters for your video. Their reference images and styling rules are automatically applied to matching scenes.">Cast<span class="cast-picker"><select class="actor-select" name="actors" multiple hidden aria-label="Select actors (internal)"></select><div class="cast-checkbox-list" id="cast-checkbox-list" role="group" aria-label="Cast actors"></div></span></label><small>Select actors to include them in this video. No cast is required unless your renderer needs a reference.</small>
     <label class="file-drop-target" data-tooltip="Upload up to 9 supplemental reference images for style, lighting, or scene guidance (not character identity)">Additional reference images<input type="file" class="refs-input" accept="image/*" multiple><small class="file-drop-hint">Choose files or drop up to 9 images here</small><small class="file-drop-error" role="alert"></small></label><div class="refs-receipt file-receipt" data-tooltip="List of attached reference image files">No additional images</div><button type="button" class="quiet clear-refs" data-tooltip="Remove all uploaded reference images from this project">Clear reference images</button>
 
     <label data-tooltip="Facial movement policy: silent mouths prevents lip flap and babbling in every passage; lip sync lets the chosen singer sing the passages that have lyrics">Facial movement<select name="mouth_mode"><option value="sealed">Silent mouths (default)</option><option value="natural">Natural expressions</option><option value="lip_sync">Lip sync to vocals (set lyric lines in the preview)</option></select></label>
