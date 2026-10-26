@@ -21,8 +21,13 @@ any mix of:
 
 Preview shows what will be read; confirm the preview to start. Your vision model
 reads the material and writes a **proposal**. A new world shows everything it
-would contain; growing a world shows only what would be added, removed or
-changed. Accept saves the next version; Reject discards it. Earlier versions are
+would contain; growing a world shows only what would be added or changed. The
+model is asked only for what the new material adds, and the app merges that into
+the world: nothing already in the world is dropped, an existing subject's canon
+line can be extended, and a reply that adds nothing produces an empty proposal,
+which says so and offers only Dismiss. Growth never removes entries (to drop one, save a hand-edited copy as a
+new world with the same JSON shape), and a list already at its limit takes no more entries.
+Accept saves the next version; Reject discards it. Earlier versions are
 never overwritten and any can be restored as a new version. A proposal made
 against an older version must be made again.
 

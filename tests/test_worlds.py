@@ -45,6 +45,27 @@ class WorldDataTests(unittest.TestCase):
         self.assertEqual(len(trimmed["core_laws"][0]), 400)
         self.assertEqual(set(trimmed["pools"]), set(worlds.WORLD_TABLES))
 
+    def test_growing_merges_additions_and_an_echoed_ledger_changes_nothing(self):
+        base = worlds.normalize({**LEDGER, "id": "salt"})
+        self.assertEqual(worlds.diff(base, worlds.grow(base, worlds.normalize(LEDGER))), [])
+        reply = worlds.normalize({
+            "name": "Renamed By The Model", "seed_sentence": "",
+            "core_laws": ["the record outlives the person", "Ink is never dry"],
+            "subjects": [{"designation": "The Graft Clerk", "canon": ""}, {"designation": "the Ink Warden", "canon": "Keeps the wells"},
+                         {"designation": "the Graft Clerk", "canon": "Stamps wounds as forms and files the scars"}],
+            "pools": {"settings": {"include": ["A Basement Archive", "a flooded vault"]}, "lighting": {"exclude": ["Neon", "daylight"]}}})
+        grown = worlds.grow(base, reply)
+        self.assertEqual((grown["name"], grown["seed_sentence"]), (base["name"], base["seed_sentence"]))
+        self.assertEqual(grown["core_laws"], ["The record outlives the person", "Ink is never dry"])
+        self.assertEqual([(s["designation"], s["canon"]) for s in grown["subjects"]],
+                         [("the Graft Clerk", "Stamps wounds as forms and files the scars"), ("the Ink Warden", "Keeps the wells")])
+        self.assertEqual(grown["pools"]["settings"]["include"], ["a basement archive", "a lamplit registry", "a flooded vault"])
+        self.assertEqual(grown["pools"]["lighting"]["exclude"], ["neon", "daylight"])
+        self.assertEqual({item["field"] for item in worlds.diff(base, grown)},
+                         {"core_laws", "subjects", "settings include", "lighting exclude"})
+        crowded = worlds.normalize({**LEDGER, "core_laws": [f"law {n}" for n in range(worlds.MAX_LIST)]})
+        self.assertEqual(worlds.grow(crowded, worlds.normalize({**LEDGER, "core_laws": ["one more"]}))["core_laws"], crowded["core_laws"])
+
     def test_pools_become_the_existing_custom_vocabulary_shape(self):
         ledger = worlds.normalize(LEDGER)
         replace = worlds.custom_vocabulary(ledger, "replace")
@@ -289,6 +310,31 @@ class WorldApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/worlds/salt").json()["version"], 1)
         self.assertEqual(self.client.delete(f"/api/worlds/proposals/{grow['id']}").status_code, 200)
         self.assertEqual(self.client.get("/api/worlds/salt/versions").json()[0]["version"], 1)
+
+    def test_growing_from_new_lore_adds_only_what_the_model_returns_and_echoing_adds_nothing(self):
+        self.client.post("/api/worlds", json={"id": "salt", **LEDGER}).raise_for_status()
+        lore = self.upload("lore", "backstory.txt", b"The Ink Warden keeps the wells under the registry.")
+
+        def grow_proposal(reply):
+            VisionMock.reply_text = json.dumps(reply)
+            _, started = self.harvest(world_id="salt", world_mode="grow", world_lore=[lore], direction="add the wardens")
+            started.raise_for_status()
+            self.assertEqual(self.wait()["state"], "complete")
+            listed = self.client.get("/api/worlds/proposals").json()[-1]
+            proposal = self.client.get(f"/api/worlds/proposals/{listed['id']}").json()
+            self.client.delete(f"/api/worlds/proposals/{listed['id']}").raise_for_status()
+            return proposal
+
+        echoed = grow_proposal(LEDGER)
+        prompt = VisionMock.bodies[-1]["messages"][0]["content"][0]["text"]
+        self.assertIn("Return ONLY what the new material adds", prompt)
+        self.assertIn("The Ink Warden keeps the wells", prompt)
+        self.assertEqual(echoed["changes"], [])
+        grown = grow_proposal({"subjects": [{"designation": "the Ink Warden", "canon": "Keeps the wells under the registry"}],
+                               "locations": ["The wells under the registry"]})
+        self.assertEqual({item["field"] for item in grown["changes"]}, {"subjects", "locations"})
+        self.assertEqual(grown["proposed"]["name"], "Salt Archive")
+        self.assertEqual(grown["proposed"]["core_laws"], LEDGER["core_laws"])
 
     def test_a_finished_run_can_seed_a_world(self):
         run = self.home / "runs" / "my_video"

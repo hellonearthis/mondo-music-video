@@ -1,4 +1,12 @@
-# Verification — 1.10.21
+# Verification — 1.10.22
+
+## 1.10.22 — Growing a world
+
+The full temporary-data/mock-service/browser suite passed on the changed code: **772 tests and 141 subtests**, 229.41 seconds
+(run before the version label moved from 1.10.21; the version assertions were then rerun at 1.10.22). New tests cover an echoed
+ledger changing nothing, additions merging without duplicates, a reply without a name, a list at its limit, and the
+additions-only prompt. The owner then grew their Fehenviz world with real lore and a finished video and confirmed that it added
+entries. No paid or automated GPU work was run.
 
 ## 1.10.21 — Fork UI, panel progress and public OAP collection
 

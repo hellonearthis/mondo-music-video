@@ -71,7 +71,10 @@ function ledgerView(ledger) {
 
 function diffView(changes) {
   const lines = changeLines(changes);
-  if (!lines.length) return text("p", "No changes to the world.", "muted");
+  if (!lines.length) {
+    return text("p", "Nothing new: the model found nothing in these references that the world does not already hold. " +
+      "Dismiss this, then try again with a direction that names what to look for, or with different material.", "muted");
+  }
   return node("ul", "world-diff", lines.map(line => {
     const row = node("li", `world-diff-${line.sign === "+" ? "add" : line.sign === "−" ? "remove" : "change"}`);
     row.append(text("strong", `${line.sign} ${line.field}: `), document.createTextNode(line.item));
@@ -113,17 +116,16 @@ function worldRow(world) {
 
 function proposalRow(proposal) {
   const title = proposal.mode === "create" ? `New world: ${proposal.proposed.name}` : `Growth for ${proposal.world_id}`;
-  const actions = node("div", "buttons", [
-    button("Accept", async () => {
-      await api(`/api/worlds/proposals/${proposal.id}/accept`, { method: "POST" });
-      notice("Saved as a new version of the world.");
-      await loadWorlds();
-    }, "primary", "Save these changes as the world's next version"),
-    button("Reject", async () => {
-      await api(`/api/worlds/proposals/${proposal.id}`, { method: "DELETE" });
-      await loadWorlds();
-    }, "quiet", "Discard this proposal")
-  ]);
+  const accept = button("Accept", async () => {
+    await api(`/api/worlds/proposals/${proposal.id}/accept`, { method: "POST" });
+    notice("Saved as a new version of the world.");
+    await loadWorlds();
+  }, "primary", "Save these changes as the world's next version");
+  const reject = button(proposal.changes.length ? "Reject" : "Dismiss", async () => {
+    await api(`/api/worlds/proposals/${proposal.id}`, { method: "DELETE" });
+    await loadWorlds();
+  }, "quiet", "Discard this proposal");
+  const actions = node("div", "buttons", proposal.changes.length || proposal.mode === "create" ? [accept, reject] : [reject]);
   return node("div", "world-proposal", [text("h3", title), diffView(proposal.changes), actions]);
 }
 

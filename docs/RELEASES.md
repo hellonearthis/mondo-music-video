@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.22 — Growing a world adds what the new material says
+
+Fixed: growing a world could report "No changes to the world" although new lore was supplied. The grow prompt asked the vision model to return the complete updated ledger, and a local model simply copied the ledger back (2,499 output tokens, every entry word for word, in a real run with five new backstories and a finished video). Growth now asks only for additions and merges them in code (`worlds.grow`): new entries are appended without case-sensitive duplicates, an existing subject's non-empty canon line replaces its old one, pools are unioned, and the world's name and seed sentence are kept unless the reply gives a new seed sentence. An echoed or empty reply still adds nothing, but the proposal now says why and offers Dismiss instead of Accept. Growth no longer removes entries; there is no in-place world editor, so dropping one means saving a hand-edited copy as a new world (a limitation, recorded here). The REST, client, CLI and MCP proposal results are unchanged (`changes` is simply empty when nothing is new). This touches only the Worlds module's own prompt, not the protected writer, ident or sealed-lips scheme.
+
+Validation: full temporary-data/mock-service suite, 772 passed + 141 subtests; the owner then grew their Fehenviz world from five new backstories and a finished video and confirmed that it added entries. No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.10.21 — EGG's actor and prop UI, with music-video panel progress
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` (one commit after reviewed `db7bec7`). The actor cards have a wider responsive grid and an inline description editor for locally created actors; the OPP library has a readable in-app guide, and dark-theme text selection has better contrast. The fork's malformed actor textarea was repaired. Imported signed OAP actors are deliberately read-only in this editor, because their original package is preserved on export. Agents can edit local descriptions through API, CLI and MCP; OPP guide text is available by inspection.
