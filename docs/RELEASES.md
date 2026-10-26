@@ -1,5 +1,14 @@
 # Releases
 
+## 1.10.21 - Actor Card Inline Editing, Wider Actor Layout, OPP Guide & Dark Selection Contrast
+
+- **Inline Visual Description Editing**: Enabled double-click editing on actor visual descriptions directly inside cards on **03 / Actors & OAP**. Changes persist cleanly to `actor.json` via `PATCH /api/actors/{actor_id}` and automatically refresh all cast cards and selectors.
+- **Wider Actor Card Grid**: Expanded `.actor-grid` minimum column width to `370px` (50% wider), providing ample space for character descriptions and inline editing.
+- **Open Prop Protocol (OPP) Guide & Architecture Documentation**: Added a dedicated "What is Open Prop Protocol?" guide dialog (`#opp-helper-dialog`), paired alongside the OAP guide button in the panel header, served from [`docs/OPEN_PROP_PROTOCOL.md`](OPEN_PROP_PROTOCOL.md) via `GET /api/props/guide`.
+- **Repositioned OPP Library**: Moved the Open Prop Protocol library fold (`#opp-library-fold`) to the bottom of the Actors & OAP panel, styling its summary title in `Georgia, 27px` to match studio `<h2>` card headings.
+- **Streamlined Actor Card Tooltips**: Removed redundant container, reference image, and name tooltips from actor cards while retaining action and description guidance.
+- **WCAG High-Contrast Dark Mode Selection**: Added calibrated `::selection` highlight styling (`#315c43` / `#f4f8f1`) delivering a 7.66:1 contrast ratio that exceeds WCAG AAA requirements.
+
 ## 1.10.20 - Visual Vocabulary Button Layout & Reference Image Tooltip Fix
 
 - **Left-Justified Vocabulary Button Row**: Placed the "Explore vocabulary" action button and Guide shortcut on their own line directly beneath the Visual Vocabulary selection menu, left-justifying button contents for clean scanability.

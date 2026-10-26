@@ -38,7 +38,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.20"
+MGL_APP_VERSION = "1.10.21"
 WEB = Path(__file__).parent
 
 
@@ -553,6 +553,10 @@ class ApiProfileRequest(StrictModel):
 class StarterRequest(StrictModel):
     accept_starter_signer: bool = False
     restore_removed: bool = False
+
+
+class ActorUpdateRequest(StrictModel):
+    description: str = Field(max_length=6000)
 
 
 class KeyRequest(StrictModel):
@@ -1126,6 +1130,21 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             return actors.create_actor(store, actor_id, name, description, reference.file.read(25 * 1024 * 1024 + 1))
 
+    @app.patch("/api/actors/{actor_id}")
+    def update_actor(actor_id: str, value: ActorUpdateRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            actor_id = identifier(actor_id)
+            target = inside(store.home / "actors", actor_id)
+            json_path = target / "actor.json"
+            if not target.is_dir() or not json_path.is_file():
+                raise ValueError("Actor not found")
+            record = read_json(json_path)
+            record["description"] = value.description
+            write_json(json_path, record)
+            quotes.clear()
+        return record
+
     @app.get("/api/actors/{actor_id}/reference")
     def actor_reference(actor_id: str):
         record = store.actor(actor_id)
@@ -1350,6 +1369,13 @@ def create_app(home=None, *, test_hosts=False):
         if not guide_path.exists():
             return {"title": "Vocabulary Architecture Guide", "markdown": "Guide not found on disk."}
         return {"title": "Visual Vocabulary Architecture & Customization Guide", "markdown": guide_path.read_text(encoding="utf-8")}
+
+    @app.get("/api/props/guide")
+    def get_props_guide():
+        guide_path = Path(__file__).parent.parent / "docs" / "OPEN_PROP_PROTOCOL.md"
+        if not guide_path.exists():
+            return {"title": "Open Prop Protocol Guide", "markdown": "Guide not found on disk."}
+        return {"title": "What is Open Prop Protocol", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
     def list_vocabularies():

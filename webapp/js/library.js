@@ -63,10 +63,10 @@ const actorCardHtml = (actor) => {
     <button type="button" class="quiet audition-button" data-action="export-audition" title="Export a signed audition package for ${escName}; cast-only assets are listed by hash but left out">Export audition package</button>
   `;
   return `
-    <article class="card" title="Cast member: ${escName}" data-id="${escId}" data-name="${escName}">
-      <img src="/api/actors/${encodeURIComponent(actor.id)}/reference" alt="${escName} reference" loading="lazy" data-tooltip="Reference portrait for ${escName}" title="Reference portrait for ${escName}">
+    <article class="card" data-id="${escId}" data-name="${escName}">
+      <img src="/api/actors/${encodeURIComponent(actor.id)}/reference" alt="${escName} reference" loading="lazy">
       <h2>${escName}</h2>
-      <p>${overview}</p>
+      <p class="actor-desc-text" data-tooltip="Double-click to edit visual description" title="Double-click to edit visual description">${overview}</p>
       <p>${oapNote}</p>
       <button type="button" class="secondary" data-action="export-oap" title="Export signed OAP package for ${escName}">Export OAP package</button>
       ${auditionSection}
@@ -217,6 +217,7 @@ function renderCastCheckboxes(actors, selectedValues = new Set()) {
 
 export async function loadActors() {
   const actors = await (await api("/api/actors")).json();
+  state.actors = actors;
   $$(".actor-select").forEach((select) => {
     const old = [...select.selectedOptions].map((x) => x.value);
     if (!actors.length) {
@@ -341,7 +342,60 @@ export function initLibraryForms() {
     }
   }));
 
-  // Delegated handler for Actor cards
+
+  // Double-click inline editor for Actor description
+  $("#actor-list")?.addEventListener("dblclick", (e) => {
+    const descP = e.target.closest(".actor-desc-text");
+    if (!descP || descP.querySelector("textarea")) return;
+    const card = descP.closest("article[data-id]");
+    if (!card) return;
+    const { id, name } = card.dataset;
+    const existing = (state.actors || []).find((a) => a.id === id);
+    const originalText = existing?.description || descP.textContent || "";
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "actor-inline-editor";
+    textarea.rows = 4;
+    textarea.maxLength = 6000;
+    textarea.value = originalText;
+    textarea.setAttribute("aria-label", `Edit visual description for ${name}`);
+
+    let saved = false;
+    const saveAndClose = async () => {
+      if (saved) return;
+      saved = true;
+      const newText = textarea.value.trim();
+      if (newText === originalText.trim()) {
+        descP.textContent = actorOverview({ description: originalText });
+        return;
+      }
+      try {
+        descP.textContent = "Saving description…";
+        const updated = await json(`/api/actors/${encodeURIComponent(id)}`, { description: newText }, "PATCH");
+        if (existing) existing.description = updated.description;
+        await loadActors();
+        notice(`Updated visual description for “${name}”.`);
+        scheduleSave();
+      } catch (err) {
+        descP.textContent = actorOverview({ description: originalText });
+        notice(`Failed to save description: ${err.message}`);
+      }
+    };
+
+    textarea.addEventListener("blur", saveAndClose);
+    textarea.addEventListener("keydown", (evt) => {
+      if (evt.key === "Escape") {
+        saved = true;
+        descP.textContent = actorOverview({ description: originalText });
+      }
+    });
+
+    descP.replaceChildren(textarea);
+    textarea.focus();
+    textarea.select();
+  });
+
+    // Delegated handler for Actor cards
   $("#actor-list")?.addEventListener("click", handle(async (e) => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
