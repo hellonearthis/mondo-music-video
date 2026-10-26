@@ -1,5 +1,17 @@
 # Releases
 
+## 1.10.20 — Fork UI polish (hellonearthis 1.10.15–1.10.20)
+
+Credit: hellonearthis. Reviewed fork head `db7bec7` (six commits after `26719de`); UI and documentation only, no backend or protected-scheme change.
+
+- Visual direction tooltip, track-receipt markers and Start fresh tooltip wording (1.10.15).
+- Visual Vocabulary: the pseudo-random seed toolbars, saved-key actions and per-category re-roll are retired; summary cards keep chip removal and counts (1.10.16). Saved selections still restore, and `vocab_random_key` stays in the project API for old drafts, but keys can no longer be re-applied from the GUI.
+- Dedicated **Video format & output** fold (aspect, megapixels, renderer, resolution), open by default (1.10.17).
+- Cast is a checkbox list with portrait hover previews and a one-line guidance strip (1.10.18); reference images are a file list with thumbnail tooltips (1.10.19); vocabulary button layout and chip tooltip fixes (1.10.20).
+- Our fixes while integrating: Quick Start and Start fresh now sync the cast checkboxes with the hidden actor select (previously the page could show a cast different from the one previewed); drafts saved before the format fold existed keep it at its default (open) instead of closing it; browser tests pick the cast through the checkboxes (`pick_cast`), with regression assertions for both fixes; stale interface-guide text removed.
+- Reviewed by Codex (medium reasoning effort, read-only), whose findings produced the three fixes above. Escaping of filenames and actor names in the new tooltips was checked and found sound.
+- Version label follows the fork (1.10.20); our 1.10.12 changes are retained. Full suite 761 passed + 141 subtests.
+
 ## 1.10.12 — Vision server starts when needed
 
 - Style Harvest, world reading (Worlds) and storyboard interpretation now start the local vision server when nothing is answering at the Vision service URL, and stop it afterwards. A server that was already running is used as is and never stopped. The preview no longer refuses just because the server is offline; it refuses only when Mondo cannot start it, and says why.

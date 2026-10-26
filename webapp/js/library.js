@@ -169,6 +169,52 @@ export async function loadStyles() {
   listEl.innerHTML = styles.map(styleCardHtml).join("");
 }
 
+export function syncCastPickerUi() {
+  const container = $("#cast-checkbox-list");
+  const select = document.querySelector(".actor-select");
+  if (!container || !select) return;
+  const selectedValues = new Set([...select.selectedOptions].map((opt) => opt.value));
+  container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.checked = selectedValues.has(cb.value);
+    cb.closest(".cast-checkbox-item")?.classList.toggle("checked", cb.checked);
+  });
+}
+
+function renderCastCheckboxes(actors, selectedValues = new Set()) {
+  const container = $("#cast-checkbox-list");
+  if (!container) return;
+  if (!actors.length) {
+    container.innerHTML = '<div class="cast-empty-note">No cast members yet — add in 03. Actors &amp; OAP</div>';
+    return;
+  }
+  container.innerHTML = actors
+    .map((actor) => {
+      const isChecked = selectedValues.has(actor.id);
+      const refUrl = `/api/actors/${encodeURIComponent(actor.id)}/reference`;
+      return `<label class="cast-checkbox-item ${isChecked ? "checked" : ""}" data-tooltip="Cast actor: ${escapeHtml(actor.name)} (${escapeHtml(actor.id)})" data-tooltip-image="${refUrl}" data-tooltip-position="right">
+        <input type="checkbox" value="${escapeHtml(actor.id)}" ${isChecked ? "checked" : ""}>
+        <span>${escapeHtml(actor.name)}</span>
+      </label>`;
+    })
+    .join("");
+
+  if (!container.dataset.bound) {
+    container.dataset.bound = "true";
+    container.addEventListener("change", (e) => {
+      const cb = e.target.closest("input[type=checkbox]");
+      if (!cb) return;
+      cb.closest(".cast-checkbox-item")?.classList.toggle("checked", cb.checked);
+      const select = document.querySelector(".actor-select");
+      if (!select) return;
+      [...select.options].forEach((opt) => {
+        if (opt.value === cb.value) opt.selected = cb.checked;
+      });
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      scheduleSave();
+    });
+  }
+}
+
 export async function loadActors() {
   const actors = await (await api("/api/actors")).json();
   $$(".actor-select").forEach((select) => {
@@ -186,6 +232,8 @@ export async function loadActors() {
         })
       );
     }
+    const selectVals = new Set([...select.selectedOptions].map((x) => x.value));
+    renderCastCheckboxes(actors, selectVals);
   });
 
   const listEl = $("#actor-list");

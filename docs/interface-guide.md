@@ -72,7 +72,7 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `director-control-room`
 - **Used in**: Step 3 of `video-production-form`
 - **Code**: `webapp/index.html`
-- **Design rules**: Full-width card with three distinct collapsible folds for advanced cinematography and render policies.
+- **Design rules**: Full-width card with collapsible folds for advanced cinematography and render policies.
 
 #### Musical Rhythm Fold
 - **ID**: `director-fold-pacing`
@@ -86,7 +86,13 @@ To toggle Component Labeling Mode in the web interface:
 - **Code**: `webapp/index.html`
 - **Design rules**: Configures reference policy (all shots, single-subject, fragmentation), casting rotation policy, ensemble mode, and maximum simultaneous actors on screen.
 
-#### Render Engine Fold
+#### Video Format & Render Engine Fold
+- **ID**: `director-fold-format`
+- **Used in**: Inside `director-control-room`
+- **Code**: `webapp/index.html`
+- **Design rules**: Configures framing aspect ratio, local render megapixels, video generation backend (Renderer), and render resolution.
+
+#### Render Engine & Post-Processing Fold
 - **ID**: `director-fold-render`
 - **Used in**: Inside `director-control-room`
 - **Code**: `webapp/index.html`
@@ -106,7 +112,7 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `card-vocab-editor`
 - **Used in**: Inside `panel-vocab`
 - **Code**: `webapp/index.html`, `webapp/js/vocab.js`
-- **Design rules**: Contains preset loader, pseudo-random seed generator toolbar, active selection chip summary, category tabs, checkbox grid, custom keyword textarea, and save/apply actions.
+- **Design rules**: Contains preset loader, active selection chip summary, category tabs, checkbox grid, custom keyword textarea, and save/apply actions.
 
 ---
 

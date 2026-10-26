@@ -5,34 +5,17 @@ import { scheduleSave } from "./project.js";
 import {
   cleanDraft,
   cloneDraft,
-  computePseudoRandomDraft,
-  deleteSavedVocabKey,
-   generateRandomKey,
   getCategoryStats,
-  getSavedVocabKeys,
   getSummaryStats,
-  parseRandomKey,
   presetToDraft,
-  saveVocabKey,
-  withAddedRandomItem,
   withCustomLines,
   withoutCategoryItem,
-  withRandomizedCategory,
   withToggledBuiltinItem
 } from "./vocab-model.js";
-
-export {
-  deleteSavedVocabKey,
-  generateRandomKey,
-  getSavedVocabKeys,
-  parseRandomKey,
-  saveVocabKey
-};
 
 let vocabDataCache = null;
 let vocabActiveCategory = "settings";
 let vocabWorkingDraft = {};
-let vocabCurrentRandomKey = "";
 
 const MAX_SUMMARY_CHIPS = 20;
 
@@ -126,19 +109,10 @@ const summaryCardHtml = (cat, activeItems) => {
         <span class="vocab-summary-cat-name">${escapeHtml(formatCatLabel(cat))}</span>
         <span class="vocab-summary-cat-count">${activeItems.length} active</span>
       </div>
-      <div class="vocab-summary-cat-actions">
-        <button type="button" class="quiet" data-action="add-one" data-category="${escCat}" title="Draw one more random item into this category">+1</button>
-        <button type="button" class="quiet" data-action="reroll-cat" data-category="${escCat}" title="Randomize this category only">🎲</button>
-      </div>
     </div>
     ${chipsHtml(cat, activeItems)}
   </div>`;
 };
-
-// --- Backwards-Compatible Model Wrapper ---
-
-export const buildPseudoRandomDraft = (rawKey, fallbackCount = 10, existingDraft = {}) =>
-  computePseudoRandomDraft(vocabDataCache, rawKey, fallbackCount, existingDraft);
 
 // --- DOM Sync & Render Functions ---
 
@@ -146,24 +120,9 @@ const copyToClipboard = (text) => {
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
 };
 
-export function renderSavedKeysSelect() {
-  const select = $("#vocab-saved-keys-select");
-  const row = $("#vocab-saved-keys-row");
-  if (!select) return;
-  const keys = getSavedVocabKeys();
-  if (row) row.hidden = keys.length === 0;
-  select.replaceChildren(
-    option("", keys.length ? `Saved keys (${keys.length})…` : "No saved keys yet"),
-    ...keys.map((k) => option(k, `🎲 ${k}`))
-  );
-}
-
 export function updateVocabCustomBadge() {
   const badge = $("#vocab-custom-badge");
-  const quickBar = $("#vocab-random-quick-bar");
-  const quickKeyInput = $("#vocab-quick-key-input");
   const customCount = Object.keys(state.currentCustomVocab || {}).length;
-  const randomKey = state.currentVocabRandomKey || "";
   const worlds = state.thematicWorlds;
 
   if (badge) {
@@ -173,19 +132,11 @@ export function updateVocabCustomBadge() {
       badge.textContent = `🧭 Worlds: ${modeLabel} (x${mult})`;
       badge.title = `Thematic Worlds active: ${modeLabel} mode, juxtaposition x${mult}`;
       badge.hidden = false;
-    } else if (randomKey) {
-      badge.textContent = `🎲 ${randomKey}`;
-      badge.title = `Pseudo-random vocabulary key: ${randomKey}`;
-      badge.hidden = false;
     } else {
       badge.textContent = `${customCount} customized`;
       badge.title = `${customCount} categories customized`;
       badge.hidden = customCount === 0;
     }
-  }
-  if (quickBar) {
-    quickBar.hidden = !randomKey;
-    if (randomKey && quickKeyInput) quickKeyInput.value = randomKey;
   }
 }
 
@@ -227,10 +178,7 @@ export function updateDeletePresetBtnVisibility() {
 const applySummaryBadgeStyle = (totalActive, customizedCats) => {
   const badge = $("#vocab-random-status-badge");
   if (!badge) return;
-  if (vocabCurrentRandomKey) {
-    badge.textContent = `🎲 ${vocabCurrentRandomKey} (${totalActive} active)`;
-    badge.style.color = "var(--accent)";
-  } else if (customizedCats > 0) {
+  if (customizedCats > 0) {
     badge.textContent = `${customizedCats} categories customized (${totalActive} active)`;
     badge.style.color = "var(--green)";
   } else {
@@ -375,27 +323,6 @@ const refreshCategoryUI = (cat, fullSummary = false) => {
   else updateVocabCategoryCard(cat);
 };
 
-export function randomizeSingleCategory(cat) {
-  const count = parseInt($("#vocab-random-count")?.value, 10) || 5;
-  const res = withRandomizedCategory(vocabDataCache, vocabWorkingDraft, cat, count);
-  if (!res) return;
-  vocabWorkingDraft = res.draft;
-  refreshCategoryUI(cat, true);
-  notice(`Randomized category "${formatCatLabel(cat)}" with ${res.sampleSize} items.`);
-}
-
-export function drawOneAdditionalRandomItem(cat) {
-  if (!vocabDataCache?.base?.[cat]) return;
-  const { draft, picked } = withAddedRandomItem(vocabDataCache, vocabWorkingDraft, cat);
-  if (!picked) {
-    notice(`All built-in items for "${formatCatLabel(cat)}" are already active.`);
-    return;
-  }
-  vocabWorkingDraft = draft;
-  refreshCategoryUI(cat, false);
-  notice(`Added "${picked}" to ${formatCatLabel(cat)}.`);
-}
-
 export function removeSingleItemFromCategory(cat, item) {
   const { draft, removed, minReached } = withoutCategoryItem(vocabDataCache, vocabWorkingDraft, cat, item);
   if (minReached) {
@@ -416,39 +343,12 @@ const refreshEditorAll = () => {
   renderVocabSelectionSummary();
 };
 
-const applyRandomToProject = (res, msg) => {
-  if (!res) return;
-  state.currentCustomVocab = res.draft;
-  state.currentVocabRandomKey = res.key;
-  vocabWorkingDraft = cloneDraft(res.draft);
-  vocabCurrentRandomKey = res.key;
-  updateVocabCustomBadge();
-  scheduleSave();
-  notice(msg);
-};
-
-const applyRandomToEditor = (res, msg, openDetails = true) => {
-  if (!res) return;
-  vocabWorkingDraft = res.draft;
-  vocabCurrentRandomKey = res.key;
-  if ($("#vocab-random-key")) $("#vocab-random-key").value = res.key;
-  if ($("#vocab-random-count")) $("#vocab-random-count").value = res.count;
-  refreshEditorAll();
-  if (openDetails && $("#vocab-random-summary-details")) {
-    $("#vocab-random-summary-details").open = true;
-  }
-  notice(msg);
-};
-
 export async function openVocabularyPanel() {
   await loadVocabularyCatalog();
   vocabWorkingDraft = cloneDraft(state.currentCustomVocab || {});
-  vocabCurrentRandomKey = state.currentVocabRandomKey || "";
   const currentProfile = $("#vocab-profile-select")?.value || "full";
   if ($("#vocab-dialog-preset-select")) $("#vocab-dialog-preset-select").value = currentProfile;
   updateDeletePresetBtnVisibility();
-  renderSavedKeysSelect();
-  if ($("#vocab-random-key")) $("#vocab-random-key").value = vocabCurrentRandomKey;
   renderVocabTabs();
   showVocabCategory(vocabActiveCategory);
 
@@ -507,8 +407,6 @@ export function setupVocabularyCustomizer() {
     if (!actionEl) return;
     const { action, category, item } = actionEl.dataset;
     if (action === "remove-chip") removeSingleItemFromCategory(category, item);
-    else if (action === "add-one") drawOneAdditionalRandomItem(category);
-    else if (action === "reroll-cat") randomizeSingleCategory(category);
     else if (action === "select-cat") selectVocabCategory(category);
   });
 
@@ -551,113 +449,8 @@ export function setupVocabularyCustomizer() {
   const actions = {
     "#open-vocab-panel-btn, #open-vocab-dialog": handle(() => openVocabularyPanel()),
 
-    "#roll-vocab-random-btn": handle(async () => {
-      await loadVocabularyCatalog();
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
-      const res = buildPseudoRandomDraft(generateRandomKey(count), count, state.currentCustomVocab || {});
-      applyRandomToProject(res, `Rolled pseudo-random vocabulary key: ${res?.key}`);
-    }),
-
-    "#vocab-quick-apply-key-btn": handle(async () => {
-      await loadVocabularyCatalog();
-      const raw = ($("#vocab-quick-key-input")?.value || "").trim();
-      if (!raw) throw new Error("Enter a pseudo-random key (e.g. 482910:10)");
-      const res = buildPseudoRandomDraft(raw, 10, state.currentCustomVocab || {});
-      if (!res) throw new Error("Invalid key format. Use seed:count (e.g. 482910:10)");
-      applyRandomToProject(res, `Applied pseudo-random key: ${res.key}`);
-    }),
-
-    "#vocab-quick-reroll-btn": handle(async () => {
-      await loadVocabularyCatalog();
-      const count = parseRandomKey(state.currentVocabRandomKey || "", 10)?.count || 10;
-      const res = buildPseudoRandomDraft(generateRandomKey(count), count, state.currentCustomVocab || {});
-      applyRandomToProject(res, `Rerolled pseudo-random key: ${res?.key}`);
-    }),
-
-    "#vocab-quick-save-key-btn": handle(() => {
-      const key = state.currentVocabRandomKey || ($("#vocab-quick-key-input")?.value || "").trim();
-      if (!key) throw new Error("No pseudo-random key to save.");
-      saveVocabKey(key);
-      renderSavedKeysSelect();
-      copyToClipboard(key);
-      notice(`Saved key "${key}" and copied to clipboard.`);
-    }),
-
-    "#vocab-quick-edit-btn": handle(async () => {
-      await openVocabularyPanel();
-      if ($("#vocab-random-summary-details")) $("#vocab-random-summary-details").open = true;
-    }),
-
-    "#vocab-quick-clear-btn": handle(() => {
-      state.currentVocabRandomKey = "";
-      state.currentCustomVocab = {};
-      vocabWorkingDraft = {};
-      vocabCurrentRandomKey = "";
-      updateVocabCustomBadge();
-      scheduleSave();
-      notice("Cleared pseudo-random vocabulary. Restored full built-in vocabulary.");
-    }),
-
-    "#vocab-roll-random-btn": handle(() => {
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
-      const res = buildPseudoRandomDraft(generateRandomKey(count), count, vocabWorkingDraft);
-      if (res) {
-        if ($("#vocab-preset-id") && !$("#vocab-preset-id").value) {
-          $("#vocab-preset-id").value = `random_${res.seed}`;
-        }
-        if ($("#vocab-preset-name") && !$("#vocab-preset-name").value) {
-          $("#vocab-preset-name").value = `Random ${res.seed} (${res.count}/cat)`;
-        }
-        applyRandomToEditor(res, `Rolled key: ${res.key}. Overview updated below.`);
-      }
-    }),
-
-    "#vocab-apply-key-btn": handle(() => {
-      const raw = ($("#vocab-random-key")?.value || "").trim();
-      if (!raw) throw new Error("Enter a key in format seed:count (e.g. 482910:10)");
-      const count = parseInt($("#vocab-random-count")?.value, 10) || 10;
-      const res = buildPseudoRandomDraft(raw, count, vocabWorkingDraft);
-      if (!res) throw new Error("Invalid key format. Expected seed:count");
-      applyRandomToEditor(res, `Applied key "${res.key}".`);
-    }),
-
-    "#vocab-copy-key-btn": handle(() => {
-      const key = ($("#vocab-random-key")?.value || vocabCurrentRandomKey || "").trim();
-      if (!key) throw new Error("No pseudo-random key to copy.");
-      copyToClipboard(key);
-      notice(`Copied key "${key}" to clipboard.`);
-    }),
-
-    "#vocab-save-key-btn": handle(() => {
-      const key = ($("#vocab-random-key")?.value || vocabCurrentRandomKey || "").trim();
-      if (!key) throw new Error("No pseudo-random key to save.");
-      saveVocabKey(key);
-      renderSavedKeysSelect();
-      copyToClipboard(key);
-      notice(`Key "${key}" saved to bookmarks!`);
-    }),
-
-    "#vocab-load-saved-key-btn": handle(() => {
-      const key = $("#vocab-saved-keys-select")?.value;
-      if (!key) throw new Error("Select a saved key from the dropdown first.");
-      const res = buildPseudoRandomDraft(key, 10, vocabWorkingDraft);
-      applyRandomToEditor(res, `Loaded saved key "${key}".`, false);
-    }),
-
-    "#vocab-delete-key-btn": handle(() => {
-      const key = $("#vocab-saved-keys-select")?.value;
-      if (!key) throw new Error("Select a saved key to remove.");
-      deleteSavedVocabKey(key);
-      renderSavedKeysSelect();
-      notice(`Removed saved key "${key}".`);
-    }),
-
-    "#vocab-random-cat-btn": handle(() => randomizeSingleCategory(vocabActiveCategory)),
-
     "#vocab-load-preset-btn": handle(async () => {
       const selectedId = $("#vocab-dialog-preset-select").value;
-      vocabCurrentRandomKey = "";
-      if ($("#vocab-random-key")) $("#vocab-random-key").value = "";
       vocabWorkingDraft = presetToDraft(vocabDataCache, selectedId);
       refreshEditorAll();
       notice(`Loaded preset "${selectedId}" into editor.`);
@@ -707,7 +500,6 @@ export function setupVocabularyCustomizer() {
       saveActiveCategoryCustomText();
       cleanWorkingDraft();
       state.currentCustomVocab = cloneDraft(vocabWorkingDraft);
-      state.currentVocabRandomKey = vocabCurrentRandomKey || "";
       updateVocabCustomBadge();
       scheduleSave();
       const dialog = $("#vocabulary-dialog");
@@ -720,8 +512,6 @@ export function setupVocabularyCustomizer() {
     "#vocab-reset-all-btn": () => {
       if (!window.confirm("Reset all vocabulary customizations back to standard?")) return;
       vocabWorkingDraft = {};
-      vocabCurrentRandomKey = "";
-      if ($("#vocab-random-key")) $("#vocab-random-key").value = "";
       refreshEditorAll();
       notice("All category customizations cleared.");
     },

@@ -4,6 +4,7 @@ import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
 
 import { syncInstrumentControls } from "./instruments.js";
 import { syncDanceControls } from "./dance.js";
+import { renderReferenceReceipt } from "./production.js";
 
 let saveDebounceTimer = null;
 
@@ -125,7 +126,7 @@ export async function restoreProject() {
   // Restore vocabulary state and profile before opening its workspace.
   if (saved.details_sections && Object.keys(saved.details_sections).length) {
     $$("#video-form details[id]").forEach(el => {
-      el.open = Boolean(saved.details_sections[el.id]);
+      if (el.id in saved.details_sections) el.open = Boolean(saved.details_sections[el.id]);
     });
   } else if (saved.details_open !== undefined) {
     $$("#video-form details").forEach(el => el.open = Boolean(saved.details_open));
@@ -175,6 +176,17 @@ export async function restoreProject() {
     });
     syncDanceControls(form);
     syncInstrumentControls(form);
+    if (form.querySelector('.actor-select')) {
+      const container = document.getElementById('cast-checkbox-list');
+      const select = form.querySelector('.actor-select');
+      if (container && select) {
+        const selectedValues = new Set([...select.selectedOptions].map(o => o.value));
+        container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+          cb.checked = selectedValues.has(cb.value);
+          cb.closest('.cast-checkbox-item')?.classList.toggle('checked', cb.checked);
+        });
+      }
+    }
     form.querySelector(".style-select")?.dispatchEvent(new Event("change"));
   });
   $("#world-form")?.elements.world_mode.dispatchEvent(new Event("change"));
@@ -196,8 +208,7 @@ export async function restoreProject() {
     if (Array.isArray(fileState.references) && fileState.references.length) {
       fState.references = fileState.references;
       fState.referenceNames = fileState.referenceNames || fileState.references;
-      const receipt = form.querySelector(".refs-receipt");
-      if (receipt) receipt.textContent = fState.referenceNames.join(" · ");
+      renderReferenceReceipt(form, fState.referenceNames, fState.references);
       const refsInput = form.querySelector(".refs-input");
       if (refsInput && form.dataset.kind === "harvest") refsInput.required = false;
     }

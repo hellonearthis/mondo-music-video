@@ -3,6 +3,8 @@
 import { $, api, handle, notice, state } from "./core.js";
 import { updateVocabCustomBadge } from "./vocabulary.js";
 import { clearStoryboard } from "./storyboard.js";
+import { syncCastPickerUi } from "./library.js";
+import { renderReferenceReceipt } from "./production.js";
 import { resolutionSelect, scheduleSave, updateSongPreview } from "./project.js";
 
 const fillIfEmpty = (field, value) => { if (field && !field.value.trim()) field.value = value; };
@@ -29,6 +31,7 @@ export function applyPlan(form, plan, songName = "") {
   if (![...select.selectedOptions].some(item => item.value)) {
     [...select.options].forEach(item => { item.selected = plan.actors.includes(item.value); });
     setSelect(form.elements.dance_mode, plan.dance_mode);
+    syncCastPickerUi();
   }
   setSelect(form.elements.instrument_mode, "off");
   setSelect(form.elements.subliminal_mode, "off");
@@ -59,8 +62,9 @@ export function resetVideoPanel(form) {
   form.querySelector(".song-receipt").textContent = "Please load in your music.";
   form.querySelector(".song-input").required = true;
   updateSongPreview(form, "");
-  form.querySelector(".refs-receipt").textContent = "No additional images";
+  renderReferenceReceipt(form, [], []);
   clearStoryboard(form);
+  syncCastPickerUi();
   state.currentCustomVocab = {};
   state.currentVocabRandomKey = "";
   updateVocabCustomBadge();

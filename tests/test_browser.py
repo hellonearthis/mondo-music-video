@@ -38,6 +38,13 @@ def autosaved(page, action):
 @unittest.skipUnless(importlib.util.find_spec('playwright') and importlib.util.find_spec('comfy_sdk')
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
+
+def pick_cast(page, ids):
+    """Choose the cast through the visible checkbox list (the native select is hidden)."""
+    for box in page.locator('#cast-checkbox-list input[type=checkbox]').all():
+        box.set_checked(box.get_attribute('value') in ids)
+
+
 class BrowserTests(LiveAppFixture, unittest.TestCase):
     def test_storyboard_drafts_reorder_reload_and_keep_forms_independent(self):
         from playwright.sync_api import sync_playwright, expect
@@ -123,6 +130,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#start-fresh-confirm').click()
                 expect(page.locator('#video-form [name=title]')).to_have_value('')
                 expect(page.locator('#video-form [name=direction]')).to_have_value('')
+                expect(page.locator('#cast-checkbox-list input:checked')).to_have_count(0)
                 expect(page.locator('#video-form .song-receipt')).not_to_contain_text('keep.wav')
                 expect(page.locator('#video-form .song-preview-wrap')).to_be_hidden()
                 self.assertEqual(page.locator('#video-form [name=backend]').input_value(), backend)
@@ -268,7 +276,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('#opp-library')).to_contain_text('Blue Guitar')
                 page.locator('[data-panel="video"]').click()
                 form = page.locator('#video-form')
-                form.locator('.actor-select').select_option(['guitarist'])
+                pick_cast(page, ['guitarist'])
                 form.locator('[name=instrument_mode]').select_option('perform')
                 form.get_by_label('Guitarist instrument', exact=True).select_option('guitar')
                 expect(form.locator('.instrument-props')).to_be_visible()
@@ -301,11 +309,11 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 form = page.locator('#video-form')
                 expect(form.locator('.instrument-assignments')).to_be_hidden()
                 expect(form.locator('.instrument-notice')).to_have_count(0)
-                form.locator('.actor-select').select_option(['player_a', 'player_b'])
+                pick_cast(page, ['player_a', 'player_b'])
                 form.locator('[name=instrument_mode]').select_option('perform')
                 expect(form.locator('.instrument-notice')).to_have_count(0)
                 form.get_by_label('Player B instrument', exact=True).select_option('keyboards')
-                form.locator('.actor-select').select_option(['player_b'])
+                pick_cast(page, ['player_b'])
                 expect(form.get_by_label('Player B instrument', exact=True)).to_have_value('keyboards')
                 page.wait_for_timeout(800)
                 page.reload()
@@ -338,10 +346,10 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 form = page.locator('#video-form')
                 expect(form.locator('.dance-parts')).to_be_hidden()
-                form.locator('.actor-select').select_option(['dance_a', 'dance_b'])
+                pick_cast(page, ['dance_a', 'dance_b'])
                 form.locator('[name=dance_mode]').select_option('independent')
                 form.get_by_label('Dancer B part', exact=True).select_option('bass')
-                form.locator('.actor-select').select_option(['dance_b'])
+                pick_cast(page, ['dance_b'])
                 expect(form.get_by_label('Dancer B part', exact=True)).to_have_value('bass')
                 page.wait_for_timeout(1200)
                 page.reload()
@@ -578,7 +586,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.12')
+                expect(page.locator('#version')).to_have_text('1.10.20')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -679,6 +687,8 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.goto(self.url)
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 expect(page.locator('#panel-vocab')).to_be_visible()
+                # A draft saved before the format fold existed leaves it at its default (open).
+                self.assertTrue(page.evaluate('document.querySelector("#video-form details[id*=format]").open'))
                 # Summary cards render lazily, when the collapsed summary is first opened.
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 card = page.locator('.vocab-summary-cat-card[data-category=settings]')
@@ -692,11 +702,11 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 self.assertTrue(page.evaluate('window.otherCard === document.querySelector(".vocab-summary-cat-card[data-category=lighting]")'))
                 page.locator('#vocab-apply-btn').click()
                 expect(page.locator('#panel-video')).to_be_visible()
-                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False, False])
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, True, False, False])
                 page.wait_for_function('() => JSON.parse(localStorage.getItem("mmv_project_draft") || "{}").panel === "video"')
                 page.reload()
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
-                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False, False])
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, True, False, False])
                 page.locator('.nav[data-panel=vocab]').click()
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
@@ -1344,7 +1354,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.12')
+                expect(page.locator('#version')).to_have_text('1.10.20')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
