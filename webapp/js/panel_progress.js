@@ -64,6 +64,20 @@ const requirements = id => {
   return [];
 };
 
+function missingNeedsFor(unit) {
+  const missing = [];
+  if (unit.id === "card-track-direction") {
+    if (!songReady()) missing.push("Audio track (upload music)");
+    if (!Boolean(field("direction")?.value.trim()) || !field("direction").checkValidity()) missing.push("Visual direction");
+  } else if (unit.id === "card-cast-staging") {
+    if (needsReference() && !(castReady() || referenceReady())) missing.push("Cast actor or reference image");
+    if (field("instrument_mode")?.value === "perform" && !assignedPlayer()) missing.push("Assigned instrument player");
+  } else if (unit.id === "director-camera") {
+    if (needsReference() && field("ref_policy")?.value !== "all") missing.push("Reference policy: Use all references");
+  }
+  return missing;
+}
+
 function progressFor(unit) {
   if (unit.id === "director-control-room") return panelProgress([], []);
   const required = requirements(unit.id);
@@ -103,6 +117,32 @@ function paint(unit) {
   unit.element.style.setProperty("--progress-mix", `${Math.round(fraction * (required ? 100 : 25))}%`);
   unit.element.style.setProperty("--progress-mix-dark", `${Math.round(fraction * (required ? 30 : 8))}%`);
   if (unit.cue.textContent !== cue) unit.cue.textContent = cue;
+  const missing = missingNeedsFor(unit);
+  if (missing.length) {
+    unit.cue.dataset.tooltip = `Needs:\n• ${missing.join("\n• ")}`;
+  } else {
+    delete unit.cue.dataset.tooltip;
+  }
+
+  // Highlight individual needed labels
+  if (unit.id === "card-track-direction") {
+    const songGroup = unit.body.querySelector(".song-input")?.closest("label");
+    const dirGroup = unit.body.querySelector('[name="direction"]')?.closest("label");
+    if (songGroup) songGroup.classList.toggle("field-needed", !songReady());
+    if (dirGroup) dirGroup.classList.toggle("field-needed", !Boolean(field("direction")?.value.trim()) || !field("direction").checkValidity());
+  } else if (unit.id === "card-cast-staging") {
+    const castGroup = unit.body.querySelector(".cast-picker")?.closest("label") || unit.body.querySelector(".cast-picker");
+    const refGroup = unit.body.querySelector(".refs-input")?.closest("label");
+    const needsRef = needsReference() && !(castReady() || referenceReady());
+    if (castGroup) castGroup.classList.toggle("field-needed", needsRef);
+    if (refGroup) refGroup.classList.toggle("field-needed", needsRef);
+    const instGroup = unit.body.querySelector('[name="instrument_mode"]')?.closest("label");
+    if (instGroup) instGroup.classList.toggle("field-needed", field("instrument_mode")?.value === "perform" && !assignedPlayer());
+  } else if (unit.id === "director-camera") {
+    const refPolicyGroup = unit.body.querySelector('[name="ref_policy"]')?.closest("label");
+    if (refPolicyGroup) refPolicyGroup.classList.toggle("field-needed", needsReference() && field("ref_policy")?.value !== "all");
+  }
+
   unit.toggle?.setAttribute("aria-expanded", String(unit.open));
   if (unit.body && !unit.details) unit.body.hidden = !unit.open;
   if (unit.options) unit.options.hidden = status !== "done" || unit.open;
