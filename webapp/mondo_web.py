@@ -39,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.25"
+MGL_APP_VERSION = "1.10.26"
 WEB = Path(__file__).parent
 
 
@@ -1430,6 +1430,15 @@ def create_app(home=None, *, test_hosts=False):
         if not guide_path.exists():
             raise HTTPException(status_code=404, detail="Open Prop Protocol guide is not installed")
         return {"title": "What is Open Prop Protocol", "markdown": guide_path.read_text(encoding="utf-8")}
+
+    @app.get("/api/vision/guide")
+    def get_vision_guide():
+        guide_path = Path(__file__).parent.parent / "docs" / "QUALITY_VISION_SETUP.md"
+        if not guide_path.exists():
+            guide_path = Path(sys.prefix) / "share/mondo-music-video/docs/QUALITY_VISION_SETUP.md"
+        if not guide_path.exists():
+            raise HTTPException(status_code=404, detail="Quality Vision setup guide is not installed")
+        return {"title": "Quality Vision & Style Harvest Architecture Guide", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
     def list_vocabularies():

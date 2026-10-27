@@ -1694,53 +1694,6 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
 .refs-receipt .remove-ref { border:0;background:transparent;color:var(--green);font-size:12px;padding:3px 5px;cursor:pointer; }
 .refs-receipt .remove-ref:hover,.refs-receipt .remove-ref:focus-visible { text-decoration:underline; }
 
-/* Reference image context menu */
-.refs-context-menu {
-  position: fixed;
-  z-index: 1000;
-  background: #ffffff;
-  border: 1px solid var(--line);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-  border-radius: 6px;
-  padding: 4px;
-  min-width: 160px;
-}
-[data-theme=dark] .refs-context-menu {
-  background: #1e262a;
-  border-color: var(--line);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-.refs-context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  box-sizing: border-box;
-  background: transparent;
-  border: 0;
-  text-align: left;
-  padding: 7px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #a32222;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.refs-context-menu-item:hover,
-.refs-context-menu-item:focus {
-  background: #fee;
-  outline: 2px solid #a32222;
-  outline-offset: -2px;
-}
-[data-theme=dark] .refs-context-menu-item {
-  color: #ffc2a6;
-}
-[data-theme=dark] .refs-context-menu-item:hover,
-[data-theme=dark] .refs-context-menu-item:focus {
-  background: rgba(161, 59, 43, 0.25);
-}
-
 /* Actor inline description editor */
 
 /* Music-video input progress: only disclosure headers are shaded. */

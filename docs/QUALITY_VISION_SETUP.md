@@ -1,6 +1,19 @@
 # Quality Vision Setup & Architecture Guide
 
-This guide explains how **Quality Vision** works in Mondo Music Video, how it is derived and launched, what causes launch errors, and how to configure and verify it.
+This guide explains how **Vision Services** work in Mondo Music Video: the difference between **Style Harvest Vision** and **Quality Vision (Frame Checker)**, how each is configured and launched, and how to verify their operation.
+
+---
+
+## 0. Style Harvest Vision vs. Quality Vision (Frame Checker)
+
+Mondo uses two separate vision capabilities that serve distinct roles:
+
+| Capability | Role | When It Runs | Where It Is Configured | Needs mmproj? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Style Harvest Vision** | Reads uploaded reference images and writes an 11-axis visual style card (`CRAFT`, `GRAMMAR`, `AFFECT`, etc.) | When clicking **Preview harvest** on **05. Style Harvest** | In **12. Settings** under **Vision Service Endpoint** (e.g. `http://127.0.0.1:8080/v1` or remote API like Gemini / OpenAI) | **Yes** if using local `llama-server`; **No** if using an API provider |
+| **Quality Vision** | Inspects rendered video frames for unrequested borders, letterboxing, or visual artifacts | After video generation completes when **Vision quality check** is enabled | Derived automatically from **Writer Launch** command (`writer_launch`) in **12. Settings**; boots dynamically on port `8083` | **Yes**, requires a sibling `mmproj*.gguf` in the writer model directory |
+
+> **Note for Style Harvesting:** You do **not** need Quality Vision to harvest visual styles. Style Harvest only requires your standard **Vision Service Endpoint** in Settings.
 
 ---
 

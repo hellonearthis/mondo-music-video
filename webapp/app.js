@@ -1,7 +1,7 @@
 // Mondo Music Video — Application Entry Point & Orchestrator.
 
 import { $, $$, api, initThemeToggle, notice, option, state, text } from "./js/core.js";
-import { setupLlamaGuide, setupOapGuide, setupOppGuide, setupVocabGuide } from "./js/guides.js";
+import { setupLlamaGuide, setupOapGuide, setupOppGuide, setupVisionGuide, setupVocabGuide } from "./js/guides.js";
 import { initComponentLabeling } from "./js/component_labeling.js";
 import { initFileDropTargets } from "./js/file_drop.js";
 import { initQuickStart } from "./js/quick_start.js";
@@ -68,6 +68,7 @@ async function initialize() {
   setupOppGuide();
   setupLlamaGuide();
   setupVocabGuide();
+  setupVisionGuide();
   loadUpdateStatus();
   loadSchemeNotice();
 

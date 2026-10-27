@@ -5,6 +5,7 @@ import { renderMarkdown } from "./markdown.js";
 
 let vocabDocLoaded = false;
 let oppDocLoaded = false;
+let visionDocLoaded = false;
 
 export function setupOapGuide() {
   const dialog = $("#oap-helper-dialog");
@@ -307,6 +308,104 @@ export function setupOppGuide() {
   }
 
   const guideBody = $("#opp-guide-body");
+  if (guideBody) {
+    guideBody.onclick = handle(async (event) => {
+      const copyCodeBtn = event.target.closest(".md-copy-btn");
+      if (!copyCodeBtn) return;
+      const codeBlock = copyCodeBtn.closest(".md-code-block");
+      const codeText = codeBlock?.querySelector("code")?.textContent || "";
+      if (!codeText) return;
+      if (!await copyToClipboard(codeText)) throw new Error("Could not copy code snippet.");
+      notice("Code snippet copied to clipboard.");
+      const origText = copyCodeBtn.textContent;
+      copyCodeBtn.textContent = "✓ Copied";
+      setTimeout(() => { copyCodeBtn.textContent = origText; }, 2000);
+    });
+  }
+}
+
+
+export async function loadVisionGuideMarkdown() {
+  if (visionDocLoaded) return;
+  const rawPre = $("#vision-guide-raw");
+  const formattedDiv = $("#vision-guide-formatted");
+  if (!rawPre && !formattedDiv) return;
+  try {
+    const resp = await api("/api/vision/guide");
+    if (resp.ok) {
+      const data = await resp.json();
+      const markdown = data.markdown || "Guide content empty.";
+      if (rawPre) rawPre.textContent = markdown;
+      if (formattedDiv) formattedDiv.innerHTML = renderMarkdown(markdown);
+      visionDocLoaded = true;
+    } else {
+      if (rawPre) rawPre.textContent = "Could not load the Vision setup guide.";
+      if (formattedDiv) formattedDiv.innerHTML = "<p>Could not load the Vision setup guide.</p>";
+    }
+  } catch {
+    if (rawPre) rawPre.textContent = "Error fetching Vision setup guide from server.";
+    if (formattedDiv) formattedDiv.innerHTML = "<p>Error fetching Vision setup guide from server.</p>";
+  }
+}
+
+export function setupVisionGuide() {
+  const dialog = $("#vision-helper-dialog");
+  if (!dialog) return;
+
+  loadVisionGuideMarkdown().catch(() => {});
+
+  $$(".vision-help-btn").forEach(btn => {
+    btn.onclick = () => {
+      loadVisionGuideMarkdown();
+      dialog.showModal();
+    };
+  });
+
+  $$(".close-vision-dialog").forEach(btn => {
+    btn.onclick = () => {
+      dialog.close();
+    };
+  });
+
+  $$(".nav-to-settings-vision-btn").forEach(btn => {
+    btn.onclick = () => {
+      if (dialog.open) dialog.close();
+      const settingsNav = document.querySelector('.nav[data-panel="settings"]');
+      if (settingsNav) settingsNav.click();
+    };
+  });
+
+  const toggleRawBtn = $("#toggle-vision-raw-btn");
+  if (toggleRawBtn) {
+    toggleRawBtn.onclick = () => {
+      const rawPre = $("#vision-guide-raw");
+      const formattedDiv = $("#vision-guide-formatted");
+      if (!rawPre || !formattedDiv) return;
+      const isRawVisible = !rawPre.hidden;
+      rawPre.hidden = isRawVisible;
+      formattedDiv.hidden = !isRawVisible;
+      toggleRawBtn.textContent = isRawVisible ? "View raw markdown" : "View formatted guide";
+    };
+  }
+
+  const copyBtn = $("#copy-vision-doc-btn");
+  if (copyBtn) {
+    copyBtn.onclick = handle(async () => {
+      await loadVisionGuideMarkdown();
+      const rawPre = $("#vision-guide-raw");
+      const content = rawPre ? rawPre.textContent : "";
+      if (!content || content.startsWith("Error") || content.startsWith("Could not")) {
+        throw new Error("No guide document available to copy.");
+      }
+      if (!await copyToClipboard(content)) throw new Error("Could not copy document to clipboard.");
+      notice("Vision Architecture Guide copied to clipboard.");
+      const origText = copyBtn.textContent;
+      copyBtn.textContent = "✓ Copied!";
+      setTimeout(() => { copyBtn.textContent = origText; }, 2500);
+    });
+  }
+
+  const guideBody = $("#vision-guide-body");
   if (guideBody) {
     guideBody.onclick = handle(async (event) => {
       const copyCodeBtn = event.target.closest(".md-copy-btn");

@@ -27,24 +27,10 @@ const escapeHtml = (s = "") =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
-import { hideTooltip } from "./tooltips.js";
-
-let activeRefsContextMenu = null;
-let activeRefsTrigger = null;
-
 export const removeReferenceAtIndex = (references = [], names = [], indexToRemove = -1) => ({
   references: references.filter((_, index) => index !== indexToRemove),
   names: names.filter((_, index) => index !== indexToRemove)
 });
-
-export function closeRefsContextMenu(restoreFocus = false) {
-  if (activeRefsContextMenu) {
-    activeRefsContextMenu.remove();
-    activeRefsContextMenu = null;
-  }
-  if (restoreFocus && activeRefsTrigger?.isConnected) activeRefsTrigger.focus();
-  activeRefsTrigger = null;
-}
 
 function removeReference(form, index) {
   const fState = state.formFiles.get(form);
@@ -61,43 +47,6 @@ function removeReference(form, index) {
   scheduleSave();
 }
 
-export function openRefsContextMenu(event, form, index) {
-  event.preventDefault();
-  event.stopPropagation();
-  hideTooltip(true);
-  closeRefsContextMenu();
-  activeRefsTrigger = event.target.closest("li")?.querySelector(".remove-ref");
-
-  const menu = document.createElement("div");
-  menu.className = "refs-context-menu";
-  menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", "Reference image actions");
-
-  const removeButton = document.createElement("button");
-  removeButton.type = "button";
-  removeButton.className = "refs-context-menu-item";
-  removeButton.setAttribute("role", "menuitem");
-  removeButton.textContent = "Remove from list";
-  removeButton.onclick = () => {
-    closeRefsContextMenu();
-    removeReference(form, index);
-  };
-
-  menu.appendChild(removeButton);
-  document.body.appendChild(menu);
-
-  const menuWidth = 160;
-  const menuHeight = 40;
-  const padding = 10;
-  const left = Math.min(event.clientX, window.innerWidth - menuWidth - padding);
-  const top = Math.min(event.clientY, window.innerHeight - menuHeight - padding);
-  menu.style.left = `${Math.max(padding, left)}px`;
-  menu.style.top = `${Math.max(padding, top)}px`;
-
-  activeRefsContextMenu = menu;
-  removeButton.focus({ preventScroll: true });
-}
-
 // The form has flat subliminal_* fields; the request carries them as one nested object.
 
 export function renderReferenceReceipt(form, names = [], hashes = []) {
@@ -110,10 +59,9 @@ export function renderReferenceReceipt(form, names = [], hashes = []) {
   const items = names.map((name, i) => {
     const hash = hashes[i];
     const titleText = `Reference: ${escapeHtml(name)}`;
-    const footerText = "Right click to remove from list";
     const imgAttr = hash
-      ? ` data-tooltip="${titleText}" data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-footer="${footerText}" data-tooltip-position="top"`
-      : ` data-tooltip="${titleText}\n${footerText}"`;
+      ? ` data-tooltip="${titleText}" data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"`
+      : ` data-tooltip="${titleText}"`;
     return `<li><code data-ref-index="${i}"${imgAttr}>${escapeHtml(name)}</code><button type="button" class="remove-ref" data-ref-index="${i}" aria-label="Remove reference image ${escapeHtml(name)}">Remove</button></li>`;
   }).join("");
   receipt.innerHTML = `<ul class="file-list">${items}</ul>`;
@@ -712,27 +660,8 @@ export function initProductionForms() {
         const button = event.target.closest("button.remove-ref");
         if (button) removeReference(form, Number(button.dataset.refIndex));
       });
-      refsReceipt.addEventListener("contextmenu", event => {
-        const code = event.target.closest("code[data-ref-index]");
-        if (!code) return;
-        const index = parseInt(code.dataset.refIndex, 10);
-        if (Number.isNaN(index)) return;
-        openRefsContextMenu(event, form, index);
-      });
     }
   });
-
-  document.addEventListener("click", event => {
-    if (!event.target.closest(".refs-context-menu")) {
-      closeRefsContextMenu();
-    }
-  });
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      closeRefsContextMenu(true);
-    }
-  });
-  window.addEventListener("resize", () => closeRefsContextMenu());
 }
 
 export function initOperationControls() {
