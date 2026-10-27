@@ -435,6 +435,26 @@ export function scoreView(output, video) {
   return box;
 }
 
+const THUMBNAIL_SLOTS = 2;
+const THUMBNAIL_TIMEOUT_MS = 5000;
+
+// Ask for the first frame; resolves once the browser stops fetching (or gives up).
+const loadThumbnail = video => new Promise(resolve => {
+  if (!video.isConnected) return resolve();
+  const timer = setTimeout(resolve, THUMBNAIL_TIMEOUT_MS);
+  ["suspend", "error"].forEach(name => video.addEventListener(name, () => { clearTimeout(timer); resolve(); }, { once: true }));
+  video.preload = "metadata";
+  video.load();
+});
+
+// A few at a time, so the list never holds most of the browser's connections (see 1.10.12).
+const loadThumbnails = videos => {
+  const queue = [...videos];
+  return Promise.all(Array.from({ length: THUMBNAIL_SLOTS }, async () => {
+    for (let video; (video = queue.shift());) await loadThumbnail(video);
+  }));
+};
+
 export async function loadOutputs() {
   const outputs = await (await api("/api/outputs")).json();
   scoreViews.forEach(view => view.dispose());
@@ -444,7 +464,7 @@ export async function loadOutputs() {
     const video = document.createElement("video");
     video.src = "/api/media/" + output.file;
     video.controls = true;
-    video.preload = "metadata";
+    video.preload = "none";
     video.dataset.tooltip = `Video player for ${output.title}`;
     video.title = video.dataset.tooltip;
 
@@ -486,6 +506,7 @@ export async function loadOutputs() {
     card.append(actions);
     return card;
   }));
+  loadThumbnails($$("#output-list video"));
 
   if (!outputs.length) {
     $("#output-list").append(text("div", "Your finished videos and idents will appear here.", "empty", "No completed productions yet"));

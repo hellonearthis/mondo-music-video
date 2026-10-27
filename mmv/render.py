@@ -15,19 +15,21 @@ from pathlib import Path
 
 from .jobs import Cancelled
 from .storage import inside, write_json
+from .engine.backends.wavespeed import MIN_REFERENCE_IMAGES as WAVESPEED_MIN_REFERENCE_IMAGES
 
 # Provider documentation checked 2026-10-15; estimates are displayed, not guarantees.
 CATALOG = {
-    "local_h3": {"name": "Local H3 / ComfyUI", "rates": {}, "resolutions": ["768p"]},
-    "comfy_sdk_h3": {"name": "H3 / Comfy SDK (local proxy)", "rates": {}, "resolutions": ["768p"]},
+    "local_h3": {"name": "Local H3 / ComfyUI", "rates": {}, "resolutions": ["768p"], "min_reference_images": 0},
+    "comfy_sdk_h3": {"name": "H3 / Comfy SDK (local proxy)", "rates": {}, "resolutions": ["768p"], "min_reference_images": 0},
     "wavespeed": {"name": "WaveSpeed H3", "path": "minimax/h3/reference-to-video",
-                  "rates": {"768p": .10, "2k": .14}, "resolutions": ["768p", "2k"]},
+                  "rates": {"768p": .10, "2k": .14}, "resolutions": ["768p", "2k"],
+                  "min_reference_images": WAVESPEED_MIN_REFERENCE_IMAGES},
     "seedance_2": {"name": "Seedance 2.0 / WaveSpeed", "path": "bytedance/seedance-2.0/text-to-video",
                    "rates": {"480p": .12, "720p": .24, "1080p": .60, "4k": 1.20},
-                   "resolutions": ["480p", "720p", "1080p", "4k"]},
+                   "resolutions": ["480p", "720p", "1080p", "4k"], "min_reference_images": 0},
     "seedance_2_5": {"name": "Seedance 2.5 / WaveSpeed", "path": "bytedance/seedance-2.5/text-to-video",
                      "rates": {"480p": .18, "720p": .36, "1080p": .90, "4k": 1.80},
-                     "resolutions": ["480p", "720p", "1080p", "4k"]},
+                     "resolutions": ["480p", "720p", "1080p", "4k"], "min_reference_images": 0},
 }
 BASE = "https://api.wavespeed.ai/api/v3"
 

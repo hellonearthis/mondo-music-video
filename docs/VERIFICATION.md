@@ -1,4 +1,38 @@
-# Verification — 1.10.10
+# Verification — 1.10.23
+
+## 1.10.23 — World editor
+
+Focused tests added for the edit rules (next version, sources kept, stale base, no-op and oversize refusals), the REST routes,
+the agent client, CLI and MCP (confirmation guard, 58 tools), and a browser test that edits a world, previews, saves and
+checks that the earlier version is intact. The full temporary-data/mock-service/browser suite passed on the final code: **776 tests and 141 subtests**, 228.28 seconds (an earlier
+run caught a stale 56-tool assertion in `tests/test_vision_stage.py`, now 58). The live app was restarted idle on port 8091 and
+reported 1.10.23; the Worlds buttons were checked against the Outputs cards in the dark theme.
+
+## 1.10.22 — Growing a world
+
+The full temporary-data/mock-service/browser suite passed on the changed code: **772 tests and 141 subtests**, 229.41 seconds
+(run before the version label moved from 1.10.21; the version assertions were then rerun at 1.10.22). New tests cover an echoed
+ledger changing nothing, additions merging without duplicates, a reply without a name, a list at its limit, and the
+additions-only prompt. The owner then grew their Fehenviz world with real lore and a finished video and confirmed that it added
+entries. No paid or automated GPU work was run.
+
+## 1.10.21 — Fork UI, panel progress and public OAP collection
+
+The full temporary-data/mock-service/browser suite passed: **770 tests and 141
+subtests**, 230.33 seconds. Focused OAP collection checks covered explicit index
+checking, checksum and signature verification, changed-index rejection, unsafe
+path rejection, and the separate signer-acceptance import. The browser check
+confirmed that the collection is not queried on page load. JavaScript syntax,
+`git diff --check`, a fresh version-handler import and protected-scheme check
+passed (`[]`). A wheel contained the new Python and JavaScript modules and OPP
+guide; its bundled OAP packages were still exactly the original four.
+
+The previously idle app was restarted with its existing data on port 8091 and
+automatic installation disabled. Live `/api/version` reported 1.10.21 and the
+served OAP collection module returned HTTP 200. In a live Playwright browser,
+Actors & OAP found five missing OAP 0.3.0 packages on request, with sizes and
+CC BY 4.0 attribution. No package was imported, no paid or GPU work ran, and
+the protected prompts were not changed. Browser refresh is required.
 
 ## 1.10.10 — OPP v0.2
 

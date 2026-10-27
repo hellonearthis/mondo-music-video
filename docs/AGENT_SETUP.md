@@ -42,13 +42,26 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.8 exposes **54 tools** and advertises the
+v1.10.23 exposes **58 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
 
-Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. See [Worlds](WORLDS.md).
+`update_actor(actor_id, description)` changes only a locally created actor's visual description while idle; imported signed OAP actors require a revised package from the signer. The CLI equivalent is `mondo-music-video-agent update-actor ID DESCRIPTION`. Use `inspect_studio(kind="opp-guide")` or `mondo-music-video-agent opp-guide` for the OPP guide. The `auto_collapse_panels` preference is available through `update_studio_settings`, `AgentClient.update_settings`, and `mondo-music-video-agent update-settings '{"auto_collapse_panels":false}'`. It defaults to true. Panel **Done** means required form inputs are present; agents still request a preview quote and explicit start consent.
+
+To check the public OAP actor collection, call `check_oap_collection` (or
+`inspect_studio(kind="oap-collection")`; CLI `oap-collection`). This checks only
+the published index and marks actors already installed. For a chosen missing
+actor, call `stage_oap_collection(actor_id, index_sha256)` (CLI
+`oap-collection-stage ID INDEX_SHA256`). Staging downloads and verifies one
+signed package without importing it. Review the returned manifest, signer,
+license and rider, then use the existing `import_oap` action only after the
+operator explicitly accepts that signer. The original four packages are OAP
+v0.2; newer collection packages can be v0.3. This flow does not change the
+built-in starter roster or overwrite an installed actor.
+
+Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. To change a world by hand, read it with `get_world`, edit the ledger, show the user `preview_world_edit(world_id, world)` (or CLI `world-edit-preview ID FILE`), then call `edit_world(world_id, world, confirm=true)` (CLI `edit-world ID FILE --confirm`) only after they have reviewed the changes; it saves a new version and fails if the world changed since it was read. See [Worlds](WORLDS.md).
 
 The browser's file drop areas are a selection shortcut. Agents use the existing
 `upload_media`/CLI `upload` for songs, references and packages (including OPP props), or the actor
@@ -237,12 +250,13 @@ Agreements do not move money, approve rider exceptions or establish signer trust
 
 | Tool | Purpose and boundary |
 | --- | --- |
-| `inspect_studio` | Read version, status, catalog, actors, styles, outputs, settings/profile metadata or update notice (`kind="update"`). No secret values. |
+| `inspect_studio` | Read version, status, catalog, actors, styles, outputs, settings/profile metadata, the OPP guide (`kind="opp-guide"`) or update notice (`kind="update"`). No secret values. |
 | `inspect_api_models` | Inspect an explicitly selected provider's advertised model IDs. A successful listing does not prove chat/video compatibility. |
 | `add_api_profile` | Save a new writer/vision/supported-video profile with role-specific `settings`. Names cannot overwrite another account. Optional `key_env` names an existing variable in the MCP server process; never pass a literal key. Without it, a new configuration has no key until configured. |
 | `select_api_profile` | Activate a named account/model for its role while idle, retaining the other roles and manual defaults. No generation. |
 | `remove_api_profile` | With user authorization and `confirm=true`, delete that profile and its saved credential. If active, restore that role's prior manual configuration. |
-| `update_studio_settings` | Patch supported model/service/profile preferences, Laya device, H3 model selections, or the auto-update switch. Executable launch commands and secret values are excluded; configure those with the installer/GUI. |
+| `update_studio_settings` | Patch supported model/service/profile preferences, Laya device, H3 model selections, auto-update switch or `auto_collapse_panels`. Executable launch commands and secret values are excluded; configure those with the installer/GUI. |
+| `update_actor` | Change a locally created actor's visual description while idle. Imported signed OAP actors require a revised package from their signer. |
 | `install_starter_assets` | Install only the four public actors and six styles, preserving existing items and removals. Without signer acceptance, return pending actors, public signer and riders for review. Set `accept_starter_signer` only with user acceptance; set `restore_removed` only when explicitly restoring deleted starters. |
 | `delete_actor`, `delete_style` | Remove an unwanted local asset with authorization and `confirm=true`, keeping completed outputs/exports. Production blocks deletion. |
 | `export_style` | Retrieve a visual style card as JSON, including its 11-axis breakdown when present. |

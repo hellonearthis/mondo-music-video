@@ -1,5 +1,19 @@
 # Collaborator review record
 
+## Fork `1e097874` reviewed (release 1.10.21, 2026-10-26)
+
+Reviewed an isolated clone of [hellonearthis](https://github.com/hellonearthis)'s fork at exact revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b`, one commit after last reviewed `db7bec7`. Claude Code Sonnet 5.5 supplied a bounded read-only peer review; Codex checked the patch and integrated it. The commit adds actor inline editing, a wider actor grid, an OPP guide, dark selection contrast and version assertions.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Inline actor description edit | Adopted with agent client, CLI and MCP parity. Restricted to locally created actors: changing the local description of an imported signed OAP actor would disagree with its preserved original export. Empty descriptions are refused. A visible Edit button makes the action keyboard accessible; double-click remains. |
+| Wider actor grid | Adopted with a responsive minimum so phone viewports do not overflow. |
+| OPP guide and dialog | Adopted. Corrected the guide's archive size wording to match `mmv/props.py`; package data includes the guide for installed apps. Missing guide returns an error instead of a successful empty guide. Agents can inspect it too. |
+| Dark text selection contrast | Adopted. |
+| Actor form textarea | Fixed malformed `maxlength`/placeholder markup in the fork patch. |
+
+The panel progress design in `.collaboration/PANEL_PROGRESS_DESIGN.md` was implemented in the same release at the owner's request. It is a GUI state view; the server's quote and consent checks remain authoritative. No fork history merge, private asset import, protected-prompt edit, paid/GPU work, commit or push was made during review.
+
 ## Fork `56d9f04` reviewed (release 1.10.6, 2026-10-22)
 
 Reviewed from an isolated clone of `hellonearthis/mondo-music-video` at exact head `56d9f04` (one commit after the previously reviewed `c699179`), by [hellonearthis](https://github.com/hellonearthis). The fork labels it 1.10.2, which collides with our 1.10.2, so it ships here as 1.10.6.
@@ -294,6 +308,21 @@ reviewed and adopted by hand (releases 1.6.4 to 1.6.11). The files touched by
 those commits were listed first and contained only source and documentation, no
 actors, media, models, keys or data. This is an exception to the rule against
 sharing Git object stores with the fork and is not a precedent.
+
+## October 26, 2026 — fork integration, head db7bec7 (release 1.10.20)
+
+Fetched at task start into an isolated checkout; reviewed `26719de..db7bec7` (fork 1.10.15–1.10.20). Codex (medium effort, read-only) and Claude Code reviewed independently.
+
+| Change | Decision | Reason and evidence |
+| --- | --- | --- |
+| 1.10.15 tooltip and receipt wording | Adopted | Clean apply. |
+| 1.10.16 retire pseudo-random vocabulary controls | Adopted | The fork authored the feature we took in 1.6.11 and now retires it. No agent/CLI/MCP path used it; `vocab_random_key` kept for old drafts. Old keys cannot be re-applied from the GUI; a selection already saved still restores. |
+| 1.10.17 format fold | Adopted with a fix | Older drafts closed the new fold; restore now leaves unlisted folds at their default. Fold-state test expectations updated. |
+| 1.10.18 cast checkboxes | Adopted with a fix | Quick Start and Start fresh did not update the checkboxes; both now call `syncCastPickerUi`. The fork's browser tests drove the now-hidden select; they use `pick_cast`. |
+| 1.10.19–1.10.20 reference list, layout | Adopted | Escaping verified; layout CSS merged by hand where the stylesheet tail differed. |
+| Version label | Matches the fork (1.10.20) | Our 1.10.12 release notes retained. |
+
+Open: sidebar order places library tabs ahead of Harvest, Vocabulary and Worlds (pre-existing, not from these commits). A browser test with quotes or markup in an actor name or reference filename is not yet added.
 
 ## October 19, 2026 — fork integration, head dc71556 (release 1.6.11)
 

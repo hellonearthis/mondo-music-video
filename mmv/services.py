@@ -409,10 +409,17 @@ def check_required_services(store, request: dict, resume: bool = False) -> list[
 
     if kind in ("harvest", "world_harvest", "storyboard"):
         vision = services.get("vision", {})
-        if not vision.get("available"):
+        from .vision_service import is_up, launch_plan
+        settings = store.settings()
+        if not is_up(settings):
+            try:
+                launch_plan(settings)
+                return errors  # offline, but Mondo can start it when the job begins
+            except ValueError as why:
+                reason = f" Mondo could not start it: {why}."
             endpoint = vision.get("url") or "unconfigured"
             errors.append(
-                f"Vision engine is offline or unreachable ({endpoint}). "
+                f"Vision engine is offline or unreachable ({endpoint}).{reason} "
                 f"Multimodal {'storyboard interpretation' if kind == 'storyboard' else 'world reading' if kind == 'world_harvest' else 'style harvesting'} requires a running vision model or API configuration in Settings."
             )
         return errors

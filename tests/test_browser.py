@@ -38,7 +38,128 @@ def autosaved(page, action):
 @unittest.skipUnless(importlib.util.find_spec('playwright') and importlib.util.find_spec('comfy_sdk')
                      and _cached_chromium(),
                      'optional Playwright, cached Chromium and SDK required')
+
+def pick_cast(page, ids):
+    """Choose the cast through the visible checkbox list (the native select is hidden)."""
+    for box in page.locator('#cast-checkbox-list input[type=checkbox]').all():
+        box.set_checked(box.get_attribute('value') in ids)
+
+
 class BrowserTests(LiveAppFixture, unittest.TestCase):
+    def test_public_oap_collection_is_on_demand_and_stages_for_review(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            requests = []
+            listing = {"source": "https://github.com/hodgemann/oap-actors", "license": "CC-BY-4.0",
+                       "attribution": "Maximum Goose Laboratory", "index_sha256": "a" * 64,
+                       "actors": [{"id": "human_female_baker_01", "name": "Baker", "bytes": 4064775,
+                                   "oap_version": "0.3.0", "signer": {"public_key": "test-signer"}, "installed": False}]}
+            staged = {"filename": "checked.oap", "manifest": {
+                "identity": {"actor_id": "human_female_baker_01", "display_name": "Baker"},
+                "agent": {"public_key": "test-signer"}, "rider": {"content": {"violence": "action"}}},
+                "verification": {"ok": True, "signature_valid": True, "agent_known": False}}
+            page.route('**/api/oap-collection/stage', lambda route: (requests.append('stage'), route.fulfill(json=staged)))
+            page.route('**/api/oap-collection', lambda route: (requests.append('check'), route.fulfill(json=listing)))
+            try:
+                page.goto(self.url)
+                expect(page.locator('#oap-collection-fold')).to_have_count(1)
+                self.assertEqual(requests, [])
+                page.locator('.nav[data-panel="actors"]').click()
+                page.locator('#oap-collection-fold summary').click()
+                page.locator('#check-oap-collection').click()
+                expect(page.locator('#oap-collection-list')).to_contain_text('OAP 0.3.0')
+                self.assertEqual(requests, ['check'])
+                page.locator('#oap-collection-list button').click()
+                expect(page.locator('#oap-report-card')).to_contain_text('test-signer')
+                expect(page.locator('#oap-import-form')).to_be_visible()
+                expect(page.locator('#oap-import-form [name=accept_unknown]')).not_to_be_checked()
+                self.assertEqual(requests, ['check', 'stage'])
+            finally:
+                browser.close()
+
+    def test_music_video_panel_progress_blur_partial_review_and_restore(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                first = page.locator('[data-component-id="card-track-direction"]')
+                second = page.locator('[data-component-id="card-cast-staging"]')
+                expect(first.locator('.progress-cue')).to_have_text('Needs 2')
+                expect(second.locator('.progress-cue')).to_have_text('Optional')
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                page.locator('#video-form textarea[name=direction]').fill('A sunlit coastline in motion.')
+                expect(first.locator('.progress-cue')).to_have_text('Needs 1')
+                page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(first.locator('.song-receipt')).to_contain_text('Uploaded:')
+                page.locator('#panel-video h1').click()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'false')
+                expect(first.locator('.progress-cue')).to_have_text('✓ Done')
+                first.locator('.progress-options').click()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'true')
+                expect(first.locator('textarea[name=direction]')).to_be_hidden()
+                expect(first.locator('input[name=title]')).to_be_visible()
+                first.locator('.progress-toggle').click()
+                first.locator('.progress-toggle').click()
+                first.locator('input[name=title]').fill('Optional title')
+                page.locator('#panel-video h1').click()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'true')
+                first.locator('textarea[name=direction]').fill('')
+                expect(first.locator('.progress-cue')).to_have_text('Needs 1')
+                first.locator('.progress-toggle').click()
+                expect(first.locator('.progress-cue')).to_have_text('Needs 1')
+                page.evaluate('''async () => (await import('/js/panel_progress.js')).showPanelForQuoteError('This renderer needs a reference in every passage. Choose an actor/image and Reference policy: All')''')
+                self.assertTrue(page.evaluate('document.querySelector("#director-camera").open'))
+                second.locator('.progress-toggle').click()
+                expect(second.locator('.progress-cue')).to_have_text('✓ Reviewed')
+                page.locator('#director-format summary').click()
+                expect(page.locator('#director-format .progress-cue')).to_have_text('✓ Reviewed')
+                expect(page.locator('[data-component-id="director-control-room"] .progress-cue').first).to_have_text('1 of 4 reviewed')
+                page.wait_for_timeout(500)
+                page.reload()
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'false')
+                expect(second.locator('.progress-cue')).to_have_text('✓ Reviewed')
+                expect(page.locator('#director-format .progress-cue')).to_have_text('✓ Reviewed')
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_panel_progress_setting_and_renderer_requirement(self):
+        from playwright.sync_api import sync_playwright, expect
+        self.fixture.client.patch('/api/settings', json={'auto_collapse_panels': False}).raise_for_status()
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
+                first = page.locator('[data-component-id="card-track-direction"]')
+                page.locator('#video-form .song-input').set_input_files(str(self.song))
+                expect(first.locator('.song-receipt')).to_contain_text('Uploaded:')
+                first.locator('textarea[name=direction]').fill('A moving coast at sunrise.')
+                page.locator('#panel-video h1').click()
+                expect(first.locator('.progress-cue')).to_have_text('✓ Done')
+                expect(first.locator('.progress-toggle')).to_have_attribute('aria-expanded', 'true')
+                page.locator('#director-camera summary').click()
+                page.locator('#director-camera [name=ref_policy]').select_option('single_subject')
+                page.locator('#video-form [name=backend]').select_option('wavespeed')
+                expect(page.locator('[data-component-id="card-cast-staging"] .progress-cue')).to_have_text('Needs 1')
+                expect(page.locator('#director-camera .progress-cue')).to_have_text('Needs 1')
+                page.locator('#director-camera [name=ref_policy]').select_option('all')
+                expect(page.locator('#director-camera .progress-cue')).to_have_text('✓ Done')
+                page.locator('#panel-video h1').click()
+                self.assertTrue(page.evaluate('document.querySelector("#director-camera").open'))
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_storyboard_drafts_reorder_reload_and_keep_forms_independent(self):
         from playwright.sync_api import sync_playwright, expect
         with sync_playwright() as p:
@@ -123,6 +244,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#start-fresh-confirm').click()
                 expect(page.locator('#video-form [name=title]')).to_have_value('')
                 expect(page.locator('#video-form [name=direction]')).to_have_value('')
+                expect(page.locator('#cast-checkbox-list input:checked')).to_have_count(0)
                 expect(page.locator('#video-form .song-receipt')).not_to_contain_text('keep.wav')
                 expect(page.locator('#video-form .song-preview-wrap')).to_be_hidden()
                 self.assertEqual(page.locator('#video-form [name=backend]').input_value(), backend)
@@ -268,7 +390,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('#opp-library')).to_contain_text('Blue Guitar')
                 page.locator('[data-panel="video"]').click()
                 form = page.locator('#video-form')
-                form.locator('.actor-select').select_option(['guitarist'])
+                pick_cast(page, ['guitarist'])
                 form.locator('[name=instrument_mode]').select_option('perform')
                 form.get_by_label('Guitarist instrument', exact=True).select_option('guitar')
                 expect(form.locator('.instrument-props')).to_be_visible()
@@ -301,11 +423,11 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 form = page.locator('#video-form')
                 expect(form.locator('.instrument-assignments')).to_be_hidden()
                 expect(form.locator('.instrument-notice')).to_have_count(0)
-                form.locator('.actor-select').select_option(['player_a', 'player_b'])
+                pick_cast(page, ['player_a', 'player_b'])
                 form.locator('[name=instrument_mode]').select_option('perform')
                 expect(form.locator('.instrument-notice')).to_have_count(0)
                 form.get_by_label('Player B instrument', exact=True).select_option('keyboards')
-                form.locator('.actor-select').select_option(['player_b'])
+                pick_cast(page, ['player_b'])
                 expect(form.get_by_label('Player B instrument', exact=True)).to_have_value('keyboards')
                 page.wait_for_timeout(800)
                 page.reload()
@@ -338,10 +460,10 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 form = page.locator('#video-form')
                 expect(form.locator('.dance-parts')).to_be_hidden()
-                form.locator('.actor-select').select_option(['dance_a', 'dance_b'])
+                pick_cast(page, ['dance_a', 'dance_b'])
                 form.locator('[name=dance_mode]').select_option('independent')
                 form.get_by_label('Dancer B part', exact=True).select_option('bass')
-                form.locator('.actor-select').select_option(['dance_b'])
+                pick_cast(page, ['dance_b'])
                 expect(form.get_by_label('Dancer B part', exact=True)).to_have_value('bass')
                 page.wait_for_timeout(1200)
                 page.reload()
@@ -578,7 +700,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.21')
+                expect(page.locator('#version')).to_have_text('1.10.23')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -679,6 +801,8 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.goto(self.url)
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
                 expect(page.locator('#panel-vocab')).to_be_visible()
+                # A draft saved before the format fold existed leaves it at its default (open).
+                self.assertTrue(page.evaluate('document.querySelector("#video-form details[id*=format]").open'))
                 # Summary cards render lazily, when the collapsed summary is first opened.
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 card = page.locator('.vocab-summary-cat-card[data-category=settings]')
@@ -692,11 +816,11 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 self.assertTrue(page.evaluate('window.otherCard === document.querySelector(".vocab-summary-cat-card[data-category=lighting]")'))
                 page.locator('#vocab-apply-btn').click()
                 expect(page.locator('#panel-video')).to_be_visible()
-                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False, False, False])
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, True, False, False])
                 page.wait_for_function('() => JSON.parse(localStorage.getItem("mmv_project_draft") || "{}").panel === "video"')
                 page.reload()
                 page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
-                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, False, False, False])
+                self.assertEqual(page.locator('#video-form details').evaluate_all('(els) => els.map(el => el.open)'), [False, False, True, True, False, False])
                 page.locator('.nav[data-panel=vocab]').click()
                 page.locator('#vocab-random-summary-details').evaluate('(el) => el.open = true')
                 expect(page.locator('.vocab-summary-cat-card[data-category=settings]')).to_contain_text('Remaining fixture')
@@ -726,8 +850,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(page.locator('#world-proposals-card')).to_be_visible()
                 expect(page.locator('#world-proposals .world-diff-add')).to_contain_text('<b>Nothing leaves unfiled</b>')
                 self.assertEqual(page.locator('#world-proposals b').count(), 0)
-                page.locator('#worlds-list button', has_text='Open').click()
+                page.locator('#worlds-list button:text-is("Open")').click()
                 expect(page.locator('#world-detail')).to_contain_text('version 1')
+                expect(page.locator('#world-detail button:text-is("Edit")')).to_have_count(2)
                 page.locator('#world-proposals button', has_text='Accept').click()
                 expect(page.locator('#world-proposals-card')).to_be_hidden()
                 self.assertEqual(self.agent.get_world('salt')['version'], 2)
@@ -742,6 +867,58 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('.nav[data-panel="worlds"]').click()
                 expect(page.locator('#world-form select[name="world_existing"]')).to_be_visible()
                 expect(page.locator('#world-form input[name="world_new_id"]')).to_be_hidden()
+            finally:
+                browser.close()
+
+    def test_world_editor_previews_before_saving_a_new_version(self):
+        from playwright.sync_api import sync_playwright, expect
+        self.agent.create_world({"id": "salt", "name": "Salt Archive", "core_laws": ["The record outlives the person"],
+                                 "subjects": [{"designation": "the Graft Clerk", "canon": "Stamps wounds as forms"}]})
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector(".nav[data-panel=worlds]").onclick !== null')
+                page.locator('.nav[data-panel="worlds"]').click()
+                page.locator('#worlds-list button:text-is("Edit")').click()
+                expect(page.locator('#world-detail h3')).to_contain_text('Edit Salt Archive')
+                save = page.locator('#world-detail button:text-is("Save as new version")')
+                expect(save).to_be_disabled()
+                page.locator('#world-detail textarea[name="core_laws"]').fill('<b>Ink is never dry</b>')
+                page.locator('#world-detail .world-subject-canon').fill('Stamps wounds as forms and files the scars')
+                page.locator('#world-detail summary', has_text='Vocabulary pools').click()
+                page.locator('#world-detail .vocab-tab-btn', has_text='Lighting').click()
+                standard = page.locator('#world-detail .vocab-item-label').first
+                kept_out = standard.inner_text()
+                standard.locator('input').uncheck()
+                page.locator('#world-detail textarea[name="own"]').fill('lamp oil glow')
+                expect(save).to_be_disabled()
+                page.locator('#world-detail button:text-is("Preview changes")').click()
+                expect(page.locator('#world-detail .world-diff-remove')).to_contain_text('The record outlives the person')
+                expect(page.locator('#world-detail .world-diff-add', has_text='<b>Ink is never dry</b>')).to_have_count(1)
+                expect(page.locator('#world-detail .world-diff-change')).to_contain_text('the Graft Clerk')
+                expect(page.locator('#world-detail .world-diff-add', has_text='lamp oil glow')).to_have_count(1)
+                expect(page.locator('#world-detail .world-diff-add', has_text=kept_out)).to_have_count(1)
+                self.assertEqual(page.locator('#world-detail b').count(), 0)
+                self.assertEqual(self.agent.get_world('salt')['version'], 1)
+                expect(save).to_be_enabled()
+                page.locator('#world-detail textarea[name="seed_sentence"]').fill('A filing system.')
+                expect(save).to_be_disabled()
+                page.locator('#world-detail button:text-is("Preview changes")').click()
+                expect(save).to_be_enabled()
+                save.click()
+                expect(page.locator('#world-detail')).to_contain_text('version 2')
+                edit_top = page.locator('#world-detail button:text-is("Edit")').first
+                expect(edit_top).to_be_visible()
+                self.assertLess(edit_top.bounding_box()['y'] - page.locator('#world-detail').bounding_box()['y'], 120)
+                world = self.agent.get_world('salt')
+                self.assertEqual((world['version'], world['core_laws'], world['seed_sentence']), (2, ['<b>Ink is never dry</b>'], 'A filing system.'))
+                self.assertEqual(world['pools']['lighting'], {'include': ['lamp oil glow'], 'exclude': [kept_out]})
+                self.assertEqual(self.agent.get_world('salt', 1)['core_laws'], ['The record outlives the person'])
+                self.assertEqual(errors, [])
             finally:
                 browser.close()
 
@@ -773,7 +950,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 self.assertGreaterEqual((light + .05) / (dark + .05), 4.5)
                 more.click()
                 expect(page.locator('#vocab-editor-pane')).to_be_visible()
-                page.locator('#panel-vocab .vocab-help-btn').click()
+                page.locator('#panel-vocab .vocab-help-btn >> nth=0').click()
                 expect(page.locator('#vocab-helper-dialog')).to_be_visible()
             finally:
                 browser.close()
@@ -1344,7 +1521,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.21')
+                expect(page.locator('#version')).to_have_text('1.10.23')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))
@@ -1368,8 +1545,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('button[data-panel=outputs]').click()
                 player = page.locator('#output-list video')
                 expect(player).to_be_visible()
-                player.evaluate('(v) => { v.preload = "auto"; v.load(); }')
-                page.wait_for_function('() => document.querySelector("#output-list video").readyState >= 1')
+                page.wait_for_function('() => document.querySelector("#output-list video").readyState >= 2')
                 self.assertAlmostEqual(player.evaluate('(v) => v.duration'), 1.1, delta=.08)
                 self.assertEqual(len(self.fixture.server.v2_submits), 1)
                 page.set_viewport_size({'width': 390, 'height': 844})

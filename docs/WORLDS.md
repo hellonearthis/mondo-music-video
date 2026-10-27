@@ -21,13 +21,32 @@ any mix of:
 
 Preview shows what will be read; confirm the preview to start. Your vision model
 reads the material and writes a **proposal**. A new world shows everything it
-would contain; growing a world shows only what would be added, removed or
-changed. Accept saves the next version; Reject discards it. Earlier versions are
+would contain; growing a world shows only what would be added or changed. The
+model is asked only for what the new material adds, and the app merges that into
+the world: nothing already in the world is dropped, an existing subject's canon
+line can be extended, and a reply that adds nothing produces an empty proposal,
+which says so and offers only Dismiss. Growth never removes entries (use **Edit**, below, to drop or reword one), and a
+list already at its limit takes no more entries.
+Accept saves the next version; Reject discards it. Earlier versions are
 never overwritten and any can be restored as a new version. A proposal made
 against an older version must be made again.
 
 Reading uses your configured vision model, so local models cost nothing. An API
 vision profile follows the same preview and consent flow as any paid operation.
+
+## Editing a world
+
+On the **Worlds** panel, press **Edit** on the world's row in "Your worlds", or **Open** the world to read it and press **Edit** at the top or bottom of that view. **Cancel** leaves without saving and returns to the read view with its earlier versions (Restore buttons). The form holds the name, what governs the world,
+each list (one entry per line), the subjects, and the vocabulary pools. The pools
+use the same tabs and checkboxes as the Visual Vocabulary panel: untick a
+standard term to keep it out, and type the world's own terms below. **Preview
+changes** lists exactly what would be added, removed or changed; **Save as new
+version** stays disabled until you have previewed the current form, and again
+after any further edit. Saving makes the next version, so the version you
+started from is kept and can be restored. If the world changed after you opened
+the editor (for example an accepted proposal), saving is refused; open it again.
+Agents do the same with `preview_world_edit` and `edit_world` (see
+[Agent setup](AGENT_SETUP.md)).
 
 ## Using a world
 

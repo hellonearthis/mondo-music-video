@@ -22,6 +22,8 @@ import {
 import { initNavigation, resolutionSelect, restoreProject, scheduleSave } from "./js/project.js";
 import { initSettingsAndPicker, loadSettings } from "./js/settings.js";
 import { initTooltips } from "./js/tooltips.js";
+import { initOapCollection } from "./js/oap_collection.js";
+import { initPanelProgress } from "./js/panel_progress.js";
 import { setupVocabularyCustomizer, loadVocabularyCatalog } from "./js/vocabulary.js";
 import { initVocabWorlds } from "./js/vocab-worlds.js";
 
@@ -96,6 +98,7 @@ async function initialize() {
   initSubliminalControls();
   initOperationControls();
   initLibraryForms();
+  initOapCollection();
   await initInstrumentLibrary();
   initWorlds();
   initStoryboards();
@@ -106,6 +109,7 @@ async function initialize() {
   // Custom presets must be in the profile select before a saved choice is restored.
   await loadVocabularyCatalog().catch(() => {});
   await restoreProject();
+  initPanelProgress(settings, scheduleSave);
   restoreStoryboards();
   await refreshStoryboards();
   initCaptionControls();

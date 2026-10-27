@@ -53,8 +53,12 @@ Return ONLY one JSON object with exactly these keys:
   in-camera atmosphere, subject_types are kinds of people or beings, tonal_registers are moods.
 Keep every entry under 240 characters. Use empty lists where the material says nothing."""
 
-GROW_RULES = """The world already exists (its current ledger is below). Return the COMPLETE updated ledger: keep every existing
-entry unless the new material contradicts it, add what the new material establishes, and never invent facts the material does not support."""
+GROW_RULES = """The world already exists (its current ledger is below). Return ONLY what the new material adds or refines, with the
+same keys. List only NEW entries: never repeat an entry the ledger already holds. For "subjects", return a designation that is
+not in the ledger yet, or an existing designation with its canon line rewritten to keep the old facts and add the new ones. Use ""
+for "name" and "seed_sentence" unless the material changes them, and empty lists where it adds nothing. Read every lore text, image
+and note: new people, places, practices, objects, rules, history and open questions all belong. Never invent facts the material
+does not support."""
 
 
 # ---------- pure data ----------
@@ -166,6 +170,34 @@ def diff(old, new):
     return changes
 
 
+def _union(old, new, limit):
+    """`old` then whatever `new` adds, compared without case; nothing in `old` is dropped."""
+    merged = {}
+    for item in [*old, *new]:
+        merged.setdefault(item.casefold(), item)
+    return list(merged.values())[:limit]
+
+
+def _merge_subjects(old, new):
+    """Existing subjects keep their place; a reply's non-empty canon line replaces theirs, and new designations are appended."""
+    merged = {item["designation"].casefold(): item for item in old}
+    for item in new:
+        key = item["designation"].casefold()
+        if item["canon"] or key not in merged:
+            merged[key] = item
+    return list(merged.values())[:MAX_SUBJECTS]
+
+
+def grow(base, delta):
+    """`base` plus what a model's reply adds. Asking a model for the whole ledger gets it echoed back unchanged, so a reply
+    holds only additions and is merged here; an echoed or empty reply therefore changes nothing and never loses an entry."""
+    pools = {table: {side: _union(base["pools"][table][side], delta["pools"][table][side], MAX_POOL)
+                     for side in ("include", "exclude")} for table in WORLD_TABLES}
+    return normalize({**base, "seed_sentence": delta["seed_sentence"] or base["seed_sentence"],
+                      "subjects": _merge_subjects(base["subjects"], delta["subjects"]), "pools": pools,
+                      **{field: _union(base[field], delta[field], MAX_LIST) for field in LIST_FIELDS}})
+
+
 def custom_vocabulary(ledger, mode="replace"):
     """The existing custom_vocabulary request shape for a world's pools. `replace` confines a table to the world's terms;
     `append` adds them to the standard pool. A table the world says nothing about is left alone."""
@@ -267,6 +299,22 @@ def revise(store, world_id, raw, *, models=None, fit=False, new_sources=()):
               "models": models or current.get("models", {})}
     ledger["sources"] = _with_sources(current.get("sources", []), ledger["version"], new_sources)
     return _write_version(store, ledger)
+
+
+def preview_edit(store, world_id, raw):
+    """What saving a hand-edited ledger would change, without saving it. User data is validated strictly."""
+    current = load(store, world_id)
+    return {"version": current["version"], "changes": diff(current, normalize(raw))}
+
+
+def edit(store, world_id, raw, base_version):
+    """The next version from a hand-edited ledger. It must start from the version the editor was opened on, and change something."""
+    current = load(store, world_id)
+    if current["version"] != base_version:
+        raise ValueError("The world changed after you opened it. Open it again to edit the latest version")
+    if not diff(current, normalize(raw)):
+        raise ValueError("Nothing was changed")
+    return revise(store, world_id, raw)
 
 
 def rollback(store, world_id, version):
@@ -441,7 +489,8 @@ def build_payload(sources, base, direction, frames):
     return content
 
 
-def parse_response(text):
+def parse_response(text, base=None):
+    """The ledger a reply holds; when growing a world, a reply that leaves the name out is read under the world's own."""
     text = text.strip()
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
@@ -450,7 +499,8 @@ def parse_response(text):
         data = json.loads(text[start:end + 1])
     except json.JSONDecodeError:
         raise ValueError("The model returned a world that could not be read; try again") from None
-    return normalize({**data, "id": ""}, fit=True)
+    named = {**data, "name": data.get("name") or (base or {}).get("name", "")}
+    return normalize({**named, "id": ""}, fit=True)
 
 
 def harvest(home, directory):
@@ -479,9 +529,10 @@ def harvest(home, directory):
                                  "messages": [{"role": "user", "content": build_payload(
                                      sources, base, request.get("direction", ""), frames)}]},
                                 key=store.key("MMV_VISION_API_KEY"), timeout=900)
-        proposed = parse_response(response["choices"][0]["message"]["content"])
+        reply = parse_response(response["choices"][0]["message"]["content"], base)
     except (KeyError, IndexError, TypeError):
         raise ValueError("The vision model returned an unexpected response") from None
+    proposed = grow(normalize(base), reply) if base else reply
     if mode == "create" and request.get("title", "").strip():
         proposed["name"] = request["title"].strip()[:160]
     progress("Preparing the proposal for your review", 90)

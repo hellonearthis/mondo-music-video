@@ -216,10 +216,13 @@ def plan_gaussian_world_dissonance(
         )
         if not weights:
             return base_world
-        ranked = sorted(weights.items(), key=lambda kv: (-kv[1], stable_hash(seed, tier, key, kv[0])))
-        top_n = ranked[:min(2, len(ranked))]
-        idx = stable_hash(seed, "gaussian_pick", tier, key, s_idx, pos) % len(top_n)
-        return top_n[idx][0]
+        ranked = sorted(weights.items())
+        point = stable_hash(seed, "gaussian_pick", tier, key, s_idx, pos) / 2 ** 64 * sum(w for _, w in ranked)
+        for name, weight in ranked:
+            point -= weight
+            if point < 0:
+                return name
+        return ranked[-1][0]
 
     result = {}
     for s_idx, seg in enumerate(segments):

@@ -323,10 +323,15 @@ def prepare(store, request, *, saved_prepared=None):
         from .vocab_select import apply_energy_scaled_vocabulary, plan_gaussian_world_dissonance
         for (s_idx, sh_idx), vocab_after in apply_energy_scaled_vocabulary(p.segments, vocab, request['seed']).items():
             p.segments[s_idx].shots[sh_idx].vocab = vocab_after
-        worlds_ctx = request.get('thematic_worlds') or {}
-        if worlds_ctx.get('mode') in ('guided', 'strict') and worlds_ctx.get('activeWorlds'):
-            base_world = worlds_ctx['activeWorlds'][0]
-            slider_pct = float(worlds_ctx.get('juxtapositionSlider', 50))
+        worlds_ctx = request.get('thematic_worlds')
+        worlds_ctx = worlds_ctx if isinstance(worlds_ctx, dict) else {}
+        active = worlds_ctx.get('activeWorlds')
+        if worlds_ctx.get('mode') in ('guided', 'strict') and isinstance(active, list) and active and isinstance(active[0], str):
+            base_world = active[0]
+            try:
+                slider_pct = min(100.0, max(0.0, float(worlds_ctx.get('slider', 50))))
+            except (TypeError, ValueError):
+                raise ValueError('Thematic Worlds slider must be a number from 0 to 100')
             for (s_idx, sh_idx), (_, vocab_after) in plan_gaussian_world_dissonance(
                 p.segments, base_world, seed=request['seed'], slider_percent=slider_pct
             ).items():
@@ -469,6 +474,12 @@ def prepare_resume(store, request, directory):
 
 
 def produce(store, request, prepared, context, *, resume=False):
+    from . import vision_service
+    with vision_service.for_request(request, prepared, context):
+        return _produce(store, request, prepared, context, resume=resume)
+
+
+def _produce(store, request, prepared, context, *, resume=False):
     from . import passage_plans
     directory = context.log_path.parent
     if resume:

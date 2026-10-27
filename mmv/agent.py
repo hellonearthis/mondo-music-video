@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 AGENT_SETTINGS = {
-    "auto_updates", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
+    "auto_updates", "auto_collapse_panels", "backend", "writer_url", "writer_model", "writer_mode", "writer_call_estimate",
     "vision_url", "vision_model", "vision_call_estimate", "laya_model_dir", "laya_device", "h3_models", "workflow_preset",
     "writer_api_profile", "vision_api_profile", "video_api_profile", "comfy_url", "comfy_sdk_url",
 }
@@ -22,6 +22,18 @@ AGENT_SETTINGS = {
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         raise ValueError("The local application redirected the request; verify MMV_URL")
+
+
+WORLD_EDIT_KEYS = ("name", "seed_sentence", "subjects", "pools", "core_laws", "locations", "practices", "objects", "factions",
+                   "ecology_rules", "moral_ambiguities", "open_threads", "do_not_contradict")
+
+
+def world_edit_body(world, base_version):
+    """The editable fields of a ledger plus the version it was read at (a ledger read with get_world carries its own)."""
+    version = base_version if base_version is not None else world.get("version")
+    if not isinstance(version, int):
+        raise ValueError("Give base_version, the version of the world the edit starts from")
+    return {**{key: world[key] for key in WORLD_EDIT_KEYS if key in world}, "base_version": version}
 
 
 class AgentClient:
@@ -66,9 +78,9 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
             raise ValueError("Unknown inspection kind")
-        result = self._json("GET", "/api/" + kind)
+        result = self._json("GET", "/api/props/guide" if kind == "opp-guide" else "/api/" + kind)
         if kind == "outputs":
             for output in result:
                 output["play_url"] = self.base + "/api/media/" + urllib.parse.quote(output["file"], safe="/")
@@ -160,6 +172,17 @@ class AgentClient:
         return self._multipart("/api/actors", {"actor_id": actor_id, "name": name, "description": description},
                                "reference", reference_path)
 
+    def check_oap_collection(self):
+        return self.inspect("oap-collection")
+
+    def stage_oap_collection(self, actor_id, index_sha256):
+        return self._json("POST", "/api/oap-collection/stage",
+                          {"actor_id": actor_id, "index_sha256": index_sha256})
+
+    def update_actor(self, actor_id, description):
+        return self._json("PATCH", "/api/actors/" + urllib.parse.quote(actor_id, safe=""),
+                          {"description": description})
+
     def create_style(self, style_id, name, direction, style_card=None, vocabulary=None):
         payload = {"id": style_id, "name": name, "direction": direction}
         if style_card:
@@ -203,6 +226,17 @@ class AgentClient:
     def create_world(self, world):
         """Save a world written by hand or by an agent; a harvest instead proposes one through preview and start."""
         return self._json("POST", "/api/worlds", world)
+
+    def preview_world_edit(self, world_id, world, base_version=None):
+        """What saving an edited ledger would change; nothing is saved. `world` may be a ledger read with get_world."""
+        return self._json("POST", "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/edit-preview",
+                          world_edit_body(world, base_version))
+
+    def edit_world(self, world_id, world, base_version=None, confirm=False):
+        """Save an edited ledger as the world's next version (restorable with rollback_world)."""
+        if not confirm:
+            raise ValueError("Editing a world changes its canon; set confirm only after the user has reviewed the changes from preview_world_edit")
+        return self._json("PUT", "/api/worlds/" + urllib.parse.quote(world_id, safe=""), world_edit_body(world, base_version))
 
     def export_world(self, world_id, destination=None):
         path = "/api/worlds/" + urllib.parse.quote(world_id, safe="") + "/export"
@@ -387,7 +421,7 @@ def main(argv=None):
     storyboard_parser = sub.add_parser("storyboard-result")
     storyboard_parser.add_argument("run_id")
     storyboard_parser.add_argument("--raw-response", action="store_true")
-    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
@@ -407,6 +441,14 @@ def main(argv=None):
         delete = sub.add_parser(name)
         delete.add_argument("id")
         delete.add_argument("--confirm", action="store_true")
+    update_actor = sub.add_parser("update-actor")
+    update_actor.add_argument("id")
+    update_actor.add_argument("description")
+    update_settings = sub.add_parser("update-settings")
+    update_settings.add_argument("changes", help="JSON object of supported settings changes")
+    stage_collection = sub.add_parser("oap-collection-stage")
+    stage_collection.add_argument("actor_id")
+    stage_collection.add_argument("index_sha256")
     for name in ("world", "world-versions", "world-proposal", "reject-world-proposal"):
         world_cmd = sub.add_parser(name)
         world_cmd.add_argument("id")
@@ -415,6 +457,13 @@ def main(argv=None):
     sub.add_parser("world-proposals")
     create_world = sub.add_parser("create-world")
     create_world.add_argument("file", help="Path to world JSON file")
+    for name in ("world-edit-preview", "edit-world"):
+        edit_cmd = sub.add_parser(name)
+        edit_cmd.add_argument("id")
+        edit_cmd.add_argument("file", help="Path to the edited world JSON (a ledger read with `world`)")
+        edit_cmd.add_argument("--base-version", type=int, default=None, help="Version the edit starts from; default: the file's own version")
+        if name == "edit-world":
+            edit_cmd.add_argument("--confirm", action="store_true")
     export_world = sub.add_parser("export-world")
     export_world.add_argument("id")
     export_world.add_argument("--destination", default=None)
@@ -486,6 +535,12 @@ def main(argv=None):
             result = client.cancel()
         elif args.command == "delete-actor":
             result = client.delete_actor(args.id, args.confirm)
+        elif args.command == "update-actor":
+            result = client.update_actor(args.id, args.description)
+        elif args.command == "update-settings":
+            result = client.update_settings(json.loads(args.changes))
+        elif args.command == "oap-collection-stage":
+            result = client.stage_oap_collection(args.actor_id, args.index_sha256)
         elif args.command == "delete-style":
             result = client.delete_style(args.id, args.confirm)
         elif args.command == "delete-vocabulary":
@@ -516,6 +571,10 @@ def main(argv=None):
             result = client.reject_world_proposal(args.id)
         elif args.command == "create-world":
             result = client.create_world(json.loads(Path(args.file).read_text(encoding="utf-8")))
+        elif args.command in ("world-edit-preview", "edit-world"):
+            edited = json.loads(Path(args.file).read_text(encoding="utf-8"))
+            result = (client.preview_world_edit(args.id, edited, args.base_version) if args.command == "world-edit-preview"
+                      else client.edit_world(args.id, edited, args.base_version, args.confirm))
         elif args.command == "export-world":
             result = client.export_world(args.id, args.destination)
         elif args.command == "rollback-world":

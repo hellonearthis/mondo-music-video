@@ -7,6 +7,7 @@ import math
 import os
 import secrets
 import shutil
+import sys
 import time
 import uuid
 import asyncio
@@ -28,7 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from mmv import actors, agreements, instrument_assets, production, props, score_view, worlds
+from mmv import actors, agreements, instrument_assets, oap_collection, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
 from mmv.render import CATALOG
@@ -38,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.21"
+MGL_APP_VERSION = "1.10.23"
 WEB = Path(__file__).parent
 
 
@@ -186,6 +187,11 @@ class WorldRequest(StrictModel):
     moral_ambiguities: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
     open_threads: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
     do_not_contradict: list[str] = Field(default_factory=list, max_length=worlds.MAX_LIST)
+
+
+class WorldEditRequest(WorldRequest):
+    id: str = Field(default="", max_length=64)
+    base_version: int = Field(ge=1, le=9999)
 
 
 class WorldRollbackRequest(StrictModel):
@@ -476,6 +482,7 @@ class Settings(StrictModel):
     vision_api_profile: str = ""
     video_api_profile: str = ""
     auto_updates: bool = False
+    auto_collapse_panels: bool = True
     render_timeout_minutes: int = Field(default=120, ge=0, le=1440)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
@@ -495,6 +502,7 @@ class Settings(StrictModel):
     laya_device: Literal["cpu", "cuda", "mps", "auto", "cuda_or_cpu", "mps_or_cpu"] = "cuda"
     vision_url: str = "http://127.0.0.1:8080/v1"
     vision_model: str = ""
+    vision_launch: str = ""
     vision_key_env: Literal["MMV_VISION_API_KEY"] = "MMV_VISION_API_KEY"
     vision_call_estimate: float = Field(default=0, ge=0, le=100)
     topaz_executable: str = ""
@@ -523,7 +531,7 @@ class Settings(StrictModel):
         from mmv.comfy_sdk import validate_proxy_url
         return validate_proxy_url(value)
 
-    @field_validator("writer_launch", "comfy_launch")
+    @field_validator("writer_launch", "comfy_launch", "vision_launch")
     @classmethod
     def valid_launch(cls, value):
         if value:
@@ -557,6 +565,11 @@ class StarterRequest(StrictModel):
 
 class ActorUpdateRequest(StrictModel):
     description: str = Field(max_length=6000)
+
+
+class CollectionStageRequest(StrictModel):
+    actor_id: str
+    index_sha256: str
 
 
 class KeyRequest(StrictModel):
@@ -657,7 +670,7 @@ class CaptionVideoRequest(StrictModel):
 
 
 class ProjectState(StrictModel):
-    panel: Literal["video", "vocab", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
+    panel: Literal["video", "vocab", "worlds", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
     forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
@@ -665,6 +678,8 @@ class ProjectState(StrictModel):
     thematic_worlds: dict[str, Any] | None = None
     details_open: bool = False
     details_sections: dict[str, bool] = Field(default_factory=dict)
+    details_reviewed: dict[str, bool] = Field(default_factory=dict)
+    details_partial: dict[str, bool] = Field(default_factory=dict)
     log_open: bool = False
 
 
@@ -1140,6 +1155,10 @@ def create_app(home=None, *, test_hosts=False):
             if not target.is_dir() or not json_path.is_file():
                 raise ValueError("Actor not found")
             record = read_json(json_path)
+            if record.get("oap") or (target / "original.oap").exists():
+                raise ValueError("Imported OAP actors keep their signed identity; request a revised package from its signer")
+            if not value.description.strip():
+                raise ValueError("Visual description cannot be empty")
             record["description"] = value.description
             write_json(json_path, record)
             quotes.clear()
@@ -1194,6 +1213,22 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             return actors.import_actor(store, path, actor_id, allow_unsigned=allow_unsigned, accept_unknown=accept_unknown)
+
+    @app.get("/api/oap-collection")
+    def check_oap_collection():
+        return oap_collection.check(store)
+
+    @app.post("/api/oap-collection/stage")
+    def stage_oap_collection(value: CollectionStageRequest):
+        with jobs.lock:
+            jobs.require_idle()
+
+        def publish(source, destination):
+            with jobs.lock:
+                jobs.require_idle()
+                source.replace(destination)
+
+        return oap_collection.stage(store, value.actor_id, value.index_sha256, publish=publish)
 
     @app.get("/api/agreements")
     def list_agreements():
@@ -1326,6 +1361,23 @@ def create_app(home=None, *, test_hosts=False):
     def get_world(world_id: str, version: int | None = None):
         return world_or_error(world_id, version)
 
+    def edit_fields(world_id, value):
+        if value.id and identifier(value.id) != identifier(world_id):
+            raise ValueError("The edit names a different world")
+        return value.model_dump(exclude={"id", "base_version"})
+
+    @app.post("/api/worlds/{world_id}/edit-preview")
+    def preview_world_edit(world_id: str, value: WorldEditRequest):
+        return worlds.preview_edit(store, identifier(world_id), edit_fields(world_id, value))
+
+    @app.put("/api/worlds/{world_id}")
+    def edit_world(world_id: str, value: WorldEditRequest):
+        with jobs.lock:
+            jobs.require_idle()
+            ledger = worlds.edit(store, identifier(world_id), edit_fields(world_id, value), value.base_version)
+            quotes.clear()
+        return ledger
+
     @app.get("/api/worlds/{world_id}/versions")
     def get_world_versions(world_id: str):
         return worlds.versions(store, world_id)
@@ -1374,7 +1426,9 @@ def create_app(home=None, *, test_hosts=False):
     def get_props_guide():
         guide_path = Path(__file__).parent.parent / "docs" / "OPEN_PROP_PROTOCOL.md"
         if not guide_path.exists():
-            return {"title": "Open Prop Protocol Guide", "markdown": "Guide not found on disk."}
+            guide_path = Path(sys.prefix) / "share/mondo-music-video/docs/OPEN_PROP_PROTOCOL.md"
+        if not guide_path.exists():
+            raise HTTPException(status_code=404, detail="Open Prop Protocol guide is not installed")
         return {"title": "What is Open Prop Protocol", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
@@ -1798,7 +1852,6 @@ def create_app(home=None, *, test_hosts=False):
                 studio_log.write_text("", encoding="utf-8")
             except Exception:
                 pass
-        status_reset = jobs.reset()
         return {"status": "cleared"}
 
     @app.post("/api/cache/clear")

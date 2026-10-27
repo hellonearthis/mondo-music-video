@@ -3,8 +3,10 @@
 import { $, api, handle, notice, state } from "./core.js";
 import { updateVocabCustomBadge } from "./vocabulary.js";
 import { clearStoryboard } from "./storyboard.js";
+import { syncCastPickerUi } from "./library.js";
 import { renderReferenceReceipt } from "./production.js";
 import { resolutionSelect, scheduleSave, updateSongPreview } from "./project.js";
+import { resetPanelProgress } from "./panel_progress.js";
 
 const fillIfEmpty = (field, value) => { if (field && !field.value.trim()) field.value = value; };
 const setSelect = (field, value) => {
@@ -30,6 +32,7 @@ export function applyPlan(form, plan, songName = "") {
   if (![...select.selectedOptions].some(item => item.value)) {
     [...select.options].forEach(item => { item.selected = plan.actors.includes(item.value); });
     setSelect(form.elements.dance_mode, plan.dance_mode);
+    syncCastPickerUi();
   }
   setSelect(form.elements.instrument_mode, "off");
   setSelect(form.elements.subliminal_mode, "off");
@@ -62,9 +65,11 @@ export function resetVideoPanel(form) {
   updateSongPreview(form, "");
   renderReferenceReceipt(form, [], []);
   clearStoryboard(form);
+  syncCastPickerUi();
   state.currentCustomVocab = {};
   state.currentVocabRandomKey = "";
   updateVocabCustomBadge();
+  resetPanelProgress();
   form.dispatchEvent(new Event("change", { bubbles: true }));
   scheduleSave();
 }

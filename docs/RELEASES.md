@@ -1,72 +1,89 @@
 # Releases
 
-## 1.10.21 - Actor Card Inline Editing, Wider Actor Layout, OPP Guide & Dark Selection Contrast
+## 1.10.23 — World editor
 
-- **Inline Visual Description Editing**: Enabled double-click editing on actor visual descriptions directly inside cards on **03 / Actors & OAP**. Changes persist cleanly to `actor.json` via `PATCH /api/actors/{actor_id}` and automatically refresh all cast cards and selectors.
-- **Wider Actor Card Grid**: Expanded `.actor-grid` minimum column width to `370px` (50% wider), providing ample space for character descriptions and inline editing.
-- **Open Prop Protocol (OPP) Guide & Architecture Documentation**: Added a dedicated "What is Open Prop Protocol?" guide dialog (`#opp-helper-dialog`), paired alongside the OAP guide button in the panel header, served from [`docs/OPEN_PROP_PROTOCOL.md`](OPEN_PROP_PROTOCOL.md) via `GET /api/props/guide`.
-- **Repositioned OPP Library**: Moved the Open Prop Protocol library fold (`#opp-library-fold`) to the bottom of the Actors & OAP panel, styling its summary title in `Georgia, 27px` to match studio `<h2>` card headings.
-- **Streamlined Actor Card Tooltips**: Removed redundant container, reference image, and name tooltips from actor cards while retaining action and description guidance.
-- **WCAG High-Contrast Dark Mode Selection**: Added calibrated `::selection` highlight styling (`#315c43` / `#f4f8f1`) delivering a 7.66:1 contrast ratio that exceeds WCAG AAA requirements.
+- New: **Edit** next to Open on each world's row, and at the top and bottom of an opened world. Names, rules, lists, subjects and vocabulary pools can be changed or removed in place. The pools reuse the Visual Vocabulary editor's tabs, standard-term checkboxes and `vocab-model.js` draft logic (a world's pools are a custom vocabulary: its own terms plus kept-out terms). Changes are previewed field by field before **Save as new version** is enabled, and any further edit requires a new preview. Saving writes the next version, keeps the world's sources and earlier versions, and is refused when the world changed after the editor was opened or nothing changed.
+- Agent parity: `PUT /api/worlds/{id}` and `POST /api/worlds/{id}/edit-preview`, `AgentClient.preview_world_edit` / `edit_world`, CLI `world-edit-preview` / `edit-world`, MCP `preview_world_edit` / `edit_world` (58 tools), the project skill reference and agent setup guide. Saving through the agent requires `confirm` after the user has reviewed the previewed changes, like accepting a proposal; `rollback_world` is the recovery path.
+- Changed text: the Visual Vocabulary "Add custom entries" suggestion no longer includes "neon" ("abandoned bowling alley").
+- No protected prompts, private assets, paid operations or automatic retries changed.
 
-## 1.10.20 - Visual Vocabulary Button Layout & Reference Image Tooltip Fix
+## 1.10.22 — Growing a world adds what the new material says
 
-- **Left-Justified Vocabulary Button Row**: Placed the "Explore vocabulary" action button and Guide shortcut on their own line directly beneath the Visual Vocabulary selection menu, left-justifying button contents for clean scanability.
-- **Reference Image Chip Tooltips**: Configured explicit `data-tooltip` titles on individual reference image file chips in `.refs-receipt`, ensuring image hover previews render reliably.
-- **Compact Cast Checkbox Spacing**: Refined padding and vertical margins on the single-column cast checkbox container for a tighter layout footprint.
+Fixed: growing a world could report "No changes to the world" although new lore was supplied. The grow prompt asked the vision model to return the complete updated ledger, and a local model simply copied the ledger back (2,499 output tokens, every entry word for word, in a real run with five new backstories and a finished video). Growth now asks only for additions and merges them in code (`worlds.grow`): new entries are appended without case-sensitive duplicates, an existing subject's non-empty canon line replaces its old one, pools are unioned, and the world's name and seed sentence are kept unless the reply gives a new seed sentence. An echoed or empty reply still adds nothing, but the proposal now says why and offers Dismiss instead of Accept. Growth no longer removes entries; there is no in-place world editor, so dropping one means saving a hand-edited copy as a new world (a limitation, recorded here). The REST, client, CLI and MCP proposal results are unchanged (`changes` is simply empty when nothing is new). This touches only the Worlds module's own prompt, not the protected writer, ident or sealed-lips scheme.
 
-## 1.10.19 - Reference Images File List & Thumbnail Tooltips
+Validation: full temporary-data/mock-service suite, 772 passed + 141 subtests; the owner then grew their Fehenviz world from five new backstories and a finished video and confirmed that it added entries. No protected prompts, private assets, paid operations or automatic retries changed.
 
-- **Structured Reference File List**: Rendered additional and harvest reference images as an organized vertical list (`ul.file-list`) of monospace chips, displaying one file per line.
-- **Reference Image Hover Previews**: Integrated image thumbnail tooltips (`.tooltip-thumb`) into each reference item in the receipt, enabling instant visual preview on hover.
-- **Robust Draft Synchronization**: Ensured full restoration and reset handling across draft saves, quick-start, and harvest forms.
+## 1.10.21 — EGG's actor and prop UI, with music-video panel progress
 
-## 1.10.18 - Interactive Cast Checkbox List & Thumbnail Tooltips
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` (one commit after reviewed `db7bec7`). The actor cards have a wider responsive grid and an inline description editor for locally created actors; the OPP library has a readable in-app guide, and dark-theme text selection has better contrast. The fork's malformed actor textarea was repaired. Imported signed OAP actors are deliberately read-only in this editor, because their original package is preserved on export. Agents can edit local descriptions through API, CLI and MCP; OPP guide text is available by inspection.
 
-- **Single-Column Cast Checkbox List**: Replaced the native multi-select box with a single-column, scrollable checkbox list with distinct hover and checked highlight states, keeping selection synchronized with the underlying form draft.
-- **Cast Portrait Tooltip Previews**: Enhanced tooltips to render image previews when hovering over cast actors (`.tooltip-thumb`), allowing instant visual character inspection.
-- **Polished Cast & Reference Guidance Strip**: Replaced the bulky hint box in Card 2 with a sleek inline banner (`.oap-hint-strip`) featuring an aligned title, right-justified guide button, and direct navigation to Tab 03.
+Music Video cards and Director folds now show input progress in their headers. Required inputs shade toward the existing GO! green; completion is labelled **Done** and collapses after the last required field loses focus. The Settings switch, on by default, can stop auto-collapse. Optional panels tint faintly as choices change and show **Reviewed** after a manual close. A collapsed complete card offers **Options available** to show unchanged optional groups; its header opens the whole card. Drafts save open, reviewed and partial states. A completed-input cue never replaces the preview quote, renderer checks or explicit paid consent. No protected prompts, private assets, paid operations or automatic retries changed.
 
-## 1.10.17 - Dedicated Video Format Fold & Streamlined Cast Guidance
+Actors & OAP now has an on-demand public collection check. It lists missing actors, stages one selected package with index checksum, package hash and OAP signature verification, then presents the existing manifest/rider and explicit signer-acceptance import. Installed actors are preserved. REST, client, CLI and MCP expose the same check, stage, inspect and import sequence (56 MCP tools). The original four starter packages remain OAP v0.2; the five newer public collection packages are OAP v0.3 and are not automatically installed by this button.
 
-- **Dedicated Video Format & Render Engine Fold**: Grouped picture shape (aspect ratio), local render megapixels, video generation engine (Renderer), and render resolution into a unified `.video-format-grid` container under its own fold in the Director's Control Room (`#director-fold-format`), open by default above post-processing.
-- **Streamlined Cast & Staging Guidance**: Replaced the verbose exposition and bullet points in Card 2 with a concise one-sentence guide while retaining one-click modal access to the comprehensive Open Actor Protocol and reference documentation.
-- **Updated Interface Guide & UI Tests**: Documented the new Video Format fold in `docs/interface-guide.md` and updated DOM details fold count expectations in browser test suites.
+Also fixed in this release: the Outputs list showed blank players until you pressed play. Release 1.10.12 stopped videos preloading to keep the browser's connections free for uploads and autosave, which also removed the first-frame thumbnail. Thumbnails now load two at a time: each video asks for its first frame, and the next starts once the browser stops fetching (or after 5 seconds), so the connection pile-up behind the Firefox upload stall cannot return. GUI only; no agent-interface change.
 
-## 1.10.16 - Streamlined Visual Vocabulary UI
+The header tagline now reads "FILMED IN MACHINE COLOUR" (it was "A LITTLE STUDIO. A BIG PICTURE.").
 
-- **Removed Pseudo-Random Vocabulary Toolbars**: Retired the pseudo-random key generation controls, seed toolbars, and quick bars from both the Main Video setup card and the Visual Vocabulary workspace (Tab 06).
-- **Cleaned Summary Cards & Filter Actions**: Simplified vocabulary summary cards to focus on direct category inspection, count badges, and chip removals, eliminating obsolete per-category re-roll actions.
-- **Pruned Unused CSS**: Removed all redundant styling rules associated with pseudo-random bars, key fields, and bookmark dropdowns.
+See [collaborator review](COLLABORATOR_REVIEW.md) for the exact fork assessment and adaptations.
 
-## 1.10.15 - Visual Direction Tooltip & Track Loading Receipt Polish
+## 1.10.20 — Fork UI polish (hellonearthis 1.10.15–1.10.20)
 
-- **Visual Direction Guidance**: Clarified the production-wide creative brief tooltip for `Visual direction` to detail settings, subject actions, mood, and recurring physical motifs across all generated scenes.
-- **Track Receipt Polish**: Updated the audio track drop zone receipt markup to feature clear upward indicator accents (`▲ ▲ ▲`).
-- **Start Fresh Tooltip Formatting**: Refined multi-line tooltip alignment for the "Start fresh" control.
+Credit: hellonearthis. Reviewed fork head `db7bec7` (six commits after `26719de`); UI and documentation only, no backend or protected-scheme change.
 
-## 1.10.14 - Static File Drop Targets & Staging Guidance Polish
+- Visual direction tooltip, track-receipt markers and Start fresh tooltip wording (1.10.15).
+- Visual Vocabulary: the pseudo-random seed toolbars, saved-key actions and per-category re-roll are retired; summary cards keep chip removal and counts (1.10.16). Saved selections still restore, and `vocab_random_key` stays in the project API for old drafts, but keys can no longer be re-applied from the GUI.
+- Dedicated **Video format & output** fold (aspect, megapixels, renderer, resolution), open by default (1.10.17).
+- Cast is a checkbox list with portrait hover previews and a one-line guidance strip (1.10.18); reference images are a file list with thumbnail tooltips (1.10.19); vocabulary button layout and chip tooltip fixes (1.10.20).
+- Our fixes while integrating: Quick Start and Start fresh now sync the cast checkboxes with the hidden actor select (previously the page could show a cast different from the one previewed); drafts saved before the format fold existed keep it at its default (open) instead of closing it; browser tests pick the cast through the checkboxes (`pick_cast`), with regression assertions for both fixes; stale interface-guide text removed.
+- Reviewed by Codex (medium reasoning effort, read-only), whose findings produced the three fixes above. Escaping of filenames and actor names in the new tooltips was checked and found sound.
+- Version label follows the fork (1.10.20); our 1.10.12 changes are retained. Full suite 761 passed + 141 subtests.
+
+## 1.10.12 — Vision server starts when needed
+
+- Style Harvest, world reading (Worlds) and storyboard interpretation now start the local vision server when nothing is answering at the Vision service URL, and stop it afterwards. A server that was already running is used as is and never stopped. The preview no longer refuses just because the server is offline; it refuses only when Mondo cannot start it, and says why.
+- Launch command: the new optional **Vision launch command** setting (`vision_launch`, JSON argument list), else derived from the writer launch plus the matching `mmproj*.gguf` beside the model, with `--alias` set to the Vision model name, the port from the Vision URL, and a 32768 context. Remote URLs and download options are never launched; only loopback addresses are.
+- Safeguards: free GPU memory is checked before starting; the program must exist; any server already answering at the Vision URL is used as before (Mondo does not try to tell it from the writer; with both on port 8080, run them on different ports). No automatic retries.
+- Agent interface: launch commands stay GUI-only for agents, as for `writer_launch` and `comfy_launch`; agents get the same behavior through `preview_production` and `start_production` for the `harvest`, `world_harvest` and `storyboard` kinds, and the error text names the cause.
+- Reviewed with a low-effort read-only Codex pass. The quality-check vision stage (port 8083) is unchanged.
+- Fixed: the saved project rejected the `worlds` panel (HTTP 422, silently ignored by the page), so nothing on the Worlds panel was autosaved and a reload blanked it. Text fields now persist. Chosen image, video and lore files cannot be restored by the browser after a reload and are still re-selected; they are uploaded only when you press Preview.
+- Fixed: file uploads could hang on "Uploading…" in Firefox. The Outputs list asked every rendered video for its metadata, which kept most of the browser's six connections to the app busy streaming videos, so the upload request waited behind them. Videos now load only when played.
+
+### Integration review of fork 26719de
+
+Reviewed by Claude Code with a low-effort read-only Codex pass; credit for the changes: hellonearthis.
+- Adopted: all UI work, contextual vocabulary scaling, world vectors, lint and cluster tools, embedding launch script. No protected-scheme file is touched.
+- Fixed: `POST /api/log/clear` no longer resets a failed operation on the server; Thematic Worlds slider is read from the `slider` key the UI sends (was `juxtapositionSlider`, so ignored); malformed `thematic_worlds` now degrades safely; style sidecar names cannot leave the styles folder; narrow-screen header overflow; vocabulary guide test selector.
+- Agent-interface limitation (intentional for now): `thematic_worlds` is set from the GUI and saved project state only; the agent client, MCP tools and skill do not yet expose it. The earlier deferral in `docs/COLLABORATOR_REVIEW.md` (no consumer) is superseded: `mmv/pipeline.py` now consumes it, only under `vocab_selection: contextual`.
+- Accepted as authored: pseudo-random vocabulary key default raised 5 to 10. Changed: the Gaussian world pick now samples every candidate world by its weight (it only chose between the top two). Left as authored: `C:/llamaCPP` lookup fallback in `mmv/vision_check.py` (only if a relative model path is missing); `start-embedding.ps1` is Windows PowerShell, now hardened (see below).
+- `start-embedding.ps1`: reads the llama-server location from the app settings.json (writer launch) when the default folder is absent; new `-ModelPath`, `MMV_EMBEDDING_MODEL`, `-ServerExe`, PATH lookup for llama-server, a one-level (non-recursive) model lookup, and a clear message when the port answers.
+
+## 1.10.11 — Fork integration (hellonearthis)
+
+All fork releases 1.10.11–1.10.14 ship together as this one version.
+
+### Fork 1.10.14 - Static File Drop Targets & Staging Guidance Polish
 
 - **Static Drop Zone Markup**: Embedded drop zone hints (`Choose a file or drop it here`, `Choose files or drop up to N images here`) and error containers directly into the HTML body across all 16 file upload targets, eliminating post-load text insertion and visual shift.
 - **Idempotent File Drop Initialization**: Updated `initFileDropTargets` in `webapp/js/file_drop.js` to preserve existing static hint and error elements in the markup instead of appending duplicates dynamically.
 - **Cast & Staging Box Architecture**: Preserved clean `.oap-hint-box` layout and header badge semantics distinguishing character identities from scene reference images.
 
-## 1.10.13 - Tooltip Theming & Operation Bar Polish
+### Fork 1.10.13 - Tooltip Theming & Operation Bar Polish
 
 - **Polished Tooltip Theming**: Upgraded studio tooltips with an emerald forest dark mode (`#0e201b` background, `#224b3d` border, `#e8f4ec` text) and a clean soft-blue light mode (`#f0f5fc` background, `#0d233a` text, `#b8d1ea` border).
 - **Consolidated Operation Bar Tooltip**: Merged redundant individual status tooltips into a unified tooltip on the studio status container (`Current status and real-time execution report of the studio engine.`).
 - **Sidebar & Tooltip Refinements**: Retained right-side offset positioning for sidebar items and cleaned duplicate attributes across the application header.
 
-## 1.10.12 - GUI Decluttering, Accessible Tooltips & Studio Polish
+### Fork 1.10.12 - GUI Decluttering, Accessible Tooltips & Studio Polish
 
 - **Streamlined Service Dock & Form Cards**: Slimmed the service dock into a compact single-line horizontal status strip with informative tooltips; organized Card 1 & Card 2 secondary parameters into collapsible `.sub-fold` accordions while keeping all form input names, IDs, and tests 100% intact.
 - **Accessible & Tautology-Free Tooltip System**: Stripped over 200 redundant `title` attributes that caused double-tooltip flickers, consolidated nested label-input tooltips into single comprehensive triggers, added right-side placement for sidebar elements, enabled `white-space: pre-line` for line breaks (`&#10;`, `\n`), and expanded tooltip `max-width` to 480px.
 - **Button Styling Polish (`button.quiet`)**: Upgraded quiet actions from plain underlined text to modern tactile pill buttons with borders, hover transitions, and dark-mode styling.
 - **Interactive Full Studio Toggle**: Transformed "The Full Studio" preview section into a collapsible dropdown with animated directional indicators (`▶` to `▼`) and informative edition notes.
 - **Immediate Drag-and-Drop Area**: Styled the audio drop zone statically in CSS so it renders instantly on page load without layout shift; updated loaded track receipt display and balanced vertical spacing.
-- **Job Status Reset on Clear Log**: `POST /api/log/clear` now resets `FAILED` operation state and restores the idle status bar (`READY WHEN YOU ARE`).
+- **Clear Log (adapted on integration)**: the studio's status bar returns to idle in the browser after Clear Log; the server-side `FAILED` state is kept so recovery information is not lost.
 
-## 1.10.11 - Semantic World Vector Clustering & Gaussian Dissonance
+### Fork 1.10.11 - Semantic World Vector Clustering & Gaussian Dissonance
 
 - **Dynamic audio-scaled vocabulary windowing**: `select_term_for_energy` scales accessible table depth directly with `ScoreMap` energy ($0.20 \to 1.0$), keeping calm sections focused on the top canonical terms while opening full depth during peak sections.
 - **Multi-tag attribute stacking**: At energy $\ge 0.80$, stackable attributes (`mechanism`, `lighting`) deterministically draw a secondary complementary cue to increase prompt density during climaxes.

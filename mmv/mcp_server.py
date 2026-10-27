@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, settings (no secret values), or a random one-click "quick-start" plan to merge into a preview_production request."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -175,6 +175,21 @@ def create_server(base_url=None):
         """Create a visual actor from a user-selected reference image; existing actors are preserved."""
         return invoke(client.create_actor, actor_id, name, description, reference_path)
 
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def check_oap_collection() -> dict[str, Any]:
+        """On request, check the public OAP actor collection for packages missing from this studio. No download or import."""
+        return invoke(client.check_oap_collection)
+
+    @server.tool()
+    def stage_oap_collection(actor_id: str, index_sha256: str) -> dict[str, Any]:
+        """Download one selected actor from a checked collection and verify checksum, signature, identity and rider. Returns a staged upload; inspect it and obtain explicit signer acceptance before import_oap."""
+        return invoke(client.stage_oap_collection, actor_id, index_sha256)
+
+    @server.tool()
+    def update_actor(actor_id: str, description: str) -> dict[str, Any]:
+        """Change a locally created actor's visual description while idle; imported signed OAP actors require a revised package."""
+        return invoke(client.update_actor, actor_id, description)
+
     @server.tool()
     def create_style(style_id: str, name: str, direction: str, style_card: str = "", vocabulary: dict[str, Any] | None = None) -> dict[str, Any]:
         """Save a new visual style; use preview_production for vision-based style harvesting."""
@@ -206,6 +221,18 @@ def create_server(base_url=None):
         ecology_rules, moral_ambiguities, open_threads, do_not_contradict and pools {table: {include, exclude}}. To create or
         grow a world from images, video, lore text or finished runs, use preview_production with kind world_harvest."""
         return invoke(client.create_world, world)
+
+    @server.tool()
+    def preview_world_edit(world_id: str, world: dict, base_version: int | None = None) -> dict[str, Any]:
+        """Show what an edited world ledger would change (field-level additions, removals and changes) without saving. Pass the
+        ledger from get_world with your edits; base_version defaults to its own version. Show the changes to the user first."""
+        return invoke(client.preview_world_edit, world_id, world, base_version)
+
+    @server.tool()
+    def edit_world(world_id: str, world: dict, base_version: int | None = None, confirm: bool = False) -> dict[str, Any]:
+        """Save an edited ledger as the world's next version, only after the user reviewed preview_world_edit (confirm=true).
+        Fails if the world changed since base_version. rollback_world restores any earlier version."""
+        return invoke(client.edit_world, world_id, world, base_version, confirm)
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def export_world(world_id: str) -> dict[str, Any]:

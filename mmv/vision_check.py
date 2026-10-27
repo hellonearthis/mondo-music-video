@@ -167,7 +167,7 @@ def judge_clip(video, trim_frames, shot_starts, base_url, model, framing_allowed
     return {'status': status, 'problems': problems, 'retry': status == 'fail'}
 
 
-def vision_command(writer_launch_json, port):
+def vision_command(writer_launch_json, port, alias='mmv-vision', context=16384):
     """Derive a local vision server command, using existing sibling projector files only."""
     try:
         argv = json.loads(writer_launch_json)
@@ -214,5 +214,5 @@ def vision_command(writer_launch_json, port):
     matches = sorted(p for p in path.parent.glob('mmproj*.gguf') if p.is_file() and family(p.stem) == family(path.stem))
     if len(matches) != 1:
         raise ValueError(f'expected one matching sibling mmproj*.gguf for {path.name}; found {len(matches)}')
-    return kept + ['-m', model, '--mmproj', str(matches[0]), '--port', str(port), '--alias', 'mmv-vision',
-                   '-c', '16384', '--temp', '0']
+    return kept + ['-m', model, '--mmproj', str(matches[0]), '--port', str(port), '--alias', alias,
+                   '-c', str(context), '--temp', '0']

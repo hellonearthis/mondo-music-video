@@ -27,7 +27,7 @@ package.opp
 ### Safety & Sandboxing Boundaries
 
 - **Strict Path Limits:** Path traversal (`..`), absolute paths, and symlinks inside packages are strictly prohibited.
-- **Resource Limits:** Archives are capped at 128 MB expanded, 256 MB total size, and individual image sheets are capped at 25 MB.
+- **Resource Limits:** Archives are capped at 128 MB on disk and 256 MB expanded; individual image sheets are capped at 25 MB.
 - **Zero Script Execution:** External executable scripts or foreign code inside packages are never executed. Original bundles are preserved intact in the private studio data store.
 
 ## How Mondo Music Video Uses OPP
@@ -40,4 +40,3 @@ package.opp
 
 - **Verified Signatures:** A valid cryptographic signature proves the package has not been tampered with since creation and verifies the creator's key control.
 - **Explicit Operator Acceptance:** You explicitly confirm acceptance of the verified signer upon import. Unsigned local drafts can also be imported when explicitly permitted.
-

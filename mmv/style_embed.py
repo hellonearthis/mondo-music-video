@@ -108,6 +108,8 @@ def sync_style_file(
 
     style_data = json.loads(path.read_text(encoding="utf-8"))
     style_id = style_data.get("id") or path.stem
+    if style_id != Path(str(style_id)).name:
+        style_id = path.stem
 
     digest_text = extract_style_digest(style_data)
     digest_sha = string_sha256(digest_text)

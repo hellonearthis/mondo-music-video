@@ -11,6 +11,7 @@ import { loadWorlds } from "./worlds.js";
 import { syncInstrumentControls, instrumentsFromForm } from "./instruments.js";
 
 import { syncDanceControls, dancePartsFromForm } from "./dance.js";
+import { showPanelForQuoteError } from "./panel_progress.js";
 
 let sseSource = null;
 let sseConnected = false;
@@ -195,6 +196,9 @@ export async function preview(form) {
       notice("");
     }
     showQuote(request, state.currentQuote);
+  } catch (error) {
+    if (request.kind === "video") showPanelForQuoteError(error.message);
+    throw error;
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;

@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.10.21** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.10.23** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -34,6 +34,8 @@ browser remembers your choice.
 File controls accept a click or a drop on their labeled area. Dropping reference
 images replaces that control's selection (up to nine images); dropping a package
 only selects it, so inspect and import remain separate actions.
+
+In Music Video, card and Director fold headers show input progress. **Done** means the required fields are filled; you still review the preview and approve any paid start. Complete required cards collapse after you leave the last required field, and you can turn that behavior off in Settings. Open a header to see every field, or use **Options available** to review optional fields left at their defaults. Actor cards let you edit local visual descriptions; imported signed OAP actors need an updated package from their signer. The OPP library includes an in-app guide. Actors & OAP can check the public actor collection on demand and offer missing packages for verified, signer-approved import. The original starter packages are OAP v0.2; newer collection packages may be OAP v0.3.
 
 Turn your song into a complete music video. Mondo listens to the track, detects
 beats and downbeats, measures energy, and identifies musical sections. Its
