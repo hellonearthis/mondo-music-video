@@ -91,3 +91,10 @@ def test_for_request_only_wraps_vision_kinds(models, tmp_path):
 def test_missing_server_program_is_reported(models):
     with pytest.raises(ValueError, match='not found'):
         vs.launch_plan(settings(models, vision_launch='["/nonexistent/llama-server"]'))
+
+
+def test_harvest_text_stores_structured_vision_replies_as_text():
+    from mmv.worker import harvest_text
+    assert harvest_text({"CRAFT": "film grain", "PALETTE": ["teal", "rust"]}) == 'CRAFT: film grain\nPALETTE: ["teal", "rust"]'
+    assert harvest_text(["one", "two"]) == "one\ntwo"
+    assert harvest_text(None) == "" and harvest_text("plain") == "plain"

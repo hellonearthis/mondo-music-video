@@ -27,24 +27,10 @@ const escapeHtml = (s = "") =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
-import { hideTooltip } from "./tooltips.js";
-
-let activeRefsContextMenu = null;
-let activeRefsTrigger = null;
-
 export const removeReferenceAtIndex = (references = [], names = [], indexToRemove = -1) => ({
   references: references.filter((_, index) => index !== indexToRemove),
   names: names.filter((_, index) => index !== indexToRemove)
 });
-
-export function closeRefsContextMenu(restoreFocus = false) {
-  if (activeRefsContextMenu) {
-    activeRefsContextMenu.remove();
-    activeRefsContextMenu = null;
-  }
-  if (restoreFocus && activeRefsTrigger?.isConnected) activeRefsTrigger.focus();
-  activeRefsTrigger = null;
-}
 
 function removeReference(form, index) {
   const fState = state.formFiles.get(form);
@@ -61,43 +47,6 @@ function removeReference(form, index) {
   scheduleSave();
 }
 
-export function openRefsContextMenu(event, form, index) {
-  event.preventDefault();
-  event.stopPropagation();
-  hideTooltip(true);
-  closeRefsContextMenu();
-  activeRefsTrigger = event.target.closest("li")?.querySelector(".remove-ref");
-
-  const menu = document.createElement("div");
-  menu.className = "refs-context-menu";
-  menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", "Reference image actions");
-
-  const removeButton = document.createElement("button");
-  removeButton.type = "button";
-  removeButton.className = "refs-context-menu-item";
-  removeButton.setAttribute("role", "menuitem");
-  removeButton.textContent = "Remove from list";
-  removeButton.onclick = () => {
-    closeRefsContextMenu();
-    removeReference(form, index);
-  };
-
-  menu.appendChild(removeButton);
-  document.body.appendChild(menu);
-
-  const menuWidth = 160;
-  const menuHeight = 40;
-  const padding = 10;
-  const left = Math.min(event.clientX, window.innerWidth - menuWidth - padding);
-  const top = Math.min(event.clientY, window.innerHeight - menuHeight - padding);
-  menu.style.left = `${Math.max(padding, left)}px`;
-  menu.style.top = `${Math.max(padding, top)}px`;
-
-  activeRefsContextMenu = menu;
-  removeButton.focus({ preventScroll: true });
-}
-
 // The form has flat subliminal_* fields; the request carries them as one nested object.
 
 export function renderReferenceReceipt(form, names = [], hashes = []) {
@@ -110,11 +59,9 @@ export function renderReferenceReceipt(form, names = [], hashes = []) {
   const items = names.map((name, i) => {
     const hash = hashes[i];
     const titleText = `Reference: ${escapeHtml(name)}`;
-    const footerText = "Use Remove, or right-click the filename";
-    const tooltipAttrs = ` data-tooltip="${titleText}" data-tooltip-footer="${footerText}"`;
     const imgAttr = hash
-      ? `${tooltipAttrs} data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"`
-      : tooltipAttrs;
+      ? ` data-tooltip="${titleText}" data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"`
+      : ` data-tooltip="${titleText}"`;
     return `<li><code data-ref-index="${i}"${imgAttr}>${escapeHtml(name)}</code><button type="button" class="remove-ref" data-ref-index="${i}" aria-label="Remove reference image ${escapeHtml(name)}">Remove</button></li>`;
   }).join("");
   receipt.innerHTML = `<ul class="file-list">${items}</ul>`;
@@ -530,6 +477,11 @@ export async function applyStatus(status) {
   if (state.lastState && state.lastState !== status.state && !busy) {
     await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds(), refreshStoryboards()]);
   }
+  // Also after a reload: show the latest completed harvest once per operation (Dismiss keeps it hidden).
+  if (status.state === "complete" && status.kind === "harvest" && status.result?.style && state.harvestShown !== status.id) {
+    state.harvestShown = status.id;
+    displayHarvestResult(status.result.style);
+  }
   state.lastState = status.state;
 }
 
@@ -713,27 +665,8 @@ export function initProductionForms() {
         const button = event.target.closest("button.remove-ref");
         if (button) removeReference(form, Number(button.dataset.refIndex));
       });
-      refsReceipt.addEventListener("contextmenu", event => {
-        const code = event.target.closest("code[data-ref-index]");
-        if (!code) return;
-        const index = parseInt(code.dataset.refIndex, 10);
-        if (Number.isNaN(index)) return;
-        openRefsContextMenu(event, form, index);
-      });
     }
   });
-
-  document.addEventListener("click", event => {
-    if (!event.target.closest(".refs-context-menu")) {
-      closeRefsContextMenu();
-    }
-  });
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      closeRefsContextMenu(true);
-    }
-  });
-  window.addEventListener("resize", () => closeRefsContextMenu());
 }
 
 export function initOperationControls() {
@@ -876,3 +809,60 @@ export function initOperationControls() {
   }
 }
 
+
+export async function displayHarvestResult(styleId) {
+  if (!styleId) return;
+  try {
+    const style = await (await api(`/api/styles/${encodeURIComponent(styleId)}`)).json();
+    if (!style) return;
+    const card = $("#harvest-result-card");
+    if (!card) return;
+    const title = $("#harvest-result-title");
+    const dir = $("#harvest-result-direction");
+    const fold = $("#harvest-result-fold");
+    const pre = $("#harvest-result-card-pre");
+    if (title) title.textContent = `${style.name || style.id} (${style.id})`;
+    if (dir) dir.textContent = style.direction || "";
+    if (pre) pre.textContent = style.style_card || "No 11-axis forensic breakdown recorded.";
+    if (fold) fold.open = true;
+    card.hidden = false;
+    card.scrollIntoView({ behavior: "smooth" });
+
+    const viewBtn = $("#harvest-view-style-btn");
+    if (viewBtn) {
+      viewBtn.onclick = () => {
+        const nav = document.querySelector('.nav[data-panel="styles"]');
+        if (nav) nav.click();
+        setTimeout(() => {
+          const styleEl = document.querySelector(`#style-list [data-id="${CSS.escape(style.id)}"]`);
+          if (styleEl) {
+            styleEl.scrollIntoView({ behavior: "smooth" });
+            styleEl.style.outline = "2px solid var(--green)";
+            setTimeout(() => { styleEl.style.outline = ""; }, 3000);
+          }
+        }, 150);
+      };
+    }
+
+    const copyBtn = $("#harvest-copy-json-btn");
+    if (copyBtn) {
+      copyBtn.onclick = handle(async () => {
+        const payload = JSON.stringify(style, null, 2);
+        if (!await copyToClipboard(payload)) throw new Error("Could not copy style JSON to clipboard.");
+        notice(`Style JSON for '${style.name}' copied to clipboard.`);
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = "✓ Copied!";
+        setTimeout(() => { copyBtn.textContent = orig; }, 2500);
+      });
+    }
+
+    const dismissBtn = $("#harvest-dismiss-result-btn");
+    if (dismissBtn) {
+      dismissBtn.onclick = () => {
+        card.hidden = true;
+      };
+    }
+  } catch (err) {
+    console.debug("Failed to fetch harvest result", err);
+  }
+}

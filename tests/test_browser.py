@@ -317,9 +317,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                     drop(page, selector, [image, second])
                     expect(page.locator(f'#{form} .refs-receipt')).to_contain_text('two.png')
                     if form == 'video-form':
-                        page.locator('#video-form .refs-receipt code').nth(1).click(button='right')
-                        expect(page.locator('.refs-context-menu')).to_be_visible()
-                        page.locator('.refs-context-menu-item').click()
+                        page.locator('#video-form .remove-ref').nth(1).click()
                         expect(page.locator('#video-form .refs-receipt code')).to_have_count(1)
                         expect(page.locator('#video-form .refs-receipt')).not_to_contain_text('two.png')
                         drop(page, selector, [image, second])
@@ -761,7 +759,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.25')
+                expect(page.locator('#version')).to_have_text('1.10.26')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1582,7 +1580,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.25')
+                expect(page.locator('#version')).to_have_text('1.10.26')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

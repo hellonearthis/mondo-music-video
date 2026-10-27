@@ -157,6 +157,15 @@ def _compact_ident_prompt(prompt: str, mode: str = "standard") -> str:
 
 
 
+def harvest_text(value):
+    """Some vision models return the style card or directives as JSON objects or lists; store them as text."""
+    if isinstance(value, dict):
+        return '\n'.join(f'{k}: {json.dumps(v) if isinstance(v, (dict, list)) else v}' for k, v in value.items())
+    if isinstance(value, list):
+        return '\n'.join(str(x) for x in value)
+    return str(value or '')
+
+
 def run(home, directory, *, resume=False):
     os.environ['MMV_HOME'] = str(home)
     store = Storage(home)
@@ -207,8 +216,9 @@ def run(home, directory, *, resume=False):
                 raise ValueError(f"Vision engine is offline or unreachable at {endpoint}: {exc}. Please ensure your vision model service is running.") from exc
             raise ValueError(f"Vision service ({endpoint}) failed during style harvest: {exc}") from exc
         card, aesthetic = style.parse_harvest_response(response['choices'][0]['message']['content'])
+        card, aesthetic = harvest_text(card), harvest_text(aesthetic)
         if not card.strip() or not aesthetic.strip(): raise ValueError('Harvest did not return a style card and aesthetic directives')
-        record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic, 'style_card':card}
+        record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic.strip(), 'style_card':card.strip()}
         write_json(store.home / 'styles' / (request['style_id'] + '.json'), record)
         write_json(directory / 'result.json', {'style':record['id']})
         return

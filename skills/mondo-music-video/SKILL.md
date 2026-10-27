@@ -75,7 +75,9 @@ and renderer configuration before starting; model failures stop production.
    seconds. An active operation rejects additional work; never simulate a queue.
 4. On completion, inspect outputs and provide the playback URL or save the
    requested file. To explain the result, `read_music_score` returns the beats,
-   energy, grammars and planned cuts; describe internal cuts as planned. If an
+   energy, grammars and planned cuts; describe internal cuts as planned.
+   `read_output_prompts` (CLI `output-prompts`) lists each passage's written prompt
+   and, while it is still on disk, the renderer's original clip URL. If an
    output lists `quality_warnings` (a near-still passage or borders), tell the
    user; free local renderers already retried once, and paid work needs consent. On failure, inspect the operation log and request IDs. Never
    automatically resubmit paid work after a timeout or ambiguous submission.
@@ -142,7 +144,8 @@ Tell the user these options exist and recommend one for their machine before the
 For the optional slower batched vision check, set `vision_quality_check: true`
 in the video preview request (default `false`). Explain the extra model loading
 and judging time. It needs a local vision-capable `writer_launch` with mmproj;
-this is separate from API vision for style harvesting. Mondo launches it on
+this is separate from API vision for style harvesting (`inspect_studio(kind="vision-guide")`
+explains both). Mondo launches it on
 port 8083 itself; do not ask the user to start it. `inspect_studio` `status` lists
 `services.vision_quality` (`available` = running now, `has_launch` = Mondo can start
 it); offline but launchable is fine. Mondo hands the GPU between models one at a

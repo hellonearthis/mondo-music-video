@@ -39,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.25"
+MGL_APP_VERSION = "1.10.26"
 WEB = Path(__file__).parent
 
 
@@ -1271,6 +1271,14 @@ def create_app(home=None, *, test_hosts=False):
     def styles():
         return [read_json(path) for path in sorted((store.home / "styles").glob("*.json"))]
 
+    @app.get("/api/styles/{style_id}")
+    def get_style(style_id: str):
+        style_id = identifier(style_id)
+        target = inside(store.home / "styles", style_id + ".json")
+        if not target.is_file():
+            raise ValueError("Style not found")
+        return read_json(target)
+
     @app.get("/api/styles/{style_id}/export")
     def export_style(style_id: str):
         style_id = identifier(style_id)
@@ -1430,6 +1438,15 @@ def create_app(home=None, *, test_hosts=False):
         if not guide_path.exists():
             raise HTTPException(status_code=404, detail="Open Prop Protocol guide is not installed")
         return {"title": "What is Open Prop Protocol", "markdown": guide_path.read_text(encoding="utf-8")}
+
+    @app.get("/api/vision/guide")
+    def get_vision_guide():
+        guide_path = Path(__file__).parent.parent / "docs" / "QUALITY_VISION_SETUP.md"
+        if not guide_path.exists():
+            guide_path = Path(sys.prefix) / "share/mondo-music-video/docs/QUALITY_VISION_SETUP.md"
+        if not guide_path.exists():
+            raise HTTPException(status_code=404, detail="Vision setup guide is not installed")
+        return {"title": "Style Harvest and Quality Vision guide", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
     def list_vocabularies():
@@ -1821,6 +1838,14 @@ def create_app(home=None, *, test_hosts=False):
     def output_score(run_id: str):
         return score_view.music_score(store, run_id)
 
+    @app.get("/api/outputs/{run_id}/prompts")
+    def output_prompts(run_id: str):
+        return score_view.passage_breakdown(store, run_id)
+
+    @app.get("/api/outputs/{run_id}/clips/{segment_id}")
+    def output_clip(run_id: str, segment_id: str):
+        path, media_type = score_view.passage_clip(store, run_id, segment_id)
+        return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower())
 
     @app.get("/api/media/{run_id}/{filename}")
     def media_file(run_id: str, filename: str, download: bool = False):

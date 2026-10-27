@@ -1,4 +1,8 @@
-# Verification — 1.10.25
+# Verification — 1.10.26
+
+## 1.10.26 — Collaborator vision guide, harvest result and passage prompts
+
+Full temporary-data/mock-service suite: **787 passed + 141 subtests**. New coverage: passage prompts with trimmed length, `.mov` clip serving, refusal of unrecorded, non-video and out-of-root clip paths, the configured ComfyUI output root, captioned copies following their source, the vision guide and single-style routes, `harvest_text`, and the agent client's `output_prompts` and `vision-guide` inspection (59 MCP tools). `node --check` passed for every web module, `git diff --check` was clean, a fresh version-handler import reported 1.10.26 and `protected_scheme.check()` returned `[]`. The idle app was restarted with existing data and `--no-auto-update` on port 8091: live `/api/version` reports 1.10.26, the served UI returns HTTP 200 with the new dialogs, and status shows no active operation. No real production, paid calls or GPU work was run.
 
 ## 1.10.25 — Collaborator library UI integration
 

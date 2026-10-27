@@ -26,7 +26,7 @@ def create_server(base_url=None):
             raise ToolError(str(exc)) from None
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"] = "status") -> dict[str, Any]:
+    def inspect_studio(kind: Literal["status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "vision-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"] = "status") -> dict[str, Any]:
         """Read local app status, capabilities, actors, styles, vocabularies, outputs, role agreements, settings (no secret values), or a random one-click "quick-start" plan to merge into a preview_production request."""
         return {"kind": kind, "data": invoke(client.inspect, kind)}
 
@@ -375,6 +375,12 @@ def create_server(base_url=None):
         Use it to explain why the video is paced the way it is. Internal cuts are planned; the
         generated clip may not follow every one exactly."""
         return invoke(client.music_score, output_file)
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def read_output_prompts(output_file: str) -> dict[str, Any]:
+        """List a finished output's passages: the written prompt, planned shots, trimmed length and, while the
+        renderer's original clip is still on disk, a URL to play it. Read-only; it never changes or re-renders anything."""
+        return invoke(client.output_prompts, output_file)
 
     @server.tool()
     def export_production_package(run_id: str, zip: bool = False, allow_private_actors: bool = False) -> dict[str, Any]:

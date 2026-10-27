@@ -1,5 +1,23 @@
 # Collaborator review record
 
+## Fork `bdd6973` reviewed (release 1.10.26, 2026-10-27)
+
+The task-start check found exact head `bdd6973221af51932549eb8ee743429e69368e06`, five authored commits after last reviewed `d376164` (`9fb0aac`, `b00add2`, `4560bfc`, `e4f747b`, `bdd6973`). The fork had not merged our 1.10.25, so those commits were cherry-picked onto our `36ef123` in an isolated clone; three conflicts were in lines 1.10.25 had already adapted. Claude Code (Opus 5.5) coordinated and integrated; Codex reviewed the patch and our current source read-only through the Codex plugin.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Vision guide dialog and `GET /api/vision/guide` | Adopted. Codex found the installed-package fallback would 404 (guide not in package data) and the guide called Settings tab 12 (it is 09); both fixed. Codex's second pass found the guide said a quality failure always re-renders; it now says only free local renderers retry once and paid renderers are never resubmitted. Codex also found the clickable service-card `<div>`s were mouse-only; they now have `role="button"`, `tabindex="0"` and Enter/Space. Agents read the guide with `inspect_studio(kind="vision-guide")`. |
+| Harvest result card and `GET /api/styles/{id}` | Adopted. Codex confirmed `status.kind` and `status.result.style` are produced for harvests (`mmv/jobs.py`, `mmv/pipeline.py`). Its second pass found the card appeared only on a live state change; it now also appears after a reload, once per operation. |
+| Harvest dict/list coercion in `mmv/worker.py` | Adopted as a `harvest_text` helper with a unit test. The pinned `mmv/engine/style.py` parser is unchanged; `protected_scheme.check()` stays `[]`. The fork's extra `from . import runtime` was redundant and dropped. |
+| `pattern` escaping (`[a-z0-9_\-]`) | Adopted. Browsers compile `pattern` with the `v` flag, where an unescaped trailing `-` makes the expression invalid and the check is skipped. |
+| Right-click reference menu removed | Adopted. This is the collaborator's own 1.10.24 menu; the visible Remove button remains. The leftover context-menu cursor and README/interface-guide mentions were removed. |
+| Full-width style cards | Adopted. In 1.10.25 we omitted a first-card-only full-width rule because list order does not single out a style; this version applies one column to every card, which has no such problem. |
+| Prompts & clips viewer, `GET /api/outputs/{run}/prompts` and `/clips/{seg}` | Adapted. Codex found: the clip route would serve any `.mp4` path in `renders.json` without a check; `.mov` renderer clips were reported available but refused; and the length shown was the renderer input duration rather than the trimmed passage. The logic moved to `mmv/score_view.py`: one rule decides availability and serving (only the exact video file recorded for that passage, `.mp4`/`.mov`/`.webm`, inside the data folder or the configured `comfy_output` folder, where `local_h3` leaves its clips), and length is `trim_frames / fps`. Codex's second pass found that a recorded path alone did not bound disclosure (now fixed by those roots) and that captioned copies, which keep no prompts, showed an empty viewer; they now follow `source` to the original run. Current final assembly does not create `assembly/work/segNNN.mp4`, so that lookup was dropped. Response keys are the fork's. Agent parity: `read_output_prompts`, `output-prompts`. |
+| `mmv/jobs.py` `reset` difference in the fork tree | Still deferred, for the reasons recorded at `d376164`; untouched by these commits. |
+| Fork version 1.10.30 | Not adopted; this delivery is 1.10.26 under the one-patch-step release rule. |
+
+No fork history merge, private asset import, protected-prompt edit, paid/GPU work, commit or push was part of the review.
+
 ## Fork `d376164` reviewed (release 1.10.25, 2026-10-27)
 
 The task-start check found exact head `d376164fb86d6694b6453689bc330272b5fe498f`. An isolated clone was compared with last reviewed `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763` and our `1e6d93a`. The fork merged our 1.10.24 in `cb34d1f`; its new authored commits are `9ed0aac`, `84763ab`, `fe7bfe3` and `d376164`. Claude Code Sonnet 5.5 reviewed their public diff read-only; Codex reviewed source and integrated the compatible changes.

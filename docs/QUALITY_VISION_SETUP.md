@@ -1,6 +1,19 @@
 # Quality Vision Setup & Architecture Guide
 
-This guide explains how **Quality Vision** works in Mondo Music Video, how it is derived and launched, what causes launch errors, and how to configure and verify it.
+This guide explains how **Vision Services** work in Mondo Music Video: the difference between **Style Harvest Vision** and **Quality Vision (Frame Checker)**, how each is configured and launched, and how to verify their operation.
+
+---
+
+## 0. Style Harvest Vision vs. Quality Vision (Frame Checker)
+
+Mondo uses two separate vision capabilities that serve distinct roles:
+
+| Capability | Role | When It Runs | Where It Is Configured | Needs mmproj? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Style Harvest Vision** | Reads uploaded reference images and writes an 11-axis visual style card (`CRAFT`, `GRAMMAR`, `AFFECT`, etc.) | When clicking **Preview harvest** on **05. Style Harvest** | In **09. Settings** under **Vision Service Endpoint** (e.g. `http://127.0.0.1:8080/v1` or remote API like Gemini / OpenAI) | **Yes** if using local `llama-server`; **No** if using an API provider |
+| **Quality Vision** | Inspects rendered video frames for unrequested borders, letterboxing, or visual artifacts | After video generation completes when **Vision quality check** is enabled | Derived automatically from **Writer Launch** command (`writer_launch`) in **09. Settings**; boots dynamically on port `8083` | **Yes**, requires a sibling `mmproj*.gguf` in the writer model directory |
+
+> **Note for Style Harvesting:** You do **not** need Quality Vision to harvest visual styles. Style Harvest only requires your standard **Vision Service Endpoint** in Settings.
 
 ---
 
@@ -16,7 +29,7 @@ Quality Vision is Mondo's automated inspection stage that evaluates rendered vid
   - Unrequested borders, letterboxing, pillarboxing, and framing devices (e.g. simulated TV frames, phone screens, split screens).
   - Visual glitches, severe artifacts, and rendering corruption.
 - **Decision logic:**
-  - If 2 or more sampled frames show unrequested framing devices, the passage **fails** and triggers an automatic re-render.
+  - If 2 or more sampled frames show unrequested framing devices, the passage **fails**. With a free local renderer (`local_h3`, `comfy_sdk_h3`) Mondo re-renders it once with a new seed; paid renderers are never resubmitted automatically, and the failure is reported as a quality warning instead.
   - Minor defects produce a warning note in the production output without failing the run.
 - **Resource management:**
   - Quality Vision does **not** stay running permanently. It remains offline during rendering to preserve GPU VRAM for ComfyUI.
