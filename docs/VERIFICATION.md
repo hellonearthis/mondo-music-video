@@ -1,4 +1,8 @@
-# Verification — 1.10.23
+# Verification — 1.10.24
+
+## 1.10.24 — Collaborator fork UI integration
+
+Full temporary-data/mock-service suite: 776 passed + 141 subtests. After the final UI fixes, focused browser coverage passed (3 tests) for right-click and visible-button reference removal, saved progress, and missing-field cues. `node --check` passed for both changed JavaScript modules, `git diff --check` was clean, a fresh version-handler import and the live `/api/version` both reported 1.10.24, and `protected_scheme.check()` returned `[]`. The owner verified the running UI. No protected scheme, paid operation or GPU render changed.
 
 ## 1.10.23 — World editor
 

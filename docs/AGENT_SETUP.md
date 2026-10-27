@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.23 exposes **58 tools** and advertises the
+v1.10.24 exposes **58 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -69,6 +69,9 @@ import tools for their image files. A new selection replaces the
 files in that control; upload IDs are passed to the same preview, inspection,
 import and recovery calls. Package selection never accepts a signer or imports
 anything on its own. There is no separate drag action in the agent interfaces.
+The browser can also remove one attached reference. Agents do the same by
+omitting its upload ID from the next preview request's `references` array;
+inspect the new quote before start consent.
 
 When a video fails prompt validation before rendering, `inspect_studio` status
 reports `can_retry_prompts`. Use `preview_retry_prompts(run_id)` (CLI:

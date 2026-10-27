@@ -35,7 +35,9 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
 
 Use actual returned upload/actor/style/output IDs. Actors and additional image
 references share a maximum of nine images. WaveSpeed H3 requires at least one
-image. Read catalog for each backend's resolution menu. Supported renderers are
+image. To remove an image before preview, omit its uploaded ID from the next
+`references` array; inspect the returned quote before explicit start consent.
+Read catalog for each backend's resolution menu. Supported renderers are
 `local_h3`, `comfy_sdk_h3`, `wavespeed`, `seedance_2` and `seedance_2_5`. Hosted providers send the
 selected images and song passages to the configured provider.
 

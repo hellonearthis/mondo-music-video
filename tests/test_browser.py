@@ -151,6 +151,10 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#director-camera [name=ref_policy]').select_option('single_subject')
                 page.locator('#video-form [name=backend]').select_option('wavespeed')
                 expect(page.locator('[data-component-id="card-cast-staging"] .progress-cue')).to_have_text('Needs 1')
+                cue = page.locator('[data-component-id="card-cast-staging"] .progress-cue')
+                expect(cue).to_have_attribute('tabindex', '0')
+                expect(cue).to_have_attribute('aria-label', 'Needs: Cast actor or reference image')
+                expect(page.locator('#video-form .cast-picker').locator('..')).to_have_class('field-needed')
                 expect(page.locator('#director-camera .progress-cue')).to_have_text('Needs 1')
                 page.locator('#director-camera [name=ref_policy]').select_option('all')
                 expect(page.locator('#director-camera .progress-cue')).to_have_text('✓ Done')
@@ -312,6 +316,20 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                     second = {**image, 'name': 'two.png'}
                     drop(page, selector, [image, second])
                     expect(page.locator(f'#{form} .refs-receipt')).to_contain_text('two.png')
+                    if form == 'video-form':
+                        page.locator('#video-form .refs-receipt code').nth(1).click(button='right')
+                        expect(page.locator('.refs-context-menu')).to_be_visible()
+                        page.locator('.refs-context-menu-item').click()
+                        expect(page.locator('#video-form .refs-receipt code')).to_have_count(1)
+                        expect(page.locator('#video-form .refs-receipt')).not_to_contain_text('two.png')
+                        drop(page, selector, [image, second])
+                        page.locator('#video-form .remove-ref').first.click()
+                        expect(page.locator('#video-form .refs-receipt code')).to_have_count(1)
+                        expect(page.locator('#video-form .refs-receipt')).not_to_contain_text('one.png')
+                        page.locator('#video-form [name=backend]').select_option('wavespeed')
+                        expect(page.locator('[data-component-id="card-cast-staging"] .progress-cue')).to_have_text('✓ Done')
+                        page.locator('#video-form .clear-refs').click()
+                        expect(page.locator('[data-component-id="card-cast-staging"] .progress-cue')).to_have_text('Needs 1')
                     self.assertEqual(drop(page, selector, [image])['names'], ['one.png'])
                     expect(page.locator(f'#{form} .refs-receipt')).to_contain_text('one.png')
                     bad = {'name': 'bad.txt', 'type': 'text/plain', 'bytes': [65]}
@@ -700,7 +718,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.23')
+                expect(page.locator('#version')).to_have_text('1.10.24')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1521,7 +1539,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.23')
+                expect(page.locator('#version')).to_have_text('1.10.24')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.24 — Reference controls and visual cues
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `132074d` and `7047aa3`, reviewed at exact head `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763`. Individual uploaded reference images can be removed with a right-click menu or a visible Remove button. The Music Video form highlights missing required fields and explains each Needs cue. The dark theme uses the fork's blue and gold palette; instrument performance has a clearer tooltip. The reference removal also refreshes form progress immediately, and keyboard/touch access uses the visible button. Agent preview requests already accept an explicit reference list, so agents can make the same selection before requesting a quote; confirmation and paid-start rules are unchanged.
+
+No protected prompting, renderer, default model, automatic retry, private asset, or paid-consent behavior changed. See [collaborator review](COLLABORATOR_REVIEW.md) for the integration decisions.
+
 ## 1.10.23 — World editor
 
 - New: **Edit** next to Open on each world's row, and at the top and bottom of an opened world. Names, rules, lists, subjects and vocabulary pools can be changed or removed in place. The pools reuse the Visual Vocabulary editor's tabs, standard-term checkboxes and `vocab-model.js` draft logic (a world's pools are a custom vocabulary: its own terms plus kept-out terms). Changes are previewed field by field before **Save as new version** is enabled, and any further edit requires a new preview. Saving writes the next version, keeps the world's sources and earlier versions, and is refused when the world changed after the editor was opened or nothing changed.
