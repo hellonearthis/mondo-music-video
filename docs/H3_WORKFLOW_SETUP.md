@@ -46,7 +46,9 @@ chosen `h3_models` entries. The roles are `diffusion_model`, `text_encoder`,
 Settings first and preserve unrelated values. The API creates a private graph
 and map under `MMV_HOME/config` and updates `workflow_map_path`. See
 [MODEL_SETTINGS](MODEL_SETTINGS.md). This mechanism changes filenames only;
-it deliberately preserves existing precision options and custom nodes.
+it deliberately preserves existing precision options and custom nodes. The exception
+is a bundled diffusion model whose preset has a different step count from the saved
+workflow: its own bundled workflow is used instead, keeping the other chosen models.
 
 When the selected variant needs other changes, the agent must make them too:
 

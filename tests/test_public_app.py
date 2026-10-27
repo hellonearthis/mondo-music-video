@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.26")
+        self.assertEqual(api_version()["version"], "1.10.27")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.26", (root / "README.md").read_text())
+        self.assertIn("1.10.27", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -1678,6 +1678,33 @@ class PublicAppTests(unittest.TestCase):
         # Keep the operator-owned sources intact, including precision and added nodes.
         self.assertEqual(read_json(Path(mapping['workflow'])), graph)
         self.assertEqual(read_json(map_path), mapping)
+
+    def test_bundled_diffusion_model_brings_its_own_workflow_and_steps(self):
+        from mmv.workflow_presets import map_steps, preset_path
+        standard_unet, fast_unet = 'minimax_h3_ref2va_pruned_bf16.safetensors', 'fasth3_omniref_8step_pruned_bf16.safetensors'
+        for category, name in [('diffusion_models', standard_unet), ('diffusion_models', fast_unet),
+                               ('text_encoders', 'my_encoder.safetensors')]:
+            folder = self.home / 'models' / category
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_text('test fixture; not real weights')
+        settings = {**self.store.settings(), 'workflow_map_path': preset_path('fasth3_bf16')}
+        self.client.put('/api/settings', json={**settings, 'h3_models': {'text_encoder': 'my_encoder.safetensors'}}).raise_for_status()
+        self.assertEqual(self.client.get('/api/settings').json()['workflow_steps'], 8)
+        # The 20-step model chosen on the 8-step FastH3 workflow switches to the standard workflow.
+        settings = self.store.settings()
+        self.client.put('/api/settings', json={**settings, 'h3_models': {'diffusion_model': standard_unet}}).raise_for_status()
+        body = self.client.get('/api/settings').json()
+        self.assertEqual((body['workflow_steps'], map_steps(self.store.settings()['workflow_map_path'])), (20, 20))
+        self.assertEqual(body['settings']['h3_models']['diffusion_model'], standard_unet)
+        self.assertEqual(body['settings']['h3_models']['text_encoder'], 'my_encoder.safetensors')
+        saved = read_json(Path(read_json(Path(self.store.settings()['workflow_map_path']))['workflow']))
+        self.assertEqual([n['inputs']['steps'] for n in saved.values() if 'steps' in n['inputs']], [20])
+        # And back: the FastH3 model brings the 8-step workflow.
+        settings = self.store.settings()
+        self.client.put('/api/settings', json={**settings, 'h3_models': {'diffusion_model': fast_unet}}).raise_for_status()
+        body = self.client.get('/api/settings').json()
+        self.assertEqual((body['workflow_steps'], body['settings']['h3_models']['diffusion_model']), (8, fast_unet))
+        self.assertEqual(body['settings']['h3_models']['text_encoder'], 'my_encoder.safetensors')
 
     def test_ambiguous_model_loaders_are_not_silently_selected(self):
         self.install_test_h3_models()

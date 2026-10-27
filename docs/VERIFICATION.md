@@ -1,4 +1,8 @@
-# Verification — 1.10.26
+# Verification — 1.10.27
+
+## 1.10.27 — H3 model picker brings the model's own workflow
+
+Full temporary-data/mock-service suite: **788 passed + 141 subtests**, including a new test that switches FastH3 → 20-step model → FastH3 model and checks the step count, saved graph steps and kept text encoder. `node --check` passed for `settings.js`, `git diff --check` was clean, a fresh version-handler import reported 1.10.27 and `protected_scheme.check()` returned `[]`. The app was restarted after the owner cancelled the affected run; live `/api/version` reports 1.10.27. The owner's saved selection (20-step model inside the FastH3 graph, 8 steps) was resubmitted and now resolves to the bundled standard workflow, 20 steps, with the same text encoder. No real production, paid calls or GPU work was run.
 
 ## 1.10.26 — Collaborator vision guide, harvest result and passage prompts
 

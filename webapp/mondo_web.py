@@ -35,11 +35,11 @@ from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabula
 from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storyboard import Storyboard
-from mmv.workflow_presets import preset_path, workflow_presets
+from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.26"
+MGL_APP_VERSION = "1.10.27"
 WEB = Path(__file__).parent
 
 
@@ -121,8 +121,22 @@ def _get_h3_model_info(store, settings=None):
     return {'current': current, 'installed': installed}
 
 
+def _rebase_for_model(store, settings, models):
+    """A bundled diffusion model brings its own workflow: choosing the 20-step H3 model on an 8-step
+    FastH3 workflow (or the reverse) switches to that model's preset and keeps the other chosen models.
+    A custom workflow whose step count already matches is left as it is."""
+    current = _get_h3_model_info(store, settings)['current']
+    chosen = {**current, **models}
+    preset = preset_for_model(chosen.get('diffusion_model'))
+    if preset is None or map_steps(preset['path']) == map_steps(settings['workflow_map_path']):
+        return models
+    settings['workflow_map_path'] = preset['path']
+    return chosen
+
+
 def _update_h3_models(store, settings, models):
     """Derive a private workflow snapshot; never overwrite the source graph/map."""
+    models = _rebase_for_model(store, settings, models)
     builder = _h3_workflow(settings)
     nodes = _h3_model_nodes(builder.base)
     info = _get_h3_model_info(store, settings)
@@ -912,7 +926,7 @@ def create_app(home=None, *, test_hosts=False):
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
-                "workflow_presets": workflow_presets(),
+                "workflow_presets": workflow_presets(), "workflow_steps": map_steps(s["workflow_map_path"]),
                 "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY",

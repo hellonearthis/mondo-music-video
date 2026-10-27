@@ -69,4 +69,15 @@ models come from `FastVideo/FastH3-Omni-Comfy`; their filenames must exist in
 ComfyUI's `diffusion_models` and `text_encoders`. Neither has a LoRA option.
 Agents choose one with `update_studio_settings({"workflow_preset": "fasth3_int8"})`
 (`standard`, `fasth3_int8`, `fasth3_bf16`) while idle; `inspect_studio("settings")`
-lists them as `workflow_presets`. A map's `default_steps` sets the sampler steps.
+lists them as `workflow_presets`. A map's `default_steps` sets the sampler steps;
+`inspect_studio("settings")` reports the saved workflow's count as `workflow_steps`, and
+Settings shows it under the workflow path.
+
+Since 1.10.27, choosing a bundled diffusion model in the H3 model picker (or
+`h3_models.diffusion_model`) also brings that model's own workflow when its step count
+differs from the saved one: the 20-step `minimax_h3_ref2va_pruned_bf16` model on a
+FastH3 workflow switches to the standard 20-step graph, and a FastH3 model on the
+standard graph switches to its 8-step preset. The other chosen models (text encoder,
+VAEs) are kept. Earlier versions swapped only the filename, so the full model could
+run with FastH3's 8 steps. A custom workflow whose step count already matches is
+left as it is.

@@ -1,5 +1,11 @@
 # Releases
 
+## 1.10.27 — The H3 model picker brings the model's own workflow
+
+Fixed: choosing the 20-step H3 model (`minimax_h3_ref2va_pruned_bf16`) in Settings while a FastH3 workflow was selected swapped only the filename into FastH3's graph, so the full model rendered with FastH3's 8 sampler steps. A bundled diffusion model now brings its own bundled workflow and step count whenever they differ from the saved workflow (in both directions), keeping the other chosen models such as the text encoder. A custom workflow whose step count already matches is unchanged. Settings shows the saved workflow's sampler steps, and `inspect_studio("settings")` reports them as `workflow_steps`; agents' `update_studio_settings` with `h3_models` follows the same rule.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.10.26 — Vision guide, harvest result and passage prompts
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `9fb0aac`, `b00add2`, `4560bfc`, `e4f747b` and `bdd6973`, reviewed at exact head `bdd6973221af51932549eb8ee743429e69368e06`.
