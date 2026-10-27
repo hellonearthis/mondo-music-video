@@ -21,6 +21,128 @@ const GRAMMAR_CLASSES = {
 let pendingExportRun = null;
 let pendingDeleteRun = null;
 
+async function openPromptsDialog(output) {
+  const dialog = $("#prompts-clips-dialog");
+  if (!dialog) return;
+  const runId = output.file.split("/")[0];
+  const listEl = $("#prompts-dialog-list");
+  const titleEl = $("#prompts-dialog-title");
+  const subEl = $("#prompts-dialog-subtitle");
+  if (titleEl) titleEl.textContent = `Prompts & Clips: ${output.title}`;
+  if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
+  if (listEl) {
+    listEl.innerHTML = '<div class="prompts-dialog-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
+  }
+  dialog.showModal();
+
+  try {
+    const res = await api(`/api/outputs/${encodeURIComponent(runId)}/prompts`);
+    if (!res.ok) throw new Error("Could not load prompts for this production");
+    const data = await res.json();
+    if (subEl) {
+      subEl.textContent = `${data.segments.length} passage${data.segments.length === 1 ? "" : "s"} · ${data.kind} production`;
+    }
+    if (!data.segments.length) {
+      listEl.innerHTML = '<div class="empty" style="margin:16px 0;">No individual passage prompts recorded for this production.</div>';
+      return;
+    }
+
+    listEl.replaceChildren(...data.segments.map((seg, idx) => {
+      const card = document.createElement("article");
+      card.className = "prompts-passage-card card";
+      card.style.margin = "0 0 16px 0";
+      card.style.padding = "16px";
+
+      const header = document.createElement("div");
+      header.className = "prompts-passage-header";
+      header.style.display = "flex";
+      header.style.justifyContent = "space-between";
+      header.style.alignItems = "center";
+      header.style.marginBottom = "10px";
+      header.style.flexWrap = "wrap";
+      header.style.gap = "8px";
+
+      const title = document.createElement("h3");
+      title.style.margin = "0";
+      title.style.fontSize = "16px";
+      title.textContent = `Passage ${seg.index + 1} (${seg.segment_id})`;
+
+      const badge = document.createElement("span");
+      badge.className = "oap-badge-pill";
+      badge.style.background = "rgba(255,255,255,0.08)";
+      badge.textContent = `${seg.duration ? seg.duration.toFixed(1) + "s" : ""} ${seg.trim_frames ? "· " + seg.trim_frames + " frames" : ""}`.trim();
+
+      header.append(title, badge);
+      card.append(header);
+
+      const grid = document.createElement("div");
+      grid.className = "prompts-passage-grid";
+
+      if (seg.has_clip && seg.clip_url) {
+        const vidWrap = document.createElement("div");
+        vidWrap.className = "prompts-passage-video-wrap";
+        vidWrap.style.marginBottom = "12px";
+        const v = document.createElement("video");
+        v.src = seg.clip_url;
+        v.controls = true;
+        v.preload = "metadata";
+        v.style.width = "100%";
+        v.style.maxHeight = "280px";
+        v.style.borderRadius = "4px";
+        v.style.background = "#101814";
+        vidWrap.append(v);
+        grid.append(vidWrap);
+      }
+
+      if (seg.prompt) {
+        const preWrap = document.createElement("div");
+        preWrap.className = "prompts-passage-text-wrap";
+        const pre = document.createElement("pre");
+        pre.className = "prompts-passage-pre";
+        pre.style.whiteSpace = "pre-wrap";
+        pre.style.wordBreak = "break-word";
+        pre.style.fontSize = "13px";
+        pre.style.lineHeight = "1.6";
+        pre.style.background = "var(--input-bg, rgba(0,0,0,0.25))";
+        pre.style.border = "1px solid var(--line)";
+        pre.style.borderRadius = "4px";
+        pre.style.padding = "12px";
+        pre.style.margin = "0";
+        pre.style.maxHeight = "240px";
+        pre.style.overflowY = "auto";
+        pre.textContent = seg.prompt;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "quiet";
+        copyBtn.style.marginTop = "8px";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.textContent = "📋 Copy Prompt";
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(seg.prompt);
+          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
+        };
+
+        preWrap.append(pre, copyBtn);
+        grid.append(preWrap);
+      } else {
+        const noPrompt = document.createElement("p");
+        noPrompt.className = "muted";
+        noPrompt.textContent = "No prompt text saved for this passage.";
+        grid.append(noPrompt);
+      }
+
+      card.append(grid);
+      return card;
+    }));
+  } catch (err) {
+    if (listEl) {
+      listEl.innerHTML = `<div class="empty" style="color:var(--danger, #e05252);margin:16px 0;">Failed to load prompts: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+
 const escapeHtml = (s = "") =>
   String(s)
     .replace(/&/g, "&amp;")
@@ -500,6 +622,9 @@ export async function loadOutputs() {
     const actions = document.createElement("div");
     actions.className = "output-actions";
     actions.append(download, upscale);
+    const viewPromptsBtn = text("button", "Prompts & clips", "secondary", `View prompts and passage clips for ${output.title}`);
+    viewPromptsBtn.onclick = () => openPromptsDialog(output);
+    actions.append(viewPromptsBtn);
     if (output.kind === "video") actions.append(caption);
     if (output.kind === "video") actions.append(exportButton(output));
     actions.append(deleteBtn);
@@ -701,5 +826,13 @@ export function initUpscaleForm() {
   $("#upscale-form").onsubmit = handle(async event => {
     await json("/api/upscale", { ...upscaleBody(), ...(state.upscaleCloud ? { max_credits: state.upscaleCredits } : {}) });
     $("#upscale-dialog").close();
+  });
+  $("#prompts-dialog-close-btn")?.addEventListener("click", () => $("#prompts-clips-dialog")?.close());
+  $("#prompts-clips-dialog")?.addEventListener("close", () => {
+    $$("#prompts-dialog-list video").forEach(v => {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    });
   });
 }

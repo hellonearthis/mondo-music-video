@@ -1830,3 +1830,34 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
 [data-theme=dark] #opp-library-fold summary {
   color: var(--ink);
 }
+
+/* Prompts & Clips breakdown dialog */
+.prompts-clips-dialog {
+  max-width: 820px !important;
+  width: calc(100% - 32px) !important;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.prompts-dialog-header {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+.prompts-dialog-header h2 {
+  margin: 0 0 6px 0;
+  font-size: 22px;
+}
+.prompts-dialog-list {
+  overflow-y: auto;
+  max-height: calc(85vh - 180px);
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.prompts-passage-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card, #1c2e24);
+}

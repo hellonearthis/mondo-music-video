@@ -545,6 +545,18 @@
   <button type="button" id="delete-confirm-btn" class="primary" style="background:#b91c1c;border-color:#991b1b;color:#fff;">Delete permanently</button>
 </div>
 </dialog>
+<dialog id="prompts-clips-dialog" class="prompts-clips-dialog" data-component="Prompts &amp; Clips Dialog" data-component-id="prompts-clips-dialog" data-component-source="webapp/index.html" data-tooltip="View passage prompts and rendered clips">
+  <form method="dialog"><button class="dialog-close" aria-label="Close prompts viewer" data-tooltip="Close prompts and clips viewer">×</button></form>
+  <div class="eyebrow">PRODUCTION BREAKDOWN</div>
+  <div class="prompts-dialog-header">
+    <h2 id="prompts-dialog-title">Passage Prompts &amp; Rendered Clips</h2>
+    <p id="prompts-dialog-subtitle" class="muted">Review the written prompts and individual rendered clips that formed each passage of this video.</p>
+  </div>
+  <div id="prompts-dialog-list" class="prompts-dialog-list"></div>
+  <div class="picker-actions" style="margin-top:16px;display:flex;justify-content:flex-end;">
+    <button type="button" class="primary" id="prompts-dialog-close-btn">Done</button>
+  </div>
+</dialog>
 <dialog id="vocab-helper-dialog" class="oap-dialog vocab-guide-dialog" data-component="Visual Vocabulary Guide Dialog" data-component-id="vocab-helper-dialog" data-component-source="webapp/index.html" aria-labelledby="vocab-guide-title">
 <form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide" data-tooltip="Dismiss guide dialog">×</button></form>
 <div class="vocab-guide-header">
