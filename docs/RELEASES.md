@@ -1,5 +1,13 @@
 # Releases
 
+## 1.10.25 — Actor and style library presentation
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `9ed0aac`, `84763ab`, `fe7bfe3` and `d376164`, reviewed at exact head `d376164fb86d6694b6453689bc330272b5fe498f`. Reference-image tooltips now separate the name, thumbnail and removal hint. The Actors & OAP creation, package-import and role-agreement cards have independent fold controls. A newly selected actor portrait appears before creation, local actor cards show the visual-description length, and styles with an 11-axis card have a clearer expandable view.
+
+Integration fixes: the selected filename is inserted as text instead of HTML; section headings remain headings with their toggle buttons inside; the fold initialization is safe to repeat; the existing style-action handler is reused; the first style is not arbitrarily stretched across the grid; and tooltip guidance includes the visible Remove action. The new fold state and portrait preview are browser presentation only. Agent actor/OAP/agreement operations and style inspection/export already expose the underlying actions and results; no new agent action or paid consent path is introduced. Existing model, renderer, OAP trust and production defaults are unchanged. See [collaborator review](COLLABORATOR_REVIEW.md).
+
+No private assets, protected prompts, automatic paid retries or GPU work changed.
+
 ## 1.10.24 — Reference controls and visual cues
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `132074d` and `7047aa3`, reviewed at exact head `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763`. Individual uploaded reference images can be removed with a right-click menu or a visible Remove button. The Music Video form highlights missing required fields and explains each Needs cue. The dark theme uses the fork's blue and gold palette; instrument performance has a clearer tooltip. The reference removal also refreshes form progress immediately, and keyboard/touch access uses the visible button. Agent preview requests already accept an explicit reference list, so agents can make the same selection before requesting a quote; confirmation and paid-start rules are unchanged.

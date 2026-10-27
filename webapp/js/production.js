@@ -109,7 +109,12 @@ export function renderReferenceReceipt(form, names = [], hashes = []) {
   }
   const items = names.map((name, i) => {
     const hash = hashes[i];
-    const imgAttr = hash ? ` data-tooltip="Reference: ${escapeHtml(name)}" data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"` : ` data-tooltip="Reference: ${escapeHtml(name)}"`;
+    const titleText = `Reference: ${escapeHtml(name)}`;
+    const footerText = "Use Remove, or right-click the filename";
+    const tooltipAttrs = ` data-tooltip="${titleText}" data-tooltip-footer="${footerText}"`;
+    const imgAttr = hash
+      ? `${tooltipAttrs} data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"`
+      : tooltipAttrs;
     return `<li><code data-ref-index="${i}"${imgAttr}>${escapeHtml(name)}</code><button type="button" class="remove-ref" data-ref-index="${i}" aria-label="Remove reference image ${escapeHtml(name)}">Remove</button></li>`;
   }).join("");
   receipt.innerHTML = `<ul class="file-list">${items}</ul>`;

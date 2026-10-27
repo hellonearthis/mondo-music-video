@@ -124,7 +124,7 @@ To toggle Component Labeling Mode in the web interface:
 - **Used in**: Section 03 navigation
 - **Code**: `webapp/index.html`, `webapp/js/library.js`, `webapp/js/guides.js`
 - **Design rules**: Cast management, reference portrait binding, and Open Actor Protocol packaging.
-- **Actor editing**: Locally created actor cards expose an Edit visual description button and double-click inline editor. Imported signed OAP actors remain read-only, since export preserves their original package. The OPP help button opens the local guide; inspection and explicit signer acceptance remain separate from import.
+- **Actor editing**: Locally created actor cards expose an Edit visual description button, current description length and double-click inline editor. Imported signed OAP actors remain read-only, since export preserves their original package. The OPP help button opens the local guide; inspection and explicit signer acceptance remain separate from import.
 
 ### Open Prop Protocol Library
 - **ID**: `opp-library-fold`
@@ -135,8 +135,8 @@ To toggle Component Labeling Mode in the web interface:
 ### Actor Creation Form
 - **ID**: `actor-create-form`
 - **Used in**: Inside `panel-actors`
-- **Code**: `webapp/index.html`, `webapp/js/actors.js`
-- **Design rules**: Card with actor ID, display name, visual description, and portrait reference image upload.
+- **Code**: `webapp/index.html`, `webapp/js/library.js`
+- **Design rules**: Collapsible card with actor ID, display name, visual description, and a local portrait preview before saving. OAP import and role-agreement cards have the same independent fold controls; folding never accepts a signer or agreement.
 
 ### OAP Import Card
 - **ID**: `oap-import-card`

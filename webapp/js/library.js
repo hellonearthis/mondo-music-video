@@ -32,13 +32,13 @@ const styleCardHtml = (style) => {
   const escId = escapeHtml(style.id);
   const escName = escapeHtml(style.name);
   const styleCardFold = style.style_card ? `
-    <details class="style-card-fold" style="margin-top:8px;font-size:14px;">
-      <summary style="cursor:pointer;color:var(--accent,#d08770);font-weight:600;">View 11-Axis Forensic Card</summary>
-      <pre style="white-space:pre-wrap;background:var(--card-bg,#1a1a1a);padding:8px;border-radius:4px;max-height:200px;overflow-y:auto;margin-top:6px;font-family:monospace;">${escapeHtml(style.style_card)}</pre>
+    <details class="style-card-fold">
+      <summary class="style-card-fold-toggle" data-tooltip="Expand to view the 11-axis visual craft, grammar, and forensic breakdown for this style">View 11-Axis Forensic Card</summary>
+      <pre class="style-card-pre">${escapeHtml(style.style_card)}</pre>
     </details>
   ` : "";
   return `
-    <article class="card" title="Style card: ${escName}" data-id="${escId}" data-name="${escName}">
+    <article class="card" data-id="${escId}" data-name="${escName}">
       <h2>${escName}</h2>
       <p>${escapeHtml(style.direction)}</p>
       ${styleCardFold}
@@ -67,7 +67,7 @@ const actorCardHtml = (actor) => {
       <img src="/api/actors/${encodeURIComponent(actor.id)}/reference" alt="${escName} reference" loading="lazy">
       <h2>${escName}</h2>
       <p class="actor-desc-text" ${actor.oap ? "" : 'data-tooltip="Double-click to edit visual description" title="Double-click to edit visual description"'}>${overview}</p>
-      ${actor.oap ? "" : '<button type="button" class="quiet actor-edit-btn" data-edit-description>Edit visual description</button>'}
+      ${actor.oap ? "" : `<div class="actor-desc-actions"><button type="button" class="quiet actor-edit-btn" data-edit-description>Edit visual description</button><span class="actor-desc-count" data-tooltip="Visual description length">${(actor.description || "").length} chars</span></div>`}
       <p>${oapNote}</p>
       <button type="button" class="secondary" data-action="export-oap" title="Export signed OAP package for ${escName}">Export OAP package</button>
       ${auditionSection}
@@ -311,7 +311,45 @@ export function renderOapReportCard(report, allowUnsigned) {
 
 // --- Delegated Action Listeners & Form Submissions ---
 
+function makeCollapsibleCard(card, id) {
+  if (!card) return;
+  const title = card.querySelector(":scope > .card-title");
+  const heading = title?.querySelector(":scope > h2");
+  if (!heading || heading.querySelector(".progress-toggle")) return;
+  const body = document.createElement("div");
+  body.className = "progress-body";
+  for (const child of [...card.children].filter(c => c !== title)) {
+    body.append(child);
+  }
+  card.append(body);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "progress-toggle";
+  toggle.setAttribute("aria-controls", id + "-body");
+  toggle.setAttribute("aria-expanded", "true");
+
+  while (heading.firstChild) toggle.append(heading.firstChild);
+  heading.append(toggle);
+  body.id = id + "-body";
+
+  toggle.addEventListener("click", () => {
+    const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!isExpanded));
+    body.hidden = isExpanded;
+  });
+}
+
+function initActorPanelCards() {
+  const panel = $("#panel-actors");
+  if (!panel) return;
+  makeCollapsibleCard($("#actor-form"), "actor-create-card");
+  makeCollapsibleCard(panel.querySelector('[data-component-id="oap-import-card"]'), "oap-import-card");
+  makeCollapsibleCard($("#agreements-card"), "agreements-card");
+}
+
 export function initLibraryForms() {
+  initActorPanelCards();
   // Delegated handler for Style cards
   $("#style-list")?.addEventListener("click", handle(async (e) => {
     const btn = e.target.closest("button[data-action]");
@@ -448,9 +486,47 @@ export function initLibraryForms() {
     }
   }));
 
-  $("#actor-form").onsubmit = handle(async (event) => {
+  const actorForm = $("#actor-form");
+  const actorRefInput = actorForm?.querySelector("input[name=reference]");
+  const actorRefPreview = $("#actor-ref-preview");
+  let actorRefObjectUrl = null;
+
+  function updateActorRefPreview(file) {
+    if (!actorRefPreview) return;
+    if (actorRefObjectUrl) {
+      URL.revokeObjectURL(actorRefObjectUrl);
+      actorRefObjectUrl = null;
+    }
+    if (!file) {
+      actorRefPreview.hidden = true;
+      actorRefPreview.replaceChildren();
+      return;
+    }
+    actorRefObjectUrl = URL.createObjectURL(file);
+    const image = document.createElement("img");
+    image.className = "actor-ref-thumb";
+    image.src = actorRefObjectUrl;
+    image.alt = "";
+    const name = document.createElement("span");
+    name.className = "actor-ref-name";
+    name.textContent = file.name;
+    actorRefPreview.replaceChildren(image, name);
+    actorRefPreview.hidden = false;
+  }
+
+  actorRefInput?.addEventListener("change", () => {
+    const file = actorRefInput.files?.[0];
+    updateActorRefPreview(file);
+  });
+
+  actorForm?.addEventListener("reset", () => {
+    updateActorRefPreview(null);
+  });
+
+  actorForm.onsubmit = handle(async (event) => {
     await api("/api/actors", { method: "POST", body: new FormData(event.target) });
     event.target.reset();
+    updateActorRefPreview(null);
     await loadActors();
     scheduleSave();
   });

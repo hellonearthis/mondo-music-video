@@ -42,13 +42,19 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.24 exposes **58 tools** and advertises the
+v1.10.25 exposes **58 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
 endpoint, with HTTPS required remotely and no redirects or generation.
 
 `update_actor(actor_id, description)` changes only a locally created actor's visual description while idle; imported signed OAP actors require a revised package from the signer. The CLI equivalent is `mondo-music-video-agent update-actor ID DESCRIPTION`. Use `inspect_studio(kind="opp-guide")` or `mondo-music-video-agent opp-guide` for the OPP guide. The `auto_collapse_panels` preference is available through `update_studio_settings`, `AgentClient.update_settings`, and `mondo-music-video-agent update-settings '{"auto_collapse_panels":false}'`. It defaults to true. Panel **Done** means required form inputs are present; agents still request a preview quote and explicit start consent.
+
+The Actors & OAP card folds, selected portrait preview and style-card fold are
+browser presentation. Agent actor creation and OAP inspection/import use the
+existing client/MCP actions, with their normal result inspection and signer
+acceptance. Agents can read a style's 11-axis card through style inspection or
+export; folding it in the browser does not change its data.
 
 To check the public OAP actor collection, call `check_oap_collection` (or
 `inspect_studio(kind="oap-collection")`; CLI `oap-collection`). This checks only

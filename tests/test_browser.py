@@ -350,8 +350,9 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('#actor-form [name=name]').fill('Drop Actor')
                 page.locator('#actor-form [name=description]').fill('Test portrait')
                 drop(page, '#actor-form [name=reference]', [image])
-                page.locator('#actor-form button').click()
+                page.locator('#actor-form').get_by_role('button', name='Create actor').click()
                 expect(page.locator('#actor-list')).to_contain_text('Drop Actor')
+                expect(page.locator('#actor-list article').filter(has_text='Drop Actor').locator('.actor-desc-count')).to_have_text('13 chars')
                 expect(page.locator('#instrument-library-fold')).to_have_count(0)
                 page.locator('#opp-library-fold summary').click()
                 expect(page.locator('#opp-library')).to_contain_text('Electric guitar')
@@ -381,6 +382,48 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.unroute('**/api/upload/reference')
                 page.locator('#style-import-file').set_input_files({'name': 'chosen.json', 'mimeType': 'application/json', 'buffer': b'{}'})
                 self.assertEqual(page.locator('#style-import-file').evaluate('(node) => node.files[0].name'), 'chosen.json')
+            finally:
+                browser.close()
+
+    def test_actor_cards_collapse_and_preview_filename_is_text(self):
+        from test_public_app import picture
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#actor-form .progress-toggle") !== null')
+                page.locator('.nav[data-panel=actors]').click()
+                expect(page.get_by_role('heading', name='Create an actor')).to_have_count(1)
+                for card in ('#actor-form', '[data-component-id="oap-import-card"]', '#agreements-card'):
+                    toggle = page.locator(f'{card} > .card-title .progress-toggle')
+                    expect(toggle).to_have_attribute('aria-expanded', 'true')
+                    toggle.click()
+                    expect(toggle).to_have_attribute('aria-expanded', 'false')
+                    expect(page.locator(f'{card} > .progress-body')).to_be_hidden()
+                    toggle.click()
+                    expect(page.locator(f'{card} > .progress-body')).to_be_visible()
+                filename = '<img src=x onerror=alert(1)>.png'
+                page.locator('#actor-form [name=reference]').set_input_files({
+                    'name': filename, 'mimeType': 'image/png', 'buffer': picture()
+                })
+                preview = page.locator('#actor-ref-preview')
+                expect(preview).to_be_visible()
+                expect(preview.locator('img')).to_have_count(1)
+                expect(preview.locator('.actor-ref-name')).to_have_text(filename)
+                page.evaluate('document.querySelector("#actor-form").reset()')
+                expect(preview).to_be_hidden()
+                page.route('**/api/styles', lambda route: route.fulfill(json=[{
+                    'id': 'forensic_test', 'name': 'Forensic Test', 'direction': 'Muted light',
+                    'style_card': 'Axis 1: muted light'
+                }]))
+                page.evaluate('async () => (await import("/js/library.js")).loadStyles()')
+                page.locator('.nav[data-panel=styles]').click()
+                fold = page.locator('#style-list .style-card-fold')
+                expect(fold.locator('.style-card-pre')).to_be_hidden()
+                fold.locator('summary').click()
+                expect(fold.locator('.style-card-pre')).to_have_text('Axis 1: muted light')
             finally:
                 browser.close()
 
@@ -718,7 +761,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.24')
+                expect(page.locator('#version')).to_have_text('1.10.25')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1539,7 +1582,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.10.24')
+                expect(page.locator('#version')).to_have_text('1.10.25')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -1,4 +1,8 @@
-# Verification — 1.10.24
+# Verification — 1.10.25
+
+## 1.10.25 — Collaborator library UI integration
+
+Full temporary-data/mock-service suite: **777 passed + 141 subtests**. Focused browser coverage: **4 passed**, including actor-card folding, safe selected-filename preview and reset, style-card expansion, actor creation, OAP collection, and reference-image controls. JavaScript syntax checks passed for `library.js`, `production.js` and `tooltips.js`; `git diff --check` was clean. A fresh version-handler import reported 1.10.25 and `protected_scheme.check()` returned `[]`. The app is running with existing data and `--no-auto-update` as a user service on port 8091: live `/api/version` reports 1.10.25, `/api/status` is complete (no active operation), and the served UI returns HTTP 200. No real production, paid calls or GPU work was run for this release.
 
 ## 1.10.24 — Collaborator fork UI integration
 

@@ -203,4 +203,6 @@ Music Video panel Done/Needs/Reviewed cues describe form inputs only. They do no
 
 Individual reference images can be removed from a browser draft. Agent previews select references by upload ID; omit an ID from the next request to make the same change, then inspect the new quote before start consent. Panel Needs labels remain form guidance only.
 
+Actors & OAP card folding and the selected portrait preview are browser presentation state; they do not change actor creation, OAP signer acceptance or role-agreement consent. Agents use the existing actor, OAP and agreement actions and inspect their results. Style-card folding likewise leaves style inspection/export unchanged.
+
 The Actors & OAP public collection button checks the current `oap-actors` index only when pressed. A selected package is staged and verified before the existing signer-acceptance import. Agents have matching `check_oap_collection` and `stage_oap_collection` actions (CLI and MCP), and must review the returned manifest and obtain explicit signer acceptance before import. OAP v0.3 collection packages coexist with the original four OAP v0.2 packages. Checking or staging does not expand the authorized public starter roster.

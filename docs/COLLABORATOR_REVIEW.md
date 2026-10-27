@@ -1,5 +1,19 @@
 # Collaborator review record
 
+## Fork `d376164` reviewed (release 1.10.25, 2026-10-27)
+
+The task-start check found exact head `d376164fb86d6694b6453689bc330272b5fe498f`. An isolated clone was compared with last reviewed `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763` and our `1e6d93a`. The fork merged our 1.10.24 in `cb34d1f`; its new authored commits are `9ed0aac`, `84763ab`, `fe7bfe3` and `d376164`. Claude Code Sonnet 5.5 reviewed their public diff read-only; Codex reviewed source and integrated the compatible changes.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Reference tooltip footer and thumbnail | Adopted. The removal hint now mentions the visible Remove button as well as right-click, and the existing text-node tooltip renderer preserves the thumbnail without HTML injection. |
+| Actor portrait preview and description count | Adopted. The fork's selected filename went into `innerHTML`; it now enters a text node, while the preview image uses a local object URL cleared on reset/change. The count is shown only for editable local descriptions. |
+| Actors & OAP accordion cards | Adopted with section headings retained outside the buttons, a repeat-initialization guard and independent fold controls. Folding does not bypass OAP inspection, signer acceptance or role-agreement consent. |
+| Style 11-axis card toggle | Adopted with the existing `handle()` action wrapper retained. The fork's `#style-list > article:first-child` full-width rule was omitted because list order does not identify a featured style. The existing export path still contains the card data. |
+| `mmv/jobs.py` `reset` difference in the merged fork tree | Deferred again: it is outside these new authored commits, has no new caller, and changes operation-state handling rather than this library UI. A separate workflow review would be needed. |
+
+No fork history merge, private asset import, protected-prompt edit, paid/GPU work, commit or push was part of the review.
+
 ## Fork `7047aa3` reviewed (release 1.10.24, 2026-10-27)
 
 Reviewed an isolated clone at exact revision `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763`, compared with last reviewed `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` and this repository's `e074c50`. Merge commit `822dcc8` brought upstream releases through 1.10.23 into the fork. Its two new authored commits are `132074d` and `7047aa3`. Claude Code Sonnet 5.5 reviewed an exported public diff in the ignored collaboration area after its isolated-checkout access was denied; Codex reviewed the patch, current code and tests. The first Claude attempt could not reach its API from the sandbox; the retry could not read `/tmp`. Neither attempt supplied a code finding.
