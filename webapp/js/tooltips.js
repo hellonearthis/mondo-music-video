@@ -94,6 +94,12 @@ export function showTooltip(target) {
     img.loading = "eager";
     tip.appendChild(img);
   }
+  if (target.dataset.tooltipFooter) {
+    const footer = document.createElement("div");
+    footer.className = "tooltip-footer";
+    footer.textContent = target.dataset.tooltipFooter;
+    tip.appendChild(footer);
+  }
   tip.hidden = false;
 
   const rect = target.getBoundingClientRect();
