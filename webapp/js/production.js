@@ -476,6 +476,10 @@ export async function applyStatus(status) {
   }
   if (state.lastState && state.lastState !== status.state && !busy) {
     await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds(), refreshStoryboards()]);
+    if (status.state === "complete" && (status.kind === "harvest" || state.lastRequest?.kind === "harvest")) {
+      const harvestedId = status.result?.style || state.lastRequest?.style_id;
+      if (harvestedId) displayHarvestResult(harvestedId);
+    }
   }
   state.lastState = status.state;
 }
@@ -804,3 +808,60 @@ export function initOperationControls() {
   }
 }
 
+
+export async function displayHarvestResult(styleId) {
+  if (!styleId) return;
+  try {
+    const style = await (await api(`/api/styles/${encodeURIComponent(styleId)}`)).json();
+    if (!style) return;
+    const card = $("#harvest-result-card");
+    if (!card) return;
+    const title = $("#harvest-result-title");
+    const dir = $("#harvest-result-direction");
+    const fold = $("#harvest-result-fold");
+    const pre = $("#harvest-result-card-pre");
+    if (title) title.textContent = `${style.name || style.id} (${style.id})`;
+    if (dir) dir.textContent = style.direction || "";
+    if (pre) pre.textContent = style.style_card || "No 11-axis forensic breakdown recorded.";
+    if (fold) fold.open = true;
+    card.hidden = false;
+    card.scrollIntoView({ behavior: "smooth" });
+
+    const viewBtn = $("#harvest-view-style-btn");
+    if (viewBtn) {
+      viewBtn.onclick = () => {
+        const nav = document.querySelector('.nav[data-panel="styles"]');
+        if (nav) nav.click();
+        setTimeout(() => {
+          const styleEl = document.querySelector(`#style-list [data-id="${CSS.escape(style.id)}"]`);
+          if (styleEl) {
+            styleEl.scrollIntoView({ behavior: "smooth" });
+            styleEl.style.outline = "2px solid var(--green)";
+            setTimeout(() => { styleEl.style.outline = ""; }, 3000);
+          }
+        }, 150);
+      };
+    }
+
+    const copyBtn = $("#harvest-copy-json-btn");
+    if (copyBtn) {
+      copyBtn.onclick = handle(async () => {
+        const payload = JSON.stringify(style, null, 2);
+        if (!await copyToClipboard(payload)) throw new Error("Could not copy style JSON to clipboard.");
+        notice(`Style JSON for '${style.name}' copied to clipboard.`);
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = "✓ Copied!";
+        setTimeout(() => { copyBtn.textContent = orig; }, 2500);
+      });
+    }
+
+    const dismissBtn = $("#harvest-dismiss-result-btn");
+    if (dismissBtn) {
+      dismissBtn.onclick = () => {
+        card.hidden = true;
+      };
+    }
+  } catch (err) {
+    console.debug("Failed to fetch harvest result", err);
+  }
+}

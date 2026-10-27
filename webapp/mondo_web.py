@@ -39,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.26"
+MGL_APP_VERSION = "1.10.27"
 WEB = Path(__file__).parent
 
 
@@ -1270,6 +1270,14 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/styles")
     def styles():
         return [read_json(path) for path in sorted((store.home / "styles").glob("*.json"))]
+
+    @app.get("/api/styles/{style_id}")
+    def get_style(style_id: str):
+        style_id = identifier(style_id)
+        target = inside(store.home / "styles", style_id + ".json")
+        if not target.is_file():
+            raise ValueError("Style not found")
+        return read_json(target)
 
     @app.get("/api/styles/{style_id}/export")
     def export_style(style_id: str):
