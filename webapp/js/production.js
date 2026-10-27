@@ -27,6 +27,68 @@ const escapeHtml = (s = "") =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+import { hideTooltip } from "./tooltips.js";
+
+let activeRefsContextMenu = null;
+
+export const removeReferenceAtIndex = (references = [], names = [], indexToRemove = -1) => ({
+  references: references.filter((_, index) => index !== indexToRemove),
+  names: names.filter((_, index) => index !== indexToRemove)
+});
+
+export function closeRefsContextMenu() {
+  if (activeRefsContextMenu) {
+    activeRefsContextMenu.remove();
+    activeRefsContextMenu = null;
+  }
+}
+
+export function openRefsContextMenu(event, form, index) {
+  event.preventDefault();
+  event.stopPropagation();
+  hideTooltip(true);
+  closeRefsContextMenu();
+
+  const menu = document.createElement("div");
+  menu.className = "refs-context-menu";
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "Reference image actions");
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "refs-context-menu-item";
+  removeButton.setAttribute("role", "menuitem");
+  removeButton.textContent = "Remove from list";
+  removeButton.onclick = () => {
+    closeRefsContextMenu();
+    const fState = state.formFiles.get(form);
+    if (!fState) return;
+    const updated = removeReferenceAtIndex(fState.references || [], fState.referenceNames || [], index);
+    fState.references = updated.references;
+    fState.referenceNames = updated.names;
+    renderReferenceReceipt(form, fState.referenceNames, fState.references);
+    if (form.dataset.kind === "harvest" && !fState.references.length) {
+      const input = form.querySelector(".refs-input");
+      if (input) input.required = true;
+    }
+    scheduleSave();
+  };
+
+  menu.appendChild(removeButton);
+  document.body.appendChild(menu);
+
+  const menuWidth = 160;
+  const menuHeight = 40;
+  const padding = 10;
+  const left = Math.min(event.clientX, window.innerWidth - menuWidth - padding);
+  const top = Math.min(event.clientY, window.innerHeight - menuHeight - padding);
+  menu.style.left = `${Math.max(padding, left)}px`;
+  menu.style.top = `${Math.max(padding, top)}px`;
+
+  activeRefsContextMenu = menu;
+  removeButton.focus();
+}
+
 // The form has flat subliminal_* fields; the request carries them as one nested object.
 
 export function renderReferenceReceipt(form, names = [], hashes = []) {
@@ -39,7 +101,7 @@ export function renderReferenceReceipt(form, names = [], hashes = []) {
   const items = names.map((name, i) => {
     const hash = hashes[i];
     const imgAttr = hash ? ` data-tooltip="Reference: ${escapeHtml(name)}" data-tooltip-image="/api/uploads/reference/${encodeURIComponent(hash)}" data-tooltip-position="top"` : ` data-tooltip="Reference: ${escapeHtml(name)}"`;
-    return `<li><code${imgAttr}>${escapeHtml(name)}</code></li>`;
+    return `<li><code data-ref-index="${i}"${imgAttr}>${escapeHtml(name)}</code></li>`;
   }).join("");
   receipt.innerHTML = `<ul class="file-list">${items}</ul>`;
 }
@@ -629,6 +691,28 @@ export function initProductionForms() {
       if (form.dataset.kind === "harvest") form.querySelector(".refs-input").required = true;
       scheduleSave();
     };
+
+    const refsReceipt = form.querySelector(".refs-receipt");
+    if (refsReceipt) {
+      refsReceipt.addEventListener("contextmenu", event => {
+        const code = event.target.closest("code[data-ref-index]");
+        if (!code) return;
+        const index = parseInt(code.dataset.refIndex, 10);
+        if (Number.isNaN(index)) return;
+        openRefsContextMenu(event, form, index);
+      });
+    }
+  });
+
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".refs-context-menu")) {
+      closeRefsContextMenu();
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      closeRefsContextMenu();
+    }
   });
 }
 
