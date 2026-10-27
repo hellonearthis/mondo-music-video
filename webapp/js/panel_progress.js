@@ -52,35 +52,26 @@ const valueChanged = control => {
 
 const groupChanged = group => [...group.querySelectorAll("input, select, textarea")].some(valueChanged);
 const groups = unit => [...unit.body.children].filter(node => node.querySelector("input, select, textarea"));
-const requirements = id => {
-  if (id === "card-track-direction") return [songReady(), Boolean(field("direction")?.value.trim()) && field("direction").checkValidity()];
+const requiredNeeds = id => {
+  if (id === "card-track-direction") return [
+    { label: "Audio track (upload music)", met: songReady() },
+    { label: "Visual direction", met: Boolean(field("direction")?.value.trim()) && field("direction").checkValidity() }
+  ];
   if (id === "card-cast-staging") {
     const required = [];
-    if (needsReference()) required.push(castReady() || referenceReady());
-    if (field("instrument_mode")?.value === "perform") required.push(assignedPlayer());
+    if (needsReference()) required.push({ label: "Cast actor or reference image", met: castReady() || referenceReady() });
+    if (field("instrument_mode")?.value === "perform") required.push({ label: "Assigned instrument player", met: assignedPlayer() });
     return required;
   }
-  if (id === "director-camera" && needsReference()) return [field("ref_policy")?.value === "all"];
+  if (id === "director-camera" && needsReference()) return [
+    { label: "Reference policy: Use all references", met: field("ref_policy")?.value === "all" }
+  ];
   return [];
 };
 
-function missingNeedsFor(unit) {
-  const missing = [];
-  if (unit.id === "card-track-direction") {
-    if (!songReady()) missing.push("Audio track (upload music)");
-    if (!Boolean(field("direction")?.value.trim()) || !field("direction").checkValidity()) missing.push("Visual direction");
-  } else if (unit.id === "card-cast-staging") {
-    if (needsReference() && !(castReady() || referenceReady())) missing.push("Cast actor or reference image");
-    if (field("instrument_mode")?.value === "perform" && !assignedPlayer()) missing.push("Assigned instrument player");
-  } else if (unit.id === "director-camera") {
-    if (needsReference() && field("ref_policy")?.value !== "all") missing.push("Reference policy: Use all references");
-  }
-  return missing;
-}
-
 function progressFor(unit) {
   if (unit.id === "director-control-room") return panelProgress([], []);
-  const required = requirements(unit.id);
+  const required = requiredNeeds(unit.id).map(need => need.met);
   const requiredGroups = unit.requiredGroups;
   const optional = groups(unit).filter(group => !requiredGroups.has(group));
   return panelProgress(required, optional.map(groupChanged));
@@ -117,30 +108,36 @@ function paint(unit) {
   unit.element.style.setProperty("--progress-mix", `${Math.round(fraction * (required ? 100 : 25))}%`);
   unit.element.style.setProperty("--progress-mix-dark", `${Math.round(fraction * (required ? 30 : 8))}%`);
   if (unit.cue.textContent !== cue) unit.cue.textContent = cue;
-  const missing = missingNeedsFor(unit);
+  const missing = requiredNeeds(unit.id).filter(need => !need.met).map(need => need.label);
+  const missingSet = new Set(missing);
   if (missing.length) {
-    unit.cue.dataset.tooltip = `Needs:\n• ${missing.join("\n• ")}`;
+    const detail = `Needs:\n• ${missing.join("\n• ")}`;
+    if (unit.cue.dataset.tooltip !== detail) unit.cue.dataset.tooltip = detail;
+    unit.cue.tabIndex = 0;
+    unit.cue.setAttribute("aria-label", `Needs: ${missing.join("; ")}`);
   } else {
     delete unit.cue.dataset.tooltip;
+    unit.cue.removeAttribute("tabindex");
+    unit.cue.removeAttribute("aria-label");
   }
 
   // Highlight individual needed labels
   if (unit.id === "card-track-direction") {
     const songGroup = unit.body.querySelector(".song-input")?.closest("label");
     const dirGroup = unit.body.querySelector('[name="direction"]')?.closest("label");
-    if (songGroup) songGroup.classList.toggle("field-needed", !songReady());
-    if (dirGroup) dirGroup.classList.toggle("field-needed", !Boolean(field("direction")?.value.trim()) || !field("direction").checkValidity());
+    if (songGroup) songGroup.classList.toggle("field-needed", missingSet.has("Audio track (upload music)"));
+    if (dirGroup) dirGroup.classList.toggle("field-needed", missingSet.has("Visual direction"));
   } else if (unit.id === "card-cast-staging") {
     const castGroup = unit.body.querySelector(".cast-picker")?.closest("label") || unit.body.querySelector(".cast-picker");
     const refGroup = unit.body.querySelector(".refs-input")?.closest("label");
-    const needsRef = needsReference() && !(castReady() || referenceReady());
+    const needsRef = missingSet.has("Cast actor or reference image");
     if (castGroup) castGroup.classList.toggle("field-needed", needsRef);
     if (refGroup) refGroup.classList.toggle("field-needed", needsRef);
-    const instGroup = unit.body.querySelector('[name="instrument_mode"]')?.closest("label");
-    if (instGroup) instGroup.classList.toggle("field-needed", field("instrument_mode")?.value === "perform" && !assignedPlayer());
+    const players = unit.body.querySelector(".instrument-assignments");
+    if (players) players.classList.toggle("field-needed", missingSet.has("Assigned instrument player"));
   } else if (unit.id === "director-camera") {
     const refPolicyGroup = unit.body.querySelector('[name="ref_policy"]')?.closest("label");
-    if (refPolicyGroup) refPolicyGroup.classList.toggle("field-needed", needsReference() && field("ref_policy")?.value !== "all");
+    if (refPolicyGroup) refPolicyGroup.classList.toggle("field-needed", missingSet.has("Reference policy: Use all references"));
   }
 
   unit.toggle?.setAttribute("aria-expanded", String(unit.open));
@@ -316,7 +313,7 @@ export function initPanelProgress(settings, scheduleSave) {
         unit.open = !unit.open;
         unit.partial = false;
         unit.blurred = false;
-        if (!unit.open && !requirements(unit.id).length) unit.reviewed = true;
+        if (!unit.open && !requiredNeeds(unit.id).length) unit.reviewed = true;
         refreshPanelProgress();
         save();
       });

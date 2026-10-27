@@ -122,8 +122,7 @@
         </select>
       </label>
       <div class="vocab-btn-row">
-        <button type="button" id="open-vocab-panel-btn" class="secondary" data-tooltip="Open Visual Vocabulary 06:
-          to explore rotation pools or customize entries">Explore vocabulary <span>↗</span> <span id="vocab-custom-badge" class="vocab-badge" hidden>Customized</span></button>
+        <button type="button" id="open-vocab-panel-btn" class="secondary" data-tooltip="Open Visual Vocabulary 06 to explore rotation pools or customize entries">Explore vocabulary <span>↗</span> <span id="vocab-custom-badge" class="vocab-badge" hidden>Customized</span></button>
         <button type="button" class="secondary vocab-help-btn" data-tooltip="Read the Visual Vocabulary Architecture &amp; Customization Guide">&#x2139;&#xFE0F; Guide</button>
       </div>
     </div>
@@ -165,23 +164,12 @@
       </div>
     </div>
     <label data-tooltip="Select recurring characters for your video. Their reference images and styling rules are automatically applied to matching scenes.">Cast<span class="cast-picker"><select class="actor-select" name="actors" multiple hidden aria-label="Select actors (internal)"></select><div class="cast-checkbox-list" id="cast-checkbox-list" role="group" aria-label="Cast actors"></div></span></label><small>Select actors to include them in this video. No cast is required unless your renderer needs a reference.</small>
-    <label class="file-drop-target" data-tooltip="Upload up to 9 supplemental reference images
-    for style, lighting, or scene guidance.
-    NOT CHARACTER IDENTITY IMAGES">Additional reference images<input type="file" class="refs-input" accept="image/*" multiple><small class="file-drop-hint">Choose files or drop up to 9 images here</small><small class="file-drop-error" role="alert"></small></label><div class="refs-receipt file-receipt" data-tooltip="List of attached reference image files">No additional images</div><button type="button" class="quiet clear-refs" data-tooltip="Remove all uploaded reference images from this project">Clear reference images</button>
+    <label class="file-drop-target" data-tooltip="Upload up to 9 supplemental reference images for style, lighting, or scene guidance. Use actor portraits for character identity.">Additional reference images<input type="file" class="refs-input" accept="image/*" multiple><small class="file-drop-hint">Choose files or drop up to 9 images here</small><small class="file-drop-error" role="alert"></small></label><div class="refs-receipt file-receipt" data-tooltip="List of attached reference image files">No additional images</div><button type="button" class="quiet clear-refs" data-tooltip="Remove all uploaded reference images from this project">Clear reference images</button>
 
-    <label data-tooltip="Facial movement policy:
-    silent mouths prevents lip flap and babbling in every passage;
-    lip sync lets the chosen singer sing the passages that have lyrics">Facial movement<select name="mouth_mode"><option value="sealed">Silent mouths (default)</option><option value="natural">Natural expressions</option><option value="lip_sync">Lip sync to vocals (set lyric lines in the preview)</option></select></label>
-    <div class="dance-row"><label data-tooltip="Let the cast dance to the song's beat.
-      Mouths still follow the facial movement setting above, and a singer can dance too.">Dancing<select name="dance_mode"><option value="off">Off (default)</option><option value="group">Everyone dances together</option><option value="independent">Each actor follows their own part</option></select></label><label data-tooltip="Optional style for the dancing.
-      For example gentle swaying, energetic jumping or goofy dancing. It only changes how they move.">Dance style<input name="dance_direction" maxlength="200" placeholder="Dancing"></label></div>
-    <label class="check" data-tooltip="Off (default):
-     wording findings about dancing and instrument playing are saved as advice and Laya reviews the prompt, so passages are written once.
-
-     On:
-      every such finding sends the passage back to the writer, up to four times, which is slower and can fail on wording the checks do not recognise."><input name="strict_prompt_checks" type="checkbox"> Strict dance &amp; instrument checks <small>(slower)</small></label>
-<label data-tooltip="Assign musical instruments to cast actors.
-When enabled, players keep their hands on their assigned instruments while non-playing actors dance or act. Existing audio stems can coordinate pauses and playing bursts.">Instrument performance<select name="instrument_mode"><option value="off">Off (default)</option><option value="perform">Actors play assigned instruments</option></select></label>
+    <label data-tooltip="Facial movement policy: silent mouths prevents lip flap and babbling in every passage; lip sync lets the chosen singer sing the passages that have lyrics">Facial movement<select name="mouth_mode"><option value="sealed">Silent mouths (default)</option><option value="natural">Natural expressions</option><option value="lip_sync">Lip sync to vocals (set lyric lines in the preview)</option></select></label>
+    <div class="dance-row"><label data-tooltip="Let the cast dance to the song's beat. Mouths still follow the facial movement setting above, and a singer can dance too.">Dancing<select name="dance_mode"><option value="off">Off (default)</option><option value="group">Everyone dances together</option><option value="independent">Each actor follows their own part</option></select></label><label data-tooltip="Optional style for the dancing, for example gentle swaying, energetic jumping or goofy dancing. It only changes how they move.">Dance style<input name="dance_direction" maxlength="200" placeholder="Dancing"></label></div>
+    <label class="check" data-tooltip="Off (default): wording findings about dancing and instrument playing are saved as advice and Laya reviews the prompt, so passages are written once. On: every such finding sends the passage back to the writer, up to four times, which is slower and can fail on wording the checks do not recognise."><input name="strict_prompt_checks" type="checkbox"> Strict dance &amp; instrument checks <small>(slower)</small></label>
+<label data-tooltip="Assign musical instruments to cast actors. When enabled, players keep their hands on their assigned instruments while non-playing actors dance or act. Existing audio stems can coordinate pauses and playing bursts.">Instrument performance<select name="instrument_mode"><option value="off">Off (default)</option><option value="perform">Actors play assigned instruments</option></select></label>
     <input type="hidden" name="instrument_assignments_json" value="{}">
     <fieldset class="instrument-assignments" hidden><legend>Instrument players</legend><p>Assign instruments to selected actors. Players keep their hands on their instruments; other actors may dance. Existing stem analysis can guide pauses; the preview reports an overall-beat fallback when it is unavailable. Keyboards use piano analysis as a proxy. No separation or model downloads start here.</p></fieldset>
     <fieldset class="instrument-props" hidden><legend>Open Prop Protocol references</legend><p>Choose an imported OPP prop for an assigned instrument. Leave it on the default prop to keep the current design. A short use description can select a matching interaction sheet; otherwise OPP uses a base sheet.</p>

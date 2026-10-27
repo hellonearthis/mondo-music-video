@@ -1,5 +1,21 @@
 # Collaborator review record
 
+## Fork `7047aa3` reviewed (release 1.10.24, 2026-10-27)
+
+Reviewed an isolated clone at exact revision `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763`, compared with last reviewed `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` and this repository's `e074c50`. Merge commit `822dcc8` brought upstream releases through 1.10.23 into the fork. Its two new authored commits are `132074d` and `7047aa3`. Claude Code Sonnet 5.5 reviewed an exported public diff in the ignored collaboration area after its isolated-checkout access was denied; Codex reviewed the patch, current code and tests. The first Claude attempt could not reach its API from the sandbox; the retry could not read `/tmp`. Neither attempt supplied a code finding.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Individual reference-image removal | Adopted. Added a visible Remove button for keyboard and touch use alongside the fork's right-click menu. Removal updates form progress and the saved draft; clearing the final Style Harvest image restores the required-file state. |
+| Cast picker spacing | Adopted. The one-pixel item margin keeps adjacent cast choices visually distinct. |
+| Dynamic Needs tooltips and required-field color | Adopted. The labels describe only form inputs; preview, quote, and start consent remain authoritative. |
+| Dark blue/gold palette and instrument tooltip | Adopted. The instrument copy describes the existing feature and does not start stem separation or model downloads. |
+| `mmv/jobs.py` `reset` difference in the merged fork tree | Not part of either new authored commit and not imported. That method has no new caller in this task; adding operation-state behavior needs its own workflow review. |
+
+Claude's successful review identified missing keyboard access to the fork's menu, stale progress after individual/clear removal, weak menu focus, duplicated missing-field conditions, an inaccessible Needs tooltip, awkward hard line breaks in tooltips, and a few old dark-palette colors. The integration fixes those in the current tree. Its warning that two active controls would show white text on gold did not apply: both already had dark-mode overrides; their older green overrides were brought into the new palette. The fork's `user-select:none` was also removed from filenames so they remain copyable. Agent preview requests already accept explicit reference ID lists; omission removes an image before the next quote, while panel progress remains GUI form guidance and is not a second quote validator.
+
+No fork history merge, private asset import, protected-prompt edit, paid/GPU work, commit or push was made during this review.
+
 ## Fork `1e097874` reviewed (release 1.10.21, 2026-10-26)
 
 Reviewed an isolated clone of [hellonearthis](https://github.com/hellonearthis)'s fork at exact revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b`, one commit after last reviewed `db7bec7`. Claude Code Sonnet 5.5 supplied a bounded read-only peer review; Codex checked the patch and integrated it. The commit adds actor inline editing, a wider actor grid, an OPP guide, dark selection contrast and version assertions.

@@ -67,7 +67,7 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `card-cast-staging`
 - **Used in**: Step 2 of `video-production-form`
 - **Code**: `webapp/index.html`
-- **Design rules**: Second card in form grid. Configures renderer backend, render resolution, multi-actor cast selector, supplemental reference images, facial movement (silent mouths / lip sync), dancing mode, and instrument performance settings.
+- **Design rules**: Second card in form grid. Configures renderer backend, render resolution, multi-actor cast selector, supplemental reference images (each with a visible Remove action and a right-click menu), facial movement (silent mouths / lip sync), dancing mode, and instrument performance settings. Missing required inputs are highlighted; quote validation still controls readiness.
 
 ### Director's Control Room
 - **ID**: `director-control-room`
