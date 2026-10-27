@@ -196,6 +196,7 @@ def run(home, directory, *, resume=False):
         return text
     if request['kind'] == 'harvest':
         progress('Harvesting visual style with the original style contract', 10)
+        from . import runtime
         try:
             response = request_json(settings['vision_url'].rstrip('/') + '/chat/completions',
                  {'model': settings['vision_model'], 'messages': [{'role':'user', 'content': style.build_harvest_payload([Path(p) for p in prepared['references']])}],
@@ -207,8 +208,20 @@ def run(home, directory, *, resume=False):
                 raise ValueError(f"Vision engine is offline or unreachable at {endpoint}: {exc}. Please ensure your vision model service is running.") from exc
             raise ValueError(f"Vision service ({endpoint}) failed during style harvest: {exc}") from exc
         card, aesthetic = style.parse_harvest_response(response['choices'][0]['message']['content'])
+        if isinstance(card, dict):
+            card = '\n'.join(f'{k}: {v}' if not isinstance(v, (dict, list)) else f'{k}: {json.dumps(v)}' for k, v in card.items())
+        elif isinstance(card, list):
+            card = '\n'.join(str(x) for x in card)
+        else:
+            card = str(card or '')
+        if isinstance(aesthetic, dict):
+            aesthetic = '\n'.join(f'{k}: {v}' if not isinstance(v, (dict, list)) else f'{k}: {json.dumps(v)}' for k, v in aesthetic.items())
+        elif isinstance(aesthetic, list):
+            aesthetic = '\n'.join(str(x) for x in aesthetic)
+        else:
+            aesthetic = str(aesthetic or '')
         if not card.strip() or not aesthetic.strip(): raise ValueError('Harvest did not return a style card and aesthetic directives')
-        record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic, 'style_card':card}
+        record = {'id':request['style_id'], 'name':request['title'] or request['style_id'], 'direction':aesthetic.strip(), 'style_card':card.strip()}
         write_json(store.home / 'styles' / (request['style_id'] + '.json'), record)
         write_json(directory / 'result.json', {'style':record['id']})
         return

@@ -39,7 +39,7 @@ from mmv.workflow_presets import preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.27"
+MGL_APP_VERSION = "1.10.28"
 WEB = Path(__file__).parent
 
 
