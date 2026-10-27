@@ -1,4 +1,8 @@
-# Verification — 1.10.27
+# Verification — 1.10.28
+
+## 1.10.28 — Memory before rendering and resume of finished passages
+
+Focused temporary-data/mock tests: **123 passed** (worker resume clip check, vision service, passage-plan resume, engine lifecycle, ComfyUI and GPU memory handoff). The full suite was deliberately not run during the owner's live render, because its parallel workers would take RAM ComfyUI needed; it is to be run once the render ends. `protected_scheme.check()` returned `[]` and `git diff --check` was clean. Real local evidence (free, owner-authorized resume of a 0.9 MP, 20-step bf16 H3 production with no writer or Laya loaded): Mondo worker 0.06 GiB before rendering; ComfyUI 90 GB steady during a 345-frame passage, peak 93.4 GB with 2.9 GB free at its end, then clean passage 1→2 and 2→3 changeovers. That resume predates the resume fix and re-rendered passage 1. The live app was busy and was not restarted; it still reports 1.10.27 until idle.
 
 ## 1.10.27 — H3 model picker brings the model's own workflow
 

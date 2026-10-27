@@ -157,6 +157,13 @@ def _compact_ident_prompt(prompt: str, mode: str = "standard") -> str:
 
 
 
+def finished_clip(got, frames):
+    """True when a saved render entry points at an existing clip with at least the passage's frames."""
+    from .engine.assemble import probe_frames
+    video = got.get('video') if isinstance(got, dict) else None
+    return bool(video) and Path(video).is_file() and probe_frames(video) >= frames
+
+
 def harvest_text(value):
     """Some vision models return the style card or directives as JSON objects or lists; store them as text."""
     if isinstance(value, dict):
@@ -530,6 +537,10 @@ def run(home, directory, *, resume=False):
             gc.collect()
             torch = sys.modules.get("torch")
             if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
+            # Freed CPU memory stays with this process until handed back; nothing else may hold RAM while ComfyUI renders.
+            if sys.platform.startswith('linux'):
+                import ctypes
+                ctypes.CDLL('libc.so.6').malloc_trim(0)
         if writer_process is not None:
             progress('Stopping the music-video writer to free the GPU for rendering', 31)
         runtime.stop_confirmed(writer_process, 'Music-video writer')
@@ -552,7 +563,8 @@ def run(home, directory, *, resume=False):
     if request['backend'] == 'local_h3' or (request['backend'] == 'comfy_sdk_h3' and vision_wanted):
         require_renderer_handoff(settings)
         comfy_process = start_comfy()
-    rendered = {}
+    # A resumed run keeps passages whose original clip is already complete; only the rest are rendered.
+    rendered = read_json(directory / 'renders.json', {}) if resume else {}
     sheets = casting.sheet_paths(prepared['casting']) if prepared['casting'] else {}
     if instrument_plan:
         instruments.verify_assets(instrument_plan)
@@ -577,6 +589,9 @@ def run(home, directory, *, resume=False):
         song = inside(store.home / 'uploads', request['song']) if request['kind'] == 'video' else directory / 'silence.wav'
         if request['kind'] == 'ident':
             subprocess.run(['ffmpeg','-nostdin','-y','-v','error','-f','lavfi','-i','anullsrc=r=44100:cl=stereo','-t',str(plan.segments[0].gen_frames/24),str(song)],check=True)
+        rss = next((line.split()[1] for line in Path('/proc/self/status').read_text().splitlines()
+                    if line.startswith('VmRSS:')), None) if Path('/proc/self/status').exists() else None
+        if rss: print(f'Mondo worker memory before rendering: {int(rss) / 1048576:.2f} GiB', flush=True)
         def render_passage(seg, segment_id, seed):
             images = [(member['actor_id'],sheets[member['actor_id']]) for member in casting.cast_for(prepared['casting'],seg.segment_id)]
             if instrument_plan:
@@ -599,6 +614,9 @@ def run(home, directory, *, resume=False):
                 raise ValueError('Renderer returned a missing or short clip; refusing an incomplete final video')
             return result
         for index, seg in enumerate(plan.segments):
+            if finished_clip(rendered.get(seg.segment_id), seg.trim_frames):
+                progress(f'Musical passage {index+1} of {len(plan.segments)} already rendered; keeping it', 35+int(40*index/len(plan.segments)))
+                continue
             progress(f'Rendering musical passage {index+1} of {len(plan.segments)}', 35+int(40*index/len(plan.segments)))
             rendered[seg.segment_id] = render_passage(seg, seg.segment_id, request['seed']+seg.index)
             write_json(directory / 'renders.json', rendered)

@@ -98,3 +98,14 @@ def test_harvest_text_stores_structured_vision_replies_as_text():
     assert harvest_text({"CRAFT": "film grain", "PALETTE": ["teal", "rust"]}) == 'CRAFT: film grain\nPALETTE: ["teal", "rust"]'
     assert harvest_text(["one", "two"]) == "one\ntwo"
     assert harvest_text(None) == "" and harvest_text("plain") == "plain"
+
+
+def test_resume_keeps_only_complete_existing_clips(tmp_path, monkeypatch):
+    from mmv import worker
+    clip = tmp_path / "seg000.mp4"
+    clip.write_bytes(b"clip")
+    monkeypatch.setattr("mmv.engine.assemble.probe_frames", lambda path: 345)
+    assert worker.finished_clip({"video": str(clip)}, 345)
+    assert not worker.finished_clip({"video": str(clip)}, 346)
+    assert not worker.finished_clip({"video": str(tmp_path / "missing.mp4")}, 1)
+    assert not worker.finished_clip(None, 1) and not worker.finished_clip({}, 1)

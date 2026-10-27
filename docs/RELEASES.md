@@ -1,5 +1,12 @@
 # Releases
 
+## 1.10.28 — Nothing else in memory while ComfyUI renders; resume keeps finished passages
+
+- Fixed: a resumed local production rendered every passage again, discarding finished clips (they were moved aside, not deleted). Resume now keeps each passage whose original clip is still on disk with at least its planned frames, logs "already rendered; keeping it", and renders only the rest. Missing or short clips are rendered again.
+- Fixed: after prompt review, Laya's freed CPU memory stayed reserved by the Mondo worker for the whole render. The worker now hands it back to the system before ComfyUI starts, and the operation log records "Mondo worker memory before rendering". A 0.9 MP, 20-step H3 run with the bf16 model and text encoder needs almost all of a 98 GB machine's RAM in ComfyUI (93.4 GB at the end of a 345-frame passage), so even a few hundred megabytes held elsewhere can get ComfyUI killed.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.10.27 — The H3 model picker brings the model's own workflow
 
 Fixed: choosing the 20-step H3 model (`minimax_h3_ref2va_pruned_bf16`) in Settings while a FastH3 workflow was selected swapped only the filename into FastH3's graph, so the full model rendered with FastH3's 8 sampler steps. A bundled diffusion model now brings its own bundled workflow and step count whenever they differ from the saved workflow (in both directions), keeping the other chosen models such as the text encoder. A custom workflow whose step count already matches is unchanged. Settings shows the saved workflow's sampler steps, and `inspect_studio("settings")` reports them as `workflow_steps`; agents' `update_studio_settings` with `h3_models` follows the same rule.
