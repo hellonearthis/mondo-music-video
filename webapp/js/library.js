@@ -67,7 +67,7 @@ const actorCardHtml = (actor) => {
       <img src="/api/actors/${encodeURIComponent(actor.id)}/reference" alt="${escName} reference" loading="lazy">
       <h2>${escName}</h2>
       <p class="actor-desc-text" ${actor.oap ? "" : 'data-tooltip="Double-click to edit visual description" title="Double-click to edit visual description"'}>${overview}</p>
-      ${actor.oap ? "" : '<button type="button" class="quiet actor-edit-btn" data-edit-description>Edit visual description</button>'}
+      ${actor.oap ? "" : `<div class="actor-desc-actions"><button type="button" class="quiet actor-edit-btn" data-edit-description>Edit visual description</button><span class="actor-desc-count" data-tooltip="Visual description length">${(actor.description || "").length} chars</span></div>`}
       <p>${oapNote}</p>
       <button type="button" class="secondary" data-action="export-oap" title="Export signed OAP package for ${escName}">Export OAP package</button>
       ${auditionSection}
@@ -448,9 +448,40 @@ export function initLibraryForms() {
     }
   }));
 
-  $("#actor-form").onsubmit = handle(async (event) => {
+  const actorForm = $("#actor-form");
+  const actorRefInput = actorForm?.querySelector("input[name=reference]");
+  const actorRefPreview = $("#actor-ref-preview");
+  let actorRefObjectUrl = null;
+
+  function updateActorRefPreview(file) {
+    if (!actorRefPreview) return;
+    if (actorRefObjectUrl) {
+      URL.revokeObjectURL(actorRefObjectUrl);
+      actorRefObjectUrl = null;
+    }
+    if (!file) {
+      actorRefPreview.hidden = true;
+      actorRefPreview.innerHTML = "";
+      return;
+    }
+    actorRefObjectUrl = URL.createObjectURL(file);
+    actorRefPreview.innerHTML = `<img class="actor-ref-thumb" src="${actorRefObjectUrl}" alt="Reference preview"><span class="actor-ref-name">${file.name}</span>`;
+    actorRefPreview.hidden = false;
+  }
+
+  actorRefInput?.addEventListener("change", () => {
+    const file = actorRefInput.files?.[0];
+    updateActorRefPreview(file);
+  });
+
+  actorForm?.addEventListener("reset", () => {
+    updateActorRefPreview(null);
+  });
+
+  actorForm.onsubmit = handle(async (event) => {
     await api("/api/actors", { method: "POST", body: new FormData(event.target) });
     event.target.reset();
+    updateActorRefPreview(null);
     await loadActors();
     scheduleSave();
   });
