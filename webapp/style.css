@@ -1710,11 +1710,42 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
 .oap-collection-row small{overflow-wrap:anywhere}
 .oap-collection-row button{flex-shrink:0}
 @media(max-width:650px){.oap-collection-row{align-items:flex-start;flex-direction:column}}
-#video-form .progress-toggle{border:0;background:transparent;color:var(--ink);font:inherit;font-weight:inherit;display:flex;align-items:center;gap:10px;text-align:left;flex:1;min-width:0;padding:12px;cursor:pointer}
-#video-form .progress-toggle:focus-visible,#video-form .progress-options:focus-visible,#video-form .director-fold summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
-#video-form .card-title:has(.progress-toggle){border-radius:5px;background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix,0%));margin:-12px -12px 18px;padding:0 10px;flex-wrap:wrap}
+#video-form .progress-toggle, #panel-actors .progress-toggle{border:0;background:transparent;color:var(--ink);font:inherit;font-weight:inherit;display:flex;align-items:center;gap:10px;text-align:left;flex:1;min-width:0;padding:12px;cursor:pointer}
+#panel-actors .progress-toggle {
+  padding: 0;
+  gap: 8px;
+}
+#panel-actors .card-title:has(.progress-toggle) {
+  margin: 0 0 16px;
+  padding: 0;
+  background: transparent;
+}
+[data-theme=dark] #panel-actors .card-title:has(.progress-toggle) {
+  background: transparent;
+}
+#panel-actors .progress-toggle h2 {
+  margin: 0;
+  display: inline;
+}
+#panel-actors .progress-toggle::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 10px solid currentColor;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+#panel-actors .progress-toggle[aria-expanded="false"]::before {
+  transform: rotate(0deg);
+}
+#video-form .progress-toggle:focus-visible, #panel-actors .progress-toggle:focus-visible, #video-form .progress-options:focus-visible,#video-form .director-fold summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+#video-form .card-title:has(.progress-toggle), #panel-actors .card-title:has(.progress-toggle){border-radius:5px;background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix,0%));margin:-12px -12px 18px;padding:0 10px;flex-wrap:wrap}
 #video-form .director-fold summary{background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix,0%));gap:8px;flex-wrap:wrap}
-[data-theme=dark] #video-form .card-title:has(.progress-toggle),[data-theme=dark] #video-form .director-fold summary{background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix-dark,0%))}
+[data-theme=dark] #video-form .card-title:has(.progress-toggle),[data-theme=dark] #panel-actors .card-title:has(.progress-toggle),[data-theme=dark] #video-form .director-fold summary{background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix-dark,0%))}
 #video-form .progress-cue{margin-left:auto;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;white-space:nowrap;color:var(--green)}
 #video-form [data-progress-state="in-progress"] .progress-cue,
 #video-form [data-progress-state="incomplete-collapsed"] .progress-cue {
@@ -1742,7 +1773,7 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
 #video-form .progress-fold-wrap{position:relative;min-width:0}
 #video-form .progress-fold-wrap>.director-fold{margin-top:0}
 #video-form .progress-fold-wrap>.progress-options{position:absolute;right:12px;top:11px;background:var(--card)}
-@media(prefers-reduced-motion:reduce){#video-form .progress-toggle,#video-form .director-fold summary{transition:none;scroll-behavior:auto}}
+@media(prefers-reduced-motion:reduce){#video-form .progress-toggle,#panel-actors .progress-toggle,#video-form .director-fold summary{transition:none;scroll-behavior:auto}}
 .actor-desc-text {
   border-radius: 3px;
   padding: 2px 4px;

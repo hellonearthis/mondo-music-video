@@ -311,7 +311,44 @@ export function renderOapReportCard(report, allowUnsigned) {
 
 // --- Delegated Action Listeners & Form Submissions ---
 
+function makeCollapsibleCard(card, id) {
+  if (!card) return;
+  const title = card.querySelector(":scope > .card-title");
+  if (!title) return;
+  const body = document.createElement("div");
+  body.className = "progress-body";
+  for (const child of [...card.children].filter(c => c !== title)) {
+    body.append(child);
+  }
+  card.append(body);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "progress-toggle";
+  toggle.setAttribute("aria-controls", id + "-body");
+  toggle.setAttribute("aria-expanded", "true");
+
+  while (title.firstChild) toggle.append(title.firstChild);
+  title.append(toggle);
+  body.id = id + "-body";
+
+  toggle.addEventListener("click", () => {
+    const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!isExpanded));
+    body.hidden = isExpanded;
+  });
+}
+
+function initActorPanelCards() {
+  const panel = $("#panel-actors");
+  if (!panel) return;
+  makeCollapsibleCard($("#actor-form"), "actor-create-card");
+  makeCollapsibleCard(panel.querySelector('[data-component-id="oap-import-card"]'), "oap-import-card");
+  makeCollapsibleCard($("#agreements-card"), "agreements-card");
+}
+
 export function initLibraryForms() {
+  initActorPanelCards();
   // Delegated handler for Style cards
   $("#style-list")?.addEventListener("click", handle(async (e) => {
     const btn = e.target.closest("button[data-action]");
