@@ -482,15 +482,7 @@ export const computePoolCounts = (pool, borrowed = false) => {
     ((isCostume && borrowed) ? Math.max(9, baseCount) : baseCount) - excludedCount
   );
   const need = Number(pool.need || 0);
-  const baseTermCount = typeof pool.baseTermCount === "number"
-    ? pool.baseTermCount
-    : terms.length;
-  const selectedTowardsNeed = terms.reduce((acc, term, idx) => {
-    const state = Number(chipStates[term] || 0);
-    if (state === 2) return acc;
-    if (state === 1 || idx >= baseTermCount) return acc + 1;
-    return acc;
-  }, 0);
+  const selectedTowardsNeed = pinnedCount;
   const remainingNeeded = Math.max(0, need - selectedTowardsNeed);
   return {
     currentPoolCount,
@@ -500,7 +492,7 @@ export const computePoolCounts = (pool, borrowed = false) => {
     excludedCount,
     need,
     remainingNeeded,
-    isLow: currentPoolCount < need && remainingNeeded > 0
+    isLow: remainingNeeded > 0 && currentPoolCount < need
   };
 };
 
@@ -510,11 +502,11 @@ export const formatPoolStatusText = (pool, borrowed = false) => {
   const borrowedNote = (isCostume && borrowed) ? " (borrowed from Brutalist concrete)" : "";
   if (selectedTowardsNeed > 0) {
     if (remainingNeeded === 0) {
-      return `${currentPoolCount} in pool, 0 needed${borrowedNote}`;
+      return `${currentPoolCount} in pool, 0 needed (${selectedTowardsNeed} selected)${borrowedNote}`;
     }
-    return `${currentPoolCount} in pool, about ${remainingNeeded} needed${borrowedNote}`;
+    return `${currentPoolCount} in pool, ${remainingNeeded} needed (${selectedTowardsNeed}/${need} selected)${borrowedNote}`;
   }
-  return `${currentPoolCount} in pool, about ${need} needed${borrowedNote}`;
+  return `${currentPoolCount} in pool, ${need} needed${borrowedNote}`;
 };
 
 export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
@@ -637,11 +629,19 @@ export const addTermToPool = (pools, poolIdx, rawTerm) => {
   const cleaned = String(rawTerm || "").trim();
   if (!cleaned) return pools;
   return pools.map((pool, idx) => {
-    if (idx !== poolIdx || pool.terms.includes(cleaned)) return pool;
+    if (idx !== poolIdx) return pool;
+    const currentChipStates = { ...(pool.chipStates || {}), [cleaned]: 1 };
+    if (pool.terms.includes(cleaned)) {
+      return {
+        ...pool,
+        chipStates: currentChipStates
+      };
+    }
     return {
       ...pool,
       terms: [...pool.terms, cleaned],
-      pool: (typeof pool.pool === "number" ? pool.pool : pool.terms.length) + 1
+      pool: (typeof pool.pool === "number" ? pool.pool : pool.terms.length) + 1,
+      chipStates: currentChipStates
     };
   });
 };
