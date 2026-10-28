@@ -1,5 +1,12 @@
 # Releases
 
+## 1.11.3 — The Edit view keeps itself up to date
+
+- Fixed: a take rendered (or a prompt written) while you had left and reopened the Edit view did not appear until a hard browser refresh. The reopened view had read the passages before the operation finished, and only the view that started it was updated. Now, whenever an operation finishes, an open Edit view reads its video's passages, takes, prompt versions and final versions again, keeping your place on the page.
+- **↻ Refresh** beside Back re-reads the open video at any time.
+
+Agents are unaffected: `read_output_prompts` always reads the current state. No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.11.2 — Edit view clips play in Firefox
 
 - Fixed: in Firefox, the Edit view's passage clips showed no picture and spun forever when played (Chromium browsers played them). The clip route sent them as a download (`Content-Disposition: attachment`), which Firefox will not play in a video player; they are now sent `inline`, keeping the file name for saving. This affected the passage clips since 1.10.26.
