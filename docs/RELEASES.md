@@ -1,5 +1,13 @@
 # Releases
 
+## 1.11.2 — Edit view clips play in Firefox
+
+- Fixed: in Firefox, the Edit view's passage clips showed no picture and spun forever when played (Chromium browsers played them). The clip route sent them as a download (`Content-Disposition: attachment`), which Firefox will not play in a video player; they are now sent `inline`, keeping the file name for saving. This affected the passage clips since 1.10.26.
+- Opening Edit now lets the hidden gallery's players release their downloads of finished videos, and passage clips load two at a time, as the gallery's thumbnails do since 1.10.12, so a long-open tab does not run out of connections to the app. Back restores the gallery.
+- Agents: the GUI must work in Firefox as well as Chromium browsers (AGENTS.md).
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.11.1 — Your own seeds, and passage prompt versions
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork commit `c36c89f` (prompt editing, prompt reroll and version history), reviewed at exact head `c36c89f`.

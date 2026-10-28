@@ -44,6 +44,29 @@ export function closeProductionBreakdown() {
   if (mainView) {
     mainView.hidden = false;
   }
+  restoreGallery();
+}
+
+// The hidden gallery's players can keep downloads of large finished videos open, holding the browser's few connections
+// to the app; while the Edit view is open they let go, and they come back (a few at a time) on return.
+function releaseGallery() {
+  $$("#output-list video").forEach(v => {
+    if (!v.getAttribute("src")) return;
+    v.dataset.releasedSrc = v.getAttribute("src");
+    v.pause();
+    v.removeAttribute("src");
+    v.load();
+  });
+}
+
+function restoreGallery() {
+  const videos = $$("#output-list video").filter(v => v.dataset.releasedSrc);
+  videos.forEach(v => {
+    v.preload = "none";
+    v.src = v.dataset.releasedSrc;
+    delete v.dataset.releasedSrc;
+  });
+  loadThumbnails(videos);
 }
 
 async function pollJobCompletion(initialMessage) {
@@ -203,6 +226,7 @@ export async function showProductionBreakdown(output) {
   listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
 
   if (mainView) mainView.hidden = true;
+  releaseGallery();
   breakdownView.hidden = false;
   breakdownView.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -366,7 +390,7 @@ export async function showProductionBreakdown(output) {
 
       const v = document.createElement("video");
       v.controls = true;
-      v.preload = "metadata";
+      v.preload = "none";              // loaded a few at a time below, like the gallery's thumbnails
       v.style.width = "100%";
       v.style.maxHeight = "280px";
       v.style.borderRadius = "4px";
@@ -495,6 +519,7 @@ export async function showProductionBreakdown(output) {
       card.append(grid);
       return card;
     }));
+    loadThumbnails($$("#prompts-view-list video").filter(v => v.getAttribute("src")));
   } catch (err) {
     if (listEl) {
       listEl.innerHTML = `<div class="empty" style="color:var(--danger, #e05252);margin:16px 0;">Failed to load prompts: ${escapeHtml(err.message)}</div>`;

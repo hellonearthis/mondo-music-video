@@ -1,4 +1,9 @@
-# Verification — 1.11.1
+# Verification — 1.11.2
+
+## 1.11.2 — Edit view clips in Firefox
+
+Full temporary-data/mock-service suite: **800 passed + 141 subtests**, including a check that passage clips are served `inline`. The live app (existing data, port 8091, `--no-auto-update`) was restarted idle; `/api/version` reports 1.11.2 and a clip response carries `content-disposition: inline`. In Chromium the Edit view loaded all 16 clips of an existing production. Firefox was not tested here (the installed Playwright Firefox build does not match this Playwright version); the owner reproduced the failure in Firefox and Brave played the clips.
+
 
 ## 1.11.1 — Seeds and passage prompt versions (collaborator fork `c36c89f`)
 

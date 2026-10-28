@@ -39,7 +39,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.11.1"
+MGL_APP_VERSION = "1.11.2"
 WEB = Path(__file__).parent
 
 
@@ -1889,7 +1889,8 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/outputs/{run_id}/clips/{segment_id}")
     def output_clip(run_id: str, segment_id: str, take: str | None = None):
         path, media_type = score_view.passage_clip(store, run_id, segment_id, take_id=take)
-        return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower())
+        # inline: Firefox will not play a <video> source served as an attachment; the name still applies when saved.
+        return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower(), content_disposition_type="inline")
 
     @app.post("/api/outputs/{run_id}/takes/{segment_id}")
     def select_output_take(run_id: str, segment_id: str, value: TakeSelectRequest):

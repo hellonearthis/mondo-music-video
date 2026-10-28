@@ -191,7 +191,9 @@ class PassageBreakdownTests(ScoreViewTests):
         self.assertEqual(res.json()["active_take"], "take2")
 
         # Verify specific take clip endpoint and updated default clip
-        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take1").content, b"take-one-bytes")
+        clip = self.client.get("/api/outputs/takes_run/clips/seg000?take=take1")
+        self.assertEqual(clip.content, b"take-one-bytes")
+        self.assertTrue(clip.headers["content-disposition"].startswith("inline"), "Firefox will not play attachment media")
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take2").content, b"take-two-bytes")
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000").content, b"take-two-bytes")
 

@@ -93,6 +93,9 @@ verify the assets appear in the app. Never import other local/private assets.
   tabs follow, and **Settings is always the last tab**. Any new or moved tab
   must keep the 01–NN numbers consecutive and update every in-app reference to
   a numbered tab. `tests/test_public_app.py` enforces the order.
+- The GUI must work in Firefox as well as Chromium browsers (Firefox is the owner's main browser). Serve media used as
+  `<video>`/`<img>` sources inline, avoid Chromium-only behaviour, and check GUI changes in Firefox or state that only
+  Chromium was tested.
 - Keep contributor GitHub handles out of application labels, tooltips, notices
   and help text. Preserve contribution credit in contributor/review/release documentation.
 
