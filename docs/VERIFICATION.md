@@ -1,4 +1,9 @@
-# Verification — 1.11.2
+# Verification — 1.11.3
+
+## 1.11.3 — Edit view refresh
+
+Full temporary-data/mock-service suite: **801 passed + 141 subtests**, including a Chromium browser test in which a take appears after the Edit view was opened: an operation's completion refreshes the open view to show it, and ↻ Refresh shows a further one. The live app was restarted idle and reports 1.11.3. Firefox was not tested here.
+
 
 ## 1.11.2 — Edit view clips in Firefox
 

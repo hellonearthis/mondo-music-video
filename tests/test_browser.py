@@ -759,7 +759,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.11.2')
+                expect(page.locator('#version')).to_have_text('1.11.3')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1311,6 +1311,44 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_an_open_edit_view_shows_a_take_finished_after_it_was_opened(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page(viewport={'width': 1280, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            video = {'file': 'run1/music-video.mp4', 'kind': 'video', 'title': 'Test video', 'duration': 5}
+            take = lambda n: {'id': f'take{n}', 'label': f'Take {n}', 'seed': n, 'clip_url': f'/api/outputs/run1/clips/seg000?take=take{n}'}
+            breakdown = {'run_id': 'run1', 'source_run_id': 'run1', 'title': 'Test video', 'kind': 'video', 'final_takes': [],
+                         'reroll_blocked': None, 'prompt_blocked': None, 'writer_charge': {}, 'prompt_limit': None,
+                         'segments': [{'index': 0, 'segment_id': 'seg000', 'prompt': 'Coastline.', 'duration': 2, 'trim_frames': 48,
+                                       'shots': [], 'has_clip': True, 'clip_url': '/api/outputs/run1/clips/seg000',
+                                       'active_take': 'take1', 'takes': [take(1)], 'active_prompt_take': None, 'prompt_takes': []}]}
+            page.route('**/api/outputs', lambda route: route.fulfill(json=[video]))
+            page.route('**/api/outputs/run1/prompts', lambda route: route.fulfill(json=breakdown))
+            page.route('**/api/outputs/run1/clips/**', lambda route: route.fulfill(status=404))
+            page.route('**/api/media/**', lambda route: route.fulfill(status=404))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelector("#open-vocab-panel-btn").onclick !== null')
+                page.locator('button.nav[data-panel=outputs]').click()
+                page.locator('#output-list button', has_text='Edit').click()
+                expect(page.locator('select.passage-take-select option')).to_have_count(1)
+                # A take finishes elsewhere (e.g. started before the view was reopened); the operation's completion refreshes it.
+                breakdown['segments'][0].update(takes=[take(1), take(2)], active_take='take2')
+                page.evaluate("""async () => { const m = await import('/js/production.js');
+                    await m.applyStatus({state: 'running', kind: 'reroll'}); await m.applyStatus({state: 'complete', kind: 'reroll'}); }""")
+                expect(page.locator('select.passage-take-select option')).to_have_count(2)
+                self.assertEqual(page.locator('select.passage-take-select').input_value(), 'take2')
+                # ↻ Refresh reads it again on demand.
+                breakdown['segments'][0].update(takes=[take(1), take(2), take(3)], active_take='take3')
+                page.locator('#prompts-view-refresh-btn').click()
+                expect(page.locator('select.passage-take-select option')).to_have_count(3)
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_the_caption_dialog_defaults_to_the_bottom_and_sends_the_chosen_look(self):
         from playwright.sync_api import sync_playwright, expect
         with sync_playwright() as p:
@@ -1580,7 +1618,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.11.2')
+                expect(page.locator('#version')).to_have_text('1.11.3')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

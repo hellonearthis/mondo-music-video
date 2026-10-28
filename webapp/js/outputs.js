@@ -33,6 +33,7 @@ let pendingDeleteRun = null;
 export function closeProductionBreakdown() {
   const mainView = $("#outputs-main-view");
   const breakdownView = $("#outputs-breakdown-view");
+  openBreakdown = null;
   if (breakdownView) {
     $$("#prompts-view-list video").forEach(v => {
       v.pause();
@@ -210,7 +211,17 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   return wrap;
 }
 
-export async function showProductionBreakdown(output) {
+let openBreakdown = null;     // the finished video shown in the Edit view, so it can be refreshed
+
+// Re-read the open Edit view (after any operation finishes, or on ↻ Refresh), keeping the reader's place.
+export async function refreshProductionBreakdown() {
+  if (!openBreakdown || $("#outputs-breakdown-view")?.hidden) return;
+  const top = window.scrollY;
+  await showProductionBreakdown(openBreakdown, { refresh: true });
+  window.scrollTo(0, top);
+}
+
+export async function showProductionBreakdown(output, { refresh = false } = {}) {
   const mainView = $("#outputs-main-view");
   const breakdownView = $("#outputs-breakdown-view");
   const listEl = $("#prompts-view-list");
@@ -221,14 +232,17 @@ export async function showProductionBreakdown(output) {
   if (!breakdownView || !listEl) return;
 
   const runId = output.file.split("/")[0];
+  openBreakdown = output;
   if (titleEl) titleEl.textContent = `Edit: ${output.title}`;
-  if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
-  listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
+  if (!refresh) {             // a refresh keeps the current cards on screen until the new ones are ready
+    if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
+    listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
+  }
 
   if (mainView) mainView.hidden = true;
   releaseGallery();
   breakdownView.hidden = false;
-  breakdownView.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!refresh) breakdownView.scrollIntoView({ behavior: "smooth", block: "start" });
 
   try {
     const res = await api(`/api/outputs/${encodeURIComponent(runId)}/prompts`);
@@ -1213,4 +1227,5 @@ export function initUpscaleForm() {
     $("#upscale-dialog").close();
   });
   $("#prompts-view-back-btn")?.addEventListener("click", closeProductionBreakdown);
+  $("#prompts-view-refresh-btn")?.addEventListener("click", handle(refreshProductionBreakdown));
 }

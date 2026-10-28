@@ -3,7 +3,7 @@
 import { $, $$, api, copyToClipboard, handle, json, logSession, notice, state, text, updateLogDisplay, upload } from "./core.js";
 import { disposeScoreEditor, mountScoreEditor } from "./score_editor.js";
 import { loadActors, loadStyles } from "./library.js";
-import { loadOutputs } from "./outputs.js";
+import { loadOutputs, refreshProductionBreakdown } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
 import { storyboardFromForm, refreshStoryboards } from "./storyboard.js";
 import { loadWorlds } from "./worlds.js";
@@ -479,10 +479,7 @@ export async function applyStatus(status) {
   }
   if (state.lastState && state.lastState !== status.state && !busy) {
     await Promise.all([loadActors(), loadStyles(), loadOutputs(), loadWorlds(), refreshStoryboards()]);
-    if (status.state === "complete" && (status.kind === "harvest" || state.lastRequest?.kind === "harvest")) {
-      const harvestedId = status.result?.style || state.lastRequest?.style_id;
-      if (harvestedId) displayHarvestResult(harvestedId);
-    }
+    await refreshProductionBreakdown();   // an open Edit view shows the new take, prompt version or final version
   }
   // Also after a reload: show the latest completed harvest once per operation (Dismiss keeps it hidden).
   if (status.state === "complete" && status.kind === "harvest" && status.result?.style && state.harvestShown !== status.id) {
