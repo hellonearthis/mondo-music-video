@@ -21,19 +21,39 @@ const GRAMMAR_CLASSES = {
 let pendingExportRun = null;
 let pendingDeleteRun = null;
 
-async function openPromptsDialog(output) {
-  const dialog = $("#prompts-clips-dialog");
-  if (!dialog) return;
+export function closeProductionBreakdown() {
+  const mainView = $("#outputs-main-view");
+  const breakdownView = $("#outputs-breakdown-view");
+  if (breakdownView) {
+    $$("#prompts-view-list video").forEach(v => {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    });
+    breakdownView.hidden = true;
+  }
+  if (mainView) {
+    mainView.hidden = false;
+  }
+}
+
+export async function showProductionBreakdown(output) {
+  const mainView = $("#outputs-main-view");
+  const breakdownView = $("#outputs-breakdown-view");
+  const listEl = $("#prompts-view-list");
+  const titleEl = $("#prompts-view-title");
+  const subEl = $("#prompts-view-subtitle");
+
+  if (!breakdownView || !listEl) return;
+
   const runId = output.file.split("/")[0];
-  const listEl = $("#prompts-dialog-list");
-  const titleEl = $("#prompts-dialog-title");
-  const subEl = $("#prompts-dialog-subtitle");
   if (titleEl) titleEl.textContent = `Prompts & Clips: ${output.title}`;
   if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
-  if (listEl) {
-    listEl.innerHTML = '<div class="prompts-dialog-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
-  }
-  dialog.showModal();
+  listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
+
+  if (mainView) mainView.hidden = true;
+  breakdownView.hidden = false;
+  breakdownView.scrollIntoView({ behavior: "smooth", block: "start" });
 
   try {
     const res = await api(`/api/outputs/${encodeURIComponent(runId)}/prompts`);
@@ -47,7 +67,7 @@ async function openPromptsDialog(output) {
       return;
     }
 
-    listEl.replaceChildren(...data.segments.map((seg, idx) => {
+    listEl.replaceChildren(...data.segments.map((seg) => {
       const card = document.createElement("article");
       card.className = "prompts-passage-card card";
       card.style.margin = "0 0 16px 0";
@@ -78,22 +98,7 @@ async function openPromptsDialog(output) {
       const grid = document.createElement("div");
       grid.className = "prompts-passage-grid";
 
-      if (seg.has_clip && seg.clip_url) {
-        const vidWrap = document.createElement("div");
-        vidWrap.className = "prompts-passage-video-wrap";
-        vidWrap.style.marginBottom = "12px";
-        const v = document.createElement("video");
-        v.src = seg.clip_url;
-        v.controls = true;
-        v.preload = "metadata";
-        v.style.width = "100%";
-        v.style.maxHeight = "280px";
-        v.style.borderRadius = "4px";
-        v.style.background = "#101814";
-        vidWrap.append(v);
-        grid.append(vidWrap);
-      }
-
+      // 1. Text prompt on the LEFT
       if (seg.prompt) {
         const preWrap = document.createElement("div");
         preWrap.className = "prompts-passage-text-wrap";
@@ -136,7 +141,7 @@ async function openPromptsDialog(output) {
         pre.style.borderRadius = "4px";
         pre.style.padding = "12px";
         pre.style.margin = "0";
-        pre.style.maxHeight = "240px";
+        pre.style.maxHeight = "280px";
         pre.style.overflowY = "auto";
         pre.textContent = seg.prompt;
 
@@ -147,6 +152,23 @@ async function openPromptsDialog(output) {
         noPrompt.className = "muted";
         noPrompt.textContent = "No prompt text saved for this passage.";
         grid.append(noPrompt);
+      }
+
+      // 2. Video clip on the RIGHT
+      if (seg.has_clip && seg.clip_url) {
+        const vidWrap = document.createElement("div");
+        vidWrap.className = "prompts-passage-video-wrap";
+        vidWrap.style.marginBottom = "0";
+        const v = document.createElement("video");
+        v.src = seg.clip_url;
+        v.controls = true;
+        v.preload = "metadata";
+        v.style.width = "100%";
+        v.style.maxHeight = "280px";
+        v.style.borderRadius = "4px";
+        v.style.background = "#101814";
+        vidWrap.append(v);
+        grid.append(vidWrap);
       }
 
       card.append(grid);
@@ -640,7 +662,7 @@ export async function loadOutputs() {
     actions.className = "output-actions";
     actions.append(download, upscale);
     const viewPromptsBtn = text("button", "Prompts & clips", "secondary", `View prompts and passage clips for ${output.title}`);
-    viewPromptsBtn.onclick = () => openPromptsDialog(output);
+    viewPromptsBtn.onclick = () => showProductionBreakdown(output);
     actions.append(viewPromptsBtn);
     if (output.kind === "video") actions.append(caption);
     if (output.kind === "video") actions.append(exportButton(output));
@@ -844,12 +866,5 @@ export function initUpscaleForm() {
     await json("/api/upscale", { ...upscaleBody(), ...(state.upscaleCloud ? { max_credits: state.upscaleCredits } : {}) });
     $("#upscale-dialog").close();
   });
-  $("#prompts-dialog-close-btn")?.addEventListener("click", () => $("#prompts-clips-dialog")?.close());
-  $("#prompts-clips-dialog")?.addEventListener("close", () => {
-    $$("#prompts-dialog-list video").forEach(v => {
-      v.pause();
-      v.removeAttribute("src");
-      v.load();
-    });
-  });
+  $("#prompts-view-back-btn")?.addEventListener("click", closeProductionBreakdown);
 }

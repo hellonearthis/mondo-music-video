@@ -445,7 +445,20 @@
 <section id="panel-idents" class="panel" data-component="Credits &amp; Idents Panel" data-component-id="panel-idents" data-component-source="webapp/index.html" hidden><div class="eyebrow">02 / SIGN YOUR WORK</div><h1>Make an <em>entrance.</em></h1><p class="intro">Generate an animated production ident. Attach it to your next video as opening or closing credits.</p><form id="ident-form" class="production-form card narrow" data-kind="ident" data-component="Ident Production Form" data-component-id="ident-production-form" data-component-source="webapp/index.html"><label data-tooltip="Studio name or brand text to display in the ident animation">Title to display<input name="title" maxlength="160" required placeholder="Your production name"></label><label data-tooltip="Description of how the lettering, materials, and lighting animate">Direction<textarea name="direction" rows="4" maxlength="6000" placeholder="Brushed chrome letters emerge from soft light." required></textarea></label><label data-tooltip="Aesthetic style card applied to the ident animation">Style<select name="style_id" class="style-select"></select></label><div class="two-col"><label data-tooltip="Rendering backend for generating the ident">Renderer<select name="backend" class="backend-select"></select></label><label data-tooltip="Video resolution for the ident clip">Resolution<select name="resolution" class="resolution-select"></select></label></div><div class="two-col"><label data-tooltip="Clip length in seconds (4 to 12 seconds)">Duration, seconds<input name="ident_seconds" type="number" min="4" max="12" value="5"></label><label data-tooltip="Aspect ratio framing for the ident">Shape<select name="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>5:4</option><option>4:5</option><option>2:1</option><option>1:2</option><option>21:9</option><option>9:21</option><option>3:1</option><option>1:3</option></select></label></div><label data-tooltip="Optional visual references for lettering or logo style">Reference images<input type="file" class="refs-input" accept="image/*" multiple><small class="file-drop-hint">Choose files or drop up to 9 images here</small><small class="file-drop-error" role="alert"></small></label><div class="refs-receipt file-receipt" data-tooltip="Attached reference files">No reference images</div><button type="button" class="quiet clear-refs" data-tooltip="Remove reference images">Clear reference images</button><label class="check"><input type="checkbox" name="ident_all_references"> Use all reference images together</label><p class="muted">Off selects one reference. On uses every attached reference, up to the renderer's limit.</p><label class="check" data-tooltip="Use shorter writer instructions and compact job data to save memory and context on small GPUs or CPU-only machines. Off keeps the full prompts. Ident writer sections that do not apply to the chosen mode are left out."><input name="compact_prompts" type="checkbox"> Compact prompts <small>(low VRAM/RAM)</small></label><p class="muted">Generated lettering may need a few attempts to spell a title correctly.</p><button class="primary operation-action" data-tooltip="Generate ident prompt and preview cost estimate">Preview ident</button></form></section>
 
 <section id="panel-outputs" class="panel" data-component="Finished Videos Panel" data-component-id="panel-outputs" data-component-source="webapp/index.html" hidden><div class="eyebrow">08 / THAT'S A WRAP</div><h1>Ready for <em>the world.</em></h1><p class="intro">Your finished work, ready to play or download. Optional Topaz exports preserve the original.</p>
+<div id="outputs-main-view">
 <div id="output-list" class="output-grid" data-tooltip="Gallery of completed music videos and idents"></div>
+</div>
+
+<div id="outputs-breakdown-view" class="outputs-breakdown-view" hidden>
+  <div class="panel-header-row" style="margin-bottom:16px;align-items:center;">
+    <div>
+      <button type="button" id="prompts-view-back-btn" class="secondary" style="margin-bottom:8px;" data-tooltip="Return to Finished Videos gallery">← Back to Finished Videos</button>
+      <h2 id="prompts-view-title" style="margin:0 0 4px 0;font-size:24px;">Passage Prompts &amp; Rendered Clips</h2>
+      <p id="prompts-view-subtitle" class="muted" style="margin:0;font-size:14px;"></p>
+    </div>
+  </div>
+  <div id="prompts-view-list" class="prompts-view-list"></div>
+</div>
 
 <details id="unfinished-runs-fold" class="card" data-component="Unfinished Runs Manager" data-component-id="unfinished-runs-manager" data-component-source="webapp/index.html" style="margin-top:24px;">
   <summary style="cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:space-between;user-select:none;">
@@ -544,18 +557,6 @@
   <button type="button" id="delete-cancel-btn" class="quiet">Cancel</button>
   <button type="button" id="delete-confirm-btn" class="primary" style="background:#b91c1c;border-color:#991b1b;color:#fff;">Delete permanently</button>
 </div>
-</dialog>
-<dialog id="prompts-clips-dialog" class="prompts-clips-dialog" data-component="Prompts &amp; Clips Dialog" data-component-id="prompts-clips-dialog" data-component-source="webapp/index.html" data-tooltip="View passage prompts and rendered clips">
-  <form method="dialog"><button class="dialog-close" aria-label="Close prompts viewer" data-tooltip="Close prompts and clips viewer">×</button></form>
-  <div class="eyebrow">PRODUCTION BREAKDOWN</div>
-  <div class="prompts-dialog-header">
-    <h2 id="prompts-dialog-title">Passage Prompts &amp; Rendered Clips</h2>
-    <p id="prompts-dialog-subtitle" class="muted">Review the written prompts and individual rendered clips that formed each passage of this video.</p>
-  </div>
-  <div id="prompts-dialog-list" class="prompts-dialog-list"></div>
-  <div class="picker-actions" style="margin-top:16px;display:flex;justify-content:flex-end;">
-    <button type="button" class="primary" id="prompts-dialog-close-btn">Done</button>
-  </div>
 </dialog>
 <dialog id="vocab-helper-dialog" class="oap-dialog vocab-guide-dialog" data-component="Visual Vocabulary Guide Dialog" data-component-id="vocab-helper-dialog" data-component-source="webapp/index.html" aria-labelledby="vocab-guide-title">
 <form method="dialog"><button class="dialog-close" aria-label="Close vocabulary guide" data-tooltip="Dismiss guide dialog">×</button></form>
