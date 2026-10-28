@@ -20,7 +20,6 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
   "megapixels": 0.6,
   "beats_per_bar": 4,
   "bars_per_phrase": 8,
-  "seed": 0,
   "vision_quality_check": false,
   "conceptual_theme": "",
   "lyrics": "",
@@ -32,6 +31,12 @@ to a JSON file and run `mondo-music-video-agent preview request.json`.
   "end_ident": ""
 }
 ```
+
+`seed` (default 0) is the variation seed: shot plan, vocabulary and casting.
+Leave out `render_seed` so each video renders with its own random seed; the quote
+returns both. Pass `render_seed` only to repeat an earlier video exactly or when
+the user gives one. A new variation seed changes the plan, so its prompts are
+written again; a new render seed alone keeps the same prompts.
 
 Use actual returned upload/actor/style/output IDs. Actors and additional image
 references share a maximum of nine images. WaveSpeed H3 requires at least one

@@ -14,7 +14,7 @@
     "max_reference_audios": 0,
     "min_reference_images": 0,
     "supports_seed": false,
-    "max_prompt_chars": null,
+    "max_prompt_chars": 10000,
     "fields": {
       "prompt": "prompt",
       "duration": "duration",
@@ -38,7 +38,7 @@
     "max_reference_audios": 0,
     "min_reference_images": 0,
     "supports_seed": false,
-    "max_prompt_chars": null,
+    "max_prompt_chars": 30000,
     "fields": {
       "prompt": "prompt",
       "duration": "duration",

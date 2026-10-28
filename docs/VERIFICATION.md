@@ -1,4 +1,9 @@
-# Verification — 1.11.0
+# Verification — 1.11.1
+
+## 1.11.1 — Seeds and passage prompt versions (collaborator fork `c36c89f`)
+
+Full temporary-data/mock-service suite: **800 passed + 141 subtests** (including the service-log routing for reroll and prompt operations, and renderer prompt ceilings read from each backend's capabilities: Seedance 2 10,000, Seedance 2.5 30,000, H3 none). The owner ran `tools/update_protected_pins.py --owner-approved-change` for the rate-card change; only the rate card's pin changed, `protected_scheme.check()` returns `[]`, and `docs/SOURCE_EXTRACTION.json` keeps the original hash with the adaptation and its `published_sha256`. The owner ran a real local reroll of seg003 on an existing production during testing: it completed as Take 2 (seed 417783182) beside Take 1 (seed 666888669). New coverage: three previews without a render seed get three different render seeds but the same variation seed 0 and the same planned passages, and explicit seeds are kept; Take 1 uses the render seed when a production has one; Take 1 reports the seed that rendered it (production seed 0, a kept quality retry, and a take record saved by 1.11.0); an end-to-end mock run of the worker's own prompt stage rewriting one passage (earlier writer/review files moved aside, new version active), a hand edit that fails the checks (kept as not passed, prompt unchanged, cannot be selected), a passing hand edit, selecting the original again, refusal of an API writer without cost acceptance, and restoring the prompt when a rewrite fails after the worker saved it. Legacy quote fingerprints are unchanged for saved requests (seed 0). `node --check` passed for every web script, `git diff --check` was clean, a fresh version-handler import reported 1.11.1 and `protected_scheme.check()` returned `[]`. Apart from the owner's reroll above, no real writer, Laya, renderer, paid or GPU work was run: no re-encode, no Seedance run, and a rewritten or edited prompt has not been rendered against the original with the same song and seed.
+
 
 ## 1.11.0 — Passage takes (collaborator fork `7367470`)
 

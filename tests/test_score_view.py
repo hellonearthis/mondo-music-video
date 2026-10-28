@@ -260,3 +260,51 @@ class PassageBreakdownTests(ScoreViewTests):
         write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
         with self.assertRaisesRegex(ValueError, "missing"):
             takes.reassemble_final_video(self.fixture.store, "lost_run", None)
+
+    def test_original_take_reports_the_seed_that_rendered_it(self):
+        directory = self.run_dir("seed_run", request={"backend": "local_h3", "seed": 0})
+        clip0, clip1 = directory / "renders" / "seg000.mp4", directory / "renders" / "seg001-r1.mp4"
+        clip0.parent.mkdir()
+        clip0.write_bytes(b"a")
+        clip1.write_bytes(b"b")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip0)}, "seg001": {"video": str(clip1)}})
+        write_json(directory / "quality.json", {"seg001": {"attempts": [{"segment_id": "seg001", "seed": 1},
+                                                                         {"segment_id": "seg001-r1", "seed": 7920}]}})
+        seeds = [seg["takes"][0]["seed"] for seg in self.client.get("/api/outputs/seed_run/prompts").json()["segments"]]
+        self.assertEqual(seeds, [0, 7920])
+
+    def test_saved_take_one_seed_is_corrected_and_kept_retry_clip_reports_retry_seed(self):
+        from mmv.worker import RETRY_SEED_OFFSET
+        directory = self.run_dir("old_takes", request={"backend": "local_h3", "seed": 0})
+        clip0, clip1 = directory / "renders" / "seg000.mp4", directory / "renders" / "seg001-r1.mp4"
+        clip0.parent.mkdir()
+        clip0.write_bytes(b"a")
+        clip1.write_bytes(b"b")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip0)}, "seg001": {"video": str(clip1)}})
+        write_json(directory / "takes.json", {"segments": {"seg000": {"active_take": "take1", "takes": [
+            {"id": "take1", "label": "Take 1 (original)", "seed": 42, "video": str(clip0), "render": {"video": str(clip0)}}]}}})
+        seeds = [seg["takes"][0]["seed"] for seg in self.client.get("/api/outputs/old_takes/prompts").json()["segments"]]
+        self.assertEqual(seeds, [0, 1 + RETRY_SEED_OFFSET])
+
+    def test_take_one_uses_the_render_seed_when_the_production_has_one(self):
+        directory = self.run_dir("render_seed_run", request={"backend": "local_h3", "seed": 3, "render_seed": 500})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"a")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        seeds = [seg["takes"][0]["seed"] for seg in self.client.get("/api/outputs/render_seed_run/prompts").json()["segments"]]
+        self.assertEqual(seeds, [500, 501])
+
+    def test_prompt_limit_comes_from_the_production_renderer(self):
+        from mmv.worker import length_problems
+        from mmv.render import get_backend
+        limits = {name: get_backend(name).capabilities().get("max_prompt_chars")
+                  for name in ("local_h3", "comfy_sdk_h3", "seedance_2", "seedance_2_5")}
+        self.assertEqual(limits, {"local_h3": None, "comfy_sdk_h3": None, "seedance_2": 10000, "seedance_2_5": 30000})
+        self.assertEqual(length_problems("x" * 50000, None), [])
+        self.assertEqual(length_problems("x" * 10000, 10000), [])
+        self.assertIn("at most 10000", length_problems("x" * 10001, 10000)[0])
+        for backend, expected in (("seedance_2", 10000), ("local_h3", None)):
+            self.run_dir(f"limit_{backend}", request={"backend": backend})
+            write_json(self.home / "runs" / f"limit_{backend}" / "prompts.json", {"seg000": "Coastline."})
+            self.assertEqual(self.client.get(f"/api/outputs/limit_{backend}/prompts").json()["prompt_limit"], expected)

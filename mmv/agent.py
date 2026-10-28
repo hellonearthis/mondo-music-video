@@ -409,6 +409,25 @@ class AgentClient:
         return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/takes/{urllib.parse.quote(segment_id, safe='')}",
                           {"take_id": take_id})
 
+    def _prompt_url(self, output_file, segment_id, action):
+        run_id = str(output_file).split("/")[0]
+        return f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/prompts/{urllib.parse.quote(segment_id, safe='')}/{action}"
+
+    def rewrite_prompt(self, output_file, segment_id, confirm=False, accept_writer_cost=False):
+        """Write a new prompt for one passage through the normal writer, Mondo checks and Laya review (confirm=True; an API
+        writer also needs accept_writer_cost=True). The new version becomes the passage's prompt; reroll the clip to render it."""
+        return self._json("POST", self._prompt_url(output_file, segment_id, "rewrite"),
+                          {"confirm": bool(confirm), "accept_writer_cost": bool(accept_writer_cost)})
+
+    def edit_prompt(self, output_file, segment_id, prompt, confirm=False):
+        """Check a hand-edited prompt with the Mondo checks and Laya review (confirm=True). It becomes the passage's prompt
+        only if it passes; otherwise it is kept as a version marked not passed."""
+        return self._json("POST", self._prompt_url(output_file, segment_id, "edit"), {"prompt": prompt, "confirm": bool(confirm)})
+
+    def select_prompt_take(self, output_file, segment_id, prompt_take_id):
+        """Make a passed prompt version (e.g. 'prompt1', the original) the passage's prompt."""
+        return self._json("POST", self._prompt_url(output_file, segment_id, "select"), {"prompt_take_id": prompt_take_id})
+
     def reassemble_output(self, output_file, selected_takes=None):
         """Re-encode the final music video using the active or selected passage takes, preserving previous final video takes."""
         run_id = str(output_file).split("/")[0]
@@ -546,6 +565,20 @@ def main(argv=None):
     select_take_cmd.add_argument("output_file")
     select_take_cmd.add_argument("segment_id")
     select_take_cmd.add_argument("take_id")
+    rewrite_cmd = sub.add_parser("rewrite-prompt", help="Write a new checked prompt for one passage")
+    rewrite_cmd.add_argument("output_file")
+    rewrite_cmd.add_argument("segment_id")
+    rewrite_cmd.add_argument("--confirm", action="store_true")
+    rewrite_cmd.add_argument("--accept-writer-cost", action="store_true", help="Accept an API writer's charge for this call")
+    edit_cmd = sub.add_parser("edit-prompt", help="Check a hand-edited prompt (read from a file) for one passage")
+    edit_cmd.add_argument("output_file")
+    edit_cmd.add_argument("segment_id")
+    edit_cmd.add_argument("prompt_file")
+    edit_cmd.add_argument("--confirm", action="store_true")
+    select_prompt_cmd = sub.add_parser("select-prompt-take", help="Make a passed prompt version the passage's prompt")
+    select_prompt_cmd.add_argument("output_file")
+    select_prompt_cmd.add_argument("segment_id")
+    select_prompt_cmd.add_argument("prompt_take_id")
     reassemble_cmd = sub.add_parser("reassemble-output", help="Re-encode final video with selected passage takes")
     reassemble_cmd.add_argument("output_file")
     reassemble_cmd.add_argument("--takes", default=None, help="Optional JSON mapping of segment_id to take_id")
@@ -639,6 +672,12 @@ def main(argv=None):
             result = client.reroll_segment(args.output_file, args.segment_id, seed=args.seed, confirm=args.confirm)
         elif args.command == "select-segment-take":
             result = client.select_segment_take(args.output_file, args.segment_id, args.take_id)
+        elif args.command == "rewrite-prompt":
+            result = client.rewrite_prompt(args.output_file, args.segment_id, args.confirm, args.accept_writer_cost)
+        elif args.command == "edit-prompt":
+            result = client.edit_prompt(args.output_file, args.segment_id, Path(args.prompt_file).read_text(encoding="utf-8"), args.confirm)
+        elif args.command == "select-prompt-take":
+            result = client.select_prompt_take(args.output_file, args.segment_id, args.prompt_take_id)
         elif args.command == "reassemble-output":
             result = client.reassemble_output(args.output_file, json.loads(args.takes) if args.takes else None)
         elif args.command == "select-opp-sheet":

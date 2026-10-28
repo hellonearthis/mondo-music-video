@@ -210,13 +210,13 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `panel-outputs`
 - **Used in**: Section 08 navigation
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
-- **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, Prompts & clips, and export triggers.
+- **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, Edit, and export triggers.
 
-### Prompts & Clips View
+### Edit View (passages)
 - **ID**: `outputs-breakdown-view`
-- **Used in**: Replaces the gallery inside `panel-outputs` when **Prompts & clips** is pressed on a finished output card; **Back to Finished Videos** returns
+- **Used in**: Replaces the gallery inside `panel-outputs` when **Edit** is pressed on a finished output card; **Back to Finished Videos** returns
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
-- **Design rules**: One card per passage: the written prompt (character count, copyable) on the left, the clip on the right with a take menu that previews recorded takes and, for local H3 productions, **Reroll Clip** after a confirmation. The header offers **Re-encode Final Video with Selected Takes** and a Final Video Version menu that downloads preserved versions. Opening the view changes nothing.
+- **Design rules**: One card per passage: the written prompt (character count, copyable) on the left, the clip on the right with a take menu that previews recorded takes and, for local H3 productions, **Reroll Clip** after a confirmation. The header offers **Re-encode Final Video with Selected Takes** and a Final Video Version menu that downloads preserved versions. Each prompt's length is shown against the renderer's own ceiling when it has one (from its rate card). Under each prompt, a version menu previews prompt versions; **Use this version** (passed versions only), **✏️ Edit prompt** with **Check and use**, and **✍️ Write new prompt** (confirmation, with the writer's estimate for an API writer) go through the production's own checks and Laya. The clip side shows the previewed take's seed and a **Next seed** field with **Random**. Opening the view changes nothing.
 
 ### Unfinished Runs Manager
 - **ID**: `unfinished-runs-manager`

@@ -19,6 +19,126 @@ TAKE_ID_RE = re.compile(r"take\d{1,4}")
 REROLL_BACKENDS = ("local_h3",)
 
 
+PROMPT_TAKES_FILE = "prompt_takes.json"
+PROMPT_TAKE_ID_RE = re.compile(r"prompt\d{1,4}")
+PROMPT_ARTIFACTS = ("writer-", "validation-", "laya-request-", "laya-response-", "instrument-repair-", "advice", "dance-advice-kept")
+
+
+def validate_prompt_take_id(prompt_take_id: str) -> str:
+    if not PROMPT_TAKE_ID_RE.fullmatch(prompt_take_id or ""):
+        raise ValueError("Invalid prompt version ID")
+    return prompt_take_id
+
+
+def prompt_block(request: dict, prepared: dict) -> str | None:
+    """Why this production's passage prompts cannot be rewritten or edited, or None when they can."""
+    if request.get("kind", "video") not in ("video", "ident"):
+        return "Only music videos and idents have passage prompts."
+    if not prepared.get("plan") or not prepared.get("settings"):
+        return "The production's saved plan or settings are missing."
+    return None
+
+
+def writer_charge(prepared: dict) -> dict:
+    """What one passage rewrite may cost: an API writer can charge per call, so it needs the user's acceptance."""
+    api = (prepared.get("settings") or {}).get("writer_mode", "local") != "local"
+    passages = max(1, len(prepared.get("segments") or (prepared.get("plan") or {}).get("segments") or []))
+    return {"api_writer": api, "estimate_usd": round(float(prepared.get("writer_estimate") or 0) / passages, 4) if api else 0}
+
+
+def _prompt_takes_view(directory: Path, plan: dict, prompts: dict) -> tuple[dict, bool]:
+    """Prompt versions per passage with the production's validated prompt as version 1. Pure: returns (versions, changed)."""
+    saved = read_json(directory / PROMPT_TAKES_FILE, {})
+    segments = saved.get("segments") if isinstance(saved, dict) and isinstance(saved.get("segments"), dict) else {}
+    sids = [f"seg{seg['index']:03d}" for seg in (plan.get("segments") or [])] or sorted(prompts)
+    changed = not (directory / PROMPT_TAKES_FILE).is_file()
+    for sid in sids:
+        text = prompts.get(sid)
+        if not isinstance(text, str) or not text:
+            continue
+        entry = segments.get(sid)
+        if not isinstance(entry, dict) or not entry.get("takes"):
+            segments[sid] = {"active_take": "prompt1", "takes": [{
+                "id": "prompt1", "label": "Prompt 1 (original)", "prompt": text, "validated": True,
+                "created_at": _mtime(directory / "prompts.json")}]}
+            changed = True
+            continue
+        matching = next((t["id"] for t in entry["takes"] if t.get("prompt") == text and t.get("validated", True)), None)
+        if matching and entry.get("active_take") != matching:
+            entry["active_take"] = matching
+            changed = True
+    return {"segments": segments}, changed
+
+
+def get_prompt_takes(store: Storage, run_id: str) -> dict:
+    """Prompt versions for a run. Read-only: nothing is written."""
+    from .score_view import _origin_run, _run_files
+    origin = _origin_run(store, run_id)
+    plan, prompts, _ = _run_files(store, origin)
+    return _prompt_takes_view(inside(store.home / "runs", identifier(origin)), plan, prompts)[0]
+
+
+def _next_prompt_id(entry: dict) -> tuple[str, int]:
+    number = max((int(t["id"][6:]) for t in entry.get("takes") or [] if PROMPT_TAKE_ID_RE.fullmatch(t.get("id", ""))), default=0) + 1
+    return f"prompt{number}", number
+
+
+def begin_prompt_rewrite(directory: Path, segment_id: str) -> str:
+    """Save version 1 and move the passage's earlier writer/review files aside, so the new attempt never overwrites them.
+    Returns the ID the new version will get."""
+    segment_id = validate_segment_id(segment_id)
+    plan, prompts = read_json(directory / "plan.json", {}), read_json(directory / "prompts.json", {})
+    data, _ = _prompt_takes_view(directory, plan, prompts)
+    write_json(directory / PROMPT_TAKES_FILE, data)
+    take_id, _ = _next_prompt_id(data["segments"].get(segment_id) or {})
+    archive = directory / "prompt_takes" / segment_id / f"before-{take_id}"
+    for path in directory.glob(f"{segment_id}.*.json"):
+        if any(path.name[len(segment_id) + 1:].startswith(prefix) for prefix in PROMPT_ARTIFACTS):
+            archive.mkdir(parents=True, exist_ok=True)
+            path.replace(archive / path.name)
+    return take_id
+
+
+def record_prompt_take(directory: Path, segment_id: str, prompt: str, how: str, *, problems=None) -> dict:
+    """Add a prompt version. A validated one becomes active (prompts.json already holds it); a hand edit that failed the
+    checks is kept for further editing but never becomes the passage's prompt."""
+    data = read_json(directory / PROMPT_TAKES_FILE, {"segments": {}})
+    entry = data["segments"].setdefault(segment_id, {"active_take": "", "takes": []})
+    take_id, number = _next_prompt_id(entry)
+    take = {"id": take_id, "label": f"Prompt {number} ({how}{'' if problems is None else ', not passed'})", "prompt": prompt,
+            "validated": problems is None, "created_at": time.time(), **({"problems": problems} if problems is not None else {})}
+    entry["takes"].append(take)
+    if problems is None:
+        entry["active_take"] = take_id
+    write_json(directory / PROMPT_TAKES_FILE, data)
+    return take
+
+
+def select_prompt_take(store: Storage, run_id: str, segment_id: str, prompt_take_id: str) -> dict:
+    """Make a validated prompt version the passage's prompt. Clips already rendered are unchanged; reroll the clip to use it."""
+    from .score_view import _origin_run, _run_files
+    from . import passage_plans
+    segment_id, prompt_take_id = validate_segment_id(segment_id), validate_prompt_take_id(prompt_take_id)
+    origin = _origin_run(store, run_id)
+    directory = inside(store.home / "runs", identifier(origin))
+    plan, prompts, _ = _run_files(store, origin)
+    data, _ = _prompt_takes_view(directory, plan, prompts)
+    entry = data["segments"].get(segment_id) or {}
+    chosen = next((t for t in entry.get("takes") or [] if t.get("id") == prompt_take_id), None)
+    if chosen is None:
+        raise ValueError(f"Prompt version {prompt_take_id} not found for passage {segment_id}")
+    if not chosen.get("validated", True):
+        raise ValueError(f"{chosen['label']} did not pass the Mondo checks and Laya review; edit it and check it again")
+    entry["active_take"] = prompt_take_id
+    prompts = {**prompts, segment_id: chosen["prompt"]}
+    prepared = read_json(directory / "prepared.json", {})
+    if prepared:                # binding first: if it fails, the prompt in use is unchanged
+        passage_plans.bind_prompts(directory, prepared, prompts)
+    write_json(directory / "prompts.json", prompts)
+    write_json(directory / PROMPT_TAKES_FILE, data)
+    return {"run_id": origin, "segment_id": segment_id, "active_prompt_take": prompt_take_id, "prompt_take": chosen}
+
+
 def reroll_block(request: dict) -> str | None:
     """Why this production's passages cannot be rerolled, or None when they can."""
     if request.get("backend", "local_h3") not in REROLL_BACKENDS:
@@ -46,7 +166,7 @@ def _takes_view(directory: Path, plan: dict, request: dict, renders: dict) -> tu
     segments = takes.get("segments")
     if not isinstance(segments, dict):
         segments = {}
-    base_seed = int(request.get("seed") or 42)
+    attempts = read_json(directory / "quality.json", {})
     changed = False
 
     by_id = {f"seg{seg['index']:03d}": seg for seg in (plan.get("segments") or [])}
@@ -62,7 +182,7 @@ def _takes_view(directory: Path, plan: dict, request: dict, renders: dict) -> tu
             take1 = {
                 "id": "take1",
                 "label": "Take 1 (original)",
-                "seed": got.get("seed", base_seed + seg["index"]),
+                "seed": got.get("seed", _original_seed(got, attempts.get(sid) or {}, request, seg["index"])),
                 "video": got["video"],
                 "audio": got.get("audio", ""),
                 "created_at": got.get("created_at") or _mtime(directory / "renders.json"),
@@ -71,6 +191,13 @@ def _takes_view(directory: Path, plan: dict, request: dict, renders: dict) -> tu
             segments[sid] = {"active_take": "take1", "takes": [take1]}
             changed = True
         else:
+            # Take 1 records saved before its seed was derived from the render (1.11.0 showed 42 + index) are corrected.
+            first = entry["takes"][0]
+            if first.get("id") == "take1" and (first.get("render") or {}).get("seed") is None:
+                seed = _original_seed(first.get("render") or first, attempts.get(sid) or {}, request, seg["index"])
+                if first.get("seed") != seed:
+                    first["seed"] = seed
+                    changed = True
             # Ensure active_take points to a valid take or matches renders.json
             current_video = got.get("video")
             matching = next((t["id"] for t in entry["takes"] if t.get("video") == current_video), None)
@@ -82,6 +209,21 @@ def _takes_view(directory: Path, plan: dict, request: dict, renders: dict) -> tu
                 changed = True
 
     return {"segments": segments}, changed or not (directory / TAKES_FILE).is_file()
+
+
+def _original_seed(got: dict, quality_entry: dict, request: dict, index: int) -> int:
+    """The seed that produced a production's kept clip: a quality retry's own seed, else the production seed plus the
+    passage index, as the worker renders it."""
+    from .worker import RETRY_SEED_OFFSET
+    name = Path(got.get("video", "")).name
+    retried = [a for a in quality_entry.get("attempts") or []
+               if "-r" in str(a.get("segment_id", "")) and a["segment_id"] in name and a.get("seed") is not None]
+    if retried:
+        return int(retried[-1]["seed"])
+    from .pipeline import render_seed
+    base = int(render_seed(request) or 0) + index
+    # A kept retry clip is named segNNN-r1; its seed is fixed by the worker even when quality.json was rewritten on resume.
+    return base + RETRY_SEED_OFFSET if f"seg{index:03d}-r1" in name else base
 
 
 def _mtime(path: Path) -> float:
@@ -186,7 +328,7 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
     from . import instruments, runtime
     from .render import get_backend
     from .pipeline import ENGINE
-    from .worker import require_renderer_handoff, render_timeout, map_steps
+    from .worker import require_renderer_handoff, render_timeout, map_steps, service_logs
 
     plan_path = directory / "plan.json"
     if not plan_path.is_file():
@@ -252,7 +394,7 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
             settings["comfy_launch"],
             settings["comfy_cwd"],
             settings["comfy_url"].rstrip("/") + "/system_stats",
-            directory / "comfy-service.log",
+            service_logs(directory) / "comfy-service.log",
             name="ComfyUI",
             launch_setting="comfy_launch",
         )
@@ -326,7 +468,8 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
     finally:
         backend.close_render()
 
-    render = {**result, "seed": seed, "take_id": take_id}
+    prompt_take = (read_json(directory / PROMPT_TAKES_FILE, {}).get("segments", {}).get(segment_id) or {}).get("active_take")
+    render = {**result, "seed": seed, "take_id": take_id, **({"prompt_take": prompt_take} if prompt_take else {})}
     new_take = {
         "id": take_id,
         "label": f"Take {next_num} (seed {seed})",
@@ -335,6 +478,7 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
         "audio": result.get("audio", ""),
         "created_at": time.time(),
         "render": render,
+        **({"prompt_take": prompt_take} if prompt_take else {}),
     }
     existing_takes.append(new_take)
     seg_takes["active_take"] = take_id

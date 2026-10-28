@@ -152,7 +152,19 @@ def prepare_world_harvest(store, request, settings):
                                                                     'base_version': base['version'] if base else 0}}
 
 
+def render_seed(request):
+    """The seed passage N renders with is render_seed + N; productions made before 1.11.1 rendered with seed + N."""
+    chosen = request.get('render_seed')
+    return request.get('seed') or 0 if chosen is None else chosen
+
+
 def prepare(store, request, *, saved_prepared=None):
+    if request.get('render_seed') is None and saved_prepared is None:
+        # Each new production renders with its own random seed unless one was chosen; the variation seed (plan, vocabulary,
+        # casting) is separate, so the same song and variation seed still plan the same passages and reuse their prompts.
+        # The request records it for start, resume and export; productions made before render seeds keep using `seed`.
+        import secrets
+        request['render_seed'] = secrets.randbelow(2147483648)
     from .render import get_backend
     from .engine.plan import plan
     from .engine.analyze import ScoreMap, Section

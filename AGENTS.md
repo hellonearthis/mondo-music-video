@@ -202,7 +202,9 @@ alignment to prompts for recovery. GUI, CLI and MCP parity is documented in
 A finished `local_h3` production can reroll one passage (explicit confirmation, local GPU, never automatic) into a new take
 beside the original. `reassemble_output` rebuilds the final video from original clips in one encode with flashes and captions
 inside that graph, keeping earlier versions as numbered files. Productions on other renderers are refused because rerolling
-could submit paid work without a preview and consent. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
+could submit paid work without a preview and consent. Passage prompt rewrites and hand edits run through the worker's own
+prompt stage (writer, Mondo checks, Laya) for that one passage; keep it that way rather than copying the loop, never let an
+edit skip the checks, and require writer-cost acceptance for API writers. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
 [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md).
 
 ## Panel progress and actor editing

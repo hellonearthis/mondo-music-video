@@ -1,5 +1,19 @@
 # Collaborator review record
 
+## Fork `c36c89f` reviewed (release 1.11.1, 2026-10-28)
+
+The task-start check found head `c36c89fc7f2fbfa1f3d4139f5fa7b3ca05225dad`, one authored commit after last reviewed `7367470`, built on the fork's 1.10.31 (not our 1.11.0), so it was ported by hand. Because it touches the protected prompting scheme, the owner was warned first and approved the opt-in approach below. Claude Code (Opus 5.5) coordinated and integrated; Codex (GPT-6) reviewed read-only.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Prompt version history (`prompt_takes.json`, version selector) | Adopted, adapted to 1.11.0's rules: reads are pure (the fork's getter created the file on GET), and a hand edit that did not pass is kept but cannot be selected. |
+| Prompt reroll (`reroll_prompt_worker`) | Adopted as behaviour, not as code. The fork copied the worker's prompt stage (system composition, singing/dance/instrument branches, validators, Laya, retry feedback) into `mmv/takes.py`, and added a writer instruction asking for "a fresh, distinct variation". A copy of protected behaviour drifts silently, and the new instruction changes the writer's wording, so both were left out. `mmv/worker.run(rewrite=…)` runs the existing stage for one passage instead, skipping the prompt cache in both directions and stopping before rendering. Temperature 0.7 already yields a new prompt. The fork also used current settings over the production's and ignored `bind_prompts` failures; the worker path uses the prepared settings and reports them. |
+| Manual prompt edit | Adapted: the fork saved edited text as the passage prompt with no checks, which could break the sealed-lips scheme. Edits now pass through the same stage with `candidate` (rigging sentence added for sealed passages, `validate_prompt`, quality, lip-sync/dance/instrument checks, Laya) and are used only if they pass. |
+| Paid writer | Added: the fork's reroll had no consent for an API writer. Rewrite now needs `accept_writer_cost` when the production's writer is an API service, with a per-passage estimate. |
+| Agent client/CLI/MCP | Adopted with the new names `rewrite_prompt` and `edit_prompt` (confirm guards) and `select_prompt_take`. |
+
+Remaining: real same-song, same-seed renders comparing a rewritten or edited prompt with the original have not been made.
+
 ## Fork `7367470` reviewed (release 1.11.0, 2026-10-28)
 
 The task-start check found head `7367470`, three authored commits after last reviewed `bdd6973` (`8356eb2`, `355cc26`, `7367470`), plus merge `0a91ce6` of our 1.10.28, whose only differences from our tree are the long-standing `Jobs.reset` and a harvest-card call in `production.js`. Fork content was applied to our `ace7114` from an isolated clone. Claude Code (Opus 5.5) coordinated and integrated; Codex (GPT-6) reviewed the patch and our current source read-only through the Codex plugin.

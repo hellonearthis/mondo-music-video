@@ -24,7 +24,7 @@ FILES = {
     'mmv/engine/casting.py': '248475a279a133cb0bccb852a99741d217790604cb49bf6ae8be1349d24513a6',
     'mmv/engine/comfy.py': '1bfa06ffab5b50af303f84e901db33a801034da388a0afed47dd529085b55181',
     'mmv/engine/config/injection_map.json': 'd0ebfb3b43d66011b5a0ab39a6b7c4d09abf92268f883bced7c10d31d5a12f88',
-    'mmv/engine/config/seedance_rate_card.json': 'e19d16a9d849fc70297205cafd4b75218aa5bce513b853ffe8e80c759a6266e9',
+    'mmv/engine/config/seedance_rate_card.json': '1bb59cee0ee738d3fb215466658330d7481935c27c16b1deebc590576edeffdb',
     'mmv/engine/grid.py': '6dcee9e9908169570ffa3d23f22a1cd6f5e886cdaf253483b5dcb7d8d961a302',
     'mmv/engine/plan.py': 'd364cb19c0f71471c81c114a1b102ab3289bd5f8dbe7fe77209a1ca75431ef4e',
     'mmv/engine/prompts/ident_base.md': '48af7f534bf41de6fc97b9de7a99b28d3080ef1e578772f07a5c03bbcdd4c8f8',

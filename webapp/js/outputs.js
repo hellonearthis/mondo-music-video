@@ -19,6 +19,15 @@ const GRAMMAR_CLASSES = {
 };
 
 let pendingExportRun = null;
+const MAX_SEED = 2147483647;
+
+// A random seed that no recorded take of the passage has used yet.
+export function freshSeed(used = [], random = Math.random) {
+  const taken = new Set(used.filter(seed => seed != null).map(Number));
+  let seed;
+  do { seed = 100000 + Math.floor(random() * (MAX_SEED - 100000)); } while (taken.has(seed));
+  return seed;
+}
 let pendingDeleteRun = null;
 
 export function closeProductionBreakdown() {
@@ -82,6 +91,102 @@ function renderFinalTakesBar(sourceRunId, finalTakes = []) {
   syncDownloadLink();
 }
 
+// "4,979 chars", or "4,979 / 10,000 chars" when the production's renderer reports a ceiling.
+function charLabel(length, limit) {
+  return limit ? `${length.toLocaleString()} / ${Number(limit).toLocaleString()} chars` : `${length.toLocaleString()} chars`;
+}
+
+// Prompt versions of one passage: preview any version, make a passed one the prompt, write a new one or check a hand edit.
+// Writing and checking go through the same writer, Mondo checks and Laya review as a production; nothing skips them.
+function promptVersionControls(seg, data, sourceRunId, showText, reload) {
+  const wrap = document.createElement("div");
+  wrap.className = "prompt-versions";
+  wrap.style.cssText = "display:flex;flex-direction:column;gap:6px;margin-top:8px;";
+  const versions = seg.prompt_takes || [];
+  const bar = document.createElement("div");
+  bar.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;";
+  const select = document.createElement("select");
+  select.className = "prompt-version-select";
+  select.style.cssText = "font-size:12px;padding:4px 8px;min-width:170px;";
+  select.setAttribute("aria-label", `Prompt versions of ${seg.segment_id}`);
+  select.replaceChildren(...versions.map(v => option(v.id, `${v.label}${v.id === seg.active_prompt_take ? " · in use" : ""}`)));
+  select.value = seg.active_prompt_take || versions.at(-1)?.id || "";
+  select.hidden = versions.length < 2;
+  const problems = text("p", "", "muted prompt-version-problems");
+  problems.hidden = true;
+  const useBtn = text("button", "Use this version", "secondary", "Make this passed version the passage's prompt; reroll the clip to render it");
+  useBtn.type = "button";
+  const editBtn = text("button", "✏️ Edit prompt", "quiet", "Edit this prompt; it is used only if it passes the Mondo checks and Laya review");
+  editBtn.type = "button";
+  const writeBtn = text("button", "✍️ Write new prompt", "quiet", "Have the writer write a new prompt for this passage, checked like every production prompt");
+  writeBtn.type = "button";
+  editBtn.hidden = writeBtn.hidden = Boolean(data.prompt_blocked);
+  const chosen = () => versions.find(v => v.id === select.value);
+  const sync = () => {
+    const version = chosen();
+    if (version) showText(version.prompt);
+    useBtn.hidden = !version || version.id === seg.active_prompt_take || version.validated === false;
+    problems.hidden = !(version && version.validated === false);
+    problems.textContent = version?.validated === false ? `Did not pass: ${(version.problems || []).join("; ")}` : "";
+  };
+  select.onchange = sync;
+  useBtn.onclick = handle(async () => {
+    await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/select`, { prompt_take_id: select.value });
+    notice(`${chosen()?.label} is now the prompt for ${seg.segment_id}. Reroll the clip to render it.`);
+    await reload();
+  });
+  const runPrompt = async (action, body, message) => {
+    await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/${action}`, body);
+    try {
+      await pollJobCompletion(message);
+      notice(`New prompt for ${seg.segment_id} passed the checks and is in use. Reroll the clip to render it.`);
+    } finally {
+      await reload();
+    }
+  };
+  writeBtn.onclick = handle(async () => {
+    const charge = data.writer_charge || {};
+    const cost = charge.api_writer ? ` Your writer is an API service that may charge for this call (estimate about $${Number(charge.estimate_usd || 0).toFixed(2)}).` : "";
+    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? It goes through the writer, the Mondo checks and Laya, like every production prompt.${cost}`)) return;
+    await runPrompt("rewrite", { confirm: true, accept_writer_cost: Boolean(charge.api_writer) }, `Writing a new prompt for ${seg.segment_id}…`);
+  });
+  const editor = document.createElement("div");
+  editor.hidden = true;
+  editor.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+  const area = document.createElement("textarea");
+  area.rows = 12;
+  area.className = "prompt-edit-area";
+  area.setAttribute("aria-label", `Edited prompt for ${seg.segment_id}`);
+  const editActions = document.createElement("div");
+  editActions.style.cssText = "display:flex;gap:6px;";
+  const checkBtn = text("button", "Check and use", "primary", "Run the Mondo checks and Laya review; the edit is used only if it passes");
+  checkBtn.type = "button";
+  const cancelBtn = text("button", "Cancel", "quiet");
+  cancelBtn.type = "button";
+  editActions.append(checkBtn, cancelBtn);
+  const counter = text("p", "", "muted prompt-edit-count");
+  area.oninput = () => {
+    counter.textContent = charLabel(area.value.length, data.prompt_limit)
+      + (data.prompt_limit && area.value.length > data.prompt_limit ? " — too long for this renderer" : "");
+  };
+  editor.append(area, counter, text("p", "Sealed passages keep their closing sentence; it is added back if removed.", "muted"), editActions);
+  editBtn.onclick = () => {
+    area.value = chosen()?.prompt || seg.prompt;
+    area.oninput();
+    editor.hidden = false;
+    area.focus();
+  };
+  cancelBtn.onclick = () => { editor.hidden = true; };
+  checkBtn.onclick = handle(async () => {
+    if (!area.value.trim()) throw new Error("The prompt is empty.");
+    await runPrompt("edit", { prompt: area.value, confirm: true }, `Checking the edited prompt for ${seg.segment_id}…`);
+  });
+  bar.append(select, useBtn, editBtn, writeBtn);
+  wrap.append(bar, problems, editor);
+  sync();
+  return wrap;
+}
+
 export async function showProductionBreakdown(output) {
   const mainView = $("#outputs-main-view");
   const breakdownView = $("#outputs-breakdown-view");
@@ -93,7 +198,7 @@ export async function showProductionBreakdown(output) {
   if (!breakdownView || !listEl) return;
 
   const runId = output.file.split("/")[0];
-  if (titleEl) titleEl.textContent = `Prompts & Clips: ${output.title}`;
+  if (titleEl) titleEl.textContent = `Edit: ${output.title}`;
   if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
   listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
 
@@ -193,7 +298,7 @@ export async function showProductionBreakdown(output) {
         charCount.style.fontSize = "12px";
         charCount.style.color = "var(--muted)";
         charCount.style.fontFamily = "monospace";
-        charCount.textContent = `${seg.prompt.length.toLocaleString()} chars`;
+        charCount.textContent = charLabel(seg.prompt.length, data.prompt_limit);
 
         const copyBtn = document.createElement("button");
         copyBtn.type = "button";
@@ -202,11 +307,16 @@ export async function showProductionBreakdown(output) {
         copyBtn.style.padding = "2px 8px";
         copyBtn.textContent = "📋 Copy Prompt";
         copyBtn.onclick = handle(async () => {
-          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
+          if (!await copyToClipboard(pre.textContent)) throw new Error("Could not copy the prompt to the clipboard.");
           notice(`Copied prompt for ${seg.segment_id} to clipboard`);
         });
 
         metaBar.append(charCount, copyBtn);
+        const showText = (prompt) => {
+          pre.textContent = prompt;
+          charCount.textContent = charLabel(prompt.length, data.prompt_limit);
+          charCount.style.color = data.prompt_limit && prompt.length > data.prompt_limit ? "var(--danger, #b91c1c)" : "var(--muted)";
+        };
 
         const pre = document.createElement("pre");
         pre.className = "prompts-passage-pre";
@@ -223,7 +333,7 @@ export async function showProductionBreakdown(output) {
         pre.style.overflowY = "auto";
         pre.textContent = seg.prompt;
 
-        preWrap.append(metaBar, pre);
+        preWrap.append(metaBar, pre, promptVersionControls(seg, data, sourceRunId, showText, () => showProductionBreakdown(output)));
         grid.append(preWrap);
       } else {
         const noPrompt = document.createElement("p");
@@ -262,6 +372,15 @@ export async function showProductionBreakdown(output) {
       v.style.borderRadius = "4px";
       v.style.background = "#101814";
 
+      // The previewed take's seed, and the seed the next reroll will use (a fresh random one unless the user types another).
+      const seedInfo = document.createElement("span");
+      seedInfo.className = "passage-take-seed muted";
+      seedInfo.style.fontSize = "12px";
+      seedInfo.style.fontFamily = "monospace";
+      const showSeed = (take) => {
+        seedInfo.textContent = take?.seed != null ? `Seed ${take.seed}` : "";
+      };
+
       const populateTakesDropdown = (takesList, activeTakeId) => {
         if (!takesList || !takesList.length) {
           takeSelect.replaceChildren(option("", "No takes recorded"));
@@ -275,6 +394,7 @@ export async function showProductionBreakdown(output) {
         const chosenId = activeTakeId || takesList[takesList.length - 1].id;
         takeSelect.value = chosenId;
         const chosenTake = takesList.find(t => t.id === chosenId) || takesList[takesList.length - 1];
+        showSeed(chosenTake);
         if (chosenTake && chosenTake.clip_url) {
           v.src = chosenTake.clip_url;
         } else if (seg.clip_url) {
@@ -288,6 +408,7 @@ export async function showProductionBreakdown(output) {
       takeSelect.onchange = () => {
         const chosen = (seg.takes || []).find(t => t.id === takeSelect.value);
         if (!chosen?.clip_url) return;
+        showSeed(chosen);
         v.src = chosen.clip_url;
         v.load();
         notice(`Previewing ${chosen.label || chosen.id} for ${seg.segment_id}. Re-encode the final video to use it.`);
@@ -299,23 +420,53 @@ export async function showProductionBreakdown(output) {
       rerollBtn.style.fontSize = "12px";
       rerollBtn.style.padding = "4px 10px";
       rerollBtn.textContent = "🎲 Reroll Clip";
-      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with a new seed using its prompt and cast references`;
+      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with the next seed, using its prompt and cast references`;
 
-      rerollBtn.hidden = Boolean(data.reroll_blocked);
+      const seedLabel = document.createElement("label");
+      seedLabel.className = "passage-seed";
+      seedLabel.style.cssText = "display:flex;align-items:center;gap:4px;margin:0;font-size:12px;";
+      seedLabel.dataset.tooltip = "Seed for the next take. Keep the random one or type your own; the same prompt with a new seed is often all a passage needs.";
+      const seedInput = document.createElement("input");
+      seedInput.type = "number";
+      seedInput.min = "0";
+      seedInput.max = String(MAX_SEED);
+      seedInput.step = "1";
+      seedInput.className = "passage-seed-input";
+      seedInput.style.cssText = "width:120px;padding:4px 6px;font-size:12px;";
+      seedInput.setAttribute("aria-label", `Seed for the next take of ${seg.segment_id}`);
+      const newSeed = () => {
+        seedInput.value = String(freshSeed((seg.takes || []).map(t => t.seed)));
+      };
+      const randomBtn = document.createElement("button");
+      randomBtn.type = "button";
+      randomBtn.className = "quiet";
+      randomBtn.style.cssText = "font-size:12px;padding:2px 6px;";
+      randomBtn.textContent = "Random";
+      randomBtn.dataset.tooltip = "Pick another random seed";
+      randomBtn.onclick = newSeed;
+      seedLabel.append("Next seed", seedInput, randomBtn);
+      newSeed();
+
+      seedLabel.hidden = rerollBtn.hidden = Boolean(data.reroll_blocked);
       rerollBtn.onclick = handle(async () => {
-        if (!window.confirm(`Render a new take of ${seg.segment_id} on the local H3 renderer? This uses the GPU for one passage. The finished video changes only when you re-encode it.`)) return;
+        const seed = Number(seedInput.value);
+        if (seedInput.value.trim() === "" || !Number.isInteger(seed) || seed < 0 || seed > MAX_SEED) {
+          throw new Error(`Enter a whole-number seed from 0 to ${MAX_SEED}, or press Random.`);
+        }
+        if (!window.confirm(`Render a new take of ${seg.segment_id} with seed ${seed} on the local H3 renderer? This uses the GPU for one passage. The finished video changes only when you re-encode it.`)) return;
         const origText = rerollBtn.textContent;
         rerollBtn.disabled = true;
         rerollBtn.setAttribute("aria-busy", "true");
         rerollBtn.textContent = "⏳ Rendering take…";
         try {
-          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reroll/${encodeURIComponent(seg.segment_id)}`, { confirm: true });
-          const updatedBreakdown = await pollJobCompletion(`Re-rendering passage ${seg.index + 1} (${seg.segment_id}) with a new seed…`);
+          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reroll/${encodeURIComponent(seg.segment_id)}`, { confirm: true, seed });
+          const updatedBreakdown = await pollJobCompletion(`Re-rendering passage ${seg.index + 1} (${seg.segment_id}) with seed ${seed}…`);
           const updatedSeg = (updatedBreakdown.segments || []).find(s => s.segment_id === seg.segment_id);
           if (updatedSeg) {
             seg.takes = updatedSeg.takes || [];
             populateTakesDropdown(seg.takes, updatedSeg.active_take);
             v.load();
+            newSeed();
           }
           notice(`New take rendered for ${seg.segment_id}! Use the dropdown to compare takes or click "Re-encode Final Video" to apply.`);
         } finally {
@@ -325,7 +476,7 @@ export async function showProductionBreakdown(output) {
         }
       });
 
-      videoToolbar.append(takeSelect, rerollBtn);
+      videoToolbar.append(takeSelect, seedInfo, seedLabel, rerollBtn);
       vidWrap.append(videoToolbar);
 
       if (seg.has_clip && seg.clip_url) {
@@ -831,7 +982,7 @@ export async function loadOutputs() {
     const actions = document.createElement("div");
     actions.className = "output-actions";
     actions.append(download, upscale);
-    const viewPromptsBtn = text("button", "Prompts & clips", "secondary", `View prompts and passage clips for ${output.title}`);
+    const viewPromptsBtn = text("button", "Edit", "secondary", `Edit ${output.title} passage by passage: prompts, clip takes, seeds and the final video`);
     viewPromptsBtn.onclick = () => showProductionBreakdown(output);
     actions.append(viewPromptsBtn);
     if (output.kind === "video") actions.append(caption);

@@ -75,7 +75,8 @@
     "source": "mondo/config/seedance_rate_card.json",
     "public": "mmv/engine/config/seedance_rate_card.json",
     "sha256": "e19d16a9d849fc70297205cafd4b75218aa5bce513b853ffe8e80c759a6266e9",
-    "adaptation": "none"
+    "adaptation": "max_prompt_chars set to the providers' prompt ceilings (Seedance 2: 10000, Seedance 2.5: 30000), owner-approved 2026-10-28 (release 1.11.1); prices and fields unchanged",
+    "published_sha256": "1bb59cee0ee738d3fb215466658330d7481935c27c16b1deebc590576edeffdb"
   },
   {
     "source": "mondo/config/injection_map.json",

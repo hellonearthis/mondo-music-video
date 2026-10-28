@@ -196,7 +196,7 @@
             <label data-tooltip="Time signature: beats per musical measure (determines phrase groupings)">Beats per bar<select name="beats_per_bar"><option value="4">4</option><option value="3">3</option><option value="6">6</option></select></label>
             <label data-tooltip="Bars per musical phrase; controls downbeat boundary pacing">Bars per phrase<input name="bars_per_phrase" type="number" min="1" max="32" value="8"></label>
           </div>
-          <div class="seed-row"><label data-tooltip="Random seed for repeatable variation in shot selection and grammar">Variation seed<input name="seed" type="number" min="0" max="2147483647" value="0"></label><button type="button" id="reroll-seed" class="quiet" data-tooltip="Roll a new random variation seed to reroll cut timings, shot grammars, and camera angles">🎲 Reroll seed</button></div>
+          <div class="seed-row"><label data-tooltip="Chooses the shot plan, vocabulary and casting. The same song with the same variation seed plans the same passages and reuses their prompts.">Variation seed<input name="seed" type="number" min="0" max="2147483647" value="0"></label><button type="button" id="reroll-seed" class="quiet" data-tooltip="Roll a new variation seed for different cut timings, shot grammars and camera angles">🎲 Reroll seed</button><label data-tooltip="Seed the renderer starts from (passage N uses it + N). Leave empty for a new random one on every video; the preview shows it, so you can type it to repeat a video exactly.">Render seed<input name="render_seed" type="number" min="0" max="2147483647" placeholder="Random each video"></label><button type="button" id="clear-seed" class="quiet" data-tooltip="Empty the render seed so every video renders with its own random one">Random</button></div>
           <label data-tooltip="Overarching motif or metaphor connecting different scenes across the video">Conceptual theme<input name="conceptual_theme" maxlength="2000"Metamorphosis', 'Nostalgia for an analog future'"Metamorphosis', 'Nostalgia for an analog future'"></label>
           <label data-tooltip="Lyrics or thematic text used to inspire visuals and shot metaphors">Lyrics / flavor text<textarea name="lyrics" rows="4" maxlength="16000"></textarea></label>
         </div>
@@ -453,7 +453,7 @@
   <div class="panel-header-row" style="margin-bottom:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px;">
     <div>
       <button type="button" id="prompts-view-back-btn" class="secondary" style="margin-bottom:8px;" data-tooltip="Return to Finished Videos gallery">← Back to Finished Videos</button>
-      <h2 id="prompts-view-title" style="margin:0 0 4px 0;font-size:24px;">Passage Prompts &amp; Rendered Clips</h2>
+      <h2 id="prompts-view-title" style="margin:0 0 4px 0;font-size:24px;">Edit passages</h2>
       <p id="prompts-view-subtitle" class="muted" style="margin:0;font-size:14px;"></p>
     </div>
     <div id="prompts-view-reassemble-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">

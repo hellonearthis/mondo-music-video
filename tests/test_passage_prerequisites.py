@@ -108,7 +108,8 @@ def test_legacy_quote_fingerprints():
     store = NS(home=Path('/unused'))
     recorded = json.loads(FIXTURE.read_text())['fingerprints']
     for fields, expected in recorded:
-        request = request_dict(ProductionRequest(backend='wavespeed', **fields))
+        # Requests saved before 1.11.1 always carry the then-default seed 0; their fingerprints must not change.
+        request = request_dict(ProductionRequest(backend='wavespeed', **{'seed': 0, **fields}))
         assert pipeline.fingerprint(store, request, {'references': [], 'lipsync': None}) == expected
 
 
