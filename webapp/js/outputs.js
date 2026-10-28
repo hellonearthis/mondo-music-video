@@ -37,12 +37,58 @@ export function closeProductionBreakdown() {
   }
 }
 
+async function pollJobCompletion(initialMessage) {
+  notice(initialMessage);
+  for (let wait = 0; wait < 2400; wait += 1) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const job = await (await api("/api/status")).json();
+    if (job.state === "running" || job.state === "cancelling") continue;
+    if (job.state === "failed" || job.state === "cancelled") {
+      throw new Error(job.message || "Operation did not complete");
+    }
+    return job.result || {};
+  }
+  throw new Error("Operation timed out waiting for completion");
+}
+
+function renderFinalTakesBar(sourceRunId, finalTakes = []) {
+  const labelEl = $("#prompts-final-takes-label");
+  const selectEl = $("#prompts-final-takes-select");
+  const downloadBtn = $("#prompts-final-download-btn");
+  if (!labelEl || !selectEl || !downloadBtn) return;
+
+  if (!finalTakes.length) {
+    labelEl.hidden = true;
+    downloadBtn.hidden = true;
+    return;
+  }
+
+  labelEl.hidden = false;
+  downloadBtn.hidden = false;
+  selectEl.replaceChildren(
+    ...finalTakes.map((ft) => option(ft.file, ft.label || ft.id, `Final video version: ${ft.label || ft.id}`))
+  );
+  const latest = finalTakes[finalTakes.length - 1];
+  if (latest) selectEl.value = latest.file;
+
+  const syncDownloadLink = () => {
+    const chosenFile = selectEl.value;
+    if (chosenFile) {
+      downloadBtn.href = `/api/media/${encodeURIComponent(sourceRunId)}/${encodeURIComponent(chosenFile)}?download=true`;
+      downloadBtn.setAttribute("download", chosenFile);
+    }
+  };
+  selectEl.onchange = syncDownloadLink;
+  syncDownloadLink();
+}
+
 export async function showProductionBreakdown(output) {
   const mainView = $("#outputs-main-view");
   const breakdownView = $("#outputs-breakdown-view");
   const listEl = $("#prompts-view-list");
   const titleEl = $("#prompts-view-title");
   const subEl = $("#prompts-view-subtitle");
+  const reassembleBtn = $("#prompts-reassemble-btn");
 
   if (!breakdownView || !listEl) return;
 
@@ -59,9 +105,40 @@ export async function showProductionBreakdown(output) {
     const res = await api(`/api/outputs/${encodeURIComponent(runId)}/prompts`);
     if (!res.ok) throw new Error("Could not load prompts for this production");
     const data = await res.json();
+    const sourceRunId = data.source_run_id || runId;
+
     if (subEl) {
       subEl.textContent = `${data.segments.length} passage${data.segments.length === 1 ? "" : "s"} · ${data.kind} production`;
     }
+    renderFinalTakesBar(sourceRunId, data.final_takes || []);
+
+    if (reassembleBtn) {
+      reassembleBtn.onclick = handle(async () => {
+        const selectedTakes = Object.fromEntries(
+          $$("#prompts-view-list select.passage-take-select")
+            .map(sel => [sel.dataset.segmentId, sel.value])
+            .filter(([sid, tid]) => sid && tid)
+        );
+        const origLabel = reassembleBtn.textContent;
+        reassembleBtn.disabled = true;
+        reassembleBtn.setAttribute("aria-busy", "true");
+        reassembleBtn.textContent = "⏳ Re-encoding Final Video…";
+        try {
+          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reassemble`, { selected_takes: selectedTakes });
+          const resData = await pollJobCompletion("Re-encoding final video with selected passage takes…");
+          notice(`Final video re-encoded (${resData.final_take?.label || "new version"}). Previous final video versions are preserved.`);
+          if (resData.final_takes) {
+            renderFinalTakesBar(sourceRunId, resData.final_takes);
+          }
+          await loadOutputs();
+        } finally {
+          reassembleBtn.disabled = false;
+          reassembleBtn.removeAttribute("aria-busy");
+          reassembleBtn.textContent = origLabel;
+        }
+      });
+    }
+
     if (!data.segments.length) {
       listEl.innerHTML = '<div class="empty" style="margin:16px 0;">No individual passage prompts recorded for this production.</div>';
       return;
@@ -154,23 +231,116 @@ export async function showProductionBreakdown(output) {
         grid.append(noPrompt);
       }
 
-      // 2. Video clip on the RIGHT
+      // 2. Video clip and take controls on the RIGHT
+      const vidWrap = document.createElement("div");
+      vidWrap.className = "prompts-passage-video-wrap";
+      vidWrap.style.marginBottom = "0";
+
+      const videoToolbar = document.createElement("div");
+      videoToolbar.className = "prompts-passage-video-toolbar";
+      videoToolbar.style.display = "flex";
+      videoToolbar.style.justifyContent = "space-between";
+      videoToolbar.style.alignItems = "center";
+      videoToolbar.style.gap = "8px";
+      videoToolbar.style.marginBottom = "6px";
+      videoToolbar.style.flexWrap = "wrap";
+
+      const takeSelect = document.createElement("select");
+      takeSelect.className = "passage-take-select";
+      takeSelect.dataset.segmentId = seg.segment_id;
+      takeSelect.style.fontSize = "12px";
+      takeSelect.style.padding = "4px 8px";
+      takeSelect.style.minWidth = "150px";
+      takeSelect.dataset.tooltip = `Select a rendered take for ${seg.segment_id}`;
+
+      const v = document.createElement("video");
+      v.controls = true;
+      v.preload = "metadata";
+      v.style.width = "100%";
+      v.style.maxHeight = "280px";
+      v.style.borderRadius = "4px";
+      v.style.background = "#101814";
+
+      const populateTakesDropdown = (takesList, activeTakeId) => {
+        if (!takesList || !takesList.length) {
+          takeSelect.replaceChildren(option("", "No takes recorded"));
+          takeSelect.disabled = true;
+          return;
+        }
+        takeSelect.disabled = false;
+        takeSelect.replaceChildren(
+          ...takesList.map(t => option(t.id, t.label || t.id, `Preview ${t.label || t.id}`))
+        );
+        const chosenId = activeTakeId || takesList[takesList.length - 1].id;
+        takeSelect.value = chosenId;
+        const chosenTake = takesList.find(t => t.id === chosenId) || takesList[takesList.length - 1];
+        if (chosenTake && chosenTake.clip_url) {
+          v.src = chosenTake.clip_url;
+        } else if (seg.clip_url) {
+          v.src = seg.clip_url;
+        }
+      };
+
+      populateTakesDropdown(seg.takes || [], seg.active_take);
+
+      takeSelect.onchange = handle(async () => {
+        const chosenTakeId = takeSelect.value;
+        if (!chosenTakeId) return;
+        const selectedRes = await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/takes/${encodeURIComponent(seg.segment_id)}`, {
+          take_id: chosenTakeId
+        });
+        if (selectedRes.clip_url) {
+          v.src = selectedRes.clip_url;
+          v.load();
+        }
+        notice(`Selected ${chosenTakeId} for ${seg.segment_id}. Click "Re-encode Final Video" when ready to update the full video.`);
+      });
+
+      const rerollBtn = document.createElement("button");
+      rerollBtn.type = "button";
+      rerollBtn.className = "secondary passage-reroll-btn";
+      rerollBtn.style.fontSize = "12px";
+      rerollBtn.style.padding = "4px 10px";
+      rerollBtn.textContent = "🎲 Reroll Clip";
+      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with a new seed using its prompt and cast references`;
+
+      rerollBtn.onclick = handle(async () => {
+        const origText = rerollBtn.textContent;
+        rerollBtn.disabled = true;
+        rerollBtn.setAttribute("aria-busy", "true");
+        rerollBtn.textContent = "⏳ Rendering take…";
+        try {
+          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reroll/${encodeURIComponent(seg.segment_id)}`, {});
+          const updatedBreakdown = await pollJobCompletion(`Re-rendering passage ${seg.index + 1} (${seg.segment_id}) with a new seed…`);
+          const updatedSeg = (updatedBreakdown.segments || []).find(s => s.segment_id === seg.segment_id);
+          if (updatedSeg) {
+            populateTakesDropdown(updatedSeg.takes || [], updatedSeg.active_take);
+            v.load();
+          }
+          notice(`New take rendered for ${seg.segment_id}! Use the dropdown to compare takes or click "Re-encode Final Video" to apply.`);
+        } finally {
+          rerollBtn.disabled = false;
+          rerollBtn.removeAttribute("aria-busy");
+          rerollBtn.textContent = origText;
+        }
+      });
+
+      videoToolbar.append(takeSelect, rerollBtn);
+      vidWrap.append(videoToolbar);
+
       if (seg.has_clip && seg.clip_url) {
-        const vidWrap = document.createElement("div");
-        vidWrap.className = "prompts-passage-video-wrap";
-        vidWrap.style.marginBottom = "0";
-        const v = document.createElement("video");
-        v.src = seg.clip_url;
-        v.controls = true;
-        v.preload = "metadata";
-        v.style.width = "100%";
-        v.style.maxHeight = "280px";
-        v.style.borderRadius = "4px";
-        v.style.background = "#101814";
+        if (!v.src) v.src = seg.clip_url;
         vidWrap.append(v);
-        grid.append(vidWrap);
+      } else {
+        v.hidden = true;
+        const emptyClip = document.createElement("div");
+        emptyClip.className = "empty";
+        emptyClip.style.padding = "24px";
+        emptyClip.textContent = "No clip currently on disk for this passage. Click Reroll Clip to render one.";
+        vidWrap.append(v, emptyClip);
       }
 
+      grid.append(vidWrap);
       card.append(grid);
       return card;
     }));

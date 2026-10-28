@@ -378,9 +378,24 @@ def create_server(base_url=None):
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def read_output_prompts(output_file: str) -> dict[str, Any]:
-        """List a finished output's passages: the written prompt, planned shots, trimmed length and, while the
-        renderer's original clip is still on disk, a URL to play it. Read-only; it never changes or re-renders anything."""
+        """List a finished output's passages: the written prompt, planned shots, trimmed length, recorded takes, and
+        while the renderer's original clip is still on disk, a URL to play it. Read-only; it never changes or re-renders anything."""
         return invoke(client.output_prompts, output_file)
+
+    @server.tool()
+    def reroll_segment(output_file: str, segment_id: str, seed: int | None = None) -> dict[str, Any]:
+        """Re-render a single passage clip with a new seed using its saved prompt and cast references, recording a new take."""
+        return invoke(client.reroll_segment, output_file, segment_id, seed)
+
+    @server.tool()
+    def select_segment_take(output_file: str, segment_id: str, take_id: str) -> dict[str, Any]:
+        """Select a recorded take (e.g. 'take1', 'take2') for a passage clip."""
+        return invoke(client.select_segment_take, output_file, segment_id, take_id)
+
+    @server.tool()
+    def reassemble_output(output_file: str, selected_takes: dict[str, str] | None = None) -> dict[str, Any]:
+        """Re-encode the final music video from original passage clips using the active or selected takes, while preserving all previous final video versions."""
+        return invoke(client.reassemble_output, output_file, selected_takes)
 
     @server.tool()
     def export_production_package(run_id: str, zip: bool = False, allow_private_actors: bool = False) -> dict[str, Any]:

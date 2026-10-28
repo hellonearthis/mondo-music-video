@@ -152,3 +152,40 @@ class PassageBreakdownTests(ScoreViewTests):
         write_json(self.home / "styles" / "coastal.json", {"id": "coastal", "name": "Coastal", "direction": "Salt light."})
         self.assertEqual(self.client.get("/api/styles/coastal").json()["name"], "Coastal")
         self.assertGreaterEqual(self.client.get("/api/styles/missing").status_code, 400)
+
+    def test_passage_takes_initialization_and_selection(self):
+        directory = self.run_dir("takes_run")
+        write_json(directory / "prompts.json", {"seg000": "Coastline.", "seg001": "Hands."})
+        clips_dir = directory / "clips"
+        clips_dir.mkdir()
+        clip1 = clips_dir / "seg000_take1.mp4"
+        clip2 = clips_dir / "seg000_take2.mp4"
+        clip1.write_bytes(b"take-one-bytes")
+        clip2.write_bytes(b"take-two-bytes")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip1)}})
+        data = self.client.get("/api/outputs/takes_run/prompts").json()
+        seg0 = data["segments"][0]
+        self.assertEqual(seg0["active_take"], "take1")
+        self.assertEqual(len(seg0["takes"]), 1)
+        self.assertEqual(seg0["takes"][0]["id"], "take1")
+
+        # Add a second take and select it
+        takes_path = directory / "takes.json"
+        takes_record = json.loads(takes_path.read_text(encoding="utf-8"))
+        takes_record["segments"]["seg000"]["takes"].append({
+            "id": "take2",
+            "label": "Take 2 (seed 999)",
+            "seed": 999,
+            "video": str(clip2),
+            "audio": "",
+        })
+        write_json(takes_path, takes_record)
+
+        res = self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "take2"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["active_take"], "take2")
+
+        # Verify specific take clip endpoint and updated default clip
+        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take1").content, b"take-one-bytes")
+        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take2").content, b"take-two-bytes")
+        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000").content, b"take-two-bytes")

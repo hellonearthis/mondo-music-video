@@ -450,11 +450,19 @@
 </div>
 
 <div id="outputs-breakdown-view" class="outputs-breakdown-view" hidden>
-  <div class="panel-header-row" style="margin-bottom:16px;align-items:center;">
+  <div class="panel-header-row" style="margin-bottom:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px;">
     <div>
       <button type="button" id="prompts-view-back-btn" class="secondary" style="margin-bottom:8px;" data-tooltip="Return to Finished Videos gallery">← Back to Finished Videos</button>
       <h2 id="prompts-view-title" style="margin:0 0 4px 0;font-size:24px;">Passage Prompts &amp; Rendered Clips</h2>
       <p id="prompts-view-subtitle" class="muted" style="margin:0;font-size:14px;"></p>
+    </div>
+    <div id="prompts-view-reassemble-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <label id="prompts-final-takes-label" style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;" hidden>
+        <span class="muted">Final Video Version:</span>
+        <select id="prompts-final-takes-select" style="min-width:170px;padding:6px 10px;font-size:13px;" data-tooltip="Switch or download preserved final video takes"></select>
+      </label>
+      <a id="prompts-final-download-btn" class="secondary" style="padding:7px 12px;font-size:13px;text-decoration:none;" hidden data-tooltip="Download the selected final video version">Download Version</a>
+      <button type="button" id="prompts-reassemble-btn" class="primary" style="padding:8px 14px;font-size:13px;" data-tooltip="Re-encode the final music video using the currently selected take for each passage, while preserving all previous final video versions">🎬 Re-encode Final Video with Selected Takes</button>
     </div>
   </div>
   <div id="prompts-view-list" class="prompts-view-list"></div>
