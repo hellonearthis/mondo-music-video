@@ -97,6 +97,34 @@ async function openPromptsDialog(output) {
       if (seg.prompt) {
         const preWrap = document.createElement("div");
         preWrap.className = "prompts-passage-text-wrap";
+
+        const metaBar = document.createElement("div");
+        metaBar.className = "prompts-passage-meta-bar";
+        metaBar.style.display = "flex";
+        metaBar.style.justifyContent = "space-between";
+        metaBar.style.alignItems = "center";
+        metaBar.style.marginBottom = "6px";
+
+        const charCount = document.createElement("span");
+        charCount.className = "prompts-passage-char-count";
+        charCount.style.fontSize = "12px";
+        charCount.style.color = "var(--muted)";
+        charCount.style.fontFamily = "monospace";
+        charCount.textContent = `${seg.prompt.length.toLocaleString()} chars`;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "quiet";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.style.padding = "2px 8px";
+        copyBtn.textContent = "📋 Copy Prompt";
+        copyBtn.onclick = handle(async () => {
+          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
+          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
+        });
+
+        metaBar.append(charCount, copyBtn);
+
         const pre = document.createElement("pre");
         pre.className = "prompts-passage-pre";
         pre.style.whiteSpace = "pre-wrap";
@@ -112,18 +140,7 @@ async function openPromptsDialog(output) {
         pre.style.overflowY = "auto";
         pre.textContent = seg.prompt;
 
-        const copyBtn = document.createElement("button");
-        copyBtn.type = "button";
-        copyBtn.className = "quiet";
-        copyBtn.style.marginTop = "8px";
-        copyBtn.style.fontSize = "12px";
-        copyBtn.textContent = "📋 Copy Prompt";
-        copyBtn.onclick = handle(async () => {
-          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
-          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
-        });
-
-        preWrap.append(pre, copyBtn);
+        preWrap.append(metaBar, pre);
         grid.append(preWrap);
       } else {
         const noPrompt = document.createElement("p");
