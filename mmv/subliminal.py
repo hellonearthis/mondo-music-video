@@ -142,7 +142,7 @@ def _count_frames(path):
     return _probe(path)[:3]
 
 
-def apply_to_run(store, directory, plan):
+def apply_to_run(store, directory, plan, run=None):
     """Assemble a flashed variant from the saved sources; preserve the clean print."""
     from . import final_assembly
     from .storage import write_json
@@ -150,7 +150,7 @@ def apply_to_run(store, directory, plan):
     final, clean_copy = directory / 'music-video.mp4', directory / 'music-video-clean.mp4'
     recipe = final_assembly.with_flash(store, directory, final_assembly.load_recipe(store, directory), plan)
     with tempfile.TemporaryDirectory(prefix='subliminal-', dir=directory) as temp:
-        out = final_assembly.render(recipe, Path(temp) / 'flashed.mp4')
+        out = final_assembly.render(recipe, Path(temp) / 'flashed.mp4', run=run)
         staged = Path(temp) / 'clean.mp4'
         shutil.copy2(final, staged)
         staged.replace(clean_copy)

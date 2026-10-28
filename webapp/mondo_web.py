@@ -39,7 +39,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.11.3"
+MGL_APP_VERSION = "1.11.4"
 WEB = Path(__file__).parent
 
 
@@ -731,6 +731,9 @@ def create_app(home=None, *, test_hosts=False):
     store = Storage(home)
     jobs = Jobs(store)
     quotes = {}
+    from mmv.final_assembly import remove_interrupted_encodes
+    for leftover in remove_interrupted_encodes(store.home / "runs"):   # no operation runs yet
+        log_studio(store, f"Removed an interrupted encode's work folder: {leftover.parent.name}/{leftover.name}")
     try:
         props.install_starter_props(store)
     except (OSError, ValueError) as error:

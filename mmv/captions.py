@@ -169,7 +169,7 @@ def downloads(record):
     return [name for name in [*extras, *(final_takes if isinstance(final_takes, list) else [])] if name]
 
 
-def apply_to_run(directory, plan):
+def apply_to_run(directory, plan, run=None):
     """Write lyrics.srt and, for burned mode, replace the finished video once the captioned one passes a frame-count check.
 
     The finished video is never modified until the new one is verified; on any failure it is left exactly as it was
@@ -181,12 +181,15 @@ def apply_to_run(directory, plan):
     if plan['mode'] != 'burned':
         return result
     try:
-        return {**result, **_burn_in(directory, final, items, plan)}
+        return {**result, **_burn_in(directory, final, items, plan, run)}
     except Exception as exc:                    # the sidecar is already written and the video untouched
+        from .jobs import Cancelled
+        if isinstance(exc, Cancelled):          # a cancel stops the operation; it is not a failed burn
+            raise
         return {**result, 'burn_error': str(exc)}
 
 
-def _burn_in(directory, final, items, chosen):
+def _burn_in(directory, final, items, chosen, run=None):
     from . import final_assembly
     from .storage import read_json, write_json
     import tempfile
@@ -195,7 +198,7 @@ def _burn_in(directory, final, items, chosen):
         raise ValueError('Original assembly sources are unavailable; a finished video cannot be re-encoded instead')
     recipe = {**recipe, 'captions': {**chosen, 'cues': items}}
     with tempfile.TemporaryDirectory(prefix='captions-', dir=directory) as temp:
-        out = final_assembly.render(recipe, Path(temp) / 'captioned.mp4')
+        out = final_assembly.render(recipe, Path(temp) / 'captioned.mp4', run=run)
         staged = Path(temp) / 'original.mp4'
         shutil.copy2(final, staged)
         staged.replace(directory / UNCAPTIONED_NAME)

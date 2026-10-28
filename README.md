@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.11.3** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.11.4** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -287,7 +287,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.11.3 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
+The v1.11.4 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets,
 world editing, passage prompts and versions (`rewrite_prompt`, `edit_prompt`, `select_prompt_take`), clip takes with seeds

@@ -36,9 +36,9 @@ def test_variants_are_separate_single_encodes_from_originals(tmp_path):
         calls.append((argv, (Path(cwd) / 'assembly.ffgraph').read_text()))
         actual(argv, cwd)
 
-    # The default runner is bound at definition, so inject it at the render boundary.
+    # Inject the recording runner at the render boundary.
     render = assembly.render
-    with patch.object(assembly, 'render', side_effect=lambda recipe, dest: render(recipe, dest, run=record)):
+    with patch.object(assembly, 'render', side_effect=lambda recipe, dest, run=None: render(recipe, dest, run=record)):
         subliminal.apply_to_run(store, tmp_path, sub)
         flashed = (tmp_path / 'music-video.mp4').read_bytes()
         result = captions.apply_to_run(tmp_path, {**captions.clean({'mode': 'burned'}), 'cues': [(0.5, 2.0, 'caption')]})

@@ -6,6 +6,8 @@ MP4. Topaz is the sole operator-authorized exception to this rule.
 from functools import lru_cache
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import tempfile
 
@@ -214,14 +216,29 @@ def command(recipe, target, work, quality='high'):
     return argv
 
 
+# Work folders of encodes (tempfile's 8-character suffix); the run's own `assembly` report folder never matches.
+ENCODE_TEMP = re.compile(r'(assembly|subliminal|captions)-[a-z0-9_]{8}')
+
+
+def remove_interrupted_encodes(runs_dir):
+    """Delete encode work folders left in production folders when the app or computer stopped mid-encode.
+    Call only when no operation is running (at startup). Returns the removed paths."""
+    found = [path for path in Path(runs_dir).glob('*/*') if path.is_dir() and ENCODE_TEMP.fullmatch(path.name)]
+    for path in found:
+        shutil.rmtree(path, ignore_errors=True)
+    return found
+
+
 def _run(argv, cwd):
     result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
     if result.returncode:
         raise ValueError('Final assembly failed: ' + result.stderr[-1500:])
 
 
-def render(recipe, target, run=_run, check=lambda: None, quality='high'):
-    """Publish only a verified first-generation output. Failure preserves target."""
+def render(recipe, target, run=None, check=lambda: None, quality='high'):
+    """Publish only a verified first-generation output. Failure preserves target.
+    run(argv, cwd) runs FFmpeg; an operation passes its own so a cancel stops the encode."""
+    run = run or _run
     from .engine.assemble import probe_frames
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -237,9 +254,9 @@ def render(recipe, target, run=_run, check=lambda: None, quality='high'):
     return target
 
 
-def assemble(store, directory, request, plan, rendered):
+def assemble(store, directory, request, plan, rendered, run=None):
     recipe = build_recipe(store, directory, request, plan, rendered)
-    output = render(recipe, Path(directory) / ('ident.mp4' if request['kind'] == 'ident' else 'music-video.mp4'))
+    output = render(recipe, Path(directory) / ('ident.mp4' if request['kind'] == 'ident' else 'music-video.mp4'), run=run)
     write_json(Path(directory) / RECIPE, recipe)
     from .engine import assemble as engine
     report_dir = Path(directory) / 'assembly'

@@ -1,4 +1,9 @@
-# Verification — 1.11.3
+# Verification — 1.11.4
+
+## 1.11.4 — Cancellable re-encodes, crash leftovers
+
+Focused tests cover a re-encode whose encode runs through the operation's cancellable runner, a cancel between encodes (no further encode, the clean version recorded truthfully, the operation ends cancelled), startup removal of `assembly-…`/`subliminal-…` work folders while the run's `assembly` report folder and other folders stay, and the interruption message by operation kind. Full temporary-data/mock-service suite: **803 passed + 141 subtests**. On 1.11.4 the owner then re-ran the interrupted re-encode for real: it completed as Version 4, became the finished video beside Versions 1-3, and left no work folder behind.
+
 
 ## 1.11.3 — Edit view refresh
 
