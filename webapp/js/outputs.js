@@ -21,33 +21,131 @@ const GRAMMAR_CLASSES = {
 let pendingExportRun = null;
 let pendingDeleteRun = null;
 
-async function openPromptsDialog(output) {
-  const dialog = $("#prompts-clips-dialog");
-  if (!dialog) return;
+export function closeProductionBreakdown() {
+  const mainView = $("#outputs-main-view");
+  const breakdownView = $("#outputs-breakdown-view");
+  if (breakdownView) {
+    $$("#prompts-view-list video").forEach(v => {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    });
+    breakdownView.hidden = true;
+  }
+  if (mainView) {
+    mainView.hidden = false;
+  }
+}
+
+async function pollJobCompletion(initialMessage) {
+  notice(initialMessage);
+  for (let wait = 0; wait < 2400; wait += 1) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const job = await (await api("/api/status")).json();
+    if (job.state === "running" || job.state === "cancelling") continue;
+    if (job.state === "failed" || job.state === "cancelled") {
+      throw new Error(job.message || "Operation did not complete");
+    }
+    return job.result || {};
+  }
+  throw new Error("Operation timed out waiting for completion");
+}
+
+function renderFinalTakesBar(sourceRunId, finalTakes = []) {
+  const labelEl = $("#prompts-final-takes-label");
+  const selectEl = $("#prompts-final-takes-select");
+  const downloadBtn = $("#prompts-final-download-btn");
+  if (!labelEl || !selectEl || !downloadBtn) return;
+
+  if (!finalTakes.length) {
+    labelEl.hidden = true;
+    downloadBtn.hidden = true;
+    return;
+  }
+
+  labelEl.hidden = false;
+  downloadBtn.hidden = false;
+  selectEl.replaceChildren(
+    ...finalTakes.map((ft) => option(ft.file, ft.label || ft.id, `Final video version: ${ft.label || ft.id}`))
+  );
+  const latest = finalTakes[finalTakes.length - 1];
+  if (latest) selectEl.value = latest.file;
+
+  const syncDownloadLink = () => {
+    const chosenFile = selectEl.value;
+    if (chosenFile) {
+      downloadBtn.href = `/api/media/${encodeURIComponent(sourceRunId)}/${encodeURIComponent(chosenFile)}?download=true`;
+      downloadBtn.setAttribute("download", chosenFile);
+    }
+  };
+  selectEl.onchange = syncDownloadLink;
+  syncDownloadLink();
+}
+
+export async function showProductionBreakdown(output) {
+  const mainView = $("#outputs-main-view");
+  const breakdownView = $("#outputs-breakdown-view");
+  const listEl = $("#prompts-view-list");
+  const titleEl = $("#prompts-view-title");
+  const subEl = $("#prompts-view-subtitle");
+  const reassembleBtn = $("#prompts-reassemble-btn");
+
+  if (!breakdownView || !listEl) return;
+
   const runId = output.file.split("/")[0];
-  const listEl = $("#prompts-dialog-list");
-  const titleEl = $("#prompts-dialog-title");
-  const subEl = $("#prompts-dialog-subtitle");
   if (titleEl) titleEl.textContent = `Prompts & Clips: ${output.title}`;
   if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
-  if (listEl) {
-    listEl.innerHTML = '<div class="prompts-dialog-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
-  }
-  dialog.showModal();
+  listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
+
+  if (mainView) mainView.hidden = true;
+  breakdownView.hidden = false;
+  breakdownView.scrollIntoView({ behavior: "smooth", block: "start" });
 
   try {
     const res = await api(`/api/outputs/${encodeURIComponent(runId)}/prompts`);
     if (!res.ok) throw new Error("Could not load prompts for this production");
     const data = await res.json();
+    const sourceRunId = data.source_run_id || runId;
+
     if (subEl) {
       subEl.textContent = `${data.segments.length} passage${data.segments.length === 1 ? "" : "s"} · ${data.kind} production`;
     }
+    renderFinalTakesBar(sourceRunId, data.final_takes || []);
+
+    if (reassembleBtn) {
+      reassembleBtn.onclick = handle(async () => {
+        const selectedTakes = Object.fromEntries(
+          $$("#prompts-view-list select.passage-take-select")
+            .map(sel => [sel.dataset.segmentId, sel.value])
+            .filter(([sid, tid]) => sid && tid)
+        );
+        const origLabel = reassembleBtn.textContent;
+        reassembleBtn.disabled = true;
+        reassembleBtn.setAttribute("aria-busy", "true");
+        reassembleBtn.textContent = "⏳ Re-encoding Final Video…";
+        try {
+          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reassemble`, { selected_takes: selectedTakes });
+          const resData = await pollJobCompletion("Re-encoding final video with selected passage takes…");
+          const warned = (resData.warnings || []).join(" ");
+          notice(`Final video re-encoded (${resData.final_take?.label || "new version"}). Previous final video versions are preserved.${warned ? " " + warned : ""}`);
+          if (resData.final_takes) {
+            renderFinalTakesBar(sourceRunId, resData.final_takes);
+          }
+          await loadOutputs();
+        } finally {
+          reassembleBtn.disabled = false;
+          reassembleBtn.removeAttribute("aria-busy");
+          reassembleBtn.textContent = origLabel;
+        }
+      });
+    }
+
     if (!data.segments.length) {
       listEl.innerHTML = '<div class="empty" style="margin:16px 0;">No individual passage prompts recorded for this production.</div>';
       return;
     }
 
-    listEl.replaceChildren(...data.segments.map((seg, idx) => {
+    listEl.replaceChildren(...data.segments.map((seg) => {
       const card = document.createElement("article");
       card.className = "prompts-passage-card card";
       card.style.margin = "0 0 16px 0";
@@ -78,25 +176,38 @@ async function openPromptsDialog(output) {
       const grid = document.createElement("div");
       grid.className = "prompts-passage-grid";
 
-      if (seg.has_clip && seg.clip_url) {
-        const vidWrap = document.createElement("div");
-        vidWrap.className = "prompts-passage-video-wrap";
-        vidWrap.style.marginBottom = "12px";
-        const v = document.createElement("video");
-        v.src = seg.clip_url;
-        v.controls = true;
-        v.preload = "metadata";
-        v.style.width = "100%";
-        v.style.maxHeight = "280px";
-        v.style.borderRadius = "4px";
-        v.style.background = "#101814";
-        vidWrap.append(v);
-        grid.append(vidWrap);
-      }
-
+      // 1. Text prompt on the LEFT
       if (seg.prompt) {
         const preWrap = document.createElement("div");
         preWrap.className = "prompts-passage-text-wrap";
+
+        const metaBar = document.createElement("div");
+        metaBar.className = "prompts-passage-meta-bar";
+        metaBar.style.display = "flex";
+        metaBar.style.justifyContent = "space-between";
+        metaBar.style.alignItems = "center";
+        metaBar.style.marginBottom = "6px";
+
+        const charCount = document.createElement("span");
+        charCount.className = "prompts-passage-char-count";
+        charCount.style.fontSize = "12px";
+        charCount.style.color = "var(--muted)";
+        charCount.style.fontFamily = "monospace";
+        charCount.textContent = `${seg.prompt.length.toLocaleString()} chars`;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "quiet";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.style.padding = "2px 8px";
+        copyBtn.textContent = "📋 Copy Prompt";
+        copyBtn.onclick = handle(async () => {
+          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
+          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
+        });
+
+        metaBar.append(charCount, copyBtn);
+
         const pre = document.createElement("pre");
         pre.className = "prompts-passage-pre";
         pre.style.whiteSpace = "pre-wrap";
@@ -108,22 +219,11 @@ async function openPromptsDialog(output) {
         pre.style.borderRadius = "4px";
         pre.style.padding = "12px";
         pre.style.margin = "0";
-        pre.style.maxHeight = "240px";
+        pre.style.maxHeight = "280px";
         pre.style.overflowY = "auto";
         pre.textContent = seg.prompt;
 
-        const copyBtn = document.createElement("button");
-        copyBtn.type = "button";
-        copyBtn.className = "quiet";
-        copyBtn.style.marginTop = "8px";
-        copyBtn.style.fontSize = "12px";
-        copyBtn.textContent = "📋 Copy Prompt";
-        copyBtn.onclick = handle(async () => {
-          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
-          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
-        });
-
-        preWrap.append(pre, copyBtn);
+        preWrap.append(metaBar, pre);
         grid.append(preWrap);
       } else {
         const noPrompt = document.createElement("p");
@@ -132,6 +232,115 @@ async function openPromptsDialog(output) {
         grid.append(noPrompt);
       }
 
+      // 2. Video clip and take controls on the RIGHT
+      const vidWrap = document.createElement("div");
+      vidWrap.className = "prompts-passage-video-wrap";
+      vidWrap.style.marginBottom = "0";
+
+      const videoToolbar = document.createElement("div");
+      videoToolbar.className = "prompts-passage-video-toolbar";
+      videoToolbar.style.display = "flex";
+      videoToolbar.style.justifyContent = "space-between";
+      videoToolbar.style.alignItems = "center";
+      videoToolbar.style.gap = "8px";
+      videoToolbar.style.marginBottom = "6px";
+      videoToolbar.style.flexWrap = "wrap";
+
+      const takeSelect = document.createElement("select");
+      takeSelect.className = "passage-take-select";
+      takeSelect.dataset.segmentId = seg.segment_id;
+      takeSelect.style.fontSize = "12px";
+      takeSelect.style.padding = "4px 8px";
+      takeSelect.style.minWidth = "150px";
+      takeSelect.dataset.tooltip = `Select a rendered take for ${seg.segment_id}`;
+
+      const v = document.createElement("video");
+      v.controls = true;
+      v.preload = "metadata";
+      v.style.width = "100%";
+      v.style.maxHeight = "280px";
+      v.style.borderRadius = "4px";
+      v.style.background = "#101814";
+
+      const populateTakesDropdown = (takesList, activeTakeId) => {
+        if (!takesList || !takesList.length) {
+          takeSelect.replaceChildren(option("", "No takes recorded"));
+          takeSelect.disabled = true;
+          return;
+        }
+        takeSelect.disabled = false;
+        takeSelect.replaceChildren(
+          ...takesList.map(t => option(t.id, t.label || t.id, `Preview ${t.label || t.id}`))
+        );
+        const chosenId = activeTakeId || takesList[takesList.length - 1].id;
+        takeSelect.value = chosenId;
+        const chosenTake = takesList.find(t => t.id === chosenId) || takesList[takesList.length - 1];
+        if (chosenTake && chosenTake.clip_url) {
+          v.src = chosenTake.clip_url;
+        } else if (seg.clip_url) {
+          v.src = seg.clip_url;
+        }
+      };
+
+      populateTakesDropdown(seg.takes || [], seg.active_take);
+
+      // Choosing a take only previews it here; the re-encode saves every passage's choice.
+      takeSelect.onchange = () => {
+        const chosen = (seg.takes || []).find(t => t.id === takeSelect.value);
+        if (!chosen?.clip_url) return;
+        v.src = chosen.clip_url;
+        v.load();
+        notice(`Previewing ${chosen.label || chosen.id} for ${seg.segment_id}. Re-encode the final video to use it.`);
+      };
+
+      const rerollBtn = document.createElement("button");
+      rerollBtn.type = "button";
+      rerollBtn.className = "secondary passage-reroll-btn";
+      rerollBtn.style.fontSize = "12px";
+      rerollBtn.style.padding = "4px 10px";
+      rerollBtn.textContent = "🎲 Reroll Clip";
+      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with a new seed using its prompt and cast references`;
+
+      rerollBtn.hidden = Boolean(data.reroll_blocked);
+      rerollBtn.onclick = handle(async () => {
+        if (!window.confirm(`Render a new take of ${seg.segment_id} on the local H3 renderer? This uses the GPU for one passage. The finished video changes only when you re-encode it.`)) return;
+        const origText = rerollBtn.textContent;
+        rerollBtn.disabled = true;
+        rerollBtn.setAttribute("aria-busy", "true");
+        rerollBtn.textContent = "⏳ Rendering take…";
+        try {
+          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reroll/${encodeURIComponent(seg.segment_id)}`, { confirm: true });
+          const updatedBreakdown = await pollJobCompletion(`Re-rendering passage ${seg.index + 1} (${seg.segment_id}) with a new seed…`);
+          const updatedSeg = (updatedBreakdown.segments || []).find(s => s.segment_id === seg.segment_id);
+          if (updatedSeg) {
+            seg.takes = updatedSeg.takes || [];
+            populateTakesDropdown(seg.takes, updatedSeg.active_take);
+            v.load();
+          }
+          notice(`New take rendered for ${seg.segment_id}! Use the dropdown to compare takes or click "Re-encode Final Video" to apply.`);
+        } finally {
+          rerollBtn.disabled = false;
+          rerollBtn.removeAttribute("aria-busy");
+          rerollBtn.textContent = origText;
+        }
+      });
+
+      videoToolbar.append(takeSelect, rerollBtn);
+      vidWrap.append(videoToolbar);
+
+      if (seg.has_clip && seg.clip_url) {
+        if (!v.src) v.src = seg.clip_url;
+        vidWrap.append(v);
+      } else {
+        v.hidden = true;
+        const emptyClip = document.createElement("div");
+        emptyClip.className = "empty";
+        emptyClip.style.padding = "24px";
+        emptyClip.textContent = data.reroll_blocked ? "No clip currently on disk for this passage." : "No clip currently on disk for this passage. Click Reroll Clip to render one.";
+        vidWrap.append(v, emptyClip);
+      }
+
+      grid.append(vidWrap);
       card.append(grid);
       return card;
     }));
@@ -623,7 +832,7 @@ export async function loadOutputs() {
     actions.className = "output-actions";
     actions.append(download, upscale);
     const viewPromptsBtn = text("button", "Prompts & clips", "secondary", `View prompts and passage clips for ${output.title}`);
-    viewPromptsBtn.onclick = () => openPromptsDialog(output);
+    viewPromptsBtn.onclick = () => showProductionBreakdown(output);
     actions.append(viewPromptsBtn);
     if (output.kind === "video") actions.append(caption);
     if (output.kind === "video") actions.append(exportButton(output));
@@ -827,12 +1036,5 @@ export function initUpscaleForm() {
     await json("/api/upscale", { ...upscaleBody(), ...(state.upscaleCloud ? { max_credits: state.upscaleCredits } : {}) });
     $("#upscale-dialog").close();
   });
-  $("#prompts-dialog-close-btn")?.addEventListener("click", () => $("#prompts-clips-dialog")?.close());
-  $("#prompts-clips-dialog")?.addEventListener("close", () => {
-    $$("#prompts-dialog-list video").forEach(v => {
-      v.pause();
-      v.removeAttribute("src");
-      v.load();
-    });
-  });
+  $("#prompts-view-back-btn")?.addEventListener("click", closeProductionBreakdown);
 }

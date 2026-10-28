@@ -165,7 +165,8 @@ def plan_run(settings, lines, offset_s, song_s, total_s):
 def downloads(record):
     """Names of the extra files a finished video offers beside the video itself (a subtitle file and the backup videos)."""
     extras = [(record.get('captions') or {}).get(k) for k in ('srt', 'uncaptioned_copy')] + [(record.get('subliminal') or {}).get('clean_copy')]
-    return [name for name in extras if name]
+    final_takes = record.get('final_takes') or []
+    return [name for name in [*extras, *(final_takes if isinstance(final_takes, list) else [])] if name]
 
 
 def apply_to_run(directory, plan):

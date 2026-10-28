@@ -77,7 +77,12 @@ and renderer configuration before starting; model failures stop production.
    requested file. To explain the result, `read_music_score` returns the beats,
    energy, grammars and planned cuts; describe internal cuts as planned.
    `read_output_prompts` (CLI `output-prompts`) lists each passage's written prompt
-   and, while it is still on disk, the renderer's original clip URL. If an
+   and, while it is still on disk, the renderer's original clip URL, plus recorded
+   `takes`. To redo one passage of a finished `local_h3` video when the user asks,
+   `reroll_segment` (GPU work, `confirm=true`; other renderers are refused) records a
+   new take; compare takes in `read_output_prompts`, choose with
+   `select_segment_take`, then `reassemble_output` re-encodes the final video once
+   from original clips (earlier versions stay as `-vN.mp4`; report its `warnings`). If an
    output lists `quality_warnings` (a near-still passage or borders), tell the
    user; free local renderers already retried once, and paid work needs consent. On failure, inspect the operation log and request IDs. Never
    automatically resubmit paid work after a timeout or ambiguous submission.

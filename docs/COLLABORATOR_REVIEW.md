@@ -1,5 +1,18 @@
 # Collaborator review record
 
+## Fork `7367470` reviewed (release 1.11.0, 2026-10-28)
+
+The task-start check found head `7367470`, three authored commits after last reviewed `bdd6973` (`8356eb2`, `355cc26`, `7367470`), plus merge `0a91ce6` of our 1.10.28, whose only differences from our tree are the long-standing `Jobs.reset` and a harvest-card call in `production.js`. Fork content was applied to our `ace7114` from an isolated clone. Claude Code (Opus 5.5) coordinated and integrated; Codex (GPT-6) reviewed the patch and our current source read-only through the Codex plugin.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Prompt character count (`8356eb2`) | Adopted as is. |
+| Full-panel Prompts & clips view (`355cc26`) | Adopted. The dialog and its styles are replaced by a sub-view of Finished Videos; videos are unloaded when leaving it. |
+| Reroll, takes history, final re-encode (`7367470`) | Adopted with fixes. Codex found the critical one: the reroll endpoint started a render without a quote or consent, and `comfy_sdk_h3` can submit a proxy job (`webapp/mondo_web.py` start/resume require a quote and `consent=true`). Reroll is now limited to `local_h3`, needs `confirm`, and the breakdown reports `reroll_blocked`. Both reviews found: reroll overwrote the run's `render-graph.json`/`local-request.json` (now per take); the worker overlaid current settings on the prepared ones (now prepared settings only, as `mmv/worker.py` does); selecting an older take kept the newer take's seed and receipt fields (each take now stores its render record); GET `/prompts` created `takes.json`/`final_takes.json` (reads are now pure); re-encode silently swallowed subliminal/caption errors and the caption `burn_error`, then kept stale effect records (now reported and recorded); unknown `selected_takes` were ignored (now refused); the take dropdown wrote `renders.json` while its notice called the choice pending (now preview only). We confirmed the re-encode itself follows the single-encode rule: `final_assembly.assemble`, `subliminal.apply_to_run` and `captions.apply_to_run` each build their variant from the saved recipe of original clips. Codex also reported that `-vN.mp4` downloads would fail; that did not reproduce, since the fork's `captions.downloads` lists `final_takes`, and a test now downloads one. Codex's second pass on the integrated tree found that a re-encode saved each take choice before assembling, so a failed encode or a later unavailable take left changed active takes, and that a missing original final would be renumbered as Version 1; choices are now checked together and saved only after the new video is assembled, and a re-encode with neither the finished video nor a saved version list is refused. It confirmed the MCP argument order. Agent docs and the skill were updated. |
+| `Jobs.reset`, harvest-card call (merge) | Not adopted, as in 1.10.24–1.10.26: `reset` has no caller, and 1.10.26 already shows the harvest card once per operation, including after a reload. |
+
+Remaining: reroll for Comfy SDK/cloud productions would need a per-passage quote and consent; a rerolled passage does not run the vision quality stage.
+
 ## Fork `bdd6973` reviewed (release 1.10.26, 2026-10-27)
 
 The task-start check found exact head `bdd6973221af51932549eb8ee743429e69368e06`, five authored commits after last reviewed `d376164` (`9fb0aac`, `b00add2`, `4560bfc`, `e4f747b`, `bdd6973`). The fork had not merged our 1.10.25, so those commits were cherry-picked onto our `36ef123` in an isolated clone; three conflicts were in lines 1.10.25 had already adapted. Claude Code (Opus 5.5) coordinated and integrated; Codex reviewed the patch and our current source read-only through the Codex plugin.

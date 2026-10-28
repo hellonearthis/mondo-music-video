@@ -197,6 +197,14 @@ from actor references, preserve musical timing and protected prompts, and bind s
 alignment to prompts for recovery. GUI, CLI and MCP parity is documented in
 [docs/STORYBOARDS.md](docs/STORYBOARDS.md). Do not publish private boards or uploads.
 
+## Passage takes
+
+A finished `local_h3` production can reroll one passage (explicit confirmation, local GPU, never automatic) into a new take
+beside the original. `reassemble_output` rebuilds the final video from original clips in one encode with flashes and captions
+inside that graph, keeping earlier versions as numbered files. Productions on other renderers are refused because rerolling
+could submit paid work without a preview and consent. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
+[docs/AGENT_SETUP.md](docs/AGENT_SETUP.md).
+
 ## Panel progress and actor editing
 
 Music Video panel Done/Needs/Reviewed cues describe form inputs only. They do not replace preview, quote validation or explicit start consent. `auto_collapse_panels` is a normal setting, on by default; drafts save card/fold open, reviewed and partial states. Agents can inspect and change the setting through the settings API, client, CLI and MCP. Local actor visual descriptions can be edited through those surfaces while idle; imported signed OAP actors keep their original package and require an updated package from their signer. The OPP guide is available in the GUI and through agent inspection.

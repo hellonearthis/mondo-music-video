@@ -1,5 +1,19 @@
 # Releases
 
+## 1.11.0 — Passage takes: reroll one clip, choose, re-encode
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `8356eb2`, `355cc26` and `7367470`, reviewed at exact head `7367470`.
+
+- **Prompts & clips is a full view** inside Finished Videos (Back returns to the gallery), with the prompt on the left, the clip on the right and each prompt's character count above it.
+- **Passage takes.** A finished local H3 production can render a new take of one passage (🎲 Reroll Clip, after a confirmation, local GPU only) using that passage's saved validated prompt, cast and instrument references and the production's own saved settings. The original clip is Take 1. Each passage's dropdown previews its takes.
+- **Re-encode the final video** with the chosen take for each passage. It is assembled once from the original renderer clips, with subliminal flashes and burned captions reapplied inside that encode as in the first production. The first re-encode keeps the original as `music-video-v1.mp4`, each version is saved as `-vN.mp4`, and the Final Video Version menu downloads any of them.
+
+Agent parity: `reroll_segment` (needs `confirm=true`), `select_segment_take` and `reassemble_output` (MCP, 62 tools), the matching `AgentClient` methods and CLI `reroll-segment … --confirm`, `select-segment-take`, `reassemble-output`; `read_output_prompts` adds `takes`, `active_take`, `final_takes` and `reroll_blocked`.
+
+Integration fixes (Claude Code and Codex review): reroll is refused for every renderer except `local_h3`, because the Comfy SDK and cloud renderers can submit paid jobs and reroll has no preview or consent step; reroll needs explicit confirmation in the GUI and `confirm=true` through the API; it replays the production's saved settings instead of today's; each take keeps its own render graph and request receipt, so the original run's `render-graph.json` and `local-request.json` stay as recovery records; choosing a take restores that take's whole render record; opening Prompts & clips no longer writes `takes.json` or `final_takes.json`; the take dropdown only previews, and the choices are saved by the re-encode; take choices in a re-encode are checked together and saved only after the new video is assembled, so a refused or failed re-encode changes nothing, and a re-encode is refused when the original finished video is missing (so Version 1 is always the original); a subliminal or caption failure during a re-encode is reported in the notice and on the output (`reassembly_warnings`) instead of being hidden. The older `Jobs.reset` and duplicate harvest-card call carried by the fork's merge remain out of scope (unused / already covered after reload). See [collaborator review](COLLABORATOR_REVIEW.md).
+
+Limitations: a reroll skips the vision quality check and its automatic retry; productions on renderers other than `local_h3` cannot reroll yet. No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.10.28 — Nothing else in memory while ComfyUI renders; resume keeps finished passages
 
 - Fixed: a resumed local production rendered every passage again, discarding finished clips (they were moved aside, not deleted). Resume now keeps each passage whose original clip is still on disk with at least its planned frames, logs "already rendered; keeping it", and renders only the rest. Missing or short clips are rendered again.

@@ -152,3 +152,111 @@ class PassageBreakdownTests(ScoreViewTests):
         write_json(self.home / "styles" / "coastal.json", {"id": "coastal", "name": "Coastal", "direction": "Salt light."})
         self.assertEqual(self.client.get("/api/styles/coastal").json()["name"], "Coastal")
         self.assertGreaterEqual(self.client.get("/api/styles/missing").status_code, 400)
+
+    def test_passage_takes_initialization_and_selection(self):
+        directory = self.run_dir("takes_run")
+        write_json(directory / "prompts.json", {"seg000": "Coastline.", "seg001": "Hands."})
+        clips_dir = directory / "clips"
+        clips_dir.mkdir()
+        clip1 = clips_dir / "seg000_take1.mp4"
+        clip2 = clips_dir / "seg000_take2.mp4"
+        clip1.write_bytes(b"take-one-bytes")
+        clip2.write_bytes(b"take-two-bytes")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip1)}})
+        data = self.client.get("/api/outputs/takes_run/prompts").json()
+        seg0 = data["segments"][0]
+        self.assertEqual(seg0["active_take"], "take1")
+        self.assertEqual(len(seg0["takes"]), 1)
+        self.assertEqual(seg0["takes"][0]["id"], "take1")
+
+        takes_path = directory / "takes.json"
+        self.assertFalse(takes_path.exists(), "reading prompts must not write take history")
+        self.assertFalse((directory / "final_takes.json").exists())
+
+        # Add a second take and select it
+        takes_record = {"segments": {"seg000": {"active_take": "take1", "takes": [dict(seg0["takes"][0], video=str(clip1),
+                                                                                       render={"video": str(clip1), "seed": 7})]}}}
+        takes_record["segments"]["seg000"]["takes"].append({
+            "id": "take2",
+            "label": "Take 2 (seed 999)",
+            "seed": 999,
+            "video": str(clip2),
+            "audio": "",
+            "render": {"video": str(clip2), "seed": 999, "prompt_id": "p2"},
+        })
+        write_json(takes_path, takes_record)
+
+        res = self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "take2"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["active_take"], "take2")
+
+        # Verify specific take clip endpoint and updated default clip
+        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take1").content, b"take-one-bytes")
+        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take2").content, b"take-two-bytes")
+        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000").content, b"take-two-bytes")
+
+        # Selecting the original back restores its whole render record, not just the video path.
+        self.assertEqual(self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "take1"}).status_code, 200)
+        self.assertEqual(json.loads((directory / "renders.json").read_text())["seg000"], {"video": str(clip1), "seed": 7})
+        self.assertGreaterEqual(self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "take9"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "../x"}).status_code, 422)
+
+    def test_reroll_needs_confirmation_and_a_free_renderer(self):
+        directory = self.run_dir("paid_run", request={"backend": "wavespeed"})
+        write_json(directory / "prompts.json", {"seg000": "Coastline."})
+        self.assertTrue(self.client.get("/api/outputs/paid_run/prompts").json()["reroll_blocked"])
+        refused = self.client.post("/api/outputs/paid_run/reroll/seg000", json={})
+        self.assertGreaterEqual(refused.status_code, 400)
+        self.assertIn("Confirm", refused.text)
+        paid = self.client.post("/api/outputs/paid_run/reroll/seg000", json={"confirm": True})
+        self.assertGreaterEqual(paid.status_code, 400)
+        self.assertIn("local H3", paid.text)
+        self.run_dir("local_run", request={"backend": "local_h3"})
+        self.assertIsNone(self.client.get("/api/outputs/local_run/prompts").json()["reroll_blocked"])
+
+    def test_reassemble_reports_effects_and_keeps_versions(self):
+        from unittest.mock import patch
+        from mmv import takes
+        directory = self.run_dir("re_run", request={"kind": "video", "backend": "local_h3"})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"clip")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        write_json(directory / "prepared.json", {"captions": {"mode": "burned", "cues": [[0, 1, "la"]]}})
+        write_json(directory / "output.json", {"file": "music-video.mp4", "kind": "video", "title": "Fixture",
+                                              "captions": {"mode": "burned", "uncaptioned_copy": "old.mp4"}})
+        (directory / "music-video.mp4").write_bytes(b"version-one")
+
+        def assemble(store, run_dir, request, plan, renders):
+            (run_dir / "music-video.mp4").write_bytes(b"version-two")
+            return run_dir / "music-video.mp4"
+
+        class Context:
+            def update(self, *args):
+                pass
+        renders_before = (directory / "renders.json").read_text()
+        for bad in ({"seg005": "take1"}, {"seg000": "take1", "seg001": "take7"}):
+            with self.assertRaises(ValueError):
+                takes.reassemble_final_video(self.fixture.store, "re_run", Context(), selected_takes=bad)
+        self.assertEqual((directory / "renders.json").read_text(), renders_before)
+        self.assertFalse((directory / "takes.json").exists())
+        with patch("mmv.final_assembly.assemble", assemble), patch("mmv.media.duration", lambda path: 4.0), \
+                patch("mmv.captions.apply_to_run", lambda run_dir, plan: {"mode": "burned", "burn_error": "no fonts"}):
+            result = takes.reassemble_final_video(self.fixture.store, "re_run", Context())
+        self.assertIn("no fonts", " ".join(result["warnings"]))
+        self.assertEqual((directory / "music-video-v1.mp4").read_bytes(), b"version-one")
+        self.assertEqual((directory / "music-video-v2.mp4").read_bytes(), b"version-two")
+        record = json.loads((directory / "output.json").read_text())
+        self.assertEqual(record["final_takes"], ["music-video-v1.mp4", "music-video-v2.mp4"])
+        self.assertIn("no fonts", record["reassembly_warnings"][0])
+        self.assertEqual(self.client.get("/api/media/re_run/music-video-v1.mp4").content, b"version-one")
+
+    def test_reassemble_refuses_when_the_original_final_is_missing(self):
+        from mmv import takes
+        directory = self.run_dir("lost_run", request={"kind": "video", "backend": "local_h3"})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"clip")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        with self.assertRaisesRegex(ValueError, "missing"):
+            takes.reassemble_final_video(self.fixture.store, "lost_run", None)

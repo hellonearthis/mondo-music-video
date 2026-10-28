@@ -378,9 +378,29 @@ def create_server(base_url=None):
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True))
     def read_output_prompts(output_file: str) -> dict[str, Any]:
-        """List a finished output's passages: the written prompt, planned shots, trimmed length and, while the
-        renderer's original clip is still on disk, a URL to play it. Read-only; it never changes or re-renders anything."""
+        """List a finished output's passages: the written prompt, planned shots, trimmed length, recorded takes, and
+        while the renderer's original clip is still on disk, a URL to play it. Read-only; it never changes or re-renders anything."""
         return invoke(client.output_prompts, output_file)
+
+    @server.tool()
+    def reroll_segment(output_file: str, segment_id: str, confirm: bool, seed: int | None = None) -> dict[str, Any]:
+        """Re-render one passage on the local H3 renderer with a new seed, its saved prompt and cast references, recording
+        a new take. This is GPU work: set confirm=true only after the user asks for it. Paid renderers are refused.
+        It starts the single operation; watch it with get_status, then read_output_prompts to compare takes."""
+        return invoke(client.reroll_segment, output_file, segment_id, seed, confirm)
+
+    @server.tool()
+    def select_segment_take(output_file: str, segment_id: str, take_id: str) -> dict[str, Any]:
+        """Make a recorded take (e.g. 'take1', 'take2') the passage's active clip. The finished video is unchanged
+        until reassemble_output re-encodes it."""
+        return invoke(client.select_segment_take, output_file, segment_id, take_id)
+
+    @server.tool()
+    def reassemble_output(output_file: str, selected_takes: dict[str, str] | None = None) -> dict[str, Any]:
+        """Re-encode the final video in one encode from the original passage clips, using the active or selected takes
+        (subliminal flashes and burned captions are reapplied from the original plan). Earlier final versions are kept
+        as numbered files. Starts the single operation; the result lists versions and any effect warnings."""
+        return invoke(client.reassemble_output, output_file, selected_takes)
 
     @server.tool()
     def export_production_package(run_id: str, zip: bool = False, allow_private_actors: bool = False) -> dict[str, Any]:

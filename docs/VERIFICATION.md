@@ -1,4 +1,9 @@
-# Verification — 1.10.28
+# Verification — 1.11.0
+
+## 1.11.0 — Passage takes (collaborator fork `7367470`)
+
+Full temporary-data/mock-service suite: **793 passed + 141 subtests**, including new tests that reading prompts writes no take history, that selecting a take restores its own render record, that reroll needs confirmation and refuses a paid renderer, that a refused re-encode leaves `renders.json` and take history untouched, that a re-encode keeps `-v1`/`-v2` versions, records a caption burn failure and serves the old version for download, and that a re-encode is refused when the original finished video is missing. `node --check` passed for `outputs.js`, `git diff --check` was clean, a fresh version-handler import reported 1.11.0 and `protected_scheme.check()` returned `[]`. The idle app was restarted with existing data and `--no-auto-update` on port 8091; live `/api/version` reports 1.11.0, and a browser check opened Prompts & clips on an existing 16-passage production (gallery hidden, character counts, Take 1 and Version 1 listed, no page errors) without writing any take file. No reroll, re-encode, real production, paid call or GPU work was run, so a real local reroll and re-encode remain to be verified by the operator.
+
 
 ## 1.10.28 — Memory before rendering and resume of finished passages
 

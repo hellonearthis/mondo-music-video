@@ -391,7 +391,29 @@ class AgentClient:
         for passage in result["segments"]:
             if passage.get("clip_url"):
                 passage["clip_url"] = self.base + passage["clip_url"]
+            for take in passage.get("takes") or []:
+                if take.get("clip_url") and take["clip_url"].startswith("/"):
+                    take["clip_url"] = self.base + take["clip_url"]
         return result
+
+    def reroll_segment(self, output_file, segment_id, seed=None, confirm=False):
+        """Re-render one passage on the local H3 renderer (GPU work; needs confirm=True) with a new seed, its saved
+        prompt and cast references. The new take becomes active; re-encode the final video to use it."""
+        run_id = str(output_file).split("/")[0]
+        payload = {"confirm": bool(confirm), **({"seed": int(seed)} if seed is not None else {})}
+        return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/reroll/{urllib.parse.quote(segment_id, safe='')}", payload)
+
+    def select_segment_take(self, output_file, segment_id, take_id):
+        """Select a recorded take for a passage clip."""
+        run_id = str(output_file).split("/")[0]
+        return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/takes/{urllib.parse.quote(segment_id, safe='')}",
+                          {"take_id": take_id})
+
+    def reassemble_output(self, output_file, selected_takes=None):
+        """Re-encode the final music video using the active or selected passage takes, preserving previous final video takes."""
+        run_id = str(output_file).split("/")[0]
+        return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/reassemble",
+                          {"selected_takes": selected_takes or {}})
 
     def export_package(self, run_id, zip_it=False, allow_private_actors=False):
         """Copy a finished production into an editing package under the app's data folder (never published)."""
@@ -515,6 +537,18 @@ def main(argv=None):
     import_opp.add_argument("--accept-signer", default="", metavar="PUBLIC_KEY")
     output_prompts = sub.add_parser("output-prompts", help="Passage prompts and original clips of a finished output")
     output_prompts.add_argument("output_file", help="An output's file from the outputs command")
+    reroll_cmd = sub.add_parser("reroll-segment", help="Re-render a single passage clip with a new seed")
+    reroll_cmd.add_argument("output_file")
+    reroll_cmd.add_argument("segment_id")
+    reroll_cmd.add_argument("--seed", type=int, default=None)
+    reroll_cmd.add_argument("--confirm", action="store_true", help="Confirm the local GPU render of this passage")
+    select_take_cmd = sub.add_parser("select-segment-take", help="Select a recorded take for a passage")
+    select_take_cmd.add_argument("output_file")
+    select_take_cmd.add_argument("segment_id")
+    select_take_cmd.add_argument("take_id")
+    reassemble_cmd = sub.add_parser("reassemble-output", help="Re-encode final video with selected passage takes")
+    reassemble_cmd.add_argument("output_file")
+    reassemble_cmd.add_argument("--takes", default=None, help="Optional JSON mapping of segment_id to take_id")
     select_opp = sub.add_parser("select-opp-sheet")
     select_opp.add_argument("prop_id")
     select_opp.add_argument("--use", default="")
@@ -601,6 +635,12 @@ def main(argv=None):
             result = client.import_opp(args.filename, args.allow_unsigned, args.accept_signer)
         elif args.command == "output-prompts":
             result = client.output_prompts(args.output_file)
+        elif args.command == "reroll-segment":
+            result = client.reroll_segment(args.output_file, args.segment_id, seed=args.seed, confirm=args.confirm)
+        elif args.command == "select-segment-take":
+            result = client.select_segment_take(args.output_file, args.segment_id, args.take_id)
+        elif args.command == "reassemble-output":
+            result = client.reassemble_output(args.output_file, json.loads(args.takes) if args.takes else None)
         elif args.command == "select-opp-sheet":
             result = client.select_opp_sheet(args.prop_id, args.use)
         else:

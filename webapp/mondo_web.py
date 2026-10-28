@@ -39,7 +39,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.28"
+MGL_APP_VERSION = "1.11.0"
 WEB = Path(__file__).parent
 
 
@@ -681,6 +681,19 @@ class CaptionVideoRequest(StrictModel):
     outline_color: str = Field(default="", pattern=r"^(#[0-9a-fA-F]{6})?$")
     font: str = Field(default="", max_length=40, pattern=r"^([A-Za-z0-9][A-Za-z0-9 ._+-]*)?$")
     lyric_lines: list[LyricLine] = Field(default_factory=list, max_length=500)
+
+
+class TakeSelectRequest(StrictModel):
+    take_id: str = Field(pattern=r"^take\d{1,4}$")
+
+
+class RerollRequest(StrictModel):
+    confirm: bool = False
+    seed: int | None = Field(default=None, ge=0, le=2147483647)
+
+
+class ReassembleRequest(StrictModel):
+    selected_takes: dict[str, str] = Field(default_factory=dict)
 
 
 class ProjectState(StrictModel):
@@ -1857,9 +1870,56 @@ def create_app(home=None, *, test_hosts=False):
         return score_view.passage_breakdown(store, run_id)
 
     @app.get("/api/outputs/{run_id}/clips/{segment_id}")
-    def output_clip(run_id: str, segment_id: str):
-        path, media_type = score_view.passage_clip(store, run_id, segment_id)
+    def output_clip(run_id: str, segment_id: str, take: str | None = None):
+        path, media_type = score_view.passage_clip(store, run_id, segment_id, take_id=take)
         return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower())
+
+    @app.post("/api/outputs/{run_id}/takes/{segment_id}")
+    def select_output_take(run_id: str, segment_id: str, value: TakeSelectRequest):
+        from mmv import takes
+        with jobs.lock:
+            jobs.require_idle()
+            return takes.select_segment_take(store, run_id, segment_id, value.take_id)
+
+    @app.post("/api/outputs/{run_id}/reroll/{segment_id}")
+    def reroll_output_segment(run_id: str, segment_id: str, value: RerollRequest):
+        from mmv import takes
+        from mmv.services import check_required_services
+        if value.confirm is not True:
+            raise ValueError("Confirm the local GPU render of one passage before rerolling")
+        with jobs.lock:
+            jobs.require_idle()
+            origin = score_view._origin_run(store, run_id)
+            directory = inside(store.home / "runs", identifier(origin))
+            request = read_json(directory / "request.json", {})
+            takes.validate_segment_id(segment_id)
+            if blocked := takes.reroll_block(request):
+                raise ValueError(blocked)
+            missing_errors = check_required_services(store, request, resume=True)
+            if missing_errors:
+                raise ValueError(f"Cannot reroll clip: {missing_errors[0]}")
+            seed_arg = [str(value.seed)] if value.seed is not None else []
+            def run_reroll(context):
+                context.update(f"Starting reroll for {segment_id}", 5)
+                context.command(
+                    [sys.executable, "-u", "-m", "mmv.worker", "reroll", str(store.home), str(directory), segment_id, *seed_arg],
+                    progress_path=directory / "progress.json",
+                )
+                return score_view.passage_breakdown(store, origin)
+            return jobs.start("reroll", run_reroll, run_id=job_run_id(store, "reroll", f"{origin}_{segment_id}"))
+
+    @app.post("/api/outputs/{run_id}/reassemble")
+    def reassemble_output_video(run_id: str, value: ReassembleRequest | None = None):
+        from mmv import takes
+        with jobs.lock:
+            jobs.require_idle()
+            origin = score_view._origin_run(store, run_id)
+            selected = value.selected_takes if value else None
+            return jobs.start(
+                "reassemble",
+                lambda context: takes.reassemble_final_video(store, origin, context, selected_takes=selected),
+                run_id=job_run_id(store, "reassemble", origin),
+            )
 
     @app.get("/api/media/{run_id}/{filename}")
     def media_file(run_id: str, filename: str, download: bool = False):

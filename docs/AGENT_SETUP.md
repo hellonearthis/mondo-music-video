@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.28 exposes **59 tools** and advertises the
+v1.11.0 exposes **62 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -237,7 +237,10 @@ service note; `quality.json` holds per-attempt judgments.
 | Tool | Purpose and boundary |
 | --- | --- |
 | `read_music_score` | Read-only. For a finished music video (`output_file` from `inspect_studio(kind="outputs")`), return tempo, beats, downbeats, per-beat energy, sections and passages with their montage grammar and planned cuts, in seconds on the video's clock. Use it to explain the pacing. Internal cuts are planned; generated clips may not follow every one. |
-| `read_output_prompts` | Read-only. For a finished output (`output_file` from `inspect_studio(kind="outputs")`), list each passage's written prompt, planned shots, length after trimming (`duration`, seconds) and, while the renderer's original clip is still on disk, an absolute `clip_url`. The GUI shows the same data under **Prompts & clips**. CLI: `mondo-music-video-agent output-prompts OUTPUT_FILE`. |
+| `read_output_prompts` | Read-only. For a finished output (`output_file` from `inspect_studio(kind="outputs")`), list each passage's written prompt, planned shots, length after trimming (`duration`, seconds) and, while the renderer's original clip is still on disk, an absolute `clip_url`. The GUI shows the same data under **Prompts & clips**, with each passage's recorded `takes`, its `active_take`, the run's `final_takes` (numbered final versions) and `reroll_blocked` (why reroll is unavailable, or null). It never writes take history. CLI: `mondo-music-video-agent output-prompts OUTPUT_FILE`. |
+| `reroll_segment` | Local GPU work: requires `confirm=true`, given only after the user asks for a new take. Re-renders one passage of a finished `local_h3` production with a new (or given) seed, its saved validated prompt, cast and instrument references and the production's own saved settings. Productions on other renderers are refused, since they can submit paid jobs that need a preview and consent. Starts the single operation (poll `inspect_studio(kind="status")`); the new take becomes active, but the finished video is unchanged until `reassemble_output`. Never retried automatically. CLI: `reroll-segment OUTPUT_FILE SEGMENT_ID [--seed N] --confirm`. |
+| `select_segment_take` | Makes a recorded take (`take1` is the original clip) the passage's active clip, restoring that take's own render record. The finished video is unchanged until `reassemble_output`. Refused while an operation runs. CLI: `select-segment-take OUTPUT_FILE SEGMENT_ID TAKE_ID`. |
+| `reassemble_output` | Re-encodes the final video once from the original passage clips with the active takes, or with `selected_takes` (`{"seg001": "take2"}`; unknown passages or takes are refused before anything changes). Subliminal flashes and burned captions are reapplied from the production's original plan inside that one encode. The first re-encode keeps the original as `music-video-v1.mp4`; each new version is also saved as `-vN.mp4` and downloadable. The result's `warnings` (also `reassembly_warnings` on the output) say when an effect could not be applied. No renderer or paid call. CLI: `reassemble-output OUTPUT_FILE [--takes JSON]`. |
 
 ## v1.3.0 OAP 0.3 tools
 
