@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.10.32** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.11.2** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -64,7 +64,6 @@ passage to its planned frames, joins the picture, and restores your original son
 - Lyric captions: a `lyrics.srt` file, or the words burned into the video, from your timed lyric lines; later caption copies are rebuilt from the saved original clips.
 - Every clean, subliminal and captioned version uses one final FFmpeg encode directly from original clips at the same CRF-6 quality. Topaz upscaling is the explicit exception.
 - Finished videos to play, download, or upscale with your installed Topaz tools or the Topaz cloud service (your own Topaz API key; Topaz charges credits).
-- Production Breakdown (Prompts & clips view) for completed runs: inspect each passage's prompt, character count, and clip side by side; switch between rendered takes or click `🎲 Reroll Clip` to re-render individual segments; switch prompt versions, edit prompts manually (`✏️ Edit Prompt`), or click `🎲 Reroll Prompt` to generate fresh prompt drafts; and re-encode the final music video (`🎬 Re-encode Final Video`) from original clips with full final-version history.
 
 Use local models or supported API providers. One production runs at a time,
 with progress, logs and cancellation. You provide your media, models and API
@@ -264,6 +263,21 @@ automatically. Uploaded references and song passages go to your chosen provider.
 5. Play or download your video. Create an ident in Credits & Idents to attach
    to another production, or use the optional Topaz export on a finished video.
 
+Two seeds shape a video. The **variation seed** (0 unless you change it) picks
+the shot plan, vocabulary and casting, so the same song and variation seed plan
+the same passages and reuse their checked prompts. The **render seed** is new and
+random for every video unless you type one; the preview shows it, so you can
+enter both to repeat a video exactly.
+
+**Edit** on a finished video opens it passage by passage. For a local H3
+production you can render a new take of one passage (the same prompt with a new
+seed is often all it needs; the seed is shown and can be typed), compare takes,
+write a new prompt or check your own edit of it (both pass the same Mondo checks
+and Laya review as any production prompt; an API writer asks before it charges),
+and re-encode the final video from the chosen takes. Earlier final versions are
+kept and downloadable. Rerolls and prompt rewrites never run without your
+confirmation and are never retried automatically.
+
 The Actors tab imports and exports OAP packages, verifies their signatures and
 checks actor riders. No account, reporting or public actor sharing is required.
 With Open Actor Protocol 0.3, imported manifests are also schema-validated
@@ -273,9 +287,11 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.10.32 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
+The v1.11.2 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
-deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets, passage clip takes and rerolling (`reroll_segment`, `select_segment_take`), passage prompt takes, manual prompt editing, and prompt rerolling (`reroll_prompt`, `select_prompt_take`, `edit_prompt`), and final video versioned re-assembly (`reassemble_output`). Reconnect the MCP client after upgrading to refresh its tool list.
+deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets,
+world editing, passage prompts and versions (`rewrite_prompt`, `edit_prompt`, `select_prompt_take`), clip takes with seeds
+(`reroll_segment`, `select_segment_take`) and re-encoding the final video (`reassemble_output`). Reconnect the MCP client after upgrading to refresh its tool list.
 
 **Open Prop Protocol:** Import verified `.opp` packages into a private, general
 prop library (OPP v0.1 and v0.2; v0.2 generic assets such as stems are recorded but not rendered). For now, a selected OPP base or interaction sheet can serve as an

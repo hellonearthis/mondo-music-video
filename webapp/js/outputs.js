@@ -19,6 +19,15 @@ const GRAMMAR_CLASSES = {
 };
 
 let pendingExportRun = null;
+const MAX_SEED = 2147483647;
+
+// A random seed that no recorded take of the passage has used yet.
+export function freshSeed(used = [], random = Math.random) {
+  const taken = new Set(used.filter(seed => seed != null).map(Number));
+  let seed;
+  do { seed = 100000 + Math.floor(random() * (MAX_SEED - 100000)); } while (taken.has(seed));
+  return seed;
+}
 let pendingDeleteRun = null;
 
 export function closeProductionBreakdown() {
@@ -35,6 +44,29 @@ export function closeProductionBreakdown() {
   if (mainView) {
     mainView.hidden = false;
   }
+  restoreGallery();
+}
+
+// The hidden gallery's players can keep downloads of large finished videos open, holding the browser's few connections
+// to the app; while the Edit view is open they let go, and they come back (a few at a time) on return.
+function releaseGallery() {
+  $$("#output-list video").forEach(v => {
+    if (!v.getAttribute("src")) return;
+    v.dataset.releasedSrc = v.getAttribute("src");
+    v.pause();
+    v.removeAttribute("src");
+    v.load();
+  });
+}
+
+function restoreGallery() {
+  const videos = $$("#output-list video").filter(v => v.dataset.releasedSrc);
+  videos.forEach(v => {
+    v.preload = "none";
+    v.src = v.dataset.releasedSrc;
+    delete v.dataset.releasedSrc;
+  });
+  loadThumbnails(videos);
 }
 
 async function pollJobCompletion(initialMessage) {
@@ -82,6 +114,102 @@ function renderFinalTakesBar(sourceRunId, finalTakes = []) {
   syncDownloadLink();
 }
 
+// "4,979 chars", or "4,979 / 10,000 chars" when the production's renderer reports a ceiling.
+function charLabel(length, limit) {
+  return limit ? `${length.toLocaleString()} / ${Number(limit).toLocaleString()} chars` : `${length.toLocaleString()} chars`;
+}
+
+// Prompt versions of one passage: preview any version, make a passed one the prompt, write a new one or check a hand edit.
+// Writing and checking go through the same writer, Mondo checks and Laya review as a production; nothing skips them.
+function promptVersionControls(seg, data, sourceRunId, showText, reload) {
+  const wrap = document.createElement("div");
+  wrap.className = "prompt-versions";
+  wrap.style.cssText = "display:flex;flex-direction:column;gap:6px;margin-top:8px;";
+  const versions = seg.prompt_takes || [];
+  const bar = document.createElement("div");
+  bar.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;";
+  const select = document.createElement("select");
+  select.className = "prompt-version-select";
+  select.style.cssText = "font-size:12px;padding:4px 8px;min-width:170px;";
+  select.setAttribute("aria-label", `Prompt versions of ${seg.segment_id}`);
+  select.replaceChildren(...versions.map(v => option(v.id, `${v.label}${v.id === seg.active_prompt_take ? " · in use" : ""}`)));
+  select.value = seg.active_prompt_take || versions.at(-1)?.id || "";
+  select.hidden = versions.length < 2;
+  const problems = text("p", "", "muted prompt-version-problems");
+  problems.hidden = true;
+  const useBtn = text("button", "Use this version", "secondary", "Make this passed version the passage's prompt; reroll the clip to render it");
+  useBtn.type = "button";
+  const editBtn = text("button", "✏️ Edit prompt", "quiet", "Edit this prompt; it is used only if it passes the Mondo checks and Laya review");
+  editBtn.type = "button";
+  const writeBtn = text("button", "✍️ Write new prompt", "quiet", "Have the writer write a new prompt for this passage, checked like every production prompt");
+  writeBtn.type = "button";
+  editBtn.hidden = writeBtn.hidden = Boolean(data.prompt_blocked);
+  const chosen = () => versions.find(v => v.id === select.value);
+  const sync = () => {
+    const version = chosen();
+    if (version) showText(version.prompt);
+    useBtn.hidden = !version || version.id === seg.active_prompt_take || version.validated === false;
+    problems.hidden = !(version && version.validated === false);
+    problems.textContent = version?.validated === false ? `Did not pass: ${(version.problems || []).join("; ")}` : "";
+  };
+  select.onchange = sync;
+  useBtn.onclick = handle(async () => {
+    await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/select`, { prompt_take_id: select.value });
+    notice(`${chosen()?.label} is now the prompt for ${seg.segment_id}. Reroll the clip to render it.`);
+    await reload();
+  });
+  const runPrompt = async (action, body, message) => {
+    await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/${action}`, body);
+    try {
+      await pollJobCompletion(message);
+      notice(`New prompt for ${seg.segment_id} passed the checks and is in use. Reroll the clip to render it.`);
+    } finally {
+      await reload();
+    }
+  };
+  writeBtn.onclick = handle(async () => {
+    const charge = data.writer_charge || {};
+    const cost = charge.api_writer ? ` Your writer is an API service that may charge for this call (estimate about $${Number(charge.estimate_usd || 0).toFixed(2)}).` : "";
+    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? It goes through the writer, the Mondo checks and Laya, like every production prompt.${cost}`)) return;
+    await runPrompt("rewrite", { confirm: true, accept_writer_cost: Boolean(charge.api_writer) }, `Writing a new prompt for ${seg.segment_id}…`);
+  });
+  const editor = document.createElement("div");
+  editor.hidden = true;
+  editor.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+  const area = document.createElement("textarea");
+  area.rows = 12;
+  area.className = "prompt-edit-area";
+  area.setAttribute("aria-label", `Edited prompt for ${seg.segment_id}`);
+  const editActions = document.createElement("div");
+  editActions.style.cssText = "display:flex;gap:6px;";
+  const checkBtn = text("button", "Check and use", "primary", "Run the Mondo checks and Laya review; the edit is used only if it passes");
+  checkBtn.type = "button";
+  const cancelBtn = text("button", "Cancel", "quiet");
+  cancelBtn.type = "button";
+  editActions.append(checkBtn, cancelBtn);
+  const counter = text("p", "", "muted prompt-edit-count");
+  area.oninput = () => {
+    counter.textContent = charLabel(area.value.length, data.prompt_limit)
+      + (data.prompt_limit && area.value.length > data.prompt_limit ? " — too long for this renderer" : "");
+  };
+  editor.append(area, counter, text("p", "Sealed passages keep their closing sentence; it is added back if removed.", "muted"), editActions);
+  editBtn.onclick = () => {
+    area.value = chosen()?.prompt || seg.prompt;
+    area.oninput();
+    editor.hidden = false;
+    area.focus();
+  };
+  cancelBtn.onclick = () => { editor.hidden = true; };
+  checkBtn.onclick = handle(async () => {
+    if (!area.value.trim()) throw new Error("The prompt is empty.");
+    await runPrompt("edit", { prompt: area.value, confirm: true }, `Checking the edited prompt for ${seg.segment_id}…`);
+  });
+  bar.append(select, useBtn, editBtn, writeBtn);
+  wrap.append(bar, problems, editor);
+  sync();
+  return wrap;
+}
+
 export async function showProductionBreakdown(output) {
   const mainView = $("#outputs-main-view");
   const breakdownView = $("#outputs-breakdown-view");
@@ -93,11 +221,12 @@ export async function showProductionBreakdown(output) {
   if (!breakdownView || !listEl) return;
 
   const runId = output.file.split("/")[0];
-  if (titleEl) titleEl.textContent = `Prompts & Clips: ${output.title}`;
+  if (titleEl) titleEl.textContent = `Edit: ${output.title}`;
   if (subEl) subEl.textContent = `Fetching passage breakdown for run ${runId}…`;
   listEl.innerHTML = '<div class="prompts-view-loading" style="padding:24px;text-align:center;color:var(--muted);">Loading passage prompts and clips…</div>';
 
   if (mainView) mainView.hidden = true;
+  releaseGallery();
   breakdownView.hidden = false;
   breakdownView.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -126,7 +255,8 @@ export async function showProductionBreakdown(output) {
         try {
           await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reassemble`, { selected_takes: selectedTakes });
           const resData = await pollJobCompletion("Re-encoding final video with selected passage takes…");
-          notice(`Final video re-encoded (${resData.final_take?.label || "new version"}). Previous final video versions are preserved.`);
+          const warned = (resData.warnings || []).join(" ");
+          notice(`Final video re-encoded (${resData.final_take?.label || "new version"}). Previous final video versions are preserved.${warned ? " " + warned : ""}`);
           if (resData.final_takes) {
             renderFinalTakesBar(sourceRunId, resData.final_takes);
           }
@@ -185,38 +315,32 @@ export async function showProductionBreakdown(output) {
         metaBar.style.display = "flex";
         metaBar.style.justifyContent = "space-between";
         metaBar.style.alignItems = "center";
-        metaBar.style.gap = "8px";
         metaBar.style.marginBottom = "6px";
-        metaBar.style.flexWrap = "wrap";
-
-        const leftControls = document.createElement("div");
-        leftControls.style.display = "flex";
-        leftControls.style.alignItems = "center";
-        leftControls.style.gap = "8px";
-        leftControls.style.flexWrap = "wrap";
-
-        const promptSelect = document.createElement("select");
-        promptSelect.className = "passage-prompt-select";
-        promptSelect.dataset.segmentId = seg.segment_id;
-        promptSelect.style.fontSize = "12px";
-        promptSelect.style.padding = "4px 8px";
-        promptSelect.style.minWidth = "140px";
-        promptSelect.dataset.tooltip = `Select a saved prompt version for ${seg.segment_id}`;
 
         const charCount = document.createElement("span");
         charCount.className = "prompts-passage-char-count";
         charCount.style.fontSize = "12px";
         charCount.style.color = "var(--muted)";
         charCount.style.fontFamily = "monospace";
-        charCount.textContent = `${seg.prompt.length.toLocaleString()} chars`;
+        charCount.textContent = charLabel(seg.prompt.length, data.prompt_limit);
 
-        leftControls.append(promptSelect, charCount);
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "quiet";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.style.padding = "2px 8px";
+        copyBtn.textContent = "📋 Copy Prompt";
+        copyBtn.onclick = handle(async () => {
+          if (!await copyToClipboard(pre.textContent)) throw new Error("Could not copy the prompt to the clipboard.");
+          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
+        });
 
-        const rightControls = document.createElement("div");
-        rightControls.style.display = "flex";
-        rightControls.style.alignItems = "center";
-        rightControls.style.gap = "6px";
-        rightControls.style.flexWrap = "wrap";
+        metaBar.append(charCount, copyBtn);
+        const showText = (prompt) => {
+          pre.textContent = prompt;
+          charCount.textContent = charLabel(prompt.length, data.prompt_limit);
+          charCount.style.color = data.prompt_limit && prompt.length > data.prompt_limit ? "var(--danger, #b91c1c)" : "var(--muted)";
+        };
 
         const pre = document.createElement("pre");
         pre.className = "prompts-passage-pre";
@@ -233,172 +357,7 @@ export async function showProductionBreakdown(output) {
         pre.style.overflowY = "auto";
         pre.textContent = seg.prompt;
 
-        const populatePromptTakesDropdown = (ptakesList, activePromptId) => {
-          const list = ptakesList && ptakesList.length
-            ? ptakesList
-            : [{ id: "prompt1", label: "Prompt 1 (original)", prompt: seg.prompt, char_count: seg.prompt.length }];
-          promptSelect.replaceChildren(
-            ...list.map(p => option(p.id, p.label || p.id, `Switch to ${p.label || p.id}`))
-          );
-          const chosenId = activePromptId || list[list.length - 1].id;
-          promptSelect.value = chosenId;
-          const chosen = list.find(p => p.id === chosenId) || list[list.length - 1];
-          if (chosen && chosen.prompt) {
-            pre.textContent = chosen.prompt;
-            charCount.textContent = `${chosen.prompt.length.toLocaleString()} chars`;
-          }
-        };
-
-        populatePromptTakesDropdown(seg.prompt_takes || [], seg.active_prompt_take);
-
-        promptSelect.onchange = handle(async () => {
-          const chosenPromptId = promptSelect.value;
-          if (!chosenPromptId) return;
-          const res = await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/select`, {
-            prompt_take_id: chosenPromptId
-          });
-          if (res.prompt) {
-            pre.textContent = res.prompt;
-            charCount.textContent = `${res.prompt.length.toLocaleString()} chars`;
-          }
-          notice(`Selected ${chosenPromptId} for ${seg.segment_id}. Click "Reroll Clip" to render a video with this prompt.`);
-        });
-
-        const rerollPromptBtn = document.createElement("button");
-        rerollPromptBtn.type = "button";
-        rerollPromptBtn.className = "secondary passage-reroll-prompt-btn";
-        rerollPromptBtn.style.fontSize = "12px";
-        rerollPromptBtn.style.padding = "4px 10px";
-        rerollPromptBtn.textContent = "🎲 Reroll Prompt";
-        rerollPromptBtn.dataset.tooltip = `Re-write and validate a new prompt version for ${seg.segment_id} while keeping earlier prompts`;
-
-        rerollPromptBtn.onclick = handle(async () => {
-          const origText = rerollPromptBtn.textContent;
-          rerollPromptBtn.disabled = true;
-          rerollPromptBtn.setAttribute("aria-busy", "true");
-          rerollPromptBtn.textContent = "⏳ Writing prompt…";
-          try {
-            await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/reroll`, {});
-            const updatedBreakdown = await pollJobCompletion(`Writing & reviewing new prompt for passage ${seg.index + 1} (${seg.segment_id})…`);
-            const updatedSeg = (updatedBreakdown.segments || []).find(s => s.segment_id === seg.segment_id);
-            if (updatedSeg) {
-              populatePromptTakesDropdown(updatedSeg.prompt_takes || [], updatedSeg.active_prompt_take);
-            }
-            notice(`New prompt generated for ${seg.segment_id}! Click "Reroll Clip" when ready to render it.`);
-          } finally {
-            rerollPromptBtn.disabled = false;
-            rerollPromptBtn.removeAttribute("aria-busy");
-            rerollPromptBtn.textContent = origText;
-          }
-        });
-
-        const copyBtn = document.createElement("button");
-        copyBtn.type = "button";
-        copyBtn.className = "quiet";
-        copyBtn.style.fontSize = "12px";
-        copyBtn.style.padding = "4px 8px";
-        copyBtn.textContent = "📋 Copy Prompt";
-        copyBtn.onclick = handle(async () => {
-          const currentText = pre.textContent || seg.prompt;
-          if (!await copyToClipboard(currentText)) throw new Error("Could not copy the prompt to the clipboard.");
-          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
-        });
-
-        const editPromptBtn = document.createElement("button");
-        editPromptBtn.type = "button";
-        editPromptBtn.className = "secondary passage-edit-prompt-btn";
-        editPromptBtn.style.fontSize = "12px";
-        editPromptBtn.style.padding = "4px 10px";
-        editPromptBtn.textContent = "✏️ Edit Prompt";
-        editPromptBtn.dataset.tooltip = `Manually edit the prompt for ${seg.segment_id} and save it as a new prompt take`;
-
-        const editorWrap = document.createElement("div");
-        editorWrap.className = "prompts-passage-editor-wrap";
-        editorWrap.hidden = true;
-
-        const editorArea = document.createElement("textarea");
-        editorArea.className = "prompts-passage-editor-textarea";
-        editorArea.rows = 12;
-        editorArea.maxLength = 64000;
-        editorArea.style.width = "100%";
-        editorArea.style.fontSize = "13px";
-        editorArea.style.lineHeight = "1.6";
-        editorArea.style.fontFamily = "monospace";
-        editorArea.style.background = "var(--input-bg, rgba(0,0,0,0.35))";
-        editorArea.style.border = "1px solid var(--accent, #d89b3a)";
-        editorArea.style.borderRadius = "4px";
-        editorArea.style.padding = "12px";
-        editorArea.style.margin = "0 0 8px 0";
-        editorArea.style.resize = "vertical";
-
-        editorArea.oninput = () => {
-          charCount.textContent = `${editorArea.value.length.toLocaleString()} chars`;
-        };
-
-        const editorActions = document.createElement("div");
-        editorActions.style.display = "flex";
-        editorActions.style.justifyContent = "flex-end";
-        editorActions.style.gap = "8px";
-
-        const cancelEditBtn = document.createElement("button");
-        cancelEditBtn.type = "button";
-        cancelEditBtn.className = "quiet";
-        cancelEditBtn.style.fontSize = "12px";
-        cancelEditBtn.style.padding = "4px 10px";
-        cancelEditBtn.textContent = "Cancel";
-
-        const saveEditBtn = document.createElement("button");
-        saveEditBtn.type = "button";
-        saveEditBtn.className = "primary passage-save-prompt-btn";
-        saveEditBtn.style.fontSize = "12px";
-        saveEditBtn.style.padding = "4px 12px";
-        saveEditBtn.textContent = "💾 Save Prompt Take";
-
-        const closeEditor = () => {
-          editorWrap.hidden = true;
-          pre.hidden = false;
-          editPromptBtn.hidden = false;
-          charCount.textContent = `${(pre.textContent || "").length.toLocaleString()} chars`;
-        };
-
-        editPromptBtn.onclick = () => {
-          editorArea.value = pre.textContent || seg.prompt || "";
-          charCount.textContent = `${editorArea.value.length.toLocaleString()} chars`;
-          pre.hidden = true;
-          editPromptBtn.hidden = true;
-          editorWrap.hidden = false;
-          editorArea.focus();
-        };
-
-        cancelEditBtn.onclick = () => {
-          closeEditor();
-        };
-
-        saveEditBtn.onclick = handle(async () => {
-          const editedText = editorArea.value.trim();
-          if (!editedText) throw new Error("Prompt text cannot be empty.");
-          saveEditBtn.disabled = true;
-          saveEditBtn.setAttribute("aria-busy", "true");
-          try {
-            const res = await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/edit`, {
-              prompt: editedText
-            });
-            populatePromptTakesDropdown(res.prompt_takes || [], res.active_prompt_take);
-            closeEditor();
-            notice(`Saved edited prompt as ${res.active_prompt_take} for ${seg.segment_id}! Click "Reroll Clip" to render with this prompt.`);
-          } finally {
-            saveEditBtn.disabled = false;
-            saveEditBtn.removeAttribute("aria-busy");
-          }
-        });
-
-        editorActions.append(cancelEditBtn, saveEditBtn);
-        editorWrap.append(editorArea, editorActions);
-
-        rightControls.append(editPromptBtn, rerollPromptBtn, copyBtn);
-        metaBar.append(leftControls, rightControls);
-
-        preWrap.append(metaBar, pre, editorWrap);
+        preWrap.append(metaBar, pre, promptVersionControls(seg, data, sourceRunId, showText, () => showProductionBreakdown(output)));
         grid.append(preWrap);
       } else {
         const noPrompt = document.createElement("p");
@@ -431,11 +390,20 @@ export async function showProductionBreakdown(output) {
 
       const v = document.createElement("video");
       v.controls = true;
-      v.preload = "metadata";
+      v.preload = "none";              // loaded a few at a time below, like the gallery's thumbnails
       v.style.width = "100%";
       v.style.maxHeight = "280px";
       v.style.borderRadius = "4px";
       v.style.background = "#101814";
+
+      // The previewed take's seed, and the seed the next reroll will use (a fresh random one unless the user types another).
+      const seedInfo = document.createElement("span");
+      seedInfo.className = "passage-take-seed muted";
+      seedInfo.style.fontSize = "12px";
+      seedInfo.style.fontFamily = "monospace";
+      const showSeed = (take) => {
+        seedInfo.textContent = take?.seed != null ? `Seed ${take.seed}` : "";
+      };
 
       const populateTakesDropdown = (takesList, activeTakeId) => {
         if (!takesList || !takesList.length) {
@@ -450,6 +418,7 @@ export async function showProductionBreakdown(output) {
         const chosenId = activeTakeId || takesList[takesList.length - 1].id;
         takeSelect.value = chosenId;
         const chosenTake = takesList.find(t => t.id === chosenId) || takesList[takesList.length - 1];
+        showSeed(chosenTake);
         if (chosenTake && chosenTake.clip_url) {
           v.src = chosenTake.clip_url;
         } else if (seg.clip_url) {
@@ -459,18 +428,15 @@ export async function showProductionBreakdown(output) {
 
       populateTakesDropdown(seg.takes || [], seg.active_take);
 
-      takeSelect.onchange = handle(async () => {
-        const chosenTakeId = takeSelect.value;
-        if (!chosenTakeId) return;
-        const selectedRes = await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/takes/${encodeURIComponent(seg.segment_id)}`, {
-          take_id: chosenTakeId
-        });
-        if (selectedRes.clip_url) {
-          v.src = selectedRes.clip_url;
-          v.load();
-        }
-        notice(`Selected ${chosenTakeId} for ${seg.segment_id}. Click "Re-encode Final Video" when ready to update the full video.`);
-      });
+      // Choosing a take only previews it here; the re-encode saves every passage's choice.
+      takeSelect.onchange = () => {
+        const chosen = (seg.takes || []).find(t => t.id === takeSelect.value);
+        if (!chosen?.clip_url) return;
+        showSeed(chosen);
+        v.src = chosen.clip_url;
+        v.load();
+        notice(`Previewing ${chosen.label || chosen.id} for ${seg.segment_id}. Re-encode the final video to use it.`);
+      };
 
       const rerollBtn = document.createElement("button");
       rerollBtn.type = "button";
@@ -478,20 +444,53 @@ export async function showProductionBreakdown(output) {
       rerollBtn.style.fontSize = "12px";
       rerollBtn.style.padding = "4px 10px";
       rerollBtn.textContent = "🎲 Reroll Clip";
-      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with a new seed using its prompt and cast references`;
+      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with the next seed, using its prompt and cast references`;
 
+      const seedLabel = document.createElement("label");
+      seedLabel.className = "passage-seed";
+      seedLabel.style.cssText = "display:flex;align-items:center;gap:4px;margin:0;font-size:12px;";
+      seedLabel.dataset.tooltip = "Seed for the next take. Keep the random one or type your own; the same prompt with a new seed is often all a passage needs.";
+      const seedInput = document.createElement("input");
+      seedInput.type = "number";
+      seedInput.min = "0";
+      seedInput.max = String(MAX_SEED);
+      seedInput.step = "1";
+      seedInput.className = "passage-seed-input";
+      seedInput.style.cssText = "width:120px;padding:4px 6px;font-size:12px;";
+      seedInput.setAttribute("aria-label", `Seed for the next take of ${seg.segment_id}`);
+      const newSeed = () => {
+        seedInput.value = String(freshSeed((seg.takes || []).map(t => t.seed)));
+      };
+      const randomBtn = document.createElement("button");
+      randomBtn.type = "button";
+      randomBtn.className = "quiet";
+      randomBtn.style.cssText = "font-size:12px;padding:2px 6px;";
+      randomBtn.textContent = "Random";
+      randomBtn.dataset.tooltip = "Pick another random seed";
+      randomBtn.onclick = newSeed;
+      seedLabel.append("Next seed", seedInput, randomBtn);
+      newSeed();
+
+      seedLabel.hidden = rerollBtn.hidden = Boolean(data.reroll_blocked);
       rerollBtn.onclick = handle(async () => {
+        const seed = Number(seedInput.value);
+        if (seedInput.value.trim() === "" || !Number.isInteger(seed) || seed < 0 || seed > MAX_SEED) {
+          throw new Error(`Enter a whole-number seed from 0 to ${MAX_SEED}, or press Random.`);
+        }
+        if (!window.confirm(`Render a new take of ${seg.segment_id} with seed ${seed} on the local H3 renderer? This uses the GPU for one passage. The finished video changes only when you re-encode it.`)) return;
         const origText = rerollBtn.textContent;
         rerollBtn.disabled = true;
         rerollBtn.setAttribute("aria-busy", "true");
         rerollBtn.textContent = "⏳ Rendering take…";
         try {
-          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reroll/${encodeURIComponent(seg.segment_id)}`, {});
-          const updatedBreakdown = await pollJobCompletion(`Re-rendering passage ${seg.index + 1} (${seg.segment_id}) with a new seed…`);
+          await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/reroll/${encodeURIComponent(seg.segment_id)}`, { confirm: true, seed });
+          const updatedBreakdown = await pollJobCompletion(`Re-rendering passage ${seg.index + 1} (${seg.segment_id}) with seed ${seed}…`);
           const updatedSeg = (updatedBreakdown.segments || []).find(s => s.segment_id === seg.segment_id);
           if (updatedSeg) {
-            populateTakesDropdown(updatedSeg.takes || [], updatedSeg.active_take);
+            seg.takes = updatedSeg.takes || [];
+            populateTakesDropdown(seg.takes, updatedSeg.active_take);
             v.load();
+            newSeed();
           }
           notice(`New take rendered for ${seg.segment_id}! Use the dropdown to compare takes or click "Re-encode Final Video" to apply.`);
         } finally {
@@ -501,7 +500,7 @@ export async function showProductionBreakdown(output) {
         }
       });
 
-      videoToolbar.append(takeSelect, rerollBtn);
+      videoToolbar.append(takeSelect, seedInfo, seedLabel, rerollBtn);
       vidWrap.append(videoToolbar);
 
       if (seg.has_clip && seg.clip_url) {
@@ -512,7 +511,7 @@ export async function showProductionBreakdown(output) {
         const emptyClip = document.createElement("div");
         emptyClip.className = "empty";
         emptyClip.style.padding = "24px";
-        emptyClip.textContent = "No clip currently on disk for this passage. Click Reroll Clip to render one.";
+        emptyClip.textContent = data.reroll_blocked ? "No clip currently on disk for this passage." : "No clip currently on disk for this passage. Click Reroll Clip to render one.";
         vidWrap.append(v, emptyClip);
       }
 
@@ -520,6 +519,7 @@ export async function showProductionBreakdown(output) {
       card.append(grid);
       return card;
     }));
+    loadThumbnails($$("#prompts-view-list video").filter(v => v.getAttribute("src")));
   } catch (err) {
     if (listEl) {
       listEl.innerHTML = `<div class="empty" style="color:var(--danger, #e05252);margin:16px 0;">Failed to load prompts: ${escapeHtml(err.message)}</div>`;
@@ -1007,7 +1007,7 @@ export async function loadOutputs() {
     const actions = document.createElement("div");
     actions.className = "output-actions";
     actions.append(download, upscale);
-    const viewPromptsBtn = text("button", "Prompts & clips", "secondary", `View prompts and passage clips for ${output.title}`);
+    const viewPromptsBtn = text("button", "Edit", "secondary", `Edit ${output.title} passage by passage: prompts, clip takes, seeds and the final video`);
     viewPromptsBtn.onclick = () => showProductionBreakdown(output);
     actions.append(viewPromptsBtn);
     if (output.kind === "video") actions.append(caption);

@@ -75,6 +75,10 @@ def create_server(base_url=None):
     def preview_production(request: dict) -> dict[str, Any]:
         """Preview a video, ident, style harvest or world harvest; returns quote ID and estimated charges.
 
+        `seed` (default 0) is the variation seed for the shot plan, vocabulary and casting. Omit `render_seed` so each
+        production renders with its own random seed; the quote returns both and the production keeps them. Pass the
+        quote's `seed` and `render_seed` to repeat a video exactly.
+
         Video request vision_quality_check (default false) enables slower local
         single-frame judging. Requires a vision-capable writer_launch + mmproj;
         Existing ComfyUI can stay running: after rendering, Mondo releases cached models only while its queue is idle,
@@ -383,33 +387,46 @@ def create_server(base_url=None):
         return invoke(client.output_prompts, output_file)
 
     @server.tool()
-    def reroll_segment(output_file: str, segment_id: str, seed: int | None = None) -> dict[str, Any]:
-        """Re-render a single passage clip with a new seed using its saved prompt and cast references, recording a new take."""
-        return invoke(client.reroll_segment, output_file, segment_id, seed)
+    def reroll_segment(output_file: str, segment_id: str, confirm: bool, seed: int | None = None) -> dict[str, Any]:
+        """Re-render one passage on the local H3 renderer with a new seed, its saved prompt and cast references, recording
+        a new take. This is GPU work: set confirm=true only after the user asks for it. Paid renderers are refused.
+        It starts the single operation; watch it with get_status, then read_output_prompts to compare takes."""
+        return invoke(client.reroll_segment, output_file, segment_id, seed, confirm)
 
     @server.tool()
     def select_segment_take(output_file: str, segment_id: str, take_id: str) -> dict[str, Any]:
-        """Select a recorded take (e.g. 'take1', 'take2') for a passage clip."""
+        """Make a recorded take (e.g. 'take1', 'take2') the passage's active clip. The finished video is unchanged
+        until reassemble_output re-encodes it."""
         return invoke(client.select_segment_take, output_file, segment_id, take_id)
 
     @server.tool()
-    def reroll_prompt(output_file: str, segment_id: str) -> dict[str, Any]:
-        """Re-write and validate a single passage prompt, saving it as a new prompt take while preserving earlier prompts."""
-        return invoke(client.reroll_prompt, output_file, segment_id)
+    def rewrite_prompt(output_file: str, segment_id: str, confirm: bool, accept_writer_cost: bool = False) -> dict[str, Any]:
+        """Write a new prompt for one passage of a finished video or ident through Mondo's normal writer, prompt checks and
+        Laya review (no copy of them, no cache). Set confirm=true only when the user asks. If read_output_prompts shows
+        writer_charge.api_writer, tell the user the estimate and set accept_writer_cost=true only with their approval.
+        Never retried automatically. Starts the single operation; on success the new version is the passage's prompt,
+        and reroll_segment renders it. Earlier versions are kept."""
+        return invoke(client.rewrite_prompt, output_file, segment_id, confirm, accept_writer_cost)
+
+    @server.tool()
+    def edit_prompt(output_file: str, segment_id: str, prompt: str, confirm: bool) -> dict[str, Any]:
+        """Check a hand-edited passage prompt with the same Mondo checks and Laya review as a written one (confirm=true;
+        local, no writer call). Sealed passages get the closing rigging sentence added as usual. If it passes it becomes
+        the passage's prompt; if not, the operation fails and the text is kept as a version marked not passed, with its
+        problems, for another edit. Edits never skip the checks."""
+        return invoke(client.edit_prompt, output_file, segment_id, prompt, confirm)
 
     @server.tool()
     def select_prompt_take(output_file: str, segment_id: str, prompt_take_id: str) -> dict[str, Any]:
-        """Select a recorded prompt version (e.g. 'prompt1', 'prompt2') for a passage."""
+        """Make a passed prompt version ('prompt1' is the production's original) the passage's prompt. Versions marked not
+        passed are refused. Rendered clips are unchanged until reroll_segment."""
         return invoke(client.select_prompt_take, output_file, segment_id, prompt_take_id)
 
     @server.tool()
-    def edit_prompt(output_file: str, segment_id: str, prompt: str) -> dict[str, Any]:
-        """Save a manually edited prompt for a passage as a new prompt take while preserving all earlier prompt versions."""
-        return invoke(client.edit_prompt, output_file, segment_id, prompt)
-
-    @server.tool()
     def reassemble_output(output_file: str, selected_takes: dict[str, str] | None = None) -> dict[str, Any]:
-        """Re-encode the final music video from original passage clips using the active or selected takes, while preserving all previous final video versions."""
+        """Re-encode the final video in one encode from the original passage clips, using the active or selected takes
+        (subliminal flashes and burned captions are reapplied from the original plan). Earlier final versions are kept
+        as numbered files. Starts the single operation; the result lists versions and any effect warnings."""
         return invoke(client.reassemble_output, output_file, selected_takes)
 
     @server.tool()

@@ -129,7 +129,7 @@ Import props with `upload_media(kind="opp")`, `inspect_opp` and `import_opp`
 (the former `import_instrument` tool and `POST /api/instruments/{id}` are removed);
 `inspect_studio(kind="instruments")` lists each role and its default prop and
 `inspect_studio(kind="props")` lists the library.
-MCP exposes 42 tools. The shell supports `mondo-music-video-agent instruments`
+The MCP server's full tool list is in [agent setup](AGENT_SETUP.md). The shell supports `mondo-music-video-agent instruments`
 and `props`, plus `upload opp`, `inspect-opp`, `import-opp`, and
 `select-opp-sheet`. `inspect_studio(kind="props")`, `inspect_opp`, `import_opp`,
 and `select_opp_sheet` cover the same workflow over MCP. API equivalents are

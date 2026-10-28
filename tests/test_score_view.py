@@ -169,15 +169,20 @@ class PassageBreakdownTests(ScoreViewTests):
         self.assertEqual(len(seg0["takes"]), 1)
         self.assertEqual(seg0["takes"][0]["id"], "take1")
 
-        # Add a second take and select it
         takes_path = directory / "takes.json"
-        takes_record = json.loads(takes_path.read_text(encoding="utf-8"))
+        self.assertFalse(takes_path.exists(), "reading prompts must not write take history")
+        self.assertFalse((directory / "final_takes.json").exists())
+
+        # Add a second take and select it
+        takes_record = {"segments": {"seg000": {"active_take": "take1", "takes": [dict(seg0["takes"][0], video=str(clip1),
+                                                                                       render={"video": str(clip1), "seed": 7})]}}}
         takes_record["segments"]["seg000"]["takes"].append({
             "id": "take2",
             "label": "Take 2 (seed 999)",
             "seed": 999,
             "video": str(clip2),
             "audio": "",
+            "render": {"video": str(clip2), "seed": 999, "prompt_id": "p2"},
         })
         write_json(takes_path, takes_record)
 
@@ -186,49 +191,122 @@ class PassageBreakdownTests(ScoreViewTests):
         self.assertEqual(res.json()["active_take"], "take2")
 
         # Verify specific take clip endpoint and updated default clip
-        self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take1").content, b"take-one-bytes")
+        clip = self.client.get("/api/outputs/takes_run/clips/seg000?take=take1")
+        self.assertEqual(clip.content, b"take-one-bytes")
+        self.assertTrue(clip.headers["content-disposition"].startswith("inline"), "Firefox will not play attachment media")
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take2").content, b"take-two-bytes")
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000").content, b"take-two-bytes")
 
-    def test_passage_prompt_takes_initialization_and_selection(self):
-        directory = self.run_dir("prompt_takes_run")
-        write_json(directory / "prompts.json", {"seg000": "Original coastline prompt.", "seg001": "Original hands prompt."})
-        data = self.client.get("/api/outputs/prompt_takes_run/prompts").json()
-        seg0 = data["segments"][0]
-        self.assertEqual(seg0["active_prompt_take"], "prompt1")
-        self.assertEqual(len(seg0["prompt_takes"]), 1)
-        self.assertEqual(seg0["prompt_takes"][0]["prompt"], "Original coastline prompt.")
+        # Selecting the original back restores its whole render record, not just the video path.
+        self.assertEqual(self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "take1"}).status_code, 200)
+        self.assertEqual(json.loads((directory / "renders.json").read_text())["seg000"], {"video": str(clip1), "seed": 7})
+        self.assertGreaterEqual(self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "take9"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/outputs/takes_run/takes/seg000", json={"take_id": "../x"}).status_code, 422)
 
-        # Add a second prompt take and select it
-        ptakes_path = directory / "prompt_takes.json"
-        ptakes_record = json.loads(ptakes_path.read_text(encoding="utf-8"))
-        ptakes_record["segments"]["seg000"]["takes"].append({
-            "id": "prompt2",
-            "label": "Prompt 2 (reroll)",
-            "prompt": "Rerolled dramatic coastline prompt with crashing waves.",
-            "char_count": 55,
-        })
-        write_json(ptakes_path, ptakes_record)
+    def test_reroll_needs_confirmation_and_a_free_renderer(self):
+        directory = self.run_dir("paid_run", request={"backend": "wavespeed"})
+        write_json(directory / "prompts.json", {"seg000": "Coastline."})
+        self.assertTrue(self.client.get("/api/outputs/paid_run/prompts").json()["reroll_blocked"])
+        refused = self.client.post("/api/outputs/paid_run/reroll/seg000", json={})
+        self.assertGreaterEqual(refused.status_code, 400)
+        self.assertIn("Confirm", refused.text)
+        paid = self.client.post("/api/outputs/paid_run/reroll/seg000", json={"confirm": True})
+        self.assertGreaterEqual(paid.status_code, 400)
+        self.assertIn("local H3", paid.text)
+        self.run_dir("local_run", request={"backend": "local_h3"})
+        self.assertIsNone(self.client.get("/api/outputs/local_run/prompts").json()["reroll_blocked"])
 
-        res = self.client.post("/api/outputs/prompt_takes_run/prompts/seg000/select", json={"prompt_take_id": "prompt2"})
-        self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(res.json()["active_prompt_take"], "prompt2")
-        self.assertEqual(res.json()["prompt"], "Rerolled dramatic coastline prompt with crashing waves.")
+    def test_reassemble_reports_effects_and_keeps_versions(self):
+        from unittest.mock import patch
+        from mmv import takes
+        directory = self.run_dir("re_run", request={"kind": "video", "backend": "local_h3"})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"clip")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        write_json(directory / "prepared.json", {"captions": {"mode": "burned", "cues": [[0, 1, "la"]]}})
+        write_json(directory / "output.json", {"file": "music-video.mp4", "kind": "video", "title": "Fixture",
+                                              "captions": {"mode": "burned", "uncaptioned_copy": "old.mp4"}})
+        (directory / "music-video.mp4").write_bytes(b"version-one")
 
-        # Verify prompts.json and breakdown endpoint reflect the selected prompt
-        updated_prompts = json.loads((directory / "prompts.json").read_text(encoding="utf-8"))
-        self.assertEqual(updated_prompts["seg000"], "Rerolled dramatic coastline prompt with crashing waves.")
-        data_after = self.client.get("/api/outputs/prompt_takes_run/prompts").json()
-        self.assertEqual(data_after["segments"][0]["prompt"], "Rerolled dramatic coastline prompt with crashing waves.")
-        self.assertEqual(data_after["segments"][0]["active_prompt_take"], "prompt2")
-        self.assertEqual(len(data_after["segments"][0]["prompt_takes"]), 2)
+        def assemble(store, run_dir, request, plan, renders):
+            (run_dir / "music-video.mp4").write_bytes(b"version-two")
+            return run_dir / "music-video.mp4"
 
-        # Save a manually edited prompt and verify it becomes prompt3 (edited) while keeping prompt1 & prompt2
-        edit_res = self.client.post("/api/outputs/prompt_takes_run/prompts/seg000/edit", json={"prompt": "Manually edited custom coastline prompt."})
-        self.assertEqual(edit_res.status_code, 200, edit_res.text)
-        edit_data = edit_res.json()
-        self.assertEqual(edit_data["active_prompt_take"], "prompt3")
-        self.assertEqual(edit_data["prompt_take"]["label"], "Prompt 3 (edited)")
-        self.assertEqual(edit_data["prompt"], "Manually edited custom coastline prompt.")
-        self.assertEqual(len(edit_data["prompt_takes"]), 3)
-        self.assertEqual(json.loads((directory / "prompts.json").read_text(encoding="utf-8"))["seg000"], "Manually edited custom coastline prompt.")
+        class Context:
+            def update(self, *args):
+                pass
+        renders_before = (directory / "renders.json").read_text()
+        for bad in ({"seg005": "take1"}, {"seg000": "take1", "seg001": "take7"}):
+            with self.assertRaises(ValueError):
+                takes.reassemble_final_video(self.fixture.store, "re_run", Context(), selected_takes=bad)
+        self.assertEqual((directory / "renders.json").read_text(), renders_before)
+        self.assertFalse((directory / "takes.json").exists())
+        with patch("mmv.final_assembly.assemble", assemble), patch("mmv.media.duration", lambda path: 4.0), \
+                patch("mmv.captions.apply_to_run", lambda run_dir, plan: {"mode": "burned", "burn_error": "no fonts"}):
+            result = takes.reassemble_final_video(self.fixture.store, "re_run", Context())
+        self.assertIn("no fonts", " ".join(result["warnings"]))
+        self.assertEqual((directory / "music-video-v1.mp4").read_bytes(), b"version-one")
+        self.assertEqual((directory / "music-video-v2.mp4").read_bytes(), b"version-two")
+        record = json.loads((directory / "output.json").read_text())
+        self.assertEqual(record["final_takes"], ["music-video-v1.mp4", "music-video-v2.mp4"])
+        self.assertIn("no fonts", record["reassembly_warnings"][0])
+        self.assertEqual(self.client.get("/api/media/re_run/music-video-v1.mp4").content, b"version-one")
+
+    def test_reassemble_refuses_when_the_original_final_is_missing(self):
+        from mmv import takes
+        directory = self.run_dir("lost_run", request={"kind": "video", "backend": "local_h3"})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"clip")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        with self.assertRaisesRegex(ValueError, "missing"):
+            takes.reassemble_final_video(self.fixture.store, "lost_run", None)
+
+    def test_original_take_reports_the_seed_that_rendered_it(self):
+        directory = self.run_dir("seed_run", request={"backend": "local_h3", "seed": 0})
+        clip0, clip1 = directory / "renders" / "seg000.mp4", directory / "renders" / "seg001-r1.mp4"
+        clip0.parent.mkdir()
+        clip0.write_bytes(b"a")
+        clip1.write_bytes(b"b")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip0)}, "seg001": {"video": str(clip1)}})
+        write_json(directory / "quality.json", {"seg001": {"attempts": [{"segment_id": "seg001", "seed": 1},
+                                                                         {"segment_id": "seg001-r1", "seed": 7920}]}})
+        seeds = [seg["takes"][0]["seed"] for seg in self.client.get("/api/outputs/seed_run/prompts").json()["segments"]]
+        self.assertEqual(seeds, [0, 7920])
+
+    def test_saved_take_one_seed_is_corrected_and_kept_retry_clip_reports_retry_seed(self):
+        from mmv.worker import RETRY_SEED_OFFSET
+        directory = self.run_dir("old_takes", request={"backend": "local_h3", "seed": 0})
+        clip0, clip1 = directory / "renders" / "seg000.mp4", directory / "renders" / "seg001-r1.mp4"
+        clip0.parent.mkdir()
+        clip0.write_bytes(b"a")
+        clip1.write_bytes(b"b")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip0)}, "seg001": {"video": str(clip1)}})
+        write_json(directory / "takes.json", {"segments": {"seg000": {"active_take": "take1", "takes": [
+            {"id": "take1", "label": "Take 1 (original)", "seed": 42, "video": str(clip0), "render": {"video": str(clip0)}}]}}})
+        seeds = [seg["takes"][0]["seed"] for seg in self.client.get("/api/outputs/old_takes/prompts").json()["segments"]]
+        self.assertEqual(seeds, [0, 1 + RETRY_SEED_OFFSET])
+
+    def test_take_one_uses_the_render_seed_when_the_production_has_one(self):
+        directory = self.run_dir("render_seed_run", request={"backend": "local_h3", "seed": 3, "render_seed": 500})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"a")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        seeds = [seg["takes"][0]["seed"] for seg in self.client.get("/api/outputs/render_seed_run/prompts").json()["segments"]]
+        self.assertEqual(seeds, [500, 501])
+
+    def test_prompt_limit_comes_from_the_production_renderer(self):
+        from mmv.worker import length_problems
+        from mmv.render import get_backend
+        limits = {name: get_backend(name).capabilities().get("max_prompt_chars")
+                  for name in ("local_h3", "comfy_sdk_h3", "seedance_2", "seedance_2_5")}
+        self.assertEqual(limits, {"local_h3": None, "comfy_sdk_h3": None, "seedance_2": 10000, "seedance_2_5": 30000})
+        self.assertEqual(length_problems("x" * 50000, None), [])
+        self.assertEqual(length_problems("x" * 10000, 10000), [])
+        self.assertIn("at most 10000", length_problems("x" * 10001, 10000)[0])
+        for backend, expected in (("seedance_2", 10000), ("local_h3", None)):
+            self.run_dir(f"limit_{backend}", request={"backend": backend})
+            write_json(self.home / "runs" / f"limit_{backend}" / "prompts.json", {"seg000": "Coastline."})
+            self.assertEqual(self.client.get(f"/api/outputs/limit_{backend}/prompts").json()["prompt_limit"], expected)

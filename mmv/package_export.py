@@ -351,6 +351,12 @@ def export(run, out, zip_it=False, allow_private=False, log=print, secrets=()):
             pack.put(file, f'05_receipts/{file.name}')
     for file in sorted((run / 'renders').glob('*/*.json')):
         pack.put(file, f'05_receipts/renders/{file.parent.name}/{file.name}')
+    # Clip, prompt and final-video versions, and the writer/review files of earlier prompt versions, when a passage was redone.
+    for name in ('takes.json', 'prompt_takes.json', 'final_takes.json'):
+        if (run / name).is_file():
+            pack.put(run / name, f'05_receipts/{name}')
+    for file in sorted((run / 'prompt_takes').rglob('*.json')):
+        pack.put(file, f'05_receipts/{file.relative_to(run).as_posix()}')
     for file in sorted((run / 'style').glob('*')):
         pack.put(file, f'05_receipts/style/{file.name}')
     pack.put(run / 'assembly' / 'assembly_report.json', '05_receipts/assembly_report.json')
@@ -457,7 +463,7 @@ def readme_text(run, request, casting, prepared, pas, label, cast, private, pack
               f'- Backend: {request.get("backend", "")}',
               f'- Resolution setting: {request.get("resolution", "")}, aspect {request.get("aspect", "")}, '
               f'megapixels {request.get("megapixels", "")}' + (f', frame {width}x{height} at {plan.get("fps")} fps' if width else ''),
-              f'- Seed: {request.get("seed", "")}', f'- Tempo: {plan.get("tempo_bpm", "unknown")} BPM',
+              f'- Variation seed: {request.get("seed", "")}', f'- Render seed: {request.get("render_seed", request.get("seed", ""))} (+ passage number)', f'- Tempo: {plan.get("tempo_bpm", "unknown")} BPM',
               f'- Direction: {request.get("direction", "")}', f'- Style: {request.get("style_id", "")}',
               '- Actors: ' + (', '.join(f'{n} (`{i}`)' for i, n in cast) or 'none'),
               '- Mode: ' + ('; '.join(modes) or 'standard'),

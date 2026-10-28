@@ -206,9 +206,9 @@ class PublicAppTests(unittest.TestCase):
             from mmv.jobs import JobContext
             original_command = JobContext.command
             def test_command(context, argv, **kwargs):
-                if "mmv.worker" in argv and "produce" in argv:
+                if "mmv.worker" in argv and ("produce" in argv or "rewrite_prompt" in argv):
                     argv = ["mock_laya_worker" if x == "mmv.worker" else x for x in argv]
-                    env = os.environ.copy()
+                    env = {**os.environ, **(kwargs.get("env") or {})}
                     env["PYTHONPATH"] = str(Path(__file__).parent) + os.pathsep + env.get("PYTHONPATH", "")
                     kwargs["env"] = env
                 return original_command(context, argv, **kwargs)
@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.10.32")
+        self.assertEqual(api_version()["version"], "1.11.2")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.10.32", (root / "README.md").read_text())
+        self.assertIn("1.11.2", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -547,6 +547,24 @@ class PublicAppTests(unittest.TestCase):
         laya_eval = _evaluate_service_activity(self.store, probed, {"state": "running", "message": "Laya reviewing passage 2"})
         self.assertEqual(laya_eval["laya"]["activity"], "processing")
         self.assertEqual(laya_eval["comfy"]["activity"], "sleeping")
+
+    def test_each_video_renders_with_its_own_seed_while_the_variation_seed_keeps_the_plan(self):
+        req = {"kind": "video", "backend": "local_h3", "song": self.song_upload()}
+        quotes = [self.client.post("/api/quote", json=req).json() for _ in range(3)]
+        self.assertEqual(len({q["render_seed"] for q in quotes}), 3, "videos must not share one built-in render seed")
+        self.assertEqual({q["seed"] for q in quotes}, {0})
+        self.assertEqual(quotes[0]["segments"], quotes[1]["segments"], "the same song and variation seed plan the same passages")
+        chosen = self.client.post("/api/quote", json={**req, "seed": 9, "render_seed": 1234}).json()
+        self.assertEqual((chosen["seed"], chosen["render_seed"]), (9, 1234))
+
+    def test_service_logs_follow_the_operation_redoing_a_passage(self):
+        from mmv.worker import service_logs
+        production, job = self.home / "runs" / "song", self.home / "runs" / "reroll_song"
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MMV_SERVICE_LOG_DIR", None)
+            self.assertEqual(service_logs(production), production)
+            os.environ["MMV_SERVICE_LOG_DIR"] = str(job)
+            self.assertEqual(service_logs(production), job)
 
     def test_offline_engines_guard_and_quote_reporting(self):
         original_settings = self.store.settings()
@@ -791,7 +809,7 @@ class PublicAppTests(unittest.TestCase):
 
     def test_prompt_caching_and_resumption(self):
         song = self.song_upload()
-        quote, started = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast"})
+        quote, started = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast", "seed": 11})
         started.raise_for_status()
         status = self.wait()
         self.assertEqual(status["state"], "complete")
@@ -800,7 +818,7 @@ class PublicAppTests(unittest.TestCase):
         self.assertTrue(bool(prompts_1))
 
         # Second production reuses cached prompts
-        quote2, started2 = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast", "reuse_prompts": True})
+        quote2, started2 = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast", "seed": 11, "reuse_prompts": True})
         started2.raise_for_status()
         status2 = self.wait()
         self.assertEqual(status2["state"], "complete")
@@ -809,6 +827,68 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(prompts_1, prompts_2)
         log_text = (run_2 / "operation.log").read_text(encoding="utf-8")
         self.assertIn("resumed from cache", log_text)
+
+    def test_passage_prompt_rewrite_and_checked_edit_use_the_production_prompt_stage(self):
+        song = self.song_upload()
+        _, started = self.start({"song": song, "direction": "A sunlit coast", "title": "Coast", "seed": 12})
+        started.raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        run_id = started.json()["id"]
+        run = self.home / "runs" / run_id
+        original = read_json(run / "prompts.json")["seg000"]
+        writer_files = sorted(p.name for p in run.glob("seg000.*.json"))
+        base = f"/api/outputs/{run_id}/prompts/seg000"
+
+        view = self.client.get(f"/api/outputs/{run_id}/prompts").json()
+        self.assertFalse((run / "prompt_takes.json").exists(), "reading prompts must not write versions")
+        self.assertEqual(view["segments"][0]["prompt_takes"][0]["id"], "prompt1")
+        self.assertIsNone(view["prompt_blocked"])
+        self.assertIn("Confirm", self.client.post(f"{base}/rewrite", json={}).text)
+        self.assertIn("Confirm", self.client.post(f"{base}/edit", json={"prompt": original}).text)
+
+        # A rewrite runs the worker's own writer, checks and Laya for this passage only, keeping the earlier files aside.
+        self.client.post(f"{base}/rewrite", json={"confirm": True}).raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        versions = read_json(run / "prompt_takes.json")["segments"]["seg000"]
+        self.assertEqual([v["id"] for v in versions["takes"]], ["prompt1", "prompt2"])
+        self.assertEqual((versions["active_take"], versions["takes"][1]["validated"]), ("prompt2", True))
+        self.assertEqual(sorted(p.name for p in (run / "prompt_takes" / "seg000" / "before-prompt2").glob("*.json")), writer_files)
+        self.assertIn("Writing musical passage 1 of 1", (run / "operation.log").read_text(encoding="utf-8"))
+
+        # A hand edit that fails the checks is kept, marked, and never becomes the prompt.
+        prompts_before = read_json(run / "prompts.json")
+        self.client.post(f"{base}/edit", json={"prompt": "A short edit with no shots.", "confirm": True}).raise_for_status()
+        self.assertEqual(self.wait()["state"], "failed")
+        self.assertEqual(read_json(run / "prompts.json"), prompts_before)
+        failed = read_json(run / "prompt_takes.json")["segments"]["seg000"]["takes"][-1]
+        self.assertEqual((failed["id"], failed["validated"]), ("prompt3", False))
+        self.assertTrue(failed["problems"])
+        self.assertGreaterEqual(self.client.post(f"{base}/select", json={"prompt_take_id": "prompt3"}).status_code, 400)
+
+        # A passing hand edit becomes the prompt; the original can be chosen again.
+        self.client.post(f"{base}/edit", json={"prompt": original, "confirm": True}).raise_for_status()
+        self.assertEqual(self.wait()["state"], "complete")
+        self.assertEqual(read_json(run / "prompt_takes.json")["segments"]["seg000"]["active_take"], "prompt4")
+        self.client.post(f"{base}/select", json={"prompt_take_id": "prompt1"}).raise_for_status()
+        self.assertEqual(read_json(run / "prompts.json")["seg000"], original)
+
+        # An API writer needs the user's acceptance of the writer cost.
+        prepared = read_json(run / "prepared.json")
+        write_json(run / "prepared.json", {**prepared, "settings": {**prepared["settings"], "writer_mode": "api"}})
+        refused = self.client.post(f"{base}/rewrite", json={"confirm": True})
+        self.assertGreaterEqual(refused.status_code, 400)
+        self.assertIn("accept the writer cost", refused.text)
+        write_json(run / "prepared.json", prepared)
+
+        # A worker that saved a prompt and then failed (e.g. GPU memory not released) leaves the prompt in use unchanged.
+        prompts_before = (run / "prompts.json").read_bytes()
+        def saves_then_fails(context, argv, **kwargs):
+            write_json(run / "prompts.json", {"seg000": "half-finished"})
+            raise RuntimeError("GPU memory was not released")
+        with patch("mmv.jobs.JobContext.command", saves_then_fails):
+            self.client.post(f"{base}/rewrite", json={"confirm": True}).raise_for_status()
+            self.assertEqual(self.wait()["state"], "failed")
+        self.assertEqual((run / "prompts.json").read_bytes(), prompts_before)
 
     def test_instrumental_and_lip_sync_validation(self):
         from mmv.engine.schema import validate_prompt, RIGGING_TAIL

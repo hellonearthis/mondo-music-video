@@ -131,37 +131,37 @@ def _passage_takes(origin, segment_id, takes_data, roots):
                 "label": t.get("label") or t["id"],
                 "seed": t.get("seed"),
                 "created_at": t.get("created_at"),
+                "prompt_take": t.get("prompt_take"),
                 "clip_url": f"/api/outputs/{origin}/clips/{segment_id}?take={t['id']}",
             })
     active = seg_entry.get("active_take") or (valid_takes[-1]["id"] if valid_takes else None)
     return active, valid_takes
 
 
-def _passage_prompt_takes(segment_id, prompt_takes_data):
-    seg_entry = (prompt_takes_data.get("segments") or {}).get(segment_id) or {}
-    raw_takes = seg_entry.get("takes") or []
-    valid_takes = [
-        {
-            "id": t["id"],
-            "label": t.get("label") or t["id"],
-            "prompt": t.get("prompt", ""),
-            "char_count": t.get("char_count", len(t.get("prompt", ""))),
-            "created_at": t.get("created_at"),
-        }
-        for t in raw_takes
-        if isinstance(t, dict) and isinstance(t.get("prompt"), str) and t.get("prompt")
-    ]
-    active = seg_entry.get("active_take") or (valid_takes[-1]["id"] if valid_takes else None)
-    return active, valid_takes
+def _passage_prompts(segment_id, prompt_data):
+    entry = (prompt_data.get("segments") or {}).get(segment_id) or {}
+    versions = [{key: t.get(key) for key in ("id", "label", "prompt", "validated", "problems", "created_at")}
+                for t in entry.get("takes") or [] if isinstance(t, dict) and isinstance(t.get("prompt"), str)]
+    return entry.get("active_take"), versions
 
 
-def _passage(run_id, segment_id, index, prompt, clip, *, seconds=0.0, frames=0, shots=(),
-             active_take=None, takes=(), active_prompt_take=None, prompt_takes=()):
+def _passage(run_id, segment_id, index, prompt, clip, *, seconds=0.0, frames=0, shots=(), active_take=None, takes=(),
+             prompt_data=None):
+    active_prompt, prompt_takes = _passage_prompts(segment_id, prompt_data or {})
     return {"index": index, "segment_id": segment_id, "prompt": prompt, "duration": seconds, "trim_frames": frames,
             "shots": list(shots), "has_clip": clip is not None,
             "clip_url": f"/api/outputs/{run_id}/clips/{segment_id}" if clip else None,
             "active_take": active_take, "takes": list(takes),
-            "active_prompt_take": active_prompt_take, "prompt_takes": list(prompt_takes)}
+            "active_prompt_take": active_prompt, "prompt_takes": prompt_takes}
+
+
+def _prompt_limit(request):
+    """The production renderer's own prompt ceiling (max_prompt_chars), or None when it reports none."""
+    from .render import get_backend
+    try:
+        return get_backend(request.get("backend", "local_h3")).capabilities().get("max_prompt_chars")
+    except Exception:
+        return None
 
 
 def passage_breakdown(store, run_id):
@@ -172,36 +172,37 @@ def passage_breakdown(store, run_id):
     origin = _origin_run(store, run_id)
     plan, prompts, renders = _run_files(store, origin)
     roots, fps = _clip_roots(store), plan.get("fps", 24)
+    request = read_json(store.home / "runs" / origin / "request.json", {})
+    prepared = read_json(store.home / "runs" / origin / "prepared.json", {})
     takes_data = takes_mod.get_segment_takes(store, origin)
-    prompt_takes_data = takes_mod.get_prompt_takes(store, origin)
+    prompt_data = takes_mod.get_prompt_takes(store, origin)
     final_takes = takes_mod.get_final_takes(store, origin)
     if plan.get("segments"):
         passages = []
         for seg in plan["segments"]:
             sid = f"seg{seg['index']:03d}"
             active_take, seg_takes = _passage_takes(origin, sid, takes_data, roots)
-            active_prompt_take, seg_prompt_takes = _passage_prompt_takes(sid, prompt_takes_data)
             passages.append(_passage(
                 origin, sid, seg["index"], prompts.get(sid, ""), _recorded_clip(renders, sid, roots),
                 seconds=round(seg.get("trim_frames", 0) / fps, 3), frames=seg.get("trim_frames", 0),
                 shots=({k: shot.get(k) for k in ("n", "shot_scale", "camera", "cut_time")}
                        for shot in seg.get("shots", [])),
-                active_take=active_take, takes=seg_takes,
-                active_prompt_take=active_prompt_take, prompt_takes=seg_prompt_takes,
+                active_take=active_take, takes=seg_takes, prompt_data=prompt_data
             ))
     else:
         passages = []
         for i, (sid, prompt) in enumerate(sorted(prompts.items())):
             active_take, seg_takes = _passage_takes(origin, sid, takes_data, roots)
-            active_prompt_take, seg_prompt_takes = _passage_prompt_takes(sid, prompt_takes_data)
             passages.append(_passage(
                 origin, sid, int(sid[3:]) if sid[3:].isdigit() else i, prompt,
                 _recorded_clip(renders, sid, roots),
-                active_take=active_take, takes=seg_takes,
-                active_prompt_take=active_prompt_take, prompt_takes=seg_prompt_takes,
+                active_take=active_take, takes=seg_takes, prompt_data=prompt_data
             ))
     return {"run_id": run_id, "source_run_id": origin, "title": output.get("title", "Finished production"),
-            "kind": output.get("kind", "video"), "segments": passages, "final_takes": final_takes.get("takes", [])}
+            "kind": output.get("kind", "video"), "segments": passages, "final_takes": final_takes.get("takes", []),
+            "reroll_blocked": takes_mod.reroll_block(request),
+            "prompt_blocked": takes_mod.prompt_block(request, prepared), "writer_charge": takes_mod.writer_charge(prepared),
+            "prompt_limit": _prompt_limit(request)}
 
 
 def passage_clip(store, run_id, segment_id, take_id=None):

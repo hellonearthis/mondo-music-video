@@ -31,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from mmv import actors, agreements, instrument_assets, oap_collection, production, props, score_view, worlds
 from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
-from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary
+from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary, render_seed
 from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storyboard import Storyboard
@@ -39,7 +39,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.32"
+MGL_APP_VERSION = "1.11.2"
 WEB = Path(__file__).parent
 
 
@@ -312,7 +312,8 @@ class ProductionRequest(StrictModel):
     content: dict[str, str] = Field(default_factory=lambda: {key: "none" for key in oap.CONTENT_ENUMS})
     beats_per_bar: int = Field(default=4, ge=2, le=12)
     bars_per_phrase: int = Field(default=8, ge=1, le=32)
-    seed: int = Field(default=0, ge=0, le=2147483647)
+    seed: int = Field(default=0, ge=0, le=2147483647)              # variation seed: shot plan, vocabulary and casting
+    render_seed: int | None = Field(default=None, ge=0, le=2147483647)   # renderer seed base; None: random, fixed at preview
     megapixels: float = Field(default=.6, ge=.15, le=4)
     conceptual_theme: str = Field(default="", max_length=2000)
     lyrics: str = Field(default="", max_length=16000)
@@ -428,6 +429,8 @@ def request_dict(value):
         request.pop("captions", None)
     if not request.get("strict_prompt_checks"):
         request.pop("strict_prompt_checks", None)
+    if request.get("render_seed") is None:
+        request.pop("render_seed", None)       # pipeline.prepare picks it, so earlier requests keep their exact form
     if request["kind"] != "video" or not request.get("world_id") or not request.get("world_contrast") or not request.get("world_contrast_strength"):
         for key in ("world_contrast", "world_contrast_strength", "world_departures"):
             request.pop(key, None)
@@ -691,11 +694,18 @@ class PromptTakeSelectRequest(StrictModel):
     prompt_take_id: str = Field(pattern=r"^prompt\d{1,4}$")
 
 
+class PromptRewriteRequest(StrictModel):
+    confirm: bool = False
+    accept_writer_cost: bool = False
+
+
 class PromptEditRequest(StrictModel):
     prompt: str = Field(min_length=1, max_length=64000)
+    confirm: bool = False
 
 
 class RerollRequest(StrictModel):
+    confirm: bool = False
     seed: int | None = Field(default=None, ge=0, le=2147483647)
 
 
@@ -1519,7 +1529,7 @@ def create_app(home=None, *, test_hosts=False):
     def build_quote(value: ProductionRequest, *, resume_directory=None):
         with jobs.lock:
             jobs.require_idle()
-            request = with_world(store, request_dict(value))
+            request = with_world(store, request_dict(value))   # pipeline.prepare picks a random render seed if none was chosen
             kind = request.get("kind", "video")
             log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
             try:
@@ -1537,7 +1547,7 @@ def create_app(home=None, *, test_hosts=False):
                                 "expires": time.time() + 600}
             from mmv.services import check_required_services
             offline_engines = check_required_services(store, request, resume=bool(resume_directory))
-            return {"id": quote_id, "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
+            return {"id": quote_id, "seed": request["seed"], "render_seed": render_seed(request), "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
                     "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
                     "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
                     "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
@@ -1879,7 +1889,8 @@ def create_app(home=None, *, test_hosts=False):
     @app.get("/api/outputs/{run_id}/clips/{segment_id}")
     def output_clip(run_id: str, segment_id: str, take: str | None = None):
         path, media_type = score_view.passage_clip(store, run_id, segment_id, take_id=take)
-        return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower())
+        # inline: Firefox will not play a <video> source served as an attachment; the name still applies when saved.
+        return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower(), content_disposition_type="inline")
 
     @app.post("/api/outputs/{run_id}/takes/{segment_id}")
     def select_output_take(run_id: str, segment_id: str, value: TakeSelectRequest):
@@ -1888,56 +1899,95 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             return takes.select_segment_take(store, run_id, segment_id, value.take_id)
 
+    def prompt_job(run_id, segment_id, kind, how, candidate=None):
+        """Rewrite or check one passage prompt of a finished production through the worker's own prompt stage."""
+        from mmv import takes
+        origin = score_view._origin_run(store, run_id)
+        directory = inside(store.home / "runs", identifier(origin))
+        takes.validate_segment_id(segment_id)
+        request, prepared = read_json(directory / "request.json", {}), read_json(directory / "prepared.json", {})
+        if blocked := takes.prompt_block(request, prepared):
+            raise ValueError(blocked)
+        if segment_id not in read_json(directory / "prompts.json", {}):
+            raise ValueError(f"No saved prompt for passage {segment_id}")
+        def run_prompt(context):
+            takes.begin_prompt_rewrite(directory, segment_id)
+            argv = [sys.executable, "-u", "-m", "mmv.worker", "rewrite_prompt", str(store.home), str(directory), segment_id]
+            if candidate is not None:
+                draft = directory / "prompt_takes" / segment_id / "candidate.txt"
+                draft.parent.mkdir(parents=True, exist_ok=True)
+                draft.write_text(candidate, encoding="utf-8")
+                argv.append(str(draft))
+            context.update(f"{'Checking the edited' if candidate is not None else 'Writing a new'} prompt for {segment_id}", 5)
+            # The worker saves the prompt before its last checks finish; a failure anywhere restores the prompt and its binding.
+            kept = {name: (directory / name).read_bytes() for name in ("prompts.json", "passage-plan-prompts.json")
+                    if (directory / name).is_file()}
+            try:
+                context.command(argv, progress_path=directory / "progress.json",
+                                env={"MMV_SERVICE_LOG_DIR": str(context.log_path.parent)})
+            except BaseException as exc:
+                for name, content in kept.items():
+                    (directory / name).write_bytes(content)
+                if candidate is not None:       # keep the user's text to edit again, marked as not passed
+                    takes.record_prompt_take(directory, segment_id, candidate, how,
+                                             problems=read_json(directory / f"{segment_id}.validation-edit.json", None) or [str(exc)[:600]])
+                raise
+            takes.record_prompt_take(directory, segment_id, read_json(directory / "prompts.json", {})[segment_id], how)
+            return score_view.passage_breakdown(store, origin)
+        return jobs.start(kind, run_prompt, run_id=job_run_id(store, kind, f"{origin}_{segment_id}"))
+
+    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/rewrite")
+    def rewrite_output_prompt(run_id: str, segment_id: str, value: PromptRewriteRequest):
+        from mmv import takes
+        if value.confirm is not True:
+            raise ValueError("Confirm writing a new prompt for this passage")
+        with jobs.lock:
+            jobs.require_idle()
+            origin = score_view._origin_run(store, run_id)
+            charge = takes.writer_charge(read_json(inside(store.home / "runs", identifier(origin)) / "prepared.json", {}))
+            if charge["api_writer"] and value.accept_writer_cost is not True:
+                raise ValueError(f"This production's writer is an API service that may charge for the call "
+                                 f"(estimate about ${charge['estimate_usd']:.2f}); accept the writer cost to continue")
+            return prompt_job(run_id, segment_id, "prompt_rewrite", "rewritten")
+
+    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/edit")
+    def edit_output_prompt(run_id: str, segment_id: str, value: PromptEditRequest):
+        if value.confirm is not True:
+            raise ValueError("Confirm checking the edited prompt with the Mondo checks and Laya review")
+        with jobs.lock:
+            jobs.require_idle()
+            return prompt_job(run_id, segment_id, "prompt_check", "edited", candidate=value.prompt.strip())
+
     @app.post("/api/outputs/{run_id}/prompts/{segment_id}/select")
-    def select_output_prompt_take(run_id: str, segment_id: str, value: PromptTakeSelectRequest):
+    def select_output_prompt(run_id: str, segment_id: str, value: PromptTakeSelectRequest):
         from mmv import takes
         with jobs.lock:
             jobs.require_idle()
             return takes.select_prompt_take(store, run_id, segment_id, value.prompt_take_id)
 
-    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/edit")
-    def edit_output_prompt_take(run_id: str, segment_id: str, value: PromptEditRequest):
-        from mmv import takes
-        with jobs.lock:
-            jobs.require_idle()
-            return takes.save_edited_prompt_take(store, run_id, segment_id, value.prompt)
-
-    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/reroll")
-    def reroll_output_prompt(run_id: str, segment_id: str):
-        from mmv import takes
-        with jobs.lock:
-            jobs.require_idle()
-            origin = score_view._origin_run(store, run_id)
-            directory = inside(store.home / "runs", identifier(origin))
-            takes.validate_segment_id(segment_id)
-            def run_reroll_prompt(context):
-                context.update(f"Starting prompt reroll for {segment_id}", 5)
-                context.command(
-                    [sys.executable, "-u", "-m", "mmv.worker", "reroll_prompt", str(store.home), str(directory), segment_id],
-                    progress_path=directory / "progress.json",
-                )
-                return score_view.passage_breakdown(store, origin)
-            return jobs.start("reroll_prompt", run_reroll_prompt, run_id=job_run_id(store, "reroll_prompt", f"{origin}_{segment_id}"))
-
     @app.post("/api/outputs/{run_id}/reroll/{segment_id}")
-    def reroll_output_segment(run_id: str, segment_id: str, value: RerollRequest | None = None):
+    def reroll_output_segment(run_id: str, segment_id: str, value: RerollRequest):
         from mmv import takes
         from mmv.services import check_required_services
+        if value.confirm is not True:
+            raise ValueError("Confirm the local GPU render of one passage before rerolling")
         with jobs.lock:
             jobs.require_idle()
             origin = score_view._origin_run(store, run_id)
             directory = inside(store.home / "runs", identifier(origin))
             request = read_json(directory / "request.json", {})
             takes.validate_segment_id(segment_id)
+            if blocked := takes.reroll_block(request):
+                raise ValueError(blocked)
             missing_errors = check_required_services(store, request, resume=True)
             if missing_errors:
                 raise ValueError(f"Cannot reroll clip: {missing_errors[0]}")
-            seed_arg = [str(value.seed)] if value and value.seed is not None else []
+            seed_arg = [str(value.seed)] if value.seed is not None else []
             def run_reroll(context):
                 context.update(f"Starting reroll for {segment_id}", 5)
                 context.command(
                     [sys.executable, "-u", "-m", "mmv.worker", "reroll", str(store.home), str(directory), segment_id, *seed_arg],
-                    progress_path=directory / "progress.json",
+                    progress_path=directory / "progress.json", env={"MMV_SERVICE_LOG_DIR": str(context.log_path.parent)},
                 )
                 return score_view.passage_breakdown(store, origin)
             return jobs.start("reroll", run_reroll, run_id=job_run_id(store, "reroll", f"{origin}_{segment_id}"))

@@ -173,7 +173,10 @@ def harvest_text(value):
     return str(value or '')
 
 
-def run(home, directory, *, resume=False):
+def run(home, directory, *, resume=False, rewrite=None):
+    """Produce a video or ident. rewrite={'segment': id, 'candidate': text or None} instead prepares one passage of a finished
+    production through this same prompt stage (a fresh writer prompt, or a hand-edited candidate given only the checks) and stops
+    before rendering; other passages keep their saved prompts and the prompt cache is neither read nor written."""
     os.environ['MMV_HOME'] = str(home)
     store = Storage(home)
     request = read_json(directory / 'request.json')
@@ -188,7 +191,7 @@ def run(home, directory, *, resume=False):
     from . import quality
     from .engine.writer import call_llm
     from .render import get_backend
-    from .pipeline import ENGINE
+    from .pipeline import ENGINE, render_seed
     from .render import request_json
     def progress(message, value):
         print(message, flush=True)
@@ -237,6 +240,7 @@ def run(home, directory, *, resume=False):
     plan.slug = 'mmv-' + directory.name
     plan.to_json(plan_path)
     backend = get_backend(request['backend'])
+    prompt_limit = backend.capabilities().get('max_prompt_chars')    # None: the renderer reports no ceiling
     style_dir = directory / 'style';style_dir.mkdir(exist_ok=True)
     (style_dir / 'aesthetic.md').write_text(prepared['style']['direction'], encoding='utf-8')
     (style_dir / 'style_card.md').write_text(prepared['style'].get('style_card', prepared['style']['direction']), encoding='utf-8')
@@ -279,7 +283,8 @@ def run(home, directory, *, resume=False):
         from . import gpu_memory
         gpu_before_writer = gpu_memory.gpu_memory()
         writer_process = None
-        if settings['writer_mode'] == 'local':
+        candidate = (rewrite or {}).get('candidate')
+        if settings['writer_mode'] == 'local' and candidate is None:
             if not runtime.http_ok(settings['writer_url'].rstrip('/') + '/models'):
                 try:
                     command = json.loads(settings['writer_launch'])
@@ -292,9 +297,9 @@ def run(home, directory, *, resume=False):
                                      f'{gpu_memory.gib(need)} needed. Another model may still be using the GPU.')
             progress('Starting music-video writer', 2)
             writer_process = runtime.start_service(settings['writer_launch'],settings['writer_cwd'],
-                             settings['writer_url'].rstrip('/')+'/models',directory/'writer-service.log',
+                             settings['writer_url'].rstrip('/')+'/models',service_logs(directory)/'writer-service.log',
                              name='llama.cpp (Writer)', launch_setting='writer_launch')
-        prompts = {}
+        prompts = read_json(directory / 'prompts.json', {}) if rewrite else {}
         validator = None
         if request['kind'] == 'video':
             from .engine.validators import LayaSemanticValidator
@@ -326,11 +331,17 @@ def run(home, directory, *, resume=False):
             cache_file = cache_dir / f"ident_{cache_key}.json"
             cleared_info = read_json(store.home / 'cache_cleared.json', {})
             cleared_at = float(cleared_info.get('cleared_at', 0))
-            reuse_prompts = request.get('reuse_prompts', True)
+            reuse_prompts = request.get('reuse_prompts', True) and not rewrite
+            if rewrite:
+                prompts.pop(plan.segments[0].segment_id, None)
+            if candidate is not None:
+                if request['title'] not in candidate: raise ValueError('The edited ident prompt must contain the exact requested title')
+                if too_long := length_problems(candidate, prompt_limit): raise ValueError(too_long[0])
+                prompts[plan.segments[0].segment_id] = candidate
             if reuse_prompts and cache_file.exists() and (cleared_at <= 0 or cache_file.stat().st_mtime >= cleared_at):
                 try:
                     cached = read_json(cache_file)
-                    if cached and "prompt" in cached:
+                    if cached and "prompt" in cached and not length_problems(cached["prompt"], prompt_limit):
                         prompts[plan.segments[0].segment_id] = cached["prompt"]
                         write_json(directory / 'prompts.json', prompts)
                         progress('Ident prompt resumed from cache', 30)
@@ -341,11 +352,13 @@ def run(home, directory, *, resume=False):
                 raw = llm(system, message, label='ident').strip()
                 if raw.startswith('```'): raw = '\n'.join(raw.splitlines()[1:-1]).strip()
                 if request['title'] not in raw: raise ValueError('Ident writer omitted the exact requested title')
+                if too_long := length_problems(raw, prompt_limit): raise ValueError('Ident ' + too_long[0])
                 prompts[plan.segments[0].segment_id] = raw
                 write_json(directory / 'prompts.json', prompts)
                 try:
-                    cache_dir.mkdir(parents=True, exist_ok=True)
-                    write_json(cache_file, {"prompt": raw})
+                    if not rewrite:                     # a rewrite never replaces the cached prompt
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        write_json(cache_file, {"prompt": raw})
                 except Exception:
                     pass
         else:
@@ -375,8 +388,10 @@ def run(home, directory, *, resume=False):
             cache_dir.mkdir(parents=True, exist_ok=True)
             cleared_info = read_json(store.home / 'cache_cleared.json', {})
             cleared_at = float(cleared_info.get('cleared_at', 0))
-            reuse_prompts = request.get('reuse_prompts', True)
+            reuse_prompts = request.get('reuse_prompts', True) and not rewrite
             for index, seg in enumerate(plan.segments):
+                if rewrite and seg.segment_id != rewrite['segment']:
+                    continue
                 tags = backend.ref_tags(seg.ref_image_slots, 0, 1)
                 sing = singing_plan.get(seg.segment_id) or {}
                 singing = bool(sing.get('singing')) and system_singing is not None
@@ -428,6 +443,8 @@ def run(home, directory, *, resume=False):
                     cache_validators.append(lambda prompt: list(filter(instrument_blocks, instruments.problems(prompt, cached_shot_bodies(prompt), seg, ipass, instrument_plan, tags))))
                 if request.get('strict_prompt_checks'):
                     dance_version += '-strict'
+                if prompt_limit:
+                    cache_validators.append(lambda prompt: length_problems(prompt, prompt_limit))
                 if reuse_prompts:
                     cached = find_cached_passage_prompt(cache_dir, store.home / 'runs', seg_system, job, seg, tags,
                                                         cleared_at=cleared_at, extra_validators=cache_validators, validators_version=dance_version)
@@ -443,6 +460,36 @@ def run(home, directory, *, resume=False):
                         progress(f'Musical passage {index+1} of {len(plan.segments)} (resumed from cache)', 5 + int(25*(index+1)/len(plan.segments)))
                         continue
 
+                if candidate is not None:
+                    # A hand-edited prompt gets the same Mondo checks and Laya review as a written one, never a rewrite.
+                    prompt = candidate
+                    if seg_silent and RIGGING_TAIL.rstrip(".").lower() not in prompt.lower():
+                        soundscape_pos = prompt.find("\noverall_soundscape:")
+                        if soundscape_pos > 0:
+                            prompt = prompt[:soundscape_pos].rstrip() + f" {RIGGING_TAIL}\n" + prompt[soundscape_pos:]
+                        else:
+                            prompt = prompt.rstrip() + f" {RIGGING_TAIL}\n"
+                    bodies = cached_shot_bodies(prompt)
+                    problems = (validate_prompt(prompt, seg, tags, strict_words=False, silent_mouths=seg_silent)
+                                + quality.prompt_problems(prompt, seg, request['direction'])
+                                + (lipsync.lipsync_problems(prompt, bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else [])
+                                + (list(filter(dance_blocks, dance.dance_problems(prompt, bodies, seg, dpass, dance_plan))) if dancing else [])
+                                + (list(filter(instrument_blocks, instruments.problems(prompt, bodies, seg, ipass, instrument_plan, tags))) if performing else [])
+                                + length_problems(prompt, prompt_limit))
+                    if not problems:
+                        progress(f'Laya reviewing the edited prompt for passage {index+1}', 20)
+                        state = {'slug':plan.slug, 'backend':request['backend'], 'restrictions':{x:True for x in restrictions},
+                                 'lyrics_flavor':(' / '.join(item['text'] for item in sing['lines']) if singing else request['lyrics']), 'director_direction':request['direction'],
+                                 'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':seg_cast_block}
+                        response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=seg_silent,state=state)
+                        write_json(directory / f'{seg.segment_id}.laya-response-edit.json', response)
+                    if problems:
+                        write_json(directory / f'{seg.segment_id}.validation-edit.json', problems)
+                        raise ValueError(f'{seg.segment_id}: the edited prompt did not pass the Mondo checks and Laya review: '
+                                         + '; '.join(map(str, problems))[:600])
+                    prompts[seg.segment_id] = prompt
+                    write_json(directory / 'prompts.json', prompts)
+                    continue
                 progress(f'Writing musical passage {index+1} of {len(plan.segments)}', 5 + int(25*index/len(plan.segments)))
                 feedback, soft_fallback = '', None
                 compact = bool(request.get('compact_prompts'))
@@ -486,7 +533,8 @@ def run(home, directory, *, resume=False):
                                     + quality.prompt_problems(prompt, seg, request['direction'])
                                     + (lipsync.lipsync_problems(prompt, response.shot_bodies, seg, sing, *lipsync.cast_refs(cast_entries, sing['actor_id'])) if singing else [])
                                     + list(filter(dance_blocks, found_dance))
-                                    + instrument_problems)
+                                    + instrument_problems
+                                    + length_problems(prompt, prompt_limit))
                     except (ValidationError, TypeError, AttributeError, KeyError) as exc:
                         prompt = None
                         problems = [str(exc)]
@@ -511,7 +559,8 @@ def run(home, directory, *, resume=False):
                             print(f'{seg.segment_id}: accepted with {len(advice)} dance/instrument wording notes (no rewrite); see {seg.segment_id}.advice.json', flush=True)
                         prompts[seg.segment_id] = prompt
                         write_json(directory / 'prompts.json', prompts)
-                        save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id, validators_version=dance_version)
+                        if not rewrite:
+                            save_cached_passage_prompt(cache_dir, seg_system, job, prompt, seg.segment_id, validators_version=dance_version)
                         break
                     write_json(directory / f'{seg.segment_id}.validation-{call+1}.json', problems)
                     call += 1
@@ -553,11 +602,14 @@ def run(home, directory, *, resume=False):
             raise ValueError('Resume requires saved validated prompts for every passage')
     if not resume:
         passage_plans.bind_prompts(directory, prepared, prompts)
+    if rewrite:
+        progress(f"Prompt for {rewrite['segment']} validated", 100)
+        return prompts[rewrite['segment']]
     progress('All prompts validated; opening renderer', 32)
     def start_comfy():
         # Returns a handle only when this production launched ComfyUI; None means it was already running.
         return runtime.start_service(settings['comfy_launch'],settings['comfy_cwd'],
-                                     settings['comfy_url'].rstrip('/')+'/system_stats',directory/'comfy-service.log',
+                                     settings['comfy_url'].rstrip('/')+'/system_stats',service_logs(directory)/'comfy-service.log',
                                      name='ComfyUI', launch_setting='comfy_launch')
     comfy_process = None
     if request['backend'] == 'local_h3' or (request['backend'] == 'comfy_sdk_h3' and vision_wanted):
@@ -618,7 +670,7 @@ def run(home, directory, *, resume=False):
                 progress(f'Musical passage {index+1} of {len(plan.segments)} already rendered; keeping it', 35+int(40*index/len(plan.segments)))
                 continue
             progress(f'Rendering musical passage {index+1} of {len(plan.segments)}', 35+int(40*index/len(plan.segments)))
-            rendered[seg.segment_id] = render_passage(seg, seg.segment_id, request['seed']+seg.index)
+            rendered[seg.segment_id] = render_passage(seg, seg.segment_id, render_seed(request)+seg.index)
             write_json(directory / 'renders.json', rendered)
         if request['kind'] == 'video':
             vision, vision_note = None, None
@@ -756,9 +808,10 @@ def run_quality_stage(directory, backend, request, plan, rendered, render_passag
     def save():
         write_json(directory / 'quality.json', report)
 
+    from .pipeline import render_seed
     progress('Checking every passage for motion and framing', 76)
     for seg in plan.segments:
-        attempt = inspect(seg, rendered[seg.segment_id], seg.segment_id, request['seed'] + seg.index)
+        attempt = inspect(seg, rendered[seg.segment_id], seg.segment_id, render_seed(request) + seg.index)
         report[seg.segment_id] = {'attempts': [attempt],
                                   'retry_used': bool(saved.get(seg.segment_id, {}).get('retry_used'))}
         results[seg.segment_id] = [rendered[seg.segment_id]]
@@ -833,6 +886,39 @@ def run_quality_stage(directory, backend, request, plan, rendered, render_passag
     return chosen
 
 
+def length_problems(prompt, limit):
+    """The renderer's own prompt ceiling (max_prompt_chars from its capabilities, e.g. a rate card), checked before
+    anything is submitted. No ceiling means no check; no number lives here."""
+    if limit and len(prompt) > int(limit):
+        return [f'prompt is {len(prompt)} characters; this renderer accepts at most {int(limit)}. '
+                f'Shorten the shot bodies so the whole prompt fits.']
+    return []
+
+
+def service_logs(directory):
+    """Where writer and ComfyUI output goes: the production folder, or the folder of the operation redoing one of its
+    passages (MMV_SERVICE_LOG_DIR), so the log view of that operation shows the render as it happens."""
+    return Path(os.environ.get('MMV_SERVICE_LOG_DIR') or directory)
+
+
+def _guarded(home, call):
+    """Run one worker phase: stop on SIGTERM, print a redacted error and exit 1 on failure, always clean up services."""
+    import signal
+    from . import runtime
+    def terminate(signum, frame): raise SystemExit(130)
+    signal.signal(signal.SIGTERM, terminate)
+    try:
+        call()
+    except Exception as exc:
+        message = str(exc)
+        for value in Storage(home).secret_values():
+            message = message.replace(value, '[redacted]')
+        print(type(exc).__name__ + ': ' + message, flush=True)
+        raise SystemExit(1)
+    finally:
+        runtime.cleanup()
+
+
 def main():
     if sys.argv[1] == 'analyze':
         from .engine.analyze import analyze
@@ -864,36 +950,13 @@ def main():
     elif sys.argv[1] == 'reroll':
         home, directory, segment_id = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
         seed = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else None
-        import signal
-        from . import runtime, takes
-        def terminate(signum, frame): raise SystemExit(130)
-        signal.signal(signal.SIGTERM, terminate)
-        try:
-            takes.reroll_segment_worker(home, directory, segment_id, seed=seed)
-        except Exception as exc:
-            message = str(exc)
-            for value in Storage(home).secret_values():
-                message = message.replace(value, '[redacted]')
-            print(type(exc).__name__ + ': ' + message, flush=True)
-            raise SystemExit(1)
-        finally:
-            runtime.cleanup()
-    elif sys.argv[1] == 'reroll_prompt':
+        from . import takes
+        _guarded(home, lambda: takes.reroll_segment_worker(home, directory, segment_id, seed=seed))
+    elif sys.argv[1] == 'rewrite_prompt':
+        # One passage of a finished production through the normal prompt stage; an optional file holds a hand-edited candidate.
         home, directory, segment_id = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
-        import signal
-        from . import runtime, takes
-        def terminate(signum, frame): raise SystemExit(130)
-        signal.signal(signal.SIGTERM, terminate)
-        try:
-            takes.reroll_prompt_worker(home, directory, segment_id)
-        except Exception as exc:
-            message = str(exc)
-            for value in Storage(home).secret_values():
-                message = message.replace(value, '[redacted]')
-            print(type(exc).__name__ + ': ' + message, flush=True)
-            raise SystemExit(1)
-        finally:
-            runtime.cleanup()
+        candidate = Path(sys.argv[5]).read_text(encoding='utf-8') if len(sys.argv) > 5 else None
+        _guarded(home, lambda: run(home, directory, rewrite={'segment': segment_id, 'candidate': candidate}))
     else: raise SystemExit('Unknown worker phase')
 
 if __name__=='__main__':main()

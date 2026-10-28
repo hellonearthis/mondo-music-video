@@ -155,9 +155,10 @@ export async function preview(form) {
     if (!files.song) throw new Error("Upload your song first");
     request.song = files.song;
     request.actors = [...form.querySelector(".actor-select").selectedOptions].map(item => item.value);
-    for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen"]) {
+    for (const name of ["megapixels", "beats_per_bar", "bars_per_phrase", "seed", "on_screen", "render_seed"]) {
       request[name] = Number(request[name]);
     }
+    if (String(data.render_seed ?? "").trim() === "") delete request.render_seed;   // empty: the preview picks a random render seed
     dancePartsFromForm(form, request);
     instrumentsFromForm(form, request);
     subliminalFromForm(request);
@@ -240,6 +241,8 @@ export function showQuote(request, quote) {
   summary.append(
     text("p", request.kind === "storyboard" ? "Interpret storyboard images for review." : request.kind === "harvest" ? "One visual style harvest." : `${quote.clips} clips · ${quote.seconds.toFixed(1)} seconds of ${request.kind === "ident" ? "ident" : "music"}.`),
     text("h2", `Estimated provider cost: $${Number(quote.estimate_usd).toFixed(2)}`),
+    ...(quote.render_seed != null && ["video", "ident"].includes(request.kind)
+      ? [text("p", `Variation seed ${quote.seed} · render seed ${quote.render_seed}${request.render_seed == null ? " (random; type it into Render seed to repeat this video)" : ""}`, "muted quote-seed")] : []),
     text("p", quote.note, "muted")
   );
   if (quote.storyboard) {
@@ -801,6 +804,16 @@ export function initOperationControls() {
         scheduleSave();
       }
     });
+  }
+  const clearSeedBtn = $("#clear-seed");
+  if (clearSeedBtn) {
+    clearSeedBtn.onclick = () => {
+      const input = $('input[name="render_seed"]');
+      if (!input) return;
+      input.value = "";
+      notice("Every video now renders with its own random seed.");
+      scheduleSave();
+    };
   }
 
   const clearCacheBtn = $("#clear-cache");

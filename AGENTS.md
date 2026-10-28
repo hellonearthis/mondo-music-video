@@ -93,6 +93,9 @@ verify the assets appear in the app. Never import other local/private assets.
   tabs follow, and **Settings is always the last tab**. Any new or moved tab
   must keep the 01–NN numbers consecutive and update every in-app reference to
   a numbered tab. `tests/test_public_app.py` enforces the order.
+- The GUI must work in Firefox as well as Chromium browsers (Firefox is the owner's main browser). Serve media used as
+  `<video>`/`<img>` sources inline, avoid Chromium-only behaviour, and check GUI changes in Firefox or state that only
+  Chromium was tested.
 - Keep contributor GitHub handles out of application labels, tooltips, notices
   and help text. Preserve contribution credit in contributor/review/release documentation.
 
@@ -196,6 +199,16 @@ before applying `storyboard.enabled` to a video/ident. Keep storyboard images se
 from actor references, preserve musical timing and protected prompts, and bind saved
 alignment to prompts for recovery. GUI, CLI and MCP parity is documented in
 [docs/STORYBOARDS.md](docs/STORYBOARDS.md). Do not publish private boards or uploads.
+
+## Passage takes
+
+A finished `local_h3` production can reroll one passage (explicit confirmation, local GPU, never automatic) into a new take
+beside the original. `reassemble_output` rebuilds the final video from original clips in one encode with flashes and captions
+inside that graph, keeping earlier versions as numbered files. Productions on other renderers are refused because rerolling
+could submit paid work without a preview and consent. Passage prompt rewrites and hand edits run through the worker's own
+prompt stage (writer, Mondo checks, Laya) for that one passage; keep it that way rather than copying the loop, never let an
+edit skip the checks, and require writer-cost acceptance for API writers. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
+[docs/AGENT_SETUP.md](docs/AGENT_SETUP.md).
 
 ## Panel progress and actor editing
 

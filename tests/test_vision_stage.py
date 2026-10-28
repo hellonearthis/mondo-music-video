@@ -184,7 +184,7 @@ def production(tmp_path, monkeypatch):
     directory.mkdir()
     (home / 'uploads').mkdir(parents=True)
     (home / 'uploads' / 'song.wav').write_bytes(b'synthetic song')
-    request = ProductionRequest(backend='comfy_sdk_h3', song='song.wav', vision_quality_check=True).model_dump()
+    request = ProductionRequest(backend='comfy_sdk_h3', song='song.wav', vision_quality_check=True, seed=0).model_dump()
     settings = {'comfy_launch': '[]', 'comfy_cwd': '', 'comfy_url': 'http://127.0.0.1:8188',
                 'comfy_input': '', 'comfy_output': '', 'workflow_map_path': '', 'comfy_sdk_url': '', 'writer_launch': '[]'}
     prepared = {'settings': settings, 'plan': {}, 'score': {}, 'casting': {}, 'style': {'direction': 'test'}}
@@ -334,7 +334,7 @@ def test_mcp_discovery_documents_vision_flag():
             client.return_value.preview.return_value = {'id': 'reviewed-quote'}
             server = create_server()
             tools = await server.list_tools()
-            assert len(tools) == 59
+            assert len(tools) == 65
             preview = next(t for t in tools if t.name == 'preview_production')
             assert 'vision_quality_check' in preview.description
             assert 'paid re-renders require consent' in preview.description
