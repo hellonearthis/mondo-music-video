@@ -359,6 +359,12 @@ export function setupVisionGuide() {
       loadVisionGuideMarkdown();
       dialog.showModal();
     };
+    // The service cards are not <button>s; let Enter and Space open the guide too.
+    if (btn.tagName !== "BUTTON") btn.onkeydown = event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      btn.click();
+    };
   });
 
   $$(".close-vision-dialog").forEach(btn => {

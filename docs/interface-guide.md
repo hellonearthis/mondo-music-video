@@ -67,7 +67,7 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `card-cast-staging`
 - **Used in**: Step 2 of `video-production-form`
 - **Code**: `webapp/index.html`
-- **Design rules**: Second card in form grid. Configures renderer backend, render resolution, multi-actor cast selector, supplemental reference images (each with a visible Remove action and a right-click menu), facial movement (silent mouths / lip sync), dancing mode, and instrument performance settings. Missing required inputs are highlighted; quote validation still controls readiness.
+- **Design rules**: Second card in form grid. Configures renderer backend, render resolution, multi-actor cast selector, supplemental reference images (each with a visible Remove action), facial movement (silent mouths / lip sync), dancing mode, and instrument performance settings. Missing required inputs are highlighted; quote validation still controls readiness.
 
 ### Director's Control Room
 - **ID**: `director-control-room`
@@ -124,7 +124,7 @@ To toggle Component Labeling Mode in the web interface:
 - **Used in**: Section 03 navigation
 - **Code**: `webapp/index.html`, `webapp/js/library.js`, `webapp/js/guides.js`
 - **Design rules**: Cast management, reference portrait binding, and Open Actor Protocol packaging.
-- **Actor editing**: Locally created actor cards expose an Edit visual description button and double-click inline editor. Imported signed OAP actors remain read-only, since export preserves their original package. The OPP help button opens the local guide; inspection and explicit signer acceptance remain separate from import.
+- **Actor editing**: Locally created actor cards expose an Edit visual description button, current description length and double-click inline editor. Imported signed OAP actors remain read-only, since export preserves their original package. The OPP help button opens the local guide; inspection and explicit signer acceptance remain separate from import.
 
 ### Open Prop Protocol Library
 - **ID**: `opp-library-fold`
@@ -135,8 +135,8 @@ To toggle Component Labeling Mode in the web interface:
 ### Actor Creation Form
 - **ID**: `actor-create-form`
 - **Used in**: Inside `panel-actors`
-- **Code**: `webapp/index.html`, `webapp/js/actors.js`
-- **Design rules**: Card with actor ID, display name, visual description, and portrait reference image upload.
+- **Code**: `webapp/index.html`, `webapp/js/library.js`
+- **Design rules**: Collapsible card with actor ID, display name, visual description, and a local portrait preview before saving. OAP import and role-agreement cards have the same independent fold controls; folding never accepts a signer or agreement.
 
 ### OAP Import Card
 - **ID**: `oap-import-card`
@@ -184,6 +184,12 @@ To toggle Component Labeling Mode in the web interface:
 - **Code**: `webapp/index.html`, `webapp/js/app.js`
 - **Design rules**: Narrow card with new style ID, style name, 1–9 reference images, and preview harvest button.
 
+### Harvest Result Feedback
+- **ID**: `harvest-result-card`
+- **Used in**: Inside `panel-harvest`, shown after a harvest completes
+- **Code**: `webapp/index.html`, `webapp/js/production.js`
+- **Design rules**: Shows the harvested style's name, visual language and 11-axis card, with View in Styles Library, Copy Style JSON and Dismiss.
+
 ---
 
 ## 6. Credits, Idents & Finished Productions (Panels 02 & 08)
@@ -204,7 +210,13 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `panel-outputs`
 - **Used in**: Section 08 navigation
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
-- **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, and export triggers.
+- **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, Prompts & clips, and export triggers.
+
+### Prompts & Clips Dialog
+- **ID**: `prompts-clips-dialog`
+- **Used in**: Opened by **Prompts & clips** on a finished output card
+- **Code**: `webapp/index.html`, `webapp/js/outputs.js`
+- **Design rules**: One card per passage with its written prompt (copyable), its length after trimming and, when the renderer's original clip is still on disk, that clip. Read-only.
 
 ### Unfinished Runs Manager
 - **ID**: `unfinished-runs-manager`
@@ -316,4 +328,9 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `vocab-helper-dialog`
 - **Code**: `webapp/index.html`, `webapp/js/vocab.js`
 - **Purpose**: Reference guide documenting rotation pools, categories, and keyword syntax.
+
+### Vision Guide Dialog
+- **ID**: `vision-helper-dialog`
+- **Code**: `webapp/index.html`, `webapp/js/guides.js`
+- **Purpose**: Shows `docs/QUALITY_VISION_SETUP.md`, explaining Style Harvest vision versus the Quality Vision frame checker. Opened from the Style Harvest header button or by clicking (or pressing Enter on) the Vision and Quality Vision service cards.
 

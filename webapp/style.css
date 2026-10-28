@@ -1688,7 +1688,6 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
   color: #e5c158;
   border-color: var(--line);
 }
-.refs-receipt .file-list code { cursor: context-menu; }
 .refs-receipt .file-list code:hover {
   border-color: var(--green);
 }
@@ -1720,9 +1719,9 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
 [data-theme=dark] #panel-actors .card-title:has(.progress-toggle) {
   background: transparent;
 }
-#panel-actors .progress-toggle h2 {
+#panel-actors .card-title h2 {
   margin: 0;
-  display: inline;
+  width: 100%;
 }
 #panel-actors .progress-toggle::before {
   content: "";
@@ -1740,9 +1739,9 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
   transform: rotate(0deg);
 }
 #video-form .progress-toggle:focus-visible, #panel-actors .progress-toggle:focus-visible, #video-form .progress-options:focus-visible,#video-form .director-fold summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
-#video-form .card-title:has(.progress-toggle), #panel-actors .card-title:has(.progress-toggle){border-radius:5px;background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix,0%));margin:-12px -12px 18px;padding:0 10px;flex-wrap:wrap}
+#video-form .card-title:has(.progress-toggle){border-radius:5px;background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix,0%));margin:-12px -12px 18px;padding:0 10px;flex-wrap:wrap}
 #video-form .director-fold summary{background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix,0%));gap:8px;flex-wrap:wrap}
-[data-theme=dark] #video-form .card-title:has(.progress-toggle),[data-theme=dark] #panel-actors .card-title:has(.progress-toggle),[data-theme=dark] #video-form .director-fold summary{background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix-dark,0%))}
+[data-theme=dark] #video-form .card-title:has(.progress-toggle),[data-theme=dark] #video-form .director-fold summary{background:color-mix(in srgb,var(--card),var(--lime) var(--progress-mix-dark,0%))}
 #video-form .progress-cue{margin-left:auto;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;white-space:nowrap;color:var(--green)}
 #video-form [data-progress-state="in-progress"] .progress-cue,
 #video-form [data-progress-state="incomplete-collapsed"] .progress-cue {

@@ -78,9 +78,10 @@ class AgentClient:
             return json.load(response)
 
     def inspect(self, kind="status"):
-        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
+        if kind not in ("status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "vision-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "worlds", "storyboards", "quick-start"):
             raise ValueError("Unknown inspection kind")
-        result = self._json("GET", "/api/props/guide" if kind == "opp-guide" else "/api/" + kind)
+        guides = {"opp-guide": "/api/props/guide", "vision-guide": "/api/vision/guide"}
+        result = self._json("GET", guides.get(kind, "/api/" + kind))
         if kind == "outputs":
             for output in result:
                 output["play_url"] = self.base + "/api/media/" + urllib.parse.quote(output["file"], safe="/")
@@ -383,6 +384,15 @@ class AgentClient:
         run_id = str(output_file).split("/")[0]
         return self._json("GET", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/score")
 
+    def output_prompts(self, output_file):
+        """Each passage's written prompt, planned shots and, while it is still on disk, its original rendered clip URL."""
+        run_id = str(output_file).split("/")[0]
+        result = self._json("GET", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/prompts")
+        for passage in result["segments"]:
+            if passage.get("clip_url"):
+                passage["clip_url"] = self.base + passage["clip_url"]
+        return result
+
     def export_package(self, run_id, zip_it=False, allow_private_actors=False):
         """Copy a finished production into an editing package under the app's data folder (never published)."""
         return self._json("POST", "/api/outputs/" + urllib.parse.quote(run_id, safe="") + "/package",
@@ -421,7 +431,7 @@ def main(argv=None):
     storyboard_parser = sub.add_parser("storyboard-result")
     storyboard_parser.add_argument("run_id")
     storyboard_parser.add_argument("--raw-response", action="store_true")
-    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
+    for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "vision-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
         sub.add_parser(name)
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
@@ -503,6 +513,8 @@ def main(argv=None):
     import_opp.add_argument("filename")
     import_opp.add_argument("--allow-unsigned", action="store_true")
     import_opp.add_argument("--accept-signer", default="", metavar="PUBLIC_KEY")
+    output_prompts = sub.add_parser("output-prompts", help="Passage prompts and original clips of a finished output")
+    output_prompts.add_argument("output_file", help="An output's file from the outputs command")
     select_opp = sub.add_parser("select-opp-sheet")
     select_opp.add_argument("prop_id")
     select_opp.add_argument("--use", default="")
@@ -587,6 +599,8 @@ def main(argv=None):
             result = client.inspect_opp(args.filename, args.allow_unsigned)
         elif args.command == "import-opp":
             result = client.import_opp(args.filename, args.allow_unsigned, args.accept_signer)
+        elif args.command == "output-prompts":
+            result = client.output_prompts(args.output_file)
         elif args.command == "select-opp-sheet":
             result = client.select_opp_sheet(args.prop_id, args.use)
         else:

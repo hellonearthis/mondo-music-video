@@ -314,7 +314,8 @@ export function renderOapReportCard(report, allowUnsigned) {
 function makeCollapsibleCard(card, id) {
   if (!card) return;
   const title = card.querySelector(":scope > .card-title");
-  if (!title) return;
+  const heading = title?.querySelector(":scope > h2");
+  if (!heading || heading.querySelector(".progress-toggle")) return;
   const body = document.createElement("div");
   body.className = "progress-body";
   for (const child of [...card.children].filter(c => c !== title)) {
@@ -328,8 +329,8 @@ function makeCollapsibleCard(card, id) {
   toggle.setAttribute("aria-controls", id + "-body");
   toggle.setAttribute("aria-expanded", "true");
 
-  while (title.firstChild) toggle.append(title.firstChild);
-  title.append(toggle);
+  while (heading.firstChild) toggle.append(heading.firstChild);
+  heading.append(toggle);
   body.id = id + "-body";
 
   toggle.addEventListener("click", () => {
@@ -350,41 +351,35 @@ function initActorPanelCards() {
 export function initLibraryForms() {
   initActorPanelCards();
   // Delegated handler for Style cards
-  $("#style-list")?.addEventListener("click", async (e) => {
+  $("#style-list")?.addEventListener("click", handle(async (e) => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
-    e.preventDefault();
-    try {
-      notice("");
-      const card = btn.closest("article[data-id]");
-      const { id, name } = card.dataset;
-      const action = btn.dataset.action;
+    const card = btn.closest("article[data-id]");
+    const { id, name } = card.dataset;
+    const action = btn.dataset.action;
 
-      if (action === "delete-style") {
-        if (!window.confirm(`Delete style “${name}” from this machine? Completed videos are kept.`)) return;
-        await api(`/api/styles/${encodeURIComponent(id)}`, { method: "DELETE" });
-        await loadStyles();
-        scheduleSave();
-        notice("Style deleted from your local collection.");
-      } else if (action === "export-style") {
-        await saveDownload(await api(`/api/styles/${encodeURIComponent(id)}/export`), `${id}.json`);
-        notice(`Exported style “${name}” as ${id}.json`);
-      } else if (action === "duplicate-style") {
-        const existing = (state.styles || []).find((s) => s.id === id);
-        const form = $("#style-form");
-        if (form && existing) {
-          form.elements.id.value = `${existing.id}_copy`.slice(0, 64);
-          form.elements.name.value = `${existing.name} (Copy)`.slice(0, 160);
-          form.elements.direction.value = existing.direction || "";
-          form.scrollIntoView({ behavior: "smooth" });
-          form.elements.name.focus();
-          notice(`Duplicating “${name}”. Edit fields and save.`);
-        }
+    if (action === "delete-style") {
+      if (!window.confirm(`Delete style “${name}” from this machine? Completed videos are kept.`)) return;
+      await api(`/api/styles/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await loadStyles();
+      scheduleSave();
+      notice("Style deleted from your local collection.");
+    } else if (action === "export-style") {
+      await saveDownload(await api(`/api/styles/${encodeURIComponent(id)}/export`), `${id}.json`);
+      notice(`Exported style “${name}” as ${id}.json`);
+    } else if (action === "duplicate-style") {
+      const existing = (state.styles || []).find((s) => s.id === id);
+      const form = $("#style-form");
+      if (form && existing) {
+        form.elements.id.value = `${existing.id}_copy`.slice(0, 64);
+        form.elements.name.value = `${existing.name} (Copy)`.slice(0, 160);
+        form.elements.direction.value = existing.direction || "";
+        form.scrollIntoView({ behavior: "smooth" });
+        form.elements.name.focus();
+        notice(`Duplicating “${name}”. Edit fields and save.`);
       }
-    } catch (error) {
-      notice(error.message);
     }
-  });
+  }));
 
 
   // Double-click inline editor for Actor description
@@ -504,11 +499,18 @@ export function initLibraryForms() {
     }
     if (!file) {
       actorRefPreview.hidden = true;
-      actorRefPreview.innerHTML = "";
+      actorRefPreview.replaceChildren();
       return;
     }
     actorRefObjectUrl = URL.createObjectURL(file);
-    actorRefPreview.innerHTML = `<img class="actor-ref-thumb" src="${actorRefObjectUrl}" alt="Reference preview"><span class="actor-ref-name">${file.name}</span>`;
+    const image = document.createElement("img");
+    image.className = "actor-ref-thumb";
+    image.src = actorRefObjectUrl;
+    image.alt = "";
+    const name = document.createElement("span");
+    name.className = "actor-ref-name";
+    name.textContent = file.name;
+    actorRefPreview.replaceChildren(image, name);
     actorRefPreview.hidden = false;
   }
 

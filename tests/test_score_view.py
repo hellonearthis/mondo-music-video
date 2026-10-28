@@ -1,5 +1,7 @@
 """Musical score view: offsets, cut classification and refusal cases from saved run artifacts."""
+import json
 import unittest
+from pathlib import Path
 
 import test_public_app as public_fixtures
 from mmv.storage import write_json
@@ -85,3 +87,68 @@ class ScoreViewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PassageBreakdownTests(ScoreViewTests):
+    def test_prompts_trimmed_length_and_recorded_clips_only(self):
+        directory = self.run_dir("prompts1")
+        write_json(directory / "prompts.json", {"seg000": "A wide coast at dawn.", "seg001": "Close on the hands."})
+        clip = directory / "clips" / "seg000.mov"
+        clip.parent.mkdir()
+        clip.write_bytes(b"fixture")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)},
+                                                "seg001": {"video": str(directory / "missing.mp4")}})
+        data = self.client.get("/api/outputs/prompts1/prompts").json()
+        first, second = data["segments"]
+        self.assertEqual((first["prompt"], first["duration"], first["trim_frames"]), ("A wide coast at dawn.", 2.0, 48))
+        self.assertEqual(first["shots"][0]["shot_scale"], "wide shot")
+        self.assertEqual(first["clip_url"], "/api/outputs/prompts1/clips/seg000")
+        self.assertFalse(second["has_clip"])
+        self.assertIsNone(second["clip_url"])
+        served = self.client.get(first["clip_url"])
+        self.assertEqual((served.status_code, served.content), (200, b"fixture"))
+        self.assertTrue(served.headers["content-type"].startswith("video/quicktime"))
+        self.assertGreaterEqual(self.client.get("/api/outputs/prompts1/clips/seg001").status_code, 400)
+        self.assertGreaterEqual(self.client.get("/api/outputs/prompts1/clips/..%2Frenders").status_code, 400)
+
+    def test_only_video_files_recorded_for_the_passage_are_served(self):
+        directory = self.run_dir("prompts2")
+        write_json(directory / "renders.json", {"seg000": {"video": str(directory / "output.json")}})
+        self.assertFalse(self.client.get("/api/outputs/prompts2/prompts").json()["segments"][0]["has_clip"])
+        self.assertGreaterEqual(self.client.get("/api/outputs/prompts2/clips/seg000").status_code, 400)
+        self.assertGreaterEqual(self.client.get("/api/outputs/no-such-run/prompts").status_code, 400)
+
+    def test_clips_outside_data_and_comfy_output_are_refused(self):
+        import tempfile
+        directory = self.run_dir("prompts3")
+        with tempfile.TemporaryDirectory() as outside:
+            clip = Path(outside) / "seg000.mp4"
+            clip.write_bytes(b"elsewhere")
+            write_json(directory / "renders.json", {"seg000": {"video": str(clip)}})
+            self.assertFalse(self.client.get("/api/outputs/prompts3/prompts").json()["segments"][0]["has_clip"])
+            self.assertGreaterEqual(self.client.get("/api/outputs/prompts3/clips/seg000").status_code, 400)
+            settings_file = self.home / "settings.json"
+            saved = settings_file.read_text() if settings_file.exists() else None
+            try:
+                write_json(settings_file, {**(json.loads(saved) if saved else {}), "comfy_output": outside})
+                self.assertEqual(self.client.get("/api/outputs/prompts3/clips/seg000").content, b"elsewhere")
+            finally:
+                settings_file.write_text(saved) if saved is not None else settings_file.unlink()
+
+    def test_captioned_output_shows_its_source_passages(self):
+        source = self.run_dir("prompts4")
+        write_json(source / "prompts.json", {"seg000": "Original prompt.", "seg001": "Second."})
+        captioned = self.home / "runs" / "captioned4"
+        write_json(captioned / "output.json", {"file": "captioned.mp4", "kind": "captioned", "title": "With captions",
+                                               "source": "prompts4/music-video.mp4"})
+        data = self.client.get("/api/outputs/captioned4/prompts").json()
+        self.assertEqual((data["run_id"], data["source_run_id"], data["title"]), ("captioned4", "prompts4", "With captions"))
+        self.assertEqual(data["segments"][0]["prompt"], "Original prompt.")
+
+    def test_vision_guide_and_single_style(self):
+        guide = self.client.get("/api/vision/guide").json()
+        self.assertIn("Style Harvest Vision", guide["markdown"])
+        self.assertIn("09. Settings", guide["markdown"])
+        write_json(self.home / "styles" / "coastal.json", {"id": "coastal", "name": "Coastal", "direction": "Salt light."})
+        self.assertEqual(self.client.get("/api/styles/coastal").json()["name"], "Coastal")
+        self.assertGreaterEqual(self.client.get("/api/styles/missing").status_code, 400)

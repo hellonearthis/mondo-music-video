@@ -30,3 +30,18 @@ def map_steps(map_path):
         return int(json.loads(Path(map_path).read_text()).get("default_steps", DEFAULT_STEPS))
     except (OSError, ValueError, TypeError):
         return DEFAULT_STEPS
+
+
+def _diffusion_model(map_path):
+    """The UNET a bundled workflow map's own graph loads, or None."""
+    try:
+        workflow = Path(json.loads(Path(map_path).read_text())["workflow"])
+        graph = json.loads((workflow if workflow.is_absolute() else CONFIG.parent / workflow).read_text())
+        return next((node["inputs"]["unet_name"] for node in graph.values() if node.get("class_type") == "UNETLoader"), None)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def preset_for_model(unet_name):
+    """The bundled preset built for this diffusion model (its graph and step count), or None."""
+    return next((p for p in workflow_presets() if _diffusion_model(p["path"]) == unet_name), None)

@@ -316,6 +316,9 @@ export async function loadSettings() {
         label.append(picker);
       }
       label.append(group);
+      if (name === "workflow_map_path" && data.workflow_steps) {
+        label.append(text("small", `The saved workflow renders with ${data.workflow_steps} sampler steps. Choosing a bundled diffusion model switches to that model's own workflow.`, "settings-note"));
+      }
     } else {
       label.append(input);
       if (name === "writer_launch") {

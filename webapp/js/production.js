@@ -481,6 +481,11 @@ export async function applyStatus(status) {
       if (harvestedId) displayHarvestResult(harvestedId);
     }
   }
+  // Also after a reload: show the latest completed harvest once per operation (Dismiss keeps it hidden).
+  if (status.state === "complete" && status.kind === "harvest" && status.result?.style && state.harvestShown !== status.id) {
+    state.harvestShown = status.id;
+    displayHarvestResult(status.result.style);
+  }
   state.lastState = status.state;
 }
 

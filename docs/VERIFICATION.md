@@ -1,4 +1,20 @@
-# Verification — 1.10.24
+# Verification — 1.10.28
+
+## 1.10.28 — Memory before rendering and resume of finished passages
+
+Focused temporary-data/mock tests: **123 passed** (worker resume clip check, vision service, passage-plan resume, engine lifecycle, ComfyUI and GPU memory handoff). The full suite was deliberately not run during the owner's live render, because its parallel workers would take RAM ComfyUI needed; it is to be run once the render ends. `protected_scheme.check()` returned `[]` and `git diff --check` was clean. Real local evidence (free, owner-authorized resume of a 0.9 MP, 20-step bf16 H3 production with no writer or Laya loaded): Mondo worker 0.06 GiB before rendering; ComfyUI 90 GB steady during a 345-frame passage, peak 93.4 GB with 2.9 GB free at its end, then clean passage 1→2 and 2→3 changeovers. That resume predates the resume fix and re-rendered passage 1. The live app was busy and was not restarted; it still reports 1.10.27 until idle.
+
+## 1.10.27 — H3 model picker brings the model's own workflow
+
+Full temporary-data/mock-service suite: **788 passed + 141 subtests**, including a new test that switches FastH3 → 20-step model → FastH3 model and checks the step count, saved graph steps and kept text encoder. `node --check` passed for `settings.js`, `git diff --check` was clean, a fresh version-handler import reported 1.10.27 and `protected_scheme.check()` returned `[]`. The app was restarted after the owner cancelled the affected run; live `/api/version` reports 1.10.27. The owner's saved selection (20-step model inside the FastH3 graph, 8 steps) was resubmitted and now resolves to the bundled standard workflow, 20 steps, with the same text encoder. No real production, paid calls or GPU work was run.
+
+## 1.10.26 — Collaborator vision guide, harvest result and passage prompts
+
+Full temporary-data/mock-service suite: **787 passed + 141 subtests**. New coverage: passage prompts with trimmed length, `.mov` clip serving, refusal of unrecorded, non-video and out-of-root clip paths, the configured ComfyUI output root, captioned copies following their source, the vision guide and single-style routes, `harvest_text`, and the agent client's `output_prompts` and `vision-guide` inspection (59 MCP tools). `node --check` passed for every web module, `git diff --check` was clean, a fresh version-handler import reported 1.10.26 and `protected_scheme.check()` returned `[]`. The idle app was restarted with existing data and `--no-auto-update` on port 8091: live `/api/version` reports 1.10.26, the served UI returns HTTP 200 with the new dialogs, and status shows no active operation. No real production, paid calls or GPU work was run.
+
+## 1.10.25 — Collaborator library UI integration
+
+Full temporary-data/mock-service suite: **777 passed + 141 subtests**. Focused browser coverage: **4 passed**, including actor-card folding, safe selected-filename preview and reset, style-card expansion, actor creation, OAP collection, and reference-image controls. JavaScript syntax checks passed for `library.js`, `production.js` and `tooltips.js`; `git diff --check` was clean. A fresh version-handler import reported 1.10.25 and `protected_scheme.check()` returned `[]`. The app is running with existing data and `--no-auto-update` as a user service on port 8091: live `/api/version` reports 1.10.25, `/api/status` is complete (no active operation), and the served UI returns HTTP 200. No real production, paid calls or GPU work was run for this release.
 
 ## 1.10.24 — Collaborator fork UI integration
 

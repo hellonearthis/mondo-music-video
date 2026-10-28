@@ -75,7 +75,9 @@ and renderer configuration before starting; model failures stop production.
    seconds. An active operation rejects additional work; never simulate a queue.
 4. On completion, inspect outputs and provide the playback URL or save the
    requested file. To explain the result, `read_music_score` returns the beats,
-   energy, grammars and planned cuts; describe internal cuts as planned. If an
+   energy, grammars and planned cuts; describe internal cuts as planned.
+   `read_output_prompts` (CLI `output-prompts`) lists each passage's written prompt
+   and, while it is still on disk, the renderer's original clip URL. If an
    output lists `quality_warnings` (a near-still passage or borders), tell the
    user; free local renderers already retried once, and paid work needs consent. On failure, inspect the operation log and request IDs. Never
    automatically resubmit paid work after a timeout or ambiguous submission.
@@ -142,7 +144,8 @@ Tell the user these options exist and recommend one for their machine before the
 For the optional slower batched vision check, set `vision_quality_check: true`
 in the video preview request (default `false`). Explain the extra model loading
 and judging time. It needs a local vision-capable `writer_launch` with mmproj;
-this is separate from API vision for style harvesting. Mondo launches it on
+this is separate from API vision for style harvesting (`inspect_studio(kind="vision-guide")`
+explains both). Mondo launches it on
 port 8083 itself; do not ask the user to start it. `inspect_studio` `status` lists
 `services.vision_quality` (`available` = running now, `has_launch` = Mondo can start
 it); offline but launchable is fine. Mondo hands the GPU between models one at a
@@ -179,6 +182,11 @@ Imports never overwrite actors. Imported voice/assets stay inert in the original
 package; this edition has no voice synthesis or audition rendering.
 
 To change a locally created actor's visual description, inspect actors first, then use `update_actor(actor_id, description)` or `mondo-music-video-agent update-actor ID DESCRIPTION`. Imported signed OAP actors need a revised package from their signer. Inspect OPP usage with `inspect_studio(kind="opp-guide")` or the `opp-guide` CLI command. The GUI's Done/Needs/Reviewed cues describe form inputs, not a successful quote. `auto_collapse_panels` defaults on and may be changed through `update_studio_settings` or `mondo-music-video-agent update-settings '{"auto_collapse_panels":false}'`; preview and paid start consent are unchanged.
+
+The Actors & OAP fold controls and local portrait preview are GUI presentation;
+agent actor creation, OAP inspection/import and agreement actions keep their
+existing consent and result checks. A style's 11-axis card is available through
+style inspection/export even when its GUI card is folded.
 
 Audition exports (`export_oap` with `tier="audition"`) leave out cast-only assets.
 Mark a reference audition-cleared only when the user says it is a cleaned or

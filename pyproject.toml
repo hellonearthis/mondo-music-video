@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mondo-music-video"
-version = "1.10.30"
+version = "1.10.28"
 description = "A focused music-video studio with Open Actor Protocol built in"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,7 +45,7 @@ mmv = ["assets/props/*/manifest.json", "assets/props/*/references/*/*.png", "ass
 "mmv.engine.validators" = ["laya/*.py", "laya/*.md"]
 
 [tool.setuptools.data-files]
-"share/mondo-music-video/docs" = ["docs/OPEN_PROP_PROTOCOL.md"]
+"share/mondo-music-video/docs" = ["docs/OPEN_PROP_PROTOCOL.md", "docs/QUALITY_VISION_SETUP.md"]
 "share/mondo-music-video/skills/mondo-music-video" = ["skills/mondo-music-video/SKILL.md", "skills/mondo-music-video/LICENSE"]
 "share/mondo-music-video/skills/mondo-music-video/agents" = ["skills/mondo-music-video/agents/openai.yaml"]
 "share/mondo-music-video/skills/mondo-music-video/references" = ["skills/mondo-music-video/references/requests.md"]

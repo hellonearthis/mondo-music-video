@@ -1,6 +1,6 @@
 // Finished Videos, Musical Score Canvas visualization, and Topaz upscale dialog.
 
-import { $, $$, api, handle, json, keyRow, notice, option, state, text } from "./core.js";
+import { $, $$, api, copyToClipboard, handle, json, keyRow, notice, option, state, text } from "./core.js";
 import { initColourWheels } from "./colorwheel.js";
 import { showQuote } from "./production.js";
 
@@ -118,10 +118,10 @@ async function openPromptsDialog(output) {
         copyBtn.style.marginTop = "8px";
         copyBtn.style.fontSize = "12px";
         copyBtn.textContent = "📋 Copy Prompt";
-        copyBtn.onclick = () => {
-          navigator.clipboard.writeText(seg.prompt);
+        copyBtn.onclick = handle(async () => {
+          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
           notice(`Copied prompt for ${seg.segment_id} to clipboard`);
-        };
+        });
 
         preWrap.append(pre, copyBtn);
         grid.append(preWrap);

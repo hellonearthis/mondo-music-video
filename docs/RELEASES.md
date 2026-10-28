@@ -1,5 +1,43 @@
 # Releases
 
+## 1.10.28 — Nothing else in memory while ComfyUI renders; resume keeps finished passages
+
+- Fixed: a resumed local production rendered every passage again, discarding finished clips (they were moved aside, not deleted). Resume now keeps each passage whose original clip is still on disk with at least its planned frames, logs "already rendered; keeping it", and renders only the rest. Missing or short clips are rendered again.
+- Fixed: after prompt review, Laya's freed CPU memory stayed reserved by the Mondo worker for the whole render. The worker now hands it back to the system before ComfyUI starts, and the operation log records "Mondo worker memory before rendering". A 0.9 MP, 20-step H3 run with the bf16 model and text encoder needs almost all of a 98 GB machine's RAM in ComfyUI (93.4 GB at the end of a 345-frame passage), so even a few hundred megabytes held elsewhere can get ComfyUI killed.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
+## 1.10.27 — The H3 model picker brings the model's own workflow
+
+Fixed: choosing the 20-step H3 model (`minimax_h3_ref2va_pruned_bf16`) in Settings while a FastH3 workflow was selected swapped only the filename into FastH3's graph, so the full model rendered with FastH3's 8 sampler steps. A bundled diffusion model now brings its own bundled workflow and step count whenever they differ from the saved workflow (in both directions), keeping the other chosen models such as the text encoder. A custom workflow whose step count already matches is unchanged. Settings shows the saved workflow's sampler steps, and `inspect_studio("settings")` reports them as `workflow_steps`; agents' `update_studio_settings` with `h3_models` follows the same rule.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
+## 1.10.26 — Vision guide, harvest result and passage prompts
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `9fb0aac`, `b00add2`, `4560bfc`, `e4f747b` and `bdd6973`, reviewed at exact head `bdd6973221af51932549eb8ee743429e69368e06`.
+
+- **Vision guide.** Style Harvest has a guide button, and the Vision and Quality Vision service cards open it too (click, Enter or Space). It explains that Style Harvest uses the Vision endpoint in Settings, while the Quality Vision frame checker is started from the writer launch with a sibling mmproj. Served by `GET /api/vision/guide` and installed with the package.
+- **Harvest result.** When a style harvest finishes (and again after a page reload, until dismissed), Style Harvest shows the new style's name, visual language and 11-axis card, with View in Styles Library, Copy Style JSON and Dismiss (`GET /api/styles/{id}`). Vision models that return the card or directives as JSON objects or lists are stored as text instead of failing.
+- **Prompts & clips.** Each finished output card has a **Prompts & clips** button listing every passage's written prompt (copyable), its length after trimming and, while it is still on disk, the renderer's original clip. A captioned copy shows the passages of the video it was made from.
+- **Reference images** are removed with their visible Remove button; the right-click menu is gone.
+- **Style cards** use the full width of the Styles list.
+- ID fields (actor, style, harvest, agreement, world, vocabulary preset) accept their documented letters, digits, `_` and `-` again in current browsers, which had rejected the old `pattern` as invalid.
+
+Agent parity: `inspect_studio(kind="vision-guide")` / CLI `vision-guide`; `read_output_prompts` (MCP, 59 tools), `AgentClient.output_prompts` and CLI `output-prompts OUTPUT_FILE`, with absolute clip URLs. The harvest result is already available through `inspect_studio(kind="styles")`.
+
+Integration fixes: the clip route serves only the video file recorded for that passage in the run's own `renders.json` (`.mp4`, `.mov`, `.webm`) and only from the data folder or the configured ComfyUI output folder, and the clip-available flag uses the same rule; captioned copies follow their `source` to the original run; the guide no longer implies paid renderers are retried automatically; the passage length is trimmed frames ÷ fps, not the renderer's input duration; the guide names Settings as tab 09; the guide is added to installed package data; the Copy Prompt button uses the shared clipboard helper; the duplicate harvest coercion became one `harvest_text` helper. See [collaborator review](COLLABORATOR_REVIEW.md).
+
+No protected prompts (`parse_harvest_response` is unchanged), private assets, paid operations, automatic retries or GPU work changed.
+
+## 1.10.25 — Actor and style library presentation
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `9ed0aac`, `84763ab`, `fe7bfe3` and `d376164`, reviewed at exact head `d376164fb86d6694b6453689bc330272b5fe498f`. Reference-image tooltips now separate the name, thumbnail and removal hint. The Actors & OAP creation, package-import and role-agreement cards have independent fold controls. A newly selected actor portrait appears before creation, local actor cards show the visual-description length, and styles with an 11-axis card have a clearer expandable view.
+
+Integration fixes: the selected filename is inserted as text instead of HTML; section headings remain headings with their toggle buttons inside; the fold initialization is safe to repeat; the existing style-action handler is reused; the first style is not arbitrarily stretched across the grid; and tooltip guidance includes the visible Remove action. The new fold state and portrait preview are browser presentation only. Agent actor/OAP/agreement operations and style inspection/export already expose the underlying actions and results; no new agent action or paid consent path is introduced. Existing model, renderer, OAP trust and production defaults are unchanged. See [collaborator review](COLLABORATOR_REVIEW.md).
+
+No private assets, protected prompts, automatic paid retries or GPU work changed.
+
 ## 1.10.24 — Reference controls and visual cues
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `132074d` and `7047aa3`, reviewed at exact head `7047aa3dfb95c16f9cdcfd20cc096a93f37b2763`. Individual uploaded reference images can be removed with a right-click menu or a visible Remove button. The Music Video form highlights missing required fields and explains each Needs cue. The dark theme uses the fork's blue and gold palette; instrument performance has a clearer tooltip. The reference removal also refreshes form progress immediately, and keyboard/touch access uses the visible button. Agent preview requests already accept an explicit reference list, so agents can make the same selection before requesting a quote; confirmation and paid-start rules are unchanged.

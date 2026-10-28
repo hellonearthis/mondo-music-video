@@ -35,11 +35,11 @@ from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabula
 from mmv.render import CATALOG
 from mmv.services import check_services
 from mmv.storyboard import Storyboard
-from mmv.workflow_presets import preset_path, workflow_presets
+from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workflow_presets
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.30"
+MGL_APP_VERSION = "1.10.28"
 WEB = Path(__file__).parent
 
 
@@ -121,8 +121,22 @@ def _get_h3_model_info(store, settings=None):
     return {'current': current, 'installed': installed}
 
 
+def _rebase_for_model(store, settings, models):
+    """A bundled diffusion model brings its own workflow: choosing the 20-step H3 model on an 8-step
+    FastH3 workflow (or the reverse) switches to that model's preset and keeps the other chosen models.
+    A custom workflow whose step count already matches is left as it is."""
+    current = _get_h3_model_info(store, settings)['current']
+    chosen = {**current, **models}
+    preset = preset_for_model(chosen.get('diffusion_model'))
+    if preset is None or map_steps(preset['path']) == map_steps(settings['workflow_map_path']):
+        return models
+    settings['workflow_map_path'] = preset['path']
+    return chosen
+
+
 def _update_h3_models(store, settings, models):
     """Derive a private workflow snapshot; never overwrite the source graph/map."""
+    models = _rebase_for_model(store, settings, models)
     builder = _h3_workflow(settings)
     nodes = _h3_model_nodes(builder.base)
     info = _get_h3_model_info(store, settings)
@@ -912,7 +926,7 @@ def create_app(home=None, *, test_hosts=False):
         info = _get_h3_model_info(store)
         s["h3_models"] = info["current"]
         return {"settings": s, "h3_models_installed": info["installed"],
-                "workflow_presets": workflow_presets(),
+                "workflow_presets": workflow_presets(), "workflow_steps": map_steps(s["workflow_map_path"]),
                 "api_profiles": public_profiles(store),
                 "keys": {name: bool(store.key(name)) for name in
                 ("WAVESPEED_API_KEY", "MMV_WRITER_API_KEY", "MMV_VISION_API_KEY", "MMV_COMFY_API_KEY",
@@ -1445,8 +1459,8 @@ def create_app(home=None, *, test_hosts=False):
         if not guide_path.exists():
             guide_path = Path(sys.prefix) / "share/mondo-music-video/docs/QUALITY_VISION_SETUP.md"
         if not guide_path.exists():
-            raise HTTPException(status_code=404, detail="Quality Vision setup guide is not installed")
-        return {"title": "Quality Vision & Style Harvest Architecture Guide", "markdown": guide_path.read_text(encoding="utf-8")}
+            raise HTTPException(status_code=404, detail="Vision setup guide is not installed")
+        return {"title": "Style Harvest and Quality Vision guide", "markdown": guide_path.read_text(encoding="utf-8")}
 
     @app.get("/api/vocabularies")
     def list_vocabularies():
@@ -1840,88 +1854,12 @@ def create_app(home=None, *, test_hosts=False):
 
     @app.get("/api/outputs/{run_id}/prompts")
     def output_prompts(run_id: str):
-        import re
-        run_id = identifier(run_id)
-        directory = inside(store.home / "runs", run_id)
-        output_record = read_json(directory / "output.json", {})
-        if not output_record:
-            raise ValueError("Output not found")
-        plan = read_json(directory / "plan.json", {}) or (read_json(directory / "prepared.json", {}) or {}).get("plan") or {}
-        prompts = read_json(directory / "prompts.json", {}) or {}
-        renders = read_json(directory / "renders.json", {}) or {}
-        segments = []
-        plan_segments = plan.get("segments", [])
-        if plan_segments:
-            for seg in plan_segments:
-                idx = seg.get("index", 0)
-                seg_id = f"seg{idx:03d}"
-                prompt = prompts.get(seg_id, "")
-                work_clip = directory / "assembly" / "work" / f"{seg_id}.mp4"
-                render_info = renders.get(seg_id, {})
-                rendered_video = render_info.get("video") if isinstance(render_info, dict) else None
-                has_clip = work_clip.is_file() or (rendered_video and Path(rendered_video).is_file())
-                clip_url = f"/api/outputs/{run_id}/clips/{seg_id}" if has_clip else None
-                shots = []
-                for s in seg.get("shots", []):
-                    shots.append({
-                        "n": s.get("n"),
-                        "shot_scale": s.get("shot_scale"),
-                        "camera": s.get("camera"),
-                        "cut_time": s.get("cut_time")
-                    })
-                segments.append({
-                    "index": idx,
-                    "segment_id": seg_id,
-                    "prompt": prompt,
-                    "duration": seg.get("duration_input", 0),
-                    "trim_frames": seg.get("trim_frames", 0),
-                    "shots": shots,
-                    "has_clip": bool(has_clip),
-                    "clip_url": clip_url
-                })
-        elif prompts:
-            for seg_id, prompt in sorted(prompts.items()):
-                work_clip = directory / "assembly" / "work" / f"{seg_id}.mp4"
-                render_info = renders.get(seg_id, {})
-                rendered_video = render_info.get("video") if isinstance(render_info, dict) else None
-                has_clip = work_clip.is_file() or (rendered_video and Path(rendered_video).is_file())
-                clip_url = f"/api/outputs/{run_id}/clips/{seg_id}" if has_clip else None
-                segments.append({
-                    "index": int(re.sub(r"\D", "", seg_id) or "0"),
-                    "segment_id": seg_id,
-                    "prompt": prompt,
-                    "duration": 0,
-                    "trim_frames": 0,
-                    "shots": [],
-                    "has_clip": bool(has_clip),
-                    "clip_url": clip_url
-                })
-        return {
-            "run_id": run_id,
-            "title": output_record.get("title", "Finished Production"),
-            "kind": output_record.get("kind", "video"),
-            "segments": segments
-        }
+        return score_view.passage_breakdown(store, run_id)
 
     @app.get("/api/outputs/{run_id}/clips/{segment_id}")
     def output_clip(run_id: str, segment_id: str):
-        import re
-        if not re.match(r"^seg\d{1,4}$", segment_id):
-            raise ValueError("Invalid segment ID")
-        run_id = identifier(run_id)
-        directory = inside(store.home / "runs", run_id)
-        work = directory / "assembly" / "work" / f"{segment_id}.mp4"
-        if work.is_file():
-            return FileResponse(work, media_type="video/mp4", filename=f"{segment_id}.mp4")
-        renders = read_json(directory / "renders.json", {}) or {}
-        render_info = renders.get(segment_id, {})
-        rendered_video = render_info.get("video") if isinstance(render_info, dict) else None
-        if rendered_video:
-            p = Path(rendered_video).resolve()
-            if p.is_file() and p.suffix.lower() == ".mp4":
-                return FileResponse(p, media_type="video/mp4", filename=f"{segment_id}.mp4")
-        raise ValueError("Clip not found")
-
+        path, media_type = score_view.passage_clip(store, run_id, segment_id)
+        return FileResponse(path, media_type=media_type, filename=segment_id + path.suffix.lower())
 
     @app.get("/api/media/{run_id}/{filename}")
     def media_file(run_id: str, filename: str, download: bool = False):
