@@ -17,7 +17,7 @@ To toggle Component Labeling Mode in the web interface:
 - **Used in**: App layout root (always visible)
 - **Code**: `webapp/index.html`, `webapp/style.css`
 - **Design rules**: Height 56px, fixed at top, flex layout with brand mark, edition text, and `.header-actions`. Uses `--surface-2` background with bottom border.
-- **Notes**: Houses branding, community edition info, `#theme-toggle`, and the OAP version badge. The developer component-labeling toggle (`#toggle-component-labels`) lives in Studio Settings (09).
+- **Notes**: Houses branding, community edition info, `#theme-toggle`, and the OAP and OPP version badges (stacked, OPP under OAP; each opens its guide). The developer component-labeling toggle (`#toggle-component-labels`) lives in Studio Settings (09).
 
 ### Navigation Sidebar
 - **ID**: `nav-sidebar`
@@ -119,7 +119,7 @@ To toggle Component Labeling Mode in the web interface:
 
 ## 4. Actors & Open Actor Protocol (Panel 03)
 
-### Actors & OAP Panel
+### Actors & Props Panel
 - **ID**: `panel-actors`
 - **Used in**: Section 03 navigation
 - **Code**: `webapp/index.html`, `webapp/js/library.js`, `webapp/js/guides.js`
@@ -216,7 +216,7 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `outputs-breakdown-view`
 - **Used in**: Replaces the gallery inside `panel-outputs` when **Edit** is pressed on a finished output card; **Back to Finished Videos** returns and **↻ Refresh** re-reads the video (it also refreshes itself whenever an operation finishes)
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
-- **Design rules**: One card per passage: the written prompt (character count, copyable) on the left, the clip on the right with a take menu that previews recorded takes and, for local H3 productions, **Reroll Clip** after a confirmation. The header offers **Re-encode Final Video with Selected Takes** and a Final Video Version menu that downloads preserved versions. Each prompt's length is shown against the renderer's own ceiling when it has one (from its rate card). Under each prompt, a version menu previews prompt versions; **Use this version** (passed versions only), **✏️ Edit prompt** with **Check and use**, and **✍️ Write new prompt** (confirmation, with the writer's estimate for an API writer) go through the production's own checks and Laya. The clip side shows the previewed take's seed and a **Next seed** field with **Random**. Opening the view changes nothing.
+- **Design rules**: One card per passage: the written prompt (character count, copyable) on the left, the clip on the right with a take menu that previews recorded takes and, for local H3 productions, **🎬 Render Clip** (the app's teal action colour, one step lighter) after a confirmation. The header offers **Re-encode Final Video with Selected Takes** and a Final Video Version menu that downloads preserved versions. Each prompt's length is shown against the renderer's own ceiling when it has one (from its rate card). Under each prompt, a version menu previews prompt versions; **Use this version** (passed versions only), **✏️ Edit prompt** with **Check and use**, and **✍️ Write new prompt** (confirmation, with the writer's estimate for an API writer) go through the production's own checks and Laya. The clip side shows the previewed take's seed and a **Next seed** field with **Random**. Opening the view changes nothing.
 
 ### Unfinished Runs Manager
 - **ID**: `unfinished-runs-manager`

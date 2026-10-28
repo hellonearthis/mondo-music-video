@@ -1856,3 +1856,14 @@ html[data-theme=dark] .world-diff-add{background:#1d2e24;color:#c8e4b8}html[data
     grid-template-columns: 1fr;
   }
 }
+
+/* The OAP and OPP badges stack, OPP under OAP, so the header is no wider than with one badge. */
+.protocol-badges{display:flex;flex-direction:column;gap:4px}.protocol-badges .oap-badge{justify-content:space-between}
+
+/* Edit view: Render Clip uses the app's own teal action colour, one step lighter, so it stands out beside each clip. */
+button.secondary.passage-render-btn{background:#2f6b74;color:#fff}
+button.secondary.passage-render-btn:hover{background:#3a7d87}
+button.secondary.passage-render-btn:focus-visible{outline:2px solid #3a7d87;outline-offset:2px}
+button.secondary.passage-render-btn:disabled{opacity:.7;cursor:progress}
+[data-theme=dark] button.secondary.passage-render-btn{background:#356677;color:#fff}
+[data-theme=dark] button.secondary.passage-render-btn:hover{background:#417889}

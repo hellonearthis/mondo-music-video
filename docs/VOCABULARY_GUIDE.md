@@ -161,14 +161,14 @@ The **Juxtaposition Slider** controls the contrast multiplier $M = 2 \times (s /
 
 ### D. Curating Rotation Pools (Step 3: Review the Pools)
 
-Each dimension (`Settings`, `Lighting`, `Mechanisms`, `Costume`, `Practical Effects`) displays its available terms and pool sufficiency (e.g. *14 in pool, about 9 needed*):
+Each dimension (`Settings`, `Lighting`, `Mechanisms`, `Costume`, `Practical Effects`) displays its available terms and a countdown of what it still needs: *14 in pool, 9 needed* until terms are pinned, then e.g. *14 in pool, 7 needed (2/9 selected)*. Excluded terms leave the pool count. Chip states are kept when terms are added, worlds change or the pools are redrawn, and Apply saves them with the chosen worlds, which come back when the draft is reopened.
 
 - **Term Chip States** (Click to cycle):
   1. **Included** *(Default)*: Enters normal rotation according to the chosen classification mode.
   2. **Pinned** *(Amber badge 📌)*: Guaranteed to be injected into the generation rotation; forces the term to appear in generated shot prompts.
   3. **Excluded** *(Strikethrough / Muted)*: Strictly banned from appearing in the video.
 - **Borrow from Nearest World**: When a dimension is low on terms (e.g. *Costume* has 4 terms but needs 6), directors can borrow complementary terms from the nearest semantic cluster with one click.
-- **+ Add Term**: Directors can inject custom terms directly into any world pool.
+- **+ Add Term**: Directors can inject custom terms directly into any world pool; an added term starts **Pinned**, so it counts toward the need and reaches the video in Guided mode.
 
 ### E. Applying to Active Music Video Production
 

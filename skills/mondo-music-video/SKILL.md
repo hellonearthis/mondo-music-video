@@ -193,7 +193,7 @@ package; this edition has no voice synthesis or audition rendering.
 
 To change a locally created actor's visual description, inspect actors first, then use `update_actor(actor_id, description)` or `mondo-music-video-agent update-actor ID DESCRIPTION`. Imported signed OAP actors need a revised package from their signer. Inspect OPP usage with `inspect_studio(kind="opp-guide")` or the `opp-guide` CLI command. The GUI's Done/Needs/Reviewed cues describe form inputs, not a successful quote. `auto_collapse_panels` defaults on and may be changed through `update_studio_settings` or `mondo-music-video-agent update-settings '{"auto_collapse_panels":false}'`; preview and paid start consent are unchanged.
 
-The Actors & OAP fold controls and local portrait preview are GUI presentation;
+The Actors & Props fold controls and local portrait preview are GUI presentation;
 agent actor creation, OAP inspection/import and agreement actions keep their
 existing consent and result checks. A style's 11-axis card is available through
 style inspection/export even when its GUI card is folded.

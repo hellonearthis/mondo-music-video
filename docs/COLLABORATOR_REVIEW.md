@@ -1,5 +1,20 @@
 # Collaborator review record
 
+## Fork `7681740` reviewed (release 1.11.5, 2026-10-28)
+
+The task-start check found head `7681740`, two authored commits after last reviewed `c36c89f` (`60bc3fc`, `7681740`), plus merges of our 1.11.2 and 1.11.3. The patch from our 1.11.3 touched only `webapp/index.html` and four modules in `webapp/js/`, plus the long-standing `Jobs.reset` difference in `mmv/jobs.py`, again not adopted (it has no caller). Claude Code (Opus 5.5) coordinated and integrated; Codex (GPT-6) reviewed read-only.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Functional refactor of `storyboard.js`, `tooltips.js` and the scoring/pool code in `vocab-worlds.js` | Adopted. The tooltip placement and storyboard panel operations were checked branch by branch against the old code and behave the same. Prompt scoring differs only where a prefix-matching keyword precedes an exact match (exact now wins); `toSorted` needs current browsers (Firefox 115+). |
+| Panel auto-collapse `userOpened` guard (`panel_progress.js`) | Adopted. Codex confirmed the old focus-out path closed a completed card the user had reopened, and that `auto_collapse_panels` is still respected. |
+| Chip states kept in pool data; added terms start pinned | Adopted. Before, chip states lived only in the page and any redraw reset them; an added term was Included, which Guided mode does not send. |
+| Pool countdown (`computePoolCounts`, `formatPoolStatusText`) | Adopted with a fix: Codex found that a chip change making a pool short updated its text but not its Borrow button; the pools are now redrawn when the shortage flips. Codex also noted that "in pool" starts from the pool's declared size (e.g. 14 Settings) rather than the four listed terms, so excluding all listed terms still shows terms in the pool; deferred, because counting only listed terms would mark every default pool as low. Remaining: decide whether declared sizes should reflect the catalogue that can actually be applied. |
+| "World selection persistence" | Adapted: Codex found the fork did not restore the applied worlds (initialisation still used the defaults, and Apply then overwrote the saved selection). Apply now saves the world list and initialisation restores it, rebuilding older drafts from their saved active names. |
+| Term chip tooltip and state title | Restored: the fork removed the chip's "Click to cycle" help and its Included/Pinned/Excluded title. |
+
+A browser test covers chip states, countdown, added-term pinning, Guided compilation and world restoration. Firefox was not tested here.
+
 ## Fork `c36c89f` reviewed (release 1.11.1, 2026-10-28)
 
 The task-start check found head `c36c89fc7f2fbfa1f3d4139f5fa7b3ca05225dad`, one authored commit after last reviewed `7367470`, built on the fork's 1.10.31 (not our 1.11.0), so it was ported by hand. Because it touches the protected prompting scheme, the owner was warned first and approved the opt-in approach below. Claude Code (Opus 5.5) coordinated and integrated; Codex (GPT-6) reviewed read-only.

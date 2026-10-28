@@ -454,11 +454,11 @@ export async function showProductionBreakdown(output, { refresh = false } = {}) 
 
       const rerollBtn = document.createElement("button");
       rerollBtn.type = "button";
-      rerollBtn.className = "secondary passage-reroll-btn";
+      rerollBtn.className = "secondary passage-reroll-btn passage-render-btn";
       rerollBtn.style.fontSize = "12px";
       rerollBtn.style.padding = "4px 10px";
-      rerollBtn.textContent = "🎲 Reroll Clip";
-      rerollBtn.dataset.tooltip = `Re-render ${seg.segment_id} with the next seed, using its prompt and cast references`;
+      rerollBtn.textContent = "🎬 Render Clip";
+      rerollBtn.dataset.tooltip = `Render a new take of ${seg.segment_id} with the next seed, using its prompt and cast references`;
 
       const seedLabel = document.createElement("label");
       seedLabel.className = "passage-seed";
@@ -525,7 +525,7 @@ export async function showProductionBreakdown(output, { refresh = false } = {}) 
         const emptyClip = document.createElement("div");
         emptyClip.className = "empty";
         emptyClip.style.padding = "24px";
-        emptyClip.textContent = data.reroll_blocked ? "No clip currently on disk for this passage." : "No clip currently on disk for this passage. Click Reroll Clip to render one.";
+        emptyClip.textContent = data.reroll_blocked ? "No clip currently on disk for this passage." : "No clip currently on disk for this passage. Click Render Clip to render one.";
         vidWrap.append(v, emptyClip);
       }
 

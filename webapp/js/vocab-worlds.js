@@ -166,6 +166,50 @@ export const THEMATIC_WORLDS_LIBRARY = [
   }
 ];
 
+const PROMPT_STOPWORDS = new Set([
+  "the", "and", "that", "this", "with", "from", "for", "through", "into", "over",
+  "under", "about", "your", "they", "them", "their", "have", "been", "were",
+  "will", "would", "could", "should", "some", "what", "when", "where", "which"
+]);
+
+const normalizeRawScore = (rawScore, maxRaw, idx) => {
+  if (maxRaw <= 0) {
+    return Math.max(0.20, Number((0.75 - idx * 0.12).toFixed(2)));
+  }
+  const ratio = rawScore / maxRaw;
+  if (ratio > 0.8) return 0.80 + (ratio - 0.8) * 0.75;
+  if (ratio > 0.4) return 0.55 + (ratio - 0.4) * 0.625;
+  if (ratio > 0) return 0.30 + ratio * 0.625;
+  return Math.max(0.15, 0.28 - idx * 0.03);
+};
+
+const computeWorldRawScore = (world, rawText, meaningfulTokens) => {
+  const worldKeywords = (world.keywords || []).map(k => k.toLowerCase());
+  const worldNameLower = world.name.toLowerCase();
+
+  // 1. Prompt string contains whole keywords/phrases
+  const keywordMatchScore = worldKeywords.reduce(
+    (sum, kw) => sum + (rawText.includes(kw) ? ((kw.includes(" ") || kw.includes("-")) ? 4.5 : 3.0) : 0),
+    0
+  );
+
+  // 2. Token overlap and prefix matching
+  const tokenMatchScore = meaningfulTokens.reduce((sum, tok) => {
+    const nameBonus = worldNameLower.includes(tok) ? 2.5 : 0;
+    const exactMatch = worldKeywords.some(kw => kw === tok);
+    const prefixMatch = !exactMatch && tok.length >= 4 && worldKeywords.some(kw => kw.startsWith(tok) || tok.startsWith(kw));
+    const kwBonus = exactMatch ? 2.0 : prefixMatch ? 1.0 : 0;
+    return sum + nameBonus + kwBonus;
+  }, 0);
+
+  // 3. Signature pools check
+  const poolMatchScore = Object.values(world.pools || {})
+    .flat()
+    .reduce((sum, term) => sum + (rawText.includes(term.toLowerCase()) ? 2.0 : 0), 0);
+
+  return keywordMatchScore + tokenMatchScore + poolMatchScore;
+};
+
 export const scorePromptAgainstWorlds = (promptText, currentWorlds = [], library = THEMATIC_WORLDS_LIBRARY) => {
   const rawText = String(promptText || "").toLowerCase().trim();
   if (!rawText) {
@@ -180,84 +224,22 @@ export const scorePromptAgainstWorlds = (promptText, currentWorlds = [], library
     });
   }
 
-  const tokens = rawText
+  const meaningfulTokens = rawText
     .replace(/[^a-z0-9\s-]/g, " ")
     .split(/\s+/)
-    .filter(t => t.length > 2);
+    .filter(t => t.length > 2 && !PROMPT_STOPWORDS.has(t));
 
-  const STOPWORDS = new Set([
-    "the", "and", "that", "this", "with", "from", "for", "through", "into", "over",
-    "under", "about", "your", "they", "them", "their", "have", "been", "were",
-    "will", "would", "could", "should", "some", "what", "when", "where", "which"
-  ]);
-
-  const meaningfulTokens = tokens.filter(t => !STOPWORDS.has(t));
-
-  const scored = library.map((world) => {
-    let rawScore = 0;
-    const worldKeywords = (world.keywords || []).map(k => k.toLowerCase());
-    const worldNameLower = world.name.toLowerCase();
-
-    // 1. Prompt string contains whole keywords/phrases
-    worldKeywords.forEach(kw => {
-      if (rawText.includes(kw)) {
-        rawScore += (kw.includes(" ") || kw.includes("-")) ? 4.5 : 3.0;
-      }
-    });
-
-    // 2. Token overlap and prefix matching
-    meaningfulTokens.forEach(tok => {
-      if (worldNameLower.includes(tok)) {
-        rawScore += 2.5;
-      }
-      for (const kw of worldKeywords) {
-        if (kw === tok) {
-          rawScore += 2.0;
-          break;
-        } else if (tok.length >= 4 && (kw.startsWith(tok) || tok.startsWith(kw))) {
-          rawScore += 1.0;
-          break;
-        }
-      }
-    });
-
-    // 3. Signature pools check
-    Object.values(world.pools || {}).forEach(terms => {
-      terms.forEach(term => {
-        const termLower = term.toLowerCase();
-        if (rawText.includes(termLower)) {
-          rawScore += 2.0;
-        }
-      });
-    });
-
-    return {
+  const scored = library
+    .map(world => ({
       world,
-      rawScore
-    };
-  });
+      rawScore: computeWorldRawScore(world, rawText, meaningfulTokens)
+    }))
+    .toSorted((a, b) => b.rawScore - a.rawScore);
 
   const maxRaw = Math.max(...scored.map(s => s.rawScore), 0);
 
-  scored.sort((a, b) => b.rawScore - a.rawScore);
-
   const ranked = scored.map((item, idx) => {
-    let normalizedScore = 0.25;
-    if (maxRaw > 0) {
-      const ratio = item.rawScore / maxRaw;
-      if (ratio > 0.8) {
-        normalizedScore = 0.80 + (ratio - 0.8) * 0.75;
-      } else if (ratio > 0.4) {
-        normalizedScore = 0.55 + (ratio - 0.4) * 0.625;
-      } else if (ratio > 0) {
-        normalizedScore = 0.30 + ratio * 0.625;
-      } else {
-        normalizedScore = Math.max(0.15, 0.28 - idx * 0.03);
-      }
-    } else {
-      normalizedScore = Math.max(0.20, Number((0.75 - idx * 0.12).toFixed(2)));
-    }
-
+    const normalizedScore = normalizeRawScore(item.rawScore, maxRaw, idx);
     const finalScore = Number(Math.min(0.98, Math.max(0.12, normalizedScore)).toFixed(2));
     const existing = currentWorlds.find(cw => cw.name === item.world.name);
 
@@ -269,38 +251,45 @@ export const scorePromptAgainstWorlds = (promptText, currentWorlds = [], library
     };
   });
 
+  const selectedFromRanked = ranked.reduce((acc, item) => (
+    acc.length < 4 || item.locked
+      ? [...acc, { name: item.name, score: item.score, active: item.active, locked: item.locked }]
+      : acc
+  ), []);
+
+  const addedNames = new Set(selectedFromRanked.map(item => item.name));
   const lockedWorlds = currentWorlds.filter(w => w.locked);
-  const result = [];
-  const addedNames = new Set();
+  const missingLocked = lockedWorlds
+    .filter(locked => !addedNames.has(locked.name))
+    .map(locked => ({
+      name: locked.name,
+      score: locked.score || 0.50,
+      active: locked.active,
+      locked: true
+    }));
 
-  for (const item of ranked) {
-    if (result.length < 4 || item.locked) {
-      result.push({
-        name: item.name,
-        score: item.score,
-        active: item.active,
-        locked: item.locked
-      });
-      addedNames.add(item.name);
-    }
-  }
-
-  for (const locked of lockedWorlds) {
-    if (!addedNames.has(locked.name)) {
-      result.push({
-        name: locked.name,
-        score: locked.score || 0.50,
-        active: locked.active,
-        locked: true
-      });
-      addedNames.add(locked.name);
-    }
-  }
-
-  result.sort((a, b) => b.score - a.score);
-
-  return result.slice(0, Math.max(4, lockedWorlds.length));
+  return [...selectedFromRanked, ...missingLocked]
+    .toSorted((a, b) => b.score - a.score)
+    .slice(0, Math.max(4, lockedWorlds.length));
 };
+
+const POOL_DIMENSIONS = [
+  { name: "Settings", defaultNeed: 9 },
+  { name: "Lighting", defaultNeed: 6 },
+  { name: "Mechanisms", defaultNeed: 10 },
+  { name: "Costume", defaultNeed: 6 },
+  { name: "Practical Effects", defaultNeed: 5 }
+];
+
+const uniqueCaseInsensitive = (terms) =>
+  terms.reduce(
+    (acc, term) => (
+      acc.some(existing => existing.toLowerCase() === term.toLowerCase())
+        ? acc
+        : [...acc, term]
+    ),
+    []
+  );
 
 export const compilePoolsFromActiveWorlds = (activeWorldNames = [], currentPools = [], library = THEMATIC_WORLDS_LIBRARY) => {
   const activeSet = new Set(activeWorldNames);
@@ -309,45 +298,30 @@ export const compilePoolsFromActiveWorlds = (activeWorldNames = [], currentPools
   if (activeWorlds.length === 0) {
     return (currentPools.length ? currentPools : DEFAULT_POOLS).map(p => ({
       ...p,
-      terms: [...p.terms]
+      terms: [...p.terms],
+      chipStates: p.chipStates ? { ...p.chipStates } : {}
     }));
   }
 
-  const dimensions = [
-    { name: "Settings", defaultNeed: 9 },
-    { name: "Lighting", defaultNeed: 6 },
-    { name: "Mechanisms", defaultNeed: 10 },
-    { name: "Costume", defaultNeed: 6 },
-    { name: "Practical Effects", defaultNeed: 5 }
-  ];
-
-  return dimensions.map(dim => {
+  return POOL_DIMENSIONS.map(dim => {
     const existingPool = currentPools.find(p => p.dimension.toLowerCase() === dim.name.toLowerCase());
     const existingTerms = existingPool ? existingPool.terms : [];
+    const existingChipStates = existingPool?.chipStates ? { ...existingPool.chipStates } : {};
     const need = existingPool ? existingPool.need : dim.defaultNeed;
 
-    const worldTerms = [];
-    activeWorlds.forEach(world => {
-      const termsForDim = world.pools?.[dim.name] || [];
-      termsForDim.forEach(term => {
-        if (!worldTerms.includes(term)) {
-          worldTerms.push(term);
-        }
-      });
-    });
+    const worldTerms = activeWorlds
+      .flatMap(world => world.pools?.[dim.name] || [])
+      .reduce((acc, term) => (acc.includes(term) ? acc : [...acc, term]), []);
 
-    const mergedTerms = [...worldTerms];
-    existingTerms.forEach(t => {
-      if (!mergedTerms.some(mt => mt.toLowerCase() === t.toLowerCase())) {
-        mergedTerms.push(t);
-      }
-    });
+    const mergedTerms = uniqueCaseInsensitive([...worldTerms, ...existingTerms]);
 
     return {
       dimension: dim.name,
       pool: mergedTerms.length,
       need,
-      terms: mergedTerms
+      terms: mergedTerms,
+      baseTermCount: worldTerms.length,
+      chipStates: existingChipStates
     };
   });
 };
@@ -367,30 +341,35 @@ export const DEFAULT_POOLS = [
     dimension: "Settings",
     pool: 14,
     need: 9,
+    baseTermCount: 4,
     terms: ["evidence locker", "sodium-lit stairwell", "records annex", "flooded basement"]
   },
   {
     dimension: "Lighting",
     pool: 11,
     need: 6,
+    baseTermCount: 3,
     terms: ["flickering fluorescent tube", "single desk lamp", "amber exit signs"]
   },
   {
     dimension: "Mechanisms",
     pool: 17,
     need: 10,
+    baseTermCount: 3,
     terms: ["pneumatic tube dispatch", "card-catalogue drawers sliding", "stamp descending"]
   },
   {
     dimension: "Costume",
     pool: 4,
     need: 6,
+    baseTermCount: 2,
     terms: ["grey wool cardigan", "laminated lanyard"]
   },
   {
     dimension: "Practical Effects",
     pool: 9,
     need: 5,
+    baseTermCount: 2,
     terms: ["drifting paper dust", "steam from a vent"]
   }
 ];
@@ -484,19 +463,68 @@ export const dimensionToCategoryKey = (dim) => {
   return map[normalized] || normalized.replace(/\s+/g, "_");
 };
 
+export const computePoolCounts = (pool, borrowed = false) => {
+  const terms = pool.terms || [];
+  const chipStates = pool.chipStates || {};
+  const excludedCount = terms.reduce(
+    (acc, term) => acc + (Number(chipStates[term] || 0) === 2 ? 1 : 0),
+    0
+  );
+  const pinnedCount = terms.reduce(
+    (acc, term) => acc + (Number(chipStates[term] || 0) === 1 ? 1 : 0),
+    0
+  );
+  const activeTermCount = Math.max(0, terms.length - excludedCount);
+  const isCostume = pool.dimension === "Costume";
+  const baseCount = typeof pool.pool === "number" ? Math.max(pool.pool, terms.length) : terms.length;
+  const currentPoolCount = Math.max(
+    0,
+    ((isCostume && borrowed) ? Math.max(9, baseCount) : baseCount) - excludedCount
+  );
+  const need = Number(pool.need || 0);
+  const selectedTowardsNeed = pinnedCount;
+  const remainingNeeded = Math.max(0, need - selectedTowardsNeed);
+  return {
+    currentPoolCount,
+    activeTermCount,
+    pinnedCount,
+    selectedTowardsNeed,
+    excludedCount,
+    need,
+    remainingNeeded,
+    isLow: remainingNeeded > 0 && currentPoolCount < need
+  };
+};
+
+export const formatPoolStatusText = (pool, borrowed = false) => {
+  const { currentPoolCount, selectedTowardsNeed, need, remainingNeeded } = computePoolCounts(pool, borrowed);
+  const isCostume = pool.dimension === "Costume";
+  const borrowedNote = (isCostume && borrowed) ? " (borrowed from Brutalist concrete)" : "";
+  if (selectedTowardsNeed > 0) {
+    if (remainingNeeded === 0) {
+      return `${currentPoolCount} in pool, 0 needed (${selectedTowardsNeed} selected)${borrowedNote}`;
+    }
+    return `${currentPoolCount} in pool, ${remainingNeeded} needed (${selectedTowardsNeed}/${need} selected)${borrowedNote}`;
+  }
+  return `${currentPoolCount} in pool, ${need} needed${borrowedNote}`;
+};
+
+const CHIP_STATE_LABELS = ["Included (default)", "Pinned (forced into rotation)", "Excluded (blocked from rotation)"];
+const CHIP_TOOLTIP = "Click to cycle: Included → Pinned (must appear) → Excluded";
+
 export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
   return pools.map((p, poolIdx) => {
-    const isCostume = p.dimension === "Costume";
-    const currentPoolCount = (isCostume && borrowed) ? 9 : p.pool;
-    const isLow = currentPoolCount < p.need;
+    const { isLow } = computePoolCounts(p, borrowed);
     const lowClass = isLow ? " pool-low" : "";
-    const borrowedNote = (isCostume && borrowed) ? " (borrowed from Brutalist concrete)" : "";
+    const statusText = formatPoolStatusText(p, borrowed);
     const borrowBtn = isLow
       ? `<button type="button" class="quiet worlds-borrow-btn" data-pool="${poolIdx}" data-tooltip="Temporarily borrow terms from the nearest semantic world">Borrow from nearest world</button>`
       : "";
 
     const chips = p.terms.map((term, termIdx) => {
-      return `<button type="button" class="worlds-term-chip" data-pool="${poolIdx}" data-term="${termIdx}" data-state="0" data-tooltip="Click to cycle: Included → Pinned (must appear) → Excluded">${escapeHtml(term)}</button>`;
+      const chipState = Number(p.chipStates?.[term] || 0);
+      const stateClass = chipState === 1 ? " pin" : chipState === 2 ? " ex" : "";
+      return `<button type="button" class="worlds-term-chip${stateClass}" data-pool="${poolIdx}" data-term="${termIdx}" data-state="${chipState}" data-tooltip="${CHIP_TOOLTIP}" title="${CHIP_STATE_LABELS[chipState] || CHIP_STATE_LABELS[0]}">${escapeHtml(term)}</button>`;
     }).join("");
 
     const catKey = dimensionToCategoryKey(p.dimension);
@@ -504,7 +532,7 @@ export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
     const existingTermsSet = new Set(p.terms.map(t => t.toLowerCase().trim()));
     const candidateTerms = catalogItems
       .filter(item => !existingTermsSet.has(item.toLowerCase().trim()))
-      .sort((a, b) => a.localeCompare(b));
+      .toSorted((a, b) => a.localeCompare(b));
 
     const dropdownHtml = candidateTerms.length > 0
       ? `
@@ -519,7 +547,7 @@ export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
       <div class="worlds-pool-dimension-row">
         <div class="worlds-pool-dim-header">
           <span class="worlds-pool-dim-title">${escapeHtml(p.dimension)}</span>
-          <span class="sub${lowClass}">${currentPoolCount} in pool, about ${p.need} needed${borrowedNote}</span>
+          <span class="sub${lowClass}" data-pool-status="${poolIdx}">${statusText}</span>
           ${borrowBtn}
         </div>
         <div class="worlds-chips-wrap">
@@ -532,66 +560,114 @@ export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
   }).join("");
 };
 
-export const compileWorldsToCustomVocab = (pools, mode, domContainer) => {
+const partitionPoolTerms = (pool, poolIdx, domContainer) => {
+  const chips = domContainer
+    ? [...domContainer.querySelectorAll(`.worlds-term-chip[data-pool="${poolIdx}"]`)]
+        .filter(chip => !chip.classList.contains("worlds-add-term-btn"))
+    : [];
+
+  const entries = chips.length > 0
+    ? chips.map(chip => ({
+        term: chip.textContent.trim(),
+        chipState: Number(chip.dataset.state || 0)
+      }))
+    : (pool.terms || []).map(term => ({
+        term,
+        chipState: Number(pool.chipStates?.[term] || 0)
+      }));
+
+  return entries.reduce(
+    (acc, { term, chipState }) => {
+      if (chipState === 2) return { ...acc, excluded: [...acc.excluded, term] };
+      if (chipState === 1) return { ...acc, pinned: [...acc.pinned, term] };
+      return { ...acc, included: [...acc.included, term] };
+    },
+    { pinned: [], excluded: [], included: [] }
+  );
+};
+
+export const compileWorldsToCustomVocab = (pools, mode, domContainer = null) => {
   if (mode === "off") return {};
 
-  const dimToKey = {
-    settings: "settings",
-    lighting: "lighting",
-    mechanisms: "mechanisms",
-    costume: "costume",
-    "practical effects": "practical_effects",
-    practical_effects: "practical_effects"
-  };
-
-  const draft = {};
-
-  pools.forEach((pool, poolIdx) => {
-    const rawDim = pool.dimension.toLowerCase().trim();
-    const key = dimToKey[rawDim] || rawDim.replace(/\s+/g, "_");
-
-    const chips = domContainer ? [...domContainer.querySelectorAll(`.worlds-term-chip[data-pool="${poolIdx}"]`)] : [];
-    const pinned = [];
-    const excluded = [];
-    const included = [];
-
-    if (chips.length > 0) {
-      chips.forEach((chip) => {
-        if (chip.classList.contains("worlds-add-term-btn")) return;
-        const term = chip.textContent.trim();
-        const chipState = Number(chip.dataset.state || 0);
-        if (chipState === 2) {
-          excluded.push(term);
-        } else if (chipState === 1) {
-          pinned.push(term);
-        } else {
-          included.push(term);
-        }
-      });
-    } else {
-      included.push(...(pool.terms || []));
-    }
+  return pools.reduce((draft, pool, poolIdx) => {
+    const key = dimensionToCategoryKey(pool.dimension);
+    const { pinned, excluded, included } = partitionPoolTerms(pool, poolIdx, domContainer);
 
     if (mode === "strict") {
       const activePool = [...pinned, ...included];
-      if (activePool.length > 0) {
-        draft[key] = {
-          mode: "replace",
-          add: activePool,
-          exclude: excluded
-        };
-      }
-    } else if (mode === "guided") {
-      draft[key] = {
-        mode: "append",
-        add: [...pinned],
-        exclude: excluded
+      return activePool.length > 0
+        ? { ...draft, [key]: { mode: "replace", add: activePool, exclude: excluded } }
+        : draft;
+    }
+
+    if (mode === "guided") {
+      return {
+        ...draft,
+        [key]: { mode: "append", add: [...pinned], exclude: excluded }
       };
     }
+
+    return draft;
+  }, {});
+};
+
+export const toggleWorldLock = (worlds, index) =>
+  worlds.map((world, idx) => (idx === index ? { ...world, locked: !world.locked } : world));
+
+export const setWorldActive = (worlds, index, active) =>
+  worlds.map((world, idx) => (idx === index ? { ...world, active: Boolean(active) } : world));
+
+export const setPoolChipState = (pools, poolIdx, term, nextState) =>
+  pools.map((pool, idx) => {
+    if (idx !== poolIdx) return pool;
+    const currentChipStates = { ...(pool.chipStates || {}) };
+    if (nextState === 0) {
+      const { [term]: _, ...remainingStates } = currentChipStates;
+      return { ...pool, chipStates: remainingStates };
+    }
+    return { ...pool, chipStates: { ...currentChipStates, [term]: nextState } };
   });
 
-  return draft;
+export const addTermToPool = (pools, poolIdx, rawTerm) => {
+  const cleaned = String(rawTerm || "").trim();
+  if (!cleaned) return pools;
+  return pools.map((pool, idx) => {
+    if (idx !== poolIdx) return pool;
+    const currentChipStates = { ...(pool.chipStates || {}), [cleaned]: 1 };
+    if (pool.terms.includes(cleaned)) {
+      return {
+        ...pool,
+        chipStates: currentChipStates
+      };
+    }
+    return {
+      ...pool,
+      terms: [...pool.terms, cleaned],
+      pool: (typeof pool.pool === "number" ? pool.pool : pool.terms.length) + 1,
+      chipStates: currentChipStates
+    };
+  });
 };
+
+// The world list a draft was applied with: its saved list, or (drafts saved before 1.11.5) the defaults with the saved
+// active names switched on, plus any active world the defaults do not list.
+export const restoreWorlds = (saved, defaults = DEFAULT_WORLDS) => {
+  if (Array.isArray(saved?.worlds) && saved.worlds.length) return saved.worlds.map(w => ({ ...w }));
+  if (!Array.isArray(saved?.activeWorlds)) return defaults.map(w => ({ ...w }));
+  const active = new Set(saved.activeWorlds);
+  const known = new Set(defaults.map(w => w.name));
+  return [
+    ...defaults.map(w => ({ ...w, active: active.has(w.name) })),
+    ...saved.activeWorlds.filter(name => !known.has(name)).map(name => ({ name, score: 0.5, active: true, locked: false }))
+  ];
+};
+
+const clonePools = (pools) =>
+  pools.map(pool => ({
+    ...pool,
+    terms: [...(pool.terms || [])],
+    chipStates: pool.chipStates ? { ...pool.chipStates } : {}
+  }));
 
 export function initVocabWorlds() {
   const container = $("#vocab-worlds-workspace");
@@ -604,11 +680,11 @@ export function initVocabWorlds() {
     mode: appState.thematicWorlds?.mode || "guided",
     slider: typeof appState.thematicWorlds?.slider === "number" ? appState.thematicWorlds.slider : 50,
     borrowed: false,
-    worlds: [...DEFAULT_WORLDS],
-    sections: [...DEFAULT_SECTIONS],
-    pools: Array.isArray(appState.thematicWorlds?.pools)
-      ? JSON.parse(JSON.stringify(appState.thematicWorlds.pools))
-      : JSON.parse(JSON.stringify(DEFAULT_POOLS))
+    worlds: restoreWorlds(appState.thematicWorlds),
+    sections: DEFAULT_SECTIONS.map(s => ({ ...s })),
+    pools: clonePools(
+      Array.isArray(appState.thematicWorlds?.pools) ? appState.thematicWorlds.pools : DEFAULT_POOLS
+    )
   };
 
   // Eagerly pre-load catalog so category dropdowns populate immediately
@@ -731,7 +807,7 @@ export function initVocabWorlds() {
     if (lockBtn) {
       const idx = Number(lockBtn.dataset.index);
       if (state.worlds[idx]) {
-        state.worlds[idx].locked = !state.worlds[idx].locked;
+        state.worlds = toggleWorldLock(state.worlds, idx);
         updateView();
       }
       return;
@@ -752,21 +828,36 @@ export function initVocabWorlds() {
       termChip.dataset.state = String(nextState);
       termChip.classList.toggle("pin", nextState === 1);
       termChip.classList.toggle("ex", nextState === 2);
-      const labels = ["Included (default)", "Pinned (forced into rotation)", "Excluded (blocked from rotation)"];
-      termChip.title = labels[nextState];
+      termChip.title = CHIP_STATE_LABELS[nextState];
+      const poolIdx = Number(termChip.dataset.pool);
+      const term = termChip.textContent.trim();
+      const targetPool = state.pools[poolIdx];
+      if (targetPool && term) {
+        state.pools = setPoolChipState(state.pools, poolIdx, term, nextState);
+        const updatedPool = state.pools[poolIdx];
+        const statusEl = container.querySelector(`[data-pool-status="${poolIdx}"]`);
+        if (statusEl && updatedPool) {
+          const { isLow } = computePoolCounts(updatedPool, state.borrowed);
+          if (isLow !== statusEl.classList.contains("pool-low")) {
+            updateView();            // the Borrow button comes and goes with a shortage; chip states survive the redraw
+          } else {
+            statusEl.textContent = formatPoolStatusText(updatedPool, state.borrowed);
+          }
+        }
+      }
       return;
     }
 
     const addBtn = event.target.closest(".worlds-add-term-btn");
     if (addBtn) {
       const poolIdx = Number(addBtn.dataset.pool);
-      const input = prompt(`Enter a custom term to add to the ${state.pools[poolIdx].dimension} pool:`);
-      if (input && input.trim()) {
+      const targetPool = state.pools[poolIdx];
+      const input = targetPool ? prompt(`Enter a custom term to add to the ${targetPool.dimension} pool:`) : "";
+      if (input && input.trim() && targetPool) {
         const cleaned = input.trim();
-        state.pools[poolIdx].terms.push(cleaned);
-        state.pools[poolIdx].pool += 1;
+        state.pools = addTermToPool(state.pools, poolIdx, cleaned);
         updateView();
-        notice(`Added "${cleaned}" to ${state.pools[poolIdx].dimension} pool.`);
+        notice(`Added "${cleaned}" to ${targetPool.dimension} pool.`);
       }
       return;
     }
@@ -794,6 +885,7 @@ export function initVocabWorlds() {
         mode: state.mode,
         slider: state.slider,
         activeWorlds,
+        worlds: state.worlds,
         pools: state.pools
       };
 
@@ -817,7 +909,7 @@ export function initVocabWorlds() {
       state.borrowed = false;
       state.worlds = DEFAULT_WORLDS.map(w => ({ ...w }));
       state.sections = DEFAULT_SECTIONS.map(s => ({ ...s }));
-      state.pools = JSON.parse(JSON.stringify(DEFAULT_POOLS));
+      state.pools = clonePools(DEFAULT_POOLS);
       updateView();
       notice("Thematic Worlds reset back to defaults.");
       return;
@@ -830,7 +922,7 @@ export function initVocabWorlds() {
     if (check) {
       const idx = Number(check.dataset.index);
       if (state.worlds[idx]) {
-        state.worlds[idx].active = check.checked;
+        state.worlds = setWorldActive(state.worlds, idx, check.checked);
         const activeNames = state.worlds.filter(w => w.active).map(w => w.name);
         state.pools = compilePoolsFromActiveWorlds(activeNames, state.pools, THEMATIC_WORLDS_LIBRARY);
         updateView();
@@ -842,13 +934,11 @@ export function initVocabWorlds() {
     if (select && select.value) {
       const poolIdx = Number(select.dataset.pool);
       const chosen = select.value.trim();
-      if (chosen && state.pools[poolIdx]) {
-        if (!state.pools[poolIdx].terms.includes(chosen)) {
-          state.pools[poolIdx].terms.push(chosen);
-          state.pools[poolIdx].pool += 1;
-          updateView();
-          notice(`Added "${chosen}" to ${state.pools[poolIdx].dimension} pool.`);
-        }
+      const targetPool = state.pools[poolIdx];
+      if (chosen && targetPool && !targetPool.terms.includes(chosen)) {
+        state.pools = addTermToPool(state.pools, poolIdx, chosen);
+        updateView();
+        notice(`Added "${chosen}" to ${targetPool.dimension} pool.`);
       }
       return;
     }

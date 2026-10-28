@@ -1,4 +1,9 @@
-# Verification — 1.11.4
+# Verification — 1.11.5
+
+## 1.11.5 — Collaborator fork `7681740` (Thematic Worlds, panel auto-collapse)
+
+New Chromium browser test of Thematic Worlds chip states, pool countdown, added-term pinning, Guided compilation and world restoration. Full temporary-data/mock-service suite: **804 passed + 141 subtests**. Firefox was not tested here.
+
 
 ## 1.11.4 — Cancellable re-encodes, crash leftovers
 
