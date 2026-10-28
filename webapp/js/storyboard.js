@@ -23,6 +23,28 @@ export function storyboardFromForm(form, request) {
   if (request.kind === 'ident') request.ident_all_references = form.elements.ident_all_references.checked;
 }
 
+const updatePanelDirection = (board, index, direction) => ({
+  ...board,
+  panels: board.panels.map((panel, idx) => (idx === index ? { ...panel, direction } : panel))
+});
+
+const swapPanels = (board, indexA, indexB) => ({
+  ...board,
+  panels: board.panels.map((panel, idx) =>
+    idx === indexA ? board.panels[indexB] : idx === indexB ? board.panels[indexA] : panel
+  )
+});
+
+const removePanelAt = (board, index) => ({
+  ...board,
+  panels: board.panels.filter((_, idx) => idx !== index)
+});
+
+const appendTextPanel = (board) => ({
+  ...board,
+  panels: [...board.panels, { image: '', direction: '' }]
+});
+
 function render(form) {
   const board = read(form), container = form.querySelector('.storyboard-panels');
   form.querySelector('.storyboard-images').textContent = board.images.length + ' storyboard image(s)';
@@ -36,17 +58,16 @@ function render(form) {
     }
     const area = document.createElement('textarea'); area.rows = 3; area.maxLength = 1200; area.value = panel.direction;
     area.setAttribute('aria-label', `Panel ${index + 1} direction`);
-    area.oninput = () => { const current = read(form); current.panels[index].direction = area.value; save(form, current); };
+    area.oninput = () => save(form, updatePanelDirection(read(form), index, area.value));
     card.append(area);
     for (const [label, delta] of [['Move up', -1], ['Move down', 1]]) {
       const move = button(label, () => {
-        const current = read(form); const other = index + delta;
-        [current.panels[index], current.panels[other]] = [current.panels[other], current.panels[index]];
-        save(form, current); render(form);
+        save(form, swapPanels(read(form), index, index + delta));
+        render(form);
       });
       move.disabled = index + delta < 0 || index + delta >= board.panels.length; card.append(move);
     }
-    card.append(button('Remove panel', () => { const current = read(form); current.panels.splice(index, 1); save(form, current); render(form); }));
+    card.append(button('Remove panel', () => { save(form, removePanelAt(read(form), index)); render(form); }));
     container.append(card);
   });
 }
@@ -99,7 +120,7 @@ export function initStoryboards() {
     });
     actions.append(button('Add text panel', () => {
       const board = read(form); if (board.panels.length >= 24) throw new Error('Use at most 24 panels');
-      board.panels.push({image: '', direction: ''}); save(form, board); render(form);
+      save(form, appendTextPanel(board)); render(form);
     }), button('Preview interpretation', async () => {
       if (form.dataset.storyboardPending) throw new Error('Wait for uploads to finish');
       const board = read(form);

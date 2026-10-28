@@ -116,7 +116,7 @@ function paint(unit) {
     unit.cue.tabIndex = 0;
     unit.cue.setAttribute("aria-label", `Needs: ${missing.join("; ")}`);
   } else {
-    delete unit.cue.dataset.tooltip;
+    unit.cue.removeAttribute("data-tooltip");
     unit.cue.removeAttribute("tabindex");
     unit.cue.removeAttribute("aria-label");
   }
@@ -155,8 +155,8 @@ function paint(unit) {
     for (const group of groups(unit)) {
       if (Object.hasOwn(group.dataset, "progressWasHidden")) {
         group.hidden = group.dataset.progressWasHidden === "1";
-        delete group.dataset.progressWasHidden;
-        delete group.dataset.progressReveal;
+        group.removeAttribute("data-progress-was-hidden");
+        group.removeAttribute("data-progress-reveal");
       }
     }
   }
@@ -186,6 +186,8 @@ export function restorePanelProgress(project) {
     unit.reviewed = Boolean(saved.reviewed[unit.id]);
     unit.partial = Boolean(saved.partial[unit.id]);
     unit.blurred = false;
+    const progress = progressFor(unit);
+    unit.userOpened = Boolean(unit.open && progress.required_total && progress.required_filled === progress.required_total);
   }
   refreshPanelProgress();
 }
@@ -195,6 +197,7 @@ export function resetPanelProgress() {
     unit.reviewed = false;
     unit.partial = false;
     unit.open = true;
+    unit.userOpened = false;
     unit.blurred = false;
     if (unit.details) {
       const target = unit.id === "director-format";
@@ -221,6 +224,7 @@ export function showPanelForQuoteError(message) {
     parent.partial = false;
   }
   unit.open = true;
+  unit.userOpened = true;
   unit.partial = false;
   refreshPanelProgress();
   save();
@@ -299,11 +303,14 @@ export function initPanelProgress(settings, scheduleSave) {
     if (unit.id in saved.sections && !unit.details) unit.open = Boolean(saved.sections[unit.id]);
     unit.reviewed = Boolean(saved.reviewed?.[unit.id]);
     unit.partial = Boolean(saved.partial?.[unit.id]);
+    const initialProgress = progressFor(unit);
+    unit.userOpened = Boolean(unit.open && initialProgress.required_total && initialProgress.required_filled === initialProgress.required_total);
     if (unit.details) {
       unit.element.querySelector(":scope > summary").addEventListener("click", () => { unit.visited = true; });
       unit.element.addEventListener("toggle", () => {
         if (unit.ignoreNextToggle) { unit.ignoreNextToggle = false; return; }
         if (!unit.open && unit.visited) unit.reviewed = true;
+        if (unit.visited) unit.userOpened = unit.open;
         unit.partial = false;
         refreshPanelProgress();
         save();
@@ -311,6 +318,7 @@ export function initPanelProgress(settings, scheduleSave) {
     } else {
       unit.toggle.addEventListener("click", () => {
         unit.open = !unit.open;
+        unit.userOpened = unit.open;
         unit.partial = false;
         unit.blurred = false;
         if (!unit.open && !requiredNeeds(unit.id).length) unit.reviewed = true;
@@ -322,6 +330,7 @@ export function initPanelProgress(settings, scheduleSave) {
       event.preventDefault();
       event.stopPropagation();
       unit.open = true;
+      unit.userOpened = true;
       unit.partial = true;
       refreshPanelProgress();
       save();
@@ -346,7 +355,7 @@ export function initPanelProgress(settings, scheduleSave) {
     setTimeout(() => {
       if (unit.element.contains(document.activeElement)) return;
       unit.blurred = true;
-      if (!autoCollapse) return;
+      if (!autoCollapse || unit.userOpened) return;
       const progress = progressFor(unit);
       if (progress.required_total && progress.required_filled === progress.required_total && unit.open) {
         unit.open = false;
@@ -359,7 +368,7 @@ export function initPanelProgress(settings, scheduleSave) {
     refreshPanelProgress();
     const first = units[0];
     const progress = progressFor(first);
-    if (autoCollapse && first.blurred && first.open && songReady() &&
+    if (autoCollapse && !first.userOpened && first.blurred && first.open && songReady() &&
         progress.required_filled === progress.required_total) {
       first.open = false;
       refreshPanelProgress();
