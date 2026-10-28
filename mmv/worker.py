@@ -878,6 +878,22 @@ def main():
             raise SystemExit(1)
         finally:
             runtime.cleanup()
+    elif sys.argv[1] == 'reroll_prompt':
+        home, directory, segment_id = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
+        import signal
+        from . import runtime, takes
+        def terminate(signum, frame): raise SystemExit(130)
+        signal.signal(signal.SIGTERM, terminate)
+        try:
+            takes.reroll_prompt_worker(home, directory, segment_id)
+        except Exception as exc:
+            message = str(exc)
+            for value in Storage(home).secret_values():
+                message = message.replace(value, '[redacted]')
+            print(type(exc).__name__ + ': ' + message, flush=True)
+            raise SystemExit(1)
+        finally:
+            runtime.cleanup()
     else: raise SystemExit('Unknown worker phase')
 
 if __name__=='__main__':main()

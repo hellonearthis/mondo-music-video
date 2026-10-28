@@ -189,3 +189,46 @@ class PassageBreakdownTests(ScoreViewTests):
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take1").content, b"take-one-bytes")
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000?take=take2").content, b"take-two-bytes")
         self.assertEqual(self.client.get("/api/outputs/takes_run/clips/seg000").content, b"take-two-bytes")
+
+    def test_passage_prompt_takes_initialization_and_selection(self):
+        directory = self.run_dir("prompt_takes_run")
+        write_json(directory / "prompts.json", {"seg000": "Original coastline prompt.", "seg001": "Original hands prompt."})
+        data = self.client.get("/api/outputs/prompt_takes_run/prompts").json()
+        seg0 = data["segments"][0]
+        self.assertEqual(seg0["active_prompt_take"], "prompt1")
+        self.assertEqual(len(seg0["prompt_takes"]), 1)
+        self.assertEqual(seg0["prompt_takes"][0]["prompt"], "Original coastline prompt.")
+
+        # Add a second prompt take and select it
+        ptakes_path = directory / "prompt_takes.json"
+        ptakes_record = json.loads(ptakes_path.read_text(encoding="utf-8"))
+        ptakes_record["segments"]["seg000"]["takes"].append({
+            "id": "prompt2",
+            "label": "Prompt 2 (reroll)",
+            "prompt": "Rerolled dramatic coastline prompt with crashing waves.",
+            "char_count": 55,
+        })
+        write_json(ptakes_path, ptakes_record)
+
+        res = self.client.post("/api/outputs/prompt_takes_run/prompts/seg000/select", json={"prompt_take_id": "prompt2"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["active_prompt_take"], "prompt2")
+        self.assertEqual(res.json()["prompt"], "Rerolled dramatic coastline prompt with crashing waves.")
+
+        # Verify prompts.json and breakdown endpoint reflect the selected prompt
+        updated_prompts = json.loads((directory / "prompts.json").read_text(encoding="utf-8"))
+        self.assertEqual(updated_prompts["seg000"], "Rerolled dramatic coastline prompt with crashing waves.")
+        data_after = self.client.get("/api/outputs/prompt_takes_run/prompts").json()
+        self.assertEqual(data_after["segments"][0]["prompt"], "Rerolled dramatic coastline prompt with crashing waves.")
+        self.assertEqual(data_after["segments"][0]["active_prompt_take"], "prompt2")
+        self.assertEqual(len(data_after["segments"][0]["prompt_takes"]), 2)
+
+        # Save a manually edited prompt and verify it becomes prompt3 (edited) while keeping prompt1 & prompt2
+        edit_res = self.client.post("/api/outputs/prompt_takes_run/prompts/seg000/edit", json={"prompt": "Manually edited custom coastline prompt."})
+        self.assertEqual(edit_res.status_code, 200, edit_res.text)
+        edit_data = edit_res.json()
+        self.assertEqual(edit_data["active_prompt_take"], "prompt3")
+        self.assertEqual(edit_data["prompt_take"]["label"], "Prompt 3 (edited)")
+        self.assertEqual(edit_data["prompt"], "Manually edited custom coastline prompt.")
+        self.assertEqual(len(edit_data["prompt_takes"]), 3)
+        self.assertEqual(json.loads((directory / "prompts.json").read_text(encoding="utf-8"))["seg000"], "Manually edited custom coastline prompt.")

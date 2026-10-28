@@ -1,5 +1,16 @@
 # Releases
 
+## 1.10.32 — Prompt editing, prompt reroll, and versioned take history
+
+- **Manual prompt editing**: Added an `✏️ Edit Prompt` button to each passage card in the Production Breakdown view. Edit prompt text directly in an inline monospace editor with live character counting, and save it as a new version (`Prompt N (edited)`) in `prompt_takes.json` while keeping all earlier versions in the prompt dropdown.
+- **Passage prompt reroll**: Added a `🎲 Reroll Prompt` button to re-run the writer LLM and Laya prompt reviewer for an individual segment, recording the newly validated prompt as a fresh version (`Prompt N (reroll)`).
+- **Passage clip reroll & take history**: Added a `🎲 Reroll Clip` button and takes dropdown above each passage video player to re-render individual segments with a new seed while preserving all previous takes.
+- **Final video re-assembly**: Added a `🎬 Re-encode Final Video` button to reassemble the complete music video directly from original renderer clips using the currently selected segment takes. Preserves all previous final video versions (`music-video-v1.mp4`, `music-video-v2.mp4`, etc.) in `final_takes.json` with a version picker and download button.
+- **Production Breakdown sub-view**: Converted the Prompts & clips modal into a full in-panel view with back navigation, side-by-side prompt and video layouts, and prompt character count badges.
+- **Agent & MCP parity**: Added `reroll_segment`, `select_segment_take`, `reroll_prompt`, `select_prompt_take`, `edit_prompt`, and `reassemble_output` across the Python agent client, CLI, and MCP server (65 tools).
+
+No protected prompts, private assets, or paid operations changed without operator consent.
+
 ## 1.10.28 — Nothing else in memory while ComfyUI renders; resume keeps finished passages
 
 - Fixed: a resumed local production rendered every passage again, discarding finished clips (they were moved aside, not deleted). Resume now keeps each passage whose original clip is still on disk with at least its planned frames, logs "already rendered; keeping it", and renders only the rest. Missing or short clips are rendered again.

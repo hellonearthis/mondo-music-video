@@ -39,7 +39,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.10.31"
+MGL_APP_VERSION = "1.10.32"
 WEB = Path(__file__).parent
 
 
@@ -685,6 +685,14 @@ class CaptionVideoRequest(StrictModel):
 
 class TakeSelectRequest(StrictModel):
     take_id: str = Field(pattern=r"^take\d{1,4}$")
+
+
+class PromptTakeSelectRequest(StrictModel):
+    prompt_take_id: str = Field(pattern=r"^prompt\d{1,4}$")
+
+
+class PromptEditRequest(StrictModel):
+    prompt: str = Field(min_length=1, max_length=64000)
 
 
 class RerollRequest(StrictModel):
@@ -1879,6 +1887,37 @@ def create_app(home=None, *, test_hosts=False):
         with jobs.lock:
             jobs.require_idle()
             return takes.select_segment_take(store, run_id, segment_id, value.take_id)
+
+    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/select")
+    def select_output_prompt_take(run_id: str, segment_id: str, value: PromptTakeSelectRequest):
+        from mmv import takes
+        with jobs.lock:
+            jobs.require_idle()
+            return takes.select_prompt_take(store, run_id, segment_id, value.prompt_take_id)
+
+    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/edit")
+    def edit_output_prompt_take(run_id: str, segment_id: str, value: PromptEditRequest):
+        from mmv import takes
+        with jobs.lock:
+            jobs.require_idle()
+            return takes.save_edited_prompt_take(store, run_id, segment_id, value.prompt)
+
+    @app.post("/api/outputs/{run_id}/prompts/{segment_id}/reroll")
+    def reroll_output_prompt(run_id: str, segment_id: str):
+        from mmv import takes
+        with jobs.lock:
+            jobs.require_idle()
+            origin = score_view._origin_run(store, run_id)
+            directory = inside(store.home / "runs", identifier(origin))
+            takes.validate_segment_id(segment_id)
+            def run_reroll_prompt(context):
+                context.update(f"Starting prompt reroll for {segment_id}", 5)
+                context.command(
+                    [sys.executable, "-u", "-m", "mmv.worker", "reroll_prompt", str(store.home), str(directory), segment_id],
+                    progress_path=directory / "progress.json",
+                )
+                return score_view.passage_breakdown(store, origin)
+            return jobs.start("reroll_prompt", run_reroll_prompt, run_id=job_run_id(store, "reroll_prompt", f"{origin}_{segment_id}"))
 
     @app.post("/api/outputs/{run_id}/reroll/{segment_id}")
     def reroll_output_segment(run_id: str, segment_id: str, value: RerollRequest | None = None):

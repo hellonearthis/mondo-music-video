@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.10.31** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.10.32** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -64,6 +64,7 @@ passage to its planned frames, joins the picture, and restores your original son
 - Lyric captions: a `lyrics.srt` file, or the words burned into the video, from your timed lyric lines; later caption copies are rebuilt from the saved original clips.
 - Every clean, subliminal and captioned version uses one final FFmpeg encode directly from original clips at the same CRF-6 quality. Topaz upscaling is the explicit exception.
 - Finished videos to play, download, or upscale with your installed Topaz tools or the Topaz cloud service (your own Topaz API key; Topaz charges credits).
+- Production Breakdown (Prompts & clips view) for completed runs: inspect each passage's prompt, character count, and clip side by side; switch between rendered takes or click `🎲 Reroll Clip` to re-render individual segments; switch prompt versions, edit prompts manually (`✏️ Edit Prompt`), or click `🎲 Reroll Prompt` to generate fresh prompt drafts; and re-encode the final music video (`🎬 Re-encode Final Video`) from original clips with full final-version history.
 
 Use local models or supported API providers. One production runs at a time,
 with progress, logs and cancellation. You provide your media, models and API
@@ -272,9 +273,9 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.10.0 MCP server has 51 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
+The v1.10.32 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, instrument-sheet import, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
-deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos and visual vocabulary presets. Reconnect the MCP client after upgrading to refresh its tool list.
+deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets, passage clip takes and rerolling (`reroll_segment`, `select_segment_take`), passage prompt takes, manual prompt editing, and prompt rerolling (`reroll_prompt`, `select_prompt_take`, `edit_prompt`), and final video versioned re-assembly (`reassemble_output`). Reconnect the MCP client after upgrading to refresh its tool list.
 
 **Open Prop Protocol:** Import verified `.opp` packages into a private, general
 prop library (OPP v0.1 and v0.2; v0.2 generic assets such as stems are recorded but not rendered). For now, a selected OPP base or interaction sheet can serve as an

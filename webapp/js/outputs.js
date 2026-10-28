@@ -185,7 +185,23 @@ export async function showProductionBreakdown(output) {
         metaBar.style.display = "flex";
         metaBar.style.justifyContent = "space-between";
         metaBar.style.alignItems = "center";
+        metaBar.style.gap = "8px";
         metaBar.style.marginBottom = "6px";
+        metaBar.style.flexWrap = "wrap";
+
+        const leftControls = document.createElement("div");
+        leftControls.style.display = "flex";
+        leftControls.style.alignItems = "center";
+        leftControls.style.gap = "8px";
+        leftControls.style.flexWrap = "wrap";
+
+        const promptSelect = document.createElement("select");
+        promptSelect.className = "passage-prompt-select";
+        promptSelect.dataset.segmentId = seg.segment_id;
+        promptSelect.style.fontSize = "12px";
+        promptSelect.style.padding = "4px 8px";
+        promptSelect.style.minWidth = "140px";
+        promptSelect.dataset.tooltip = `Select a saved prompt version for ${seg.segment_id}`;
 
         const charCount = document.createElement("span");
         charCount.className = "prompts-passage-char-count";
@@ -194,18 +210,13 @@ export async function showProductionBreakdown(output) {
         charCount.style.fontFamily = "monospace";
         charCount.textContent = `${seg.prompt.length.toLocaleString()} chars`;
 
-        const copyBtn = document.createElement("button");
-        copyBtn.type = "button";
-        copyBtn.className = "quiet";
-        copyBtn.style.fontSize = "12px";
-        copyBtn.style.padding = "2px 8px";
-        copyBtn.textContent = "📋 Copy Prompt";
-        copyBtn.onclick = handle(async () => {
-          if (!await copyToClipboard(seg.prompt)) throw new Error("Could not copy the prompt to the clipboard.");
-          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
-        });
+        leftControls.append(promptSelect, charCount);
 
-        metaBar.append(charCount, copyBtn);
+        const rightControls = document.createElement("div");
+        rightControls.style.display = "flex";
+        rightControls.style.alignItems = "center";
+        rightControls.style.gap = "6px";
+        rightControls.style.flexWrap = "wrap";
 
         const pre = document.createElement("pre");
         pre.className = "prompts-passage-pre";
@@ -222,7 +233,172 @@ export async function showProductionBreakdown(output) {
         pre.style.overflowY = "auto";
         pre.textContent = seg.prompt;
 
-        preWrap.append(metaBar, pre);
+        const populatePromptTakesDropdown = (ptakesList, activePromptId) => {
+          const list = ptakesList && ptakesList.length
+            ? ptakesList
+            : [{ id: "prompt1", label: "Prompt 1 (original)", prompt: seg.prompt, char_count: seg.prompt.length }];
+          promptSelect.replaceChildren(
+            ...list.map(p => option(p.id, p.label || p.id, `Switch to ${p.label || p.id}`))
+          );
+          const chosenId = activePromptId || list[list.length - 1].id;
+          promptSelect.value = chosenId;
+          const chosen = list.find(p => p.id === chosenId) || list[list.length - 1];
+          if (chosen && chosen.prompt) {
+            pre.textContent = chosen.prompt;
+            charCount.textContent = `${chosen.prompt.length.toLocaleString()} chars`;
+          }
+        };
+
+        populatePromptTakesDropdown(seg.prompt_takes || [], seg.active_prompt_take);
+
+        promptSelect.onchange = handle(async () => {
+          const chosenPromptId = promptSelect.value;
+          if (!chosenPromptId) return;
+          const res = await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/select`, {
+            prompt_take_id: chosenPromptId
+          });
+          if (res.prompt) {
+            pre.textContent = res.prompt;
+            charCount.textContent = `${res.prompt.length.toLocaleString()} chars`;
+          }
+          notice(`Selected ${chosenPromptId} for ${seg.segment_id}. Click "Reroll Clip" to render a video with this prompt.`);
+        });
+
+        const rerollPromptBtn = document.createElement("button");
+        rerollPromptBtn.type = "button";
+        rerollPromptBtn.className = "secondary passage-reroll-prompt-btn";
+        rerollPromptBtn.style.fontSize = "12px";
+        rerollPromptBtn.style.padding = "4px 10px";
+        rerollPromptBtn.textContent = "🎲 Reroll Prompt";
+        rerollPromptBtn.dataset.tooltip = `Re-write and validate a new prompt version for ${seg.segment_id} while keeping earlier prompts`;
+
+        rerollPromptBtn.onclick = handle(async () => {
+          const origText = rerollPromptBtn.textContent;
+          rerollPromptBtn.disabled = true;
+          rerollPromptBtn.setAttribute("aria-busy", "true");
+          rerollPromptBtn.textContent = "⏳ Writing prompt…";
+          try {
+            await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/reroll`, {});
+            const updatedBreakdown = await pollJobCompletion(`Writing & reviewing new prompt for passage ${seg.index + 1} (${seg.segment_id})…`);
+            const updatedSeg = (updatedBreakdown.segments || []).find(s => s.segment_id === seg.segment_id);
+            if (updatedSeg) {
+              populatePromptTakesDropdown(updatedSeg.prompt_takes || [], updatedSeg.active_prompt_take);
+            }
+            notice(`New prompt generated for ${seg.segment_id}! Click "Reroll Clip" when ready to render it.`);
+          } finally {
+            rerollPromptBtn.disabled = false;
+            rerollPromptBtn.removeAttribute("aria-busy");
+            rerollPromptBtn.textContent = origText;
+          }
+        });
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "quiet";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.style.padding = "4px 8px";
+        copyBtn.textContent = "📋 Copy Prompt";
+        copyBtn.onclick = handle(async () => {
+          const currentText = pre.textContent || seg.prompt;
+          if (!await copyToClipboard(currentText)) throw new Error("Could not copy the prompt to the clipboard.");
+          notice(`Copied prompt for ${seg.segment_id} to clipboard`);
+        });
+
+        const editPromptBtn = document.createElement("button");
+        editPromptBtn.type = "button";
+        editPromptBtn.className = "secondary passage-edit-prompt-btn";
+        editPromptBtn.style.fontSize = "12px";
+        editPromptBtn.style.padding = "4px 10px";
+        editPromptBtn.textContent = "✏️ Edit Prompt";
+        editPromptBtn.dataset.tooltip = `Manually edit the prompt for ${seg.segment_id} and save it as a new prompt take`;
+
+        const editorWrap = document.createElement("div");
+        editorWrap.className = "prompts-passage-editor-wrap";
+        editorWrap.hidden = true;
+
+        const editorArea = document.createElement("textarea");
+        editorArea.className = "prompts-passage-editor-textarea";
+        editorArea.rows = 12;
+        editorArea.maxLength = 64000;
+        editorArea.style.width = "100%";
+        editorArea.style.fontSize = "13px";
+        editorArea.style.lineHeight = "1.6";
+        editorArea.style.fontFamily = "monospace";
+        editorArea.style.background = "var(--input-bg, rgba(0,0,0,0.35))";
+        editorArea.style.border = "1px solid var(--accent, #d89b3a)";
+        editorArea.style.borderRadius = "4px";
+        editorArea.style.padding = "12px";
+        editorArea.style.margin = "0 0 8px 0";
+        editorArea.style.resize = "vertical";
+
+        editorArea.oninput = () => {
+          charCount.textContent = `${editorArea.value.length.toLocaleString()} chars`;
+        };
+
+        const editorActions = document.createElement("div");
+        editorActions.style.display = "flex";
+        editorActions.style.justifyContent = "flex-end";
+        editorActions.style.gap = "8px";
+
+        const cancelEditBtn = document.createElement("button");
+        cancelEditBtn.type = "button";
+        cancelEditBtn.className = "quiet";
+        cancelEditBtn.style.fontSize = "12px";
+        cancelEditBtn.style.padding = "4px 10px";
+        cancelEditBtn.textContent = "Cancel";
+
+        const saveEditBtn = document.createElement("button");
+        saveEditBtn.type = "button";
+        saveEditBtn.className = "primary passage-save-prompt-btn";
+        saveEditBtn.style.fontSize = "12px";
+        saveEditBtn.style.padding = "4px 12px";
+        saveEditBtn.textContent = "💾 Save Prompt Take";
+
+        const closeEditor = () => {
+          editorWrap.hidden = true;
+          pre.hidden = false;
+          editPromptBtn.hidden = false;
+          charCount.textContent = `${(pre.textContent || "").length.toLocaleString()} chars`;
+        };
+
+        editPromptBtn.onclick = () => {
+          editorArea.value = pre.textContent || seg.prompt || "";
+          charCount.textContent = `${editorArea.value.length.toLocaleString()} chars`;
+          pre.hidden = true;
+          editPromptBtn.hidden = true;
+          editorWrap.hidden = false;
+          editorArea.focus();
+        };
+
+        cancelEditBtn.onclick = () => {
+          closeEditor();
+        };
+
+        saveEditBtn.onclick = handle(async () => {
+          const editedText = editorArea.value.trim();
+          if (!editedText) throw new Error("Prompt text cannot be empty.");
+          saveEditBtn.disabled = true;
+          saveEditBtn.setAttribute("aria-busy", "true");
+          try {
+            const res = await json(`/api/outputs/${encodeURIComponent(sourceRunId)}/prompts/${encodeURIComponent(seg.segment_id)}/edit`, {
+              prompt: editedText
+            });
+            populatePromptTakesDropdown(res.prompt_takes || [], res.active_prompt_take);
+            closeEditor();
+            notice(`Saved edited prompt as ${res.active_prompt_take} for ${seg.segment_id}! Click "Reroll Clip" to render with this prompt.`);
+          } finally {
+            saveEditBtn.disabled = false;
+            saveEditBtn.removeAttribute("aria-busy");
+          }
+        });
+
+        editorActions.append(cancelEditBtn, saveEditBtn);
+        editorWrap.append(editorArea, editorActions);
+
+        rightControls.append(editPromptBtn, rerollPromptBtn, copyBtn);
+        metaBar.append(leftControls, rightControls);
+
+        preWrap.append(metaBar, pre, editorWrap);
         grid.append(preWrap);
       } else {
         const noPrompt = document.createElement("p");

@@ -408,6 +408,23 @@ class AgentClient:
         return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/takes/{urllib.parse.quote(segment_id, safe='')}",
                           {"take_id": take_id})
 
+    def reroll_prompt(self, output_file, segment_id):
+        """Re-write and validate a single passage prompt, saving it as a new prompt take while preserving earlier prompts."""
+        run_id = str(output_file).split("/")[0]
+        return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/prompts/{urllib.parse.quote(segment_id, safe='')}/reroll", {})
+
+    def select_prompt_take(self, output_file, segment_id, prompt_take_id):
+        """Select a recorded prompt version for a passage."""
+        run_id = str(output_file).split("/")[0]
+        return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/prompts/{urllib.parse.quote(segment_id, safe='')}/select",
+                          {"prompt_take_id": prompt_take_id})
+
+    def edit_prompt(self, output_file, segment_id, prompt):
+        """Save a manually edited prompt for a passage as a new prompt take while preserving earlier prompts."""
+        run_id = str(output_file).split("/")[0]
+        return self._json("POST", f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/prompts/{urllib.parse.quote(segment_id, safe='')}/edit",
+                          {"prompt": prompt})
+
     def reassemble_output(self, output_file, selected_takes=None):
         """Re-encode the final music video using the active or selected passage takes, preserving previous final video takes."""
         run_id = str(output_file).split("/")[0]
@@ -544,6 +561,17 @@ def main(argv=None):
     select_take_cmd.add_argument("output_file")
     select_take_cmd.add_argument("segment_id")
     select_take_cmd.add_argument("take_id")
+    reroll_prompt_cmd = sub.add_parser("reroll-prompt", help="Re-write and validate a single passage prompt")
+    reroll_prompt_cmd.add_argument("output_file")
+    reroll_prompt_cmd.add_argument("segment_id")
+    select_prompt_cmd = sub.add_parser("select-prompt-take", help="Select a recorded prompt version for a passage")
+    select_prompt_cmd.add_argument("output_file")
+    select_prompt_cmd.add_argument("segment_id")
+    select_prompt_cmd.add_argument("prompt_take_id")
+    edit_prompt_cmd = sub.add_parser("edit-prompt", help="Save a manually edited prompt for a passage as a new prompt take")
+    edit_prompt_cmd.add_argument("output_file")
+    edit_prompt_cmd.add_argument("segment_id")
+    edit_prompt_cmd.add_argument("prompt")
     reassemble_cmd = sub.add_parser("reassemble-output", help="Re-encode final video with selected passage takes")
     reassemble_cmd.add_argument("output_file")
     reassemble_cmd.add_argument("--takes", default=None, help="Optional JSON mapping of segment_id to take_id")
@@ -637,6 +665,12 @@ def main(argv=None):
             result = client.reroll_segment(args.output_file, args.segment_id, seed=args.seed)
         elif args.command == "select-segment-take":
             result = client.select_segment_take(args.output_file, args.segment_id, args.take_id)
+        elif args.command == "reroll-prompt":
+            result = client.reroll_prompt(args.output_file, args.segment_id)
+        elif args.command == "select-prompt-take":
+            result = client.select_prompt_take(args.output_file, args.segment_id, args.prompt_take_id)
+        elif args.command == "edit-prompt":
+            result = client.edit_prompt(args.output_file, args.segment_id, args.prompt)
         elif args.command == "reassemble-output":
             result = client.reassemble_output(args.output_file, json.loads(args.takes) if args.takes else None)
         elif args.command == "select-opp-sheet":

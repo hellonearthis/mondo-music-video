@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.10.28 exposes **59 tools** and advertises the
+v1.10.32 exposes **65 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -237,7 +237,13 @@ service note; `quality.json` holds per-attempt judgments.
 | Tool | Purpose and boundary |
 | --- | --- |
 | `read_music_score` | Read-only. For a finished music video (`output_file` from `inspect_studio(kind="outputs")`), return tempo, beats, downbeats, per-beat energy, sections and passages with their montage grammar and planned cuts, in seconds on the video's clock. Use it to explain the pacing. Internal cuts are planned; generated clips may not follow every one. |
-| `read_output_prompts` | Read-only. For a finished output (`output_file` from `inspect_studio(kind="outputs")`), list each passage's written prompt, planned shots, length after trimming (`duration`, seconds) and, while the renderer's original clip is still on disk, an absolute `clip_url`. The GUI shows the same data under **Prompts & clips**. CLI: `mondo-music-video-agent output-prompts OUTPUT_FILE`. |
+| `read_output_prompts` | Read-only. For a finished output (`output_file` from `inspect_studio(kind="outputs")`), list each passage's written prompt, prompt takes, planned shots, length after trimming (`duration`, seconds), recorded clip takes, and while the renderer's original clip is still on disk, an absolute `clip_url`. The GUI shows the same data under **Prompts & clips** (Production Breakdown). CLI: `mondo-music-video-agent output-prompts OUTPUT_FILE`. |
+| `reroll_segment` | Re-render a single passage clip with a new seed using its prompt and cast references, recording a new take. CLI: `mondo-music-video-agent reroll-segment OUTPUT_FILE SEGMENT_ID [--seed SEED]`. |
+| `select_segment_take` | Select an existing recorded clip take for a passage. CLI: `mondo-music-video-agent select-segment-take OUTPUT_FILE SEGMENT_ID TAKE_ID`. |
+| `reroll_prompt` | Re-write and validate a single passage prompt using the writer LLM and Laya, recording a new prompt take while preserving earlier versions. CLI: `mondo-music-video-agent reroll-prompt OUTPUT_FILE SEGMENT_ID`. |
+| `select_prompt_take` | Select an existing recorded prompt version for a passage. CLI: `mondo-music-video-agent select-prompt-take OUTPUT_FILE SEGMENT_ID PROMPT_TAKE_ID`. |
+| `edit_prompt` | Save a manually edited prompt for a passage as a new prompt take while preserving all earlier versions. CLI: `mondo-music-video-agent edit-prompt OUTPUT_FILE SEGMENT_ID PROMPT`. |
+| `reassemble_output` | Re-encode the final music video from original passage clips using the active or specified segment takes, preserving earlier final video versions (`music-video-v1.mp4`, etc.). CLI: `mondo-music-video-agent reassemble-output OUTPUT_FILE [--takes JSON_MAP]`. |
 
 ## v1.3.0 OAP 0.3 tools
 

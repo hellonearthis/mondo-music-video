@@ -393,6 +393,21 @@ def create_server(base_url=None):
         return invoke(client.select_segment_take, output_file, segment_id, take_id)
 
     @server.tool()
+    def reroll_prompt(output_file: str, segment_id: str) -> dict[str, Any]:
+        """Re-write and validate a single passage prompt, saving it as a new prompt take while preserving earlier prompts."""
+        return invoke(client.reroll_prompt, output_file, segment_id)
+
+    @server.tool()
+    def select_prompt_take(output_file: str, segment_id: str, prompt_take_id: str) -> dict[str, Any]:
+        """Select a recorded prompt version (e.g. 'prompt1', 'prompt2') for a passage."""
+        return invoke(client.select_prompt_take, output_file, segment_id, prompt_take_id)
+
+    @server.tool()
+    def edit_prompt(output_file: str, segment_id: str, prompt: str) -> dict[str, Any]:
+        """Save a manually edited prompt for a passage as a new prompt take while preserving all earlier prompt versions."""
+        return invoke(client.edit_prompt, output_file, segment_id, prompt)
+
+    @server.tool()
     def reassemble_output(output_file: str, selected_takes: dict[str, str] | None = None) -> dict[str, Any]:
         """Re-encode the final music video from original passage clips using the active or selected takes, while preserving all previous final video versions."""
         return invoke(client.reassemble_output, output_file, selected_takes)

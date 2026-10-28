@@ -212,11 +212,14 @@ To toggle Component Labeling Mode in the web interface:
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
 - **Design rules**: Gallery grid of rendered music videos and idents with inline playback, download, Topaz upscale, Prompts & clips, and export triggers.
 
-### Prompts & Clips Dialog
-- **ID**: `prompts-clips-dialog`
-- **Used in**: Opened by **Prompts & clips** on a finished output card
+### Production Breakdown Sub-View (Prompts & Clips)
+- **ID**: `outputs-breakdown-view`
+- **Used in**: Opened by **Prompts & clips** on a finished output card in `panel-outputs`
 - **Code**: `webapp/index.html`, `webapp/js/outputs.js`
-- **Design rules**: One card per passage with its written prompt (copyable), its length after trimming and, when the renderer's original clip is still on disk, that clip. Read-only.
+- **Design rules**: Full in-panel sub-view replacing the gallery on demand, with a header Back button, title badge, and final video version toolbar (`#prompts-final-takes-select`, `#prompts-final-download-btn`, `#prompts-reassemble-btn`).
+- **Passage Grid**: Side-by-side prompt (left) and video clip (right) for each passage:
+  - Left column: Prompt version dropdown (`.passage-prompt-select`), character count badge, inline editor (`✏️ Edit Prompt` toggling `.prompts-passage-editor-wrap` with `.passage-save-prompt-btn`), prompt generator (`🎲 Reroll Prompt`), and copy prompt button.
+  - Right column: Clip takes dropdown (`.passage-take-select`), clip reroller (`🎲 Reroll Clip`), and video player. Read-only by default; editing or rerolling saves new versions without overwriting earlier takes.
 
 ### Unfinished Runs Manager
 - **ID**: `unfinished-runs-manager`
