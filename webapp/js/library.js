@@ -185,7 +185,7 @@ function renderCastCheckboxes(actors, selectedValues = new Set()) {
   const container = $("#cast-checkbox-list");
   if (!container) return;
   if (!actors.length) {
-    container.innerHTML = '<div class="cast-empty-note">No cast members yet — add in 03. Actors &amp; OAP</div>';
+    container.innerHTML = '<div class="cast-empty-note">No cast members yet — add in 03. Actors &amp; Props</div>';
     return;
   }
   container.innerHTML = actors
@@ -222,7 +222,7 @@ export async function loadActors() {
   $$(".actor-select").forEach((select) => {
     const old = [...select.selectedOptions].map((x) => x.value);
     if (!actors.length) {
-      const emptyOpt = option("", "No cast members yet — add in 03. Actors & OAP", "No cast members currently in your studio library");
+      const emptyOpt = option("", "No cast members yet — add in 03. Actors & Props", "No cast members currently in your studio library");
       emptyOpt.disabled = true;
       select.replaceChildren(emptyOpt);
     } else {

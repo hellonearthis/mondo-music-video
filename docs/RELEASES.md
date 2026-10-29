@@ -1,9 +1,38 @@
 # Releases
 
-## 1.11.4 — Passage prompt rewrites roll fresh settings and motifs
+## 1.11.6 — Passage prompt rewrites roll fresh settings and motifs
 
 - **Fresh setting and motif on rewrite.** When you click **✍️ Write new prompt** for a passage, the worker now automatically rolls a fresh variation seed for that segment's vocabulary slots (`thematic_anchor`, `footage_anchor`, `practical_effects`, and per-shot setting, mechanism, lighting, tonal register and costume) while preserving musical timing and cuts. The new draw excludes the passage's current terms, guaranteeing a genuinely new setting and motif from the pool.
 - An optional `seed` parameter is supported on the rewrite API, CLI (`--seed`), and MCP tool (`rewrite_prompt`).
+
+## 1.11.5 — Thematic Worlds keeps your choices; panels stay open when you open them
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `60bc3fc` and `7681740`, reviewed at exact head `7681740`.
+
+- **Pool countdown.** Each Thematic Worlds pool now counts down what it still needs as terms are pinned (*14 in pool, 7 needed (2/9 selected)*), and excluded terms leave the pool count.
+- **Term choices are kept.** Pinned, included and excluded states were only on the page: adding a term, switching a world or any redraw reset every chip. They are now part of the pools, saved with Apply and restored with the draft.
+- **Added terms count.** A term added by hand or from the catalogue starts Pinned. Before, it was only Included, which Guided mode does not send, so it had no effect.
+- **The worlds you applied come back.** Apply saved the active worlds, but reopening the workspace showed the default selection, and applying again replaced yours. The applied world list is now restored (older drafts rebuild it from their saved active names).
+- **A panel you reopen stays open.** With auto-collapse on, a completed Music Video card that you opened again closed itself as soon as focus left it; it now stays open until you close it.
+- Storyboard, tooltip and scoring code was rewritten as small pure functions with the same behaviour.
+- In the Edit view, **🎲 Reroll Clip** is now **🎬 Render Clip** (the slate matches Re-encode Final Video), in a lighter shade of the app's teal action colour (both themes, with hover and keyboard-focus states) so the step that renders a new take stands out; its place is unchanged. The agent action keeps its name, `reroll_segment`.
+- Sidebar tab 03 is now **Actors & Props** (was Actors & OAP): it holds both the actor cast and the Open Prop Protocol prop library. Agent actions are unchanged.
+- The header badge now reads just **OAP** and the supported version (was OAP BUILT IN), and an **OPP** badge with the supported Open Prop Protocol version sits under it, opening the OPP guide. Stacked, they keep the header as narrow as before on phones.
+
+Integration fixes (Claude Code and Codex review): the term chips' hover help and state labels, dropped in the fork, are restored; the world selection was still not restored after the fork (fixed as above); a pool that becomes short when terms are excluded now gets its **Borrow from nearest world** button at once. Agents are unaffected: Thematic Worlds is a browser draft, and agents send `custom_vocabulary` with a preview as before. See [collaborator review](COLLABORATOR_REVIEW.md).
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
+## 1.11.4 — Cancellable re-encodes and tidy recovery after a crash
+
+- **Cancel stops a re-encode.** Re-encoding a final video from chosen takes ran FFmpeg directly, so Cancel only raised a flag and the encode ran to the end. Each encode (clean, flashed, captioned) now runs through the operation like a production's own commands, and Cancel stops it. The finished video is replaced only by a complete, frame-checked encode, so a cancelled re-encode leaves it as it was; if Cancel lands after the new clean version was built, that version is recorded as clean (no flashes or captions claimed) with a note.
+- **Leftover encode folders are removed.** If the app or computer stops mid-encode, the half-written work folder (`assembly-…`, `subliminal-…`, `captions-…`) stayed in the production folder. The app now removes such folders when it starts, before any operation can run, and notes each in the studio log.
+- **A fitting message after an interruption.** An operation that only works on this computer (re-encode, captions, export, prompt check, stem model) now says that nothing finished was replaced and it can be started again, instead of asking to check remote request IDs, which remains for renders and other remote work.
+
+Investigated, owner's report: a Windows crash (bugcheck 0x154, `UNEXPECTED_STORE_EXCEPTION`, in Windows' memory store) about a minute into a re-encode. The encode was the same FFmpeg graph that built earlier versions that day, with no frame-buffering filter; no application defect explaining a host crash was found (Codex reviewed read-only). Encoder threads stay uncapped by the owner's choice, so many-core CPUs keep their speed.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+>>>>>>> upstream/main
 
 ## 1.11.3 — The Edit view keeps itself up to date
 

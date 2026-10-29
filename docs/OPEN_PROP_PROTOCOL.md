@@ -33,7 +33,7 @@ package.opp
 ## How Mondo Music Video Uses OPP
 
 1. **Musical Instruments:** Mondo bundles starter OPP props (e.g. `mmv-guitar`, `mmv-keyboards`) for instrument-playing roles in music videos.
-2. **Custom Props:** You can inspect and import any valid `.opp` package into **03 / Actors & OAP → Open Prop Protocol library**.
+2. **Custom Props:** You can inspect and import any valid `.opp` package into **03 / Actors & Props → Open Prop Protocol library**.
 3. **Prompt Integration:** During video generation, Mondo references the verified visual sheet hashes and physical object traits, ensuring visual consistency across cuts while keeping package-authored prompt modifiers from overriding studio direction.
 
 ## Digital Signatures & Trust

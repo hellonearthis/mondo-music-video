@@ -1,8 +1,18 @@
-# Verification — 1.11.4
+# Verification — 1.11.6
 
-## 1.11.4 — Passage prompt rewrite variation seed
+## 1.11.6 — Passage prompt rewrite variation seed
 
-Full temporary-data/mock-service suite: verified passage prompt rewrite with new setting and motif draws (`shots[0]["vocabulary"]["setting"]` and `["mechanism"]` differ from original job), atomic rollback on rewrite failure, CLI `--seed` flag and MCP tool parity. The live app was restarted idle on port 8091 and reports 1.11.4 with `protected_scheme.check() == []`.
+Full temporary-data/mock-service suite: verified passage prompt rewrite with new setting and motif draws (`shots[0]["vocabulary"]["setting"]` and `["mechanism"]` differ from original job), atomic rollback on rewrite failure, CLI `--seed` flag and MCP tool parity. The live app was restarted idle on port 8091 and reports 1.11.6 with `protected_scheme.check() == []`.
+
+
+## 1.11.5 — Collaborator fork `7681740` (Thematic Worlds, panel auto-collapse)
+
+New Chromium browser test of Thematic Worlds chip states, pool countdown, added-term pinning, Guided compilation and world restoration. Full temporary-data/mock-service suite: **804 passed + 141 subtests**. Firefox was not tested here.
+
+
+## 1.11.4 — Cancellable re-encodes, crash leftovers
+
+Focused tests cover a re-encode whose encode runs through the operation's cancellable runner, a cancel between encodes (no further encode, the clean version recorded truthfully, the operation ends cancelled), startup removal of `assembly-…`/`subliminal-…` work folders while the run's `assembly` report folder and other folders stay, and the interruption message by operation kind. Full temporary-data/mock-service suite: **803 passed + 141 subtests**. On 1.11.4 the owner then re-ran the interrupted re-encode for real: it completed as Version 4, became the finished video beside Versions 1-3, and left no work folder behind.
 
 
 ## 1.11.3 — Edit view refresh

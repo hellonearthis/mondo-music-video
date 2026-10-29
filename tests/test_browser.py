@@ -759,7 +759,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.11.3')
+                expect(page.locator('#version')).to_have_text('1.11.5')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -926,6 +926,49 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 page.locator('.nav[data-panel="worlds"]').click()
                 expect(page.locator('#world-form select[name="world_existing"]')).to_be_visible()
                 expect(page.locator('#world-form input[name="world_new_id"]')).to_be_hidden()
+            finally:
+                browser.close()
+
+    def test_thematic_world_pools_keep_choices_count_down_and_restore_the_applied_worlds(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda err: errors.append(str(err)))
+            try:
+                page.goto(self.url)
+                result = page.evaluate("""async () => {
+                  const m = await import('/js/vocab-worlds.js');
+                  const pool = {dimension: 'Settings', pool: 4, need: 3, terms: ['a', 'b', 'c', 'd'], chipStates: {}};
+                  const pinned = m.setPoolChipState([pool], 0, 'a', 1);
+                  const added = m.addTermToPool(pinned, 0, 'custom hall');
+                  const excluded = m.setPoolChipState(added, 0, 'b', 2);
+                  const cleared = m.setPoolChipState(excluded, 0, 'a', 0);
+                  return {
+                    pinnedText: m.formatPoolStatusText(pinned[0]),
+                    addedText: m.formatPoolStatusText(added[0]),
+                    addedIsPinned: added[0].chipStates['custom hall'],
+                    excludedCount: m.computePoolCounts(excluded[0]).currentPoolCount,
+                    clearedHasA: 'a' in cleared[0].chipStates,
+                    guided: m.compileWorldsToCustomVocab(excluded, 'guided'),
+                    oldDraft: m.restoreWorlds({activeWorlds: ['Industrial Decay', 'Deep Sea Salvage']}).filter(w => w.active).map(w => w.name),
+                    savedList: m.restoreWorlds({worlds: [{name: 'X', active: true, locked: true, score: .9}]}),
+                    noDraft: m.restoreWorlds(null).map(w => w.active),
+                    tooltip: m.renderPoolsHtml([excluded[0]], false).includes('data-tooltip="Click to cycle'),
+                  };
+                }""")
+                self.assertEqual(result['pinnedText'], '4 in pool, 2 needed (1/3 selected)')
+                self.assertEqual(result['addedText'], '5 in pool, 1 needed (2/3 selected)')
+                self.assertEqual(result['addedIsPinned'], 1)
+                self.assertEqual(result['excludedCount'], 4)
+                self.assertFalse(result['clearedHasA'])
+                self.assertEqual(result['guided'], {'settings': {'mode': 'append', 'add': ['a', 'custom hall'], 'exclude': ['b']}})
+                self.assertEqual(result['oldDraft'], ['Industrial Decay', 'Deep Sea Salvage'])
+                self.assertEqual(result['savedList'], [{'name': 'X', 'active': True, 'locked': True, 'score': .9}])
+                self.assertEqual(result['noDraft'][:3], [True, True, False])
+                self.assertTrue(result['tooltip'])
+                self.assertEqual(errors, [])
             finally:
                 browser.close()
 
@@ -1618,7 +1661,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.11.3')
+                expect(page.locator('#version')).to_have_text('1.11.5')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

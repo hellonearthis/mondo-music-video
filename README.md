@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.11.4** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.11.6** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 ## Easy install — let your AI agent do it
 
@@ -36,8 +36,8 @@ images replaces that control's selection (up to nine images); dropping a package
 only selects it, so inspect and import remain separate actions.
 Each attached reference image has a Remove button.
 
-In Music Video, card and Director fold headers show input progress. **Done** means the required fields are filled; you still review the preview and approve any paid start. Complete required cards collapse after you leave the last required field, and you can turn that behavior off in Settings. Open a header to see every field, or use **Options available** to review optional fields left at their defaults. Actor cards let you edit local visual descriptions; imported signed OAP actors need an updated package from their signer. The OPP library includes an in-app guide. Actors & OAP can check the public actor collection on demand and offer missing packages for verified, signer-approved import. The original starter packages are OAP v0.2; newer collection packages may be OAP v0.3.
-The Actors & OAP creation, OAP import and role-agreement cards can be folded open
+In Music Video, card and Director fold headers show input progress. **Done** means the required fields are filled; you still review the preview and approve any paid start. Complete required cards collapse after you leave the last required field, and you can turn that behavior off in Settings. Open a header to see every field, or use **Options available** to review optional fields left at their defaults. Actor cards let you edit local visual descriptions; imported signed OAP actors need an updated package from their signer. The OPP library includes an in-app guide. Actors & Props can check the public actor collection on demand and offer missing packages for verified, signer-approved import. The original starter packages are OAP v0.2; newer collection packages may be OAP v0.3.
+The Actors & Props creation, OAP import and role-agreement cards can be folded open
 or closed. Creating an actor shows the selected portrait before you save it, and
 local actor cards show the current visual-description length. Style cards with
 an 11-axis breakdown have an expandable view.
@@ -287,7 +287,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.11.4 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
+The v1.11.6 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets,
 world editing, passage prompts and versions (`rewrite_prompt`, `edit_prompt`, `select_prompt_take`), clip takes with seeds

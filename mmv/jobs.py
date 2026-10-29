@@ -128,6 +128,17 @@ class JobContext:
         self.check()
 
 
+# Operations that only work on this computer: an interruption submitted nothing anywhere, and their results are published
+# only when complete (re-encodes and caption assembly keep the finished video until a verified new one replaces it).
+LOCAL_KINDS = ("reassemble", "captions", "export", "prompt_check", "stems")
+
+
+def interrupted_message(kind):
+    if kind in LOCAL_KINDS:
+        return "The application stopped during this operation. Nothing finished was replaced; start it again when ready."
+    return "Application stopped during this operation. Check remote request IDs before generating again."
+
+
 class Jobs:
     def __init__(self, store):
         self.store = store
@@ -137,9 +148,8 @@ class Jobs:
         self.subscribers = []
         self.status_path = store.home / "operation.json"
         self.last = read_json(self.status_path, {"state": "idle"})
-        if self.last.get("state") in ("running", "cancelling"):
-            self.last.update(state="interrupted", message="Application stopped during this operation. "
-                             "Check remote request IDs before generating again.")
+        if self.last.get("state") in ("running", "cancelling", "interrupted"):   # interrupted: re-word records saved earlier
+            self.last.update(state="interrupted", message=interrupted_message(self.last.get("kind")))
             write_json(self.status_path, self.last)
 
     def subscribe(self, callback):

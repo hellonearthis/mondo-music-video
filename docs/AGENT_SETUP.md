@@ -42,7 +42,7 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.11.4 exposes **65 tools** and advertises the
+v1.11.6 exposes **65 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -50,7 +50,7 @@ endpoint, with HTTPS required remotely and no redirects or generation.
 
 `update_actor(actor_id, description)` changes only a locally created actor's visual description while idle; imported signed OAP actors require a revised package from the signer. The CLI equivalent is `mondo-music-video-agent update-actor ID DESCRIPTION`. Use `inspect_studio(kind="opp-guide")` or `mondo-music-video-agent opp-guide` for the OPP guide, and `inspect_studio(kind="vision-guide")` or `mondo-music-video-agent vision-guide` for the Style Harvest versus Quality Vision guide. The `auto_collapse_panels` preference is available through `update_studio_settings`, `AgentClient.update_settings`, and `mondo-music-video-agent update-settings '{"auto_collapse_panels":false}'`. It defaults to true. Panel **Done** means required form inputs are present; agents still request a preview quote and explicit start consent.
 
-The Actors & OAP card folds, selected portrait preview and style-card fold are
+The Actors & Props card folds, selected portrait preview and style-card fold are
 browser presentation. Agent actor creation and OAP inspection/import use the
 existing client/MCP actions, with their normal result inspection and signer
 acceptance. Agents can read a style's 11-axis card through style inspection or
@@ -245,7 +245,7 @@ service note; `quality.json` holds per-attempt judgments.
 | `rewrite_prompt` | Rolls a fresh setting and motif from the production's vocabulary pool for one passage of a finished video or ident (using a new random variation seed or optional `seed`, while preserving musical timing and planned cuts) and writes a new prompt through the production's own writer, Mondo checks and Laya review (the worker's prompt stage for that passage only; the prompt cache is neither read nor written). Requires `confirm=true`, given only when the user asks; when `writer_charge.api_writer` is true, tell the user the estimate and pass `accept_writer_cost=true` only with their approval. Never retried automatically. On success the new version is the passage's prompt; `reroll_segment` renders it. The passage's earlier writer and review files are moved to `prompt_takes/SEGMENT/before-promptN/`. CLI: `rewrite-prompt OUTPUT_FILE SEGMENT_ID [--seed N] --confirm [--accept-writer-cost]`. |
 | `edit_prompt` | Checks a hand-edited prompt with the same Mondo checks and Laya review (`confirm=true`; local, no writer call). Sealed passages get their closing rigging sentence added back as in production. A passing edit becomes the passage's prompt; a failing one fails the operation and is kept as a version marked not passed, with its problems, so it can be edited again. CLI: `edit-prompt OUTPUT_FILE SEGMENT_ID PROMPT_FILE --confirm`. |
 | `select_prompt_take` | Makes a passed prompt version (`prompt1` is the production's original) the passage's prompt and rebinds the saved passage-plan digest. Versions marked not passed are refused. Clips are unchanged until `reroll_segment`. CLI: `select-prompt-take OUTPUT_FILE SEGMENT_ID PROMPT_TAKE_ID`. |
-| `reassemble_output` | Re-encodes the final video once from the original passage clips with the active takes, or with `selected_takes` (`{"seg001": "take2"}`; unknown passages or takes are refused before anything changes). Subliminal flashes and burned captions are reapplied from the production's original plan inside that one encode. The first re-encode keeps the original as `music-video-v1.mp4`; each new version is also saved as `-vN.mp4` and downloadable. The result's `warnings` (also `reassembly_warnings` on the output) say when an effect could not be applied. No renderer or paid call. CLI: `reassemble-output OUTPUT_FILE [--takes JSON]`. |
+| `reassemble_output` | Re-encodes the final video once from the original passage clips with the active takes, or with `selected_takes` (`{"seg001": "take2"}`; unknown passages or takes are refused before anything changes). Subliminal flashes and burned captions are reapplied from the production's original plan inside that one encode. The first re-encode keeps the original as `music-video-v1.mp4`; each new version is also saved as `-vN.mp4` and downloadable. The result's `warnings` (also `reassembly_warnings` on the output) say when an effect could not be applied. `cancel_production` stops a running re-encode; the finished video changes only after a complete encode. No renderer or paid call. CLI: `reassemble-output OUTPUT_FILE [--takes JSON]`. |
 
 ## v1.3.0 OAP 0.3 tools
 

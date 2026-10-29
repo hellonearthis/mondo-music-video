@@ -668,27 +668,36 @@ def reassemble_final_video(store: Storage, run_id: str, context, selected_takes:
                 shutil.copy2(final_path, directory / backup_v1)
             final_takes["takes"][0]["file"] = backup_v1
 
+    # Each FFmpeg encode runs through the operation, so Cancel stops it; a cancel between encodes keeps the records true.
+    from .jobs import Cancelled
+    run = lambda argv, cwd: context.command(argv, cwd=cwd)
     context.update("Re-assembling frame-exact final video from selected passage takes", 25)
-    output = final_assembly.assemble(store, directory, request, plan, renders)
+    output = final_assembly.assemble(store, directory, request, plan, renders, run=run)
     write_json(directory / TAKES_FILE, takes_data)
     write_json(directory / "renders.json", renders)
 
     # Each variant is assembled from the original clips, as in the first production; a failed effect is reported, not hidden.
-    warnings, effects = [], {}
+    warnings, effects, cancelled = [], {}, None
     if request.get("kind") == "video" and prepared.get("subliminal"):
         context.update("Applying subliminal version from selected passage clips", 75)
         try:
-            effects["subliminal"] = subliminal.apply_to_run(store, directory, prepared["subliminal"])
+            effects["subliminal"] = subliminal.apply_to_run(store, directory, prepared["subliminal"], run=run)
+        except Cancelled as exc:
+            cancelled = exc
+            warnings.append("Cancelled before the subliminal flashes were added, so this version is the clean one.")
         except Exception as exc:
             warnings.append("The subliminal flashes could not be added, so this version is the clean one: " + str(exc)[:200])
 
-    if request.get("kind") == "video" and (prepared.get("captions") or {}).get("cues"):
+    if cancelled is None and request.get("kind") == "video" and (prepared.get("captions") or {}).get("cues"):
         context.update("Applying lyric captions from selected passage clips", 85)
         try:
-            effects["captions"] = captions.apply_to_run(directory, prepared["captions"])
+            effects["captions"] = captions.apply_to_run(directory, prepared["captions"], run=run)
+        except Cancelled as exc:
+            cancelled = exc
+            warnings.append("Cancelled before the lyric captions were burned in, so this version has none.")
         except Exception as exc:
             effects["captions"] = {"burn_error": str(exc)}
-        if burn_error := effects["captions"].get("burn_error"):
+        if burn_error := (effects.get("captions") or {}).get("burn_error"):
             warnings.append("The lyric captions could not be burned in, so this version has none: " + burn_error[:200])
 
     next_v = len(final_takes["takes"]) + 1
@@ -722,6 +731,8 @@ def reassemble_final_video(store: Storage, run_id: str, context, selected_takes:
         **({"reassembly_warnings": warnings} if warnings else {}),
     })
     write_json(directory / "output.json", output_record)
+    if cancelled is not None:      # the version that was built is recorded truthfully; the operation still ends cancelled
+        raise cancelled
     context.update("Re-assembly complete", 100)
     return {
         "file": f"{origin}/{output.name}",

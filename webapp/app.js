@@ -76,6 +76,7 @@ async function initialize() {
   const version = await (await api("/api/version")).json();
   $("#version").textContent = version.version;
   $("#oap-version").textContent = state.catalog.oap_version;
+  $("#opp-version").textContent = state.catalog.opp_version || "";
 
   populateCatalogControls();
 

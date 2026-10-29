@@ -229,7 +229,7 @@ class PassageBreakdownTests(ScoreViewTests):
                                               "captions": {"mode": "burned", "uncaptioned_copy": "old.mp4"}})
         (directory / "music-video.mp4").write_bytes(b"version-one")
 
-        def assemble(store, run_dir, request, plan, renders):
+        def assemble(store, run_dir, request, plan, renders, run=None):
             (run_dir / "music-video.mp4").write_bytes(b"version-two")
             return run_dir / "music-video.mp4"
 
@@ -243,7 +243,7 @@ class PassageBreakdownTests(ScoreViewTests):
         self.assertEqual((directory / "renders.json").read_text(), renders_before)
         self.assertFalse((directory / "takes.json").exists())
         with patch("mmv.final_assembly.assemble", assemble), patch("mmv.media.duration", lambda path: 4.0), \
-                patch("mmv.captions.apply_to_run", lambda run_dir, plan: {"mode": "burned", "burn_error": "no fonts"}):
+                patch("mmv.captions.apply_to_run", lambda run_dir, plan, run=None: {"mode": "burned", "burn_error": "no fonts"}):
             result = takes.reassemble_final_video(self.fixture.store, "re_run", Context())
         self.assertIn("no fonts", " ".join(result["warnings"]))
         self.assertEqual((directory / "music-video-v1.mp4").read_bytes(), b"version-one")
@@ -310,3 +310,56 @@ class PassageBreakdownTests(ScoreViewTests):
             self.run_dir(f"limit_{backend}", request={"backend": backend})
             write_json(self.home / "runs" / f"limit_{backend}" / "prompts.json", {"seg000": "Coastline."})
             self.assertEqual(self.client.get(f"/api/outputs/limit_{backend}/prompts").json()["prompt_limit"], expected)
+
+    def test_cancelling_a_re_encode_between_encodes_keeps_true_records(self):
+        from unittest.mock import patch
+        from mmv import takes
+        from mmv.jobs import Cancelled
+        directory = self.run_dir("cancel_run", request={"kind": "video", "backend": "local_h3"})
+        clip = directory / "renders" / "seg000.mp4"
+        clip.parent.mkdir()
+        clip.write_bytes(b"clip")
+        write_json(directory / "renders.json", {"seg000": {"video": str(clip)}, "seg001": {"video": str(clip)}})
+        write_json(directory / "prepared.json", {"subliminal": {"mode": "text"}, "captions": {"mode": "burned", "cues": [[0, 1, "la"]]}})
+        write_json(directory / "output.json", {"file": "music-video.mp4", "kind": "video", "title": "Fixture",
+                                              "subliminal": {"clean_copy": "music-video-clean.mp4"}})
+        (directory / "music-video.mp4").write_bytes(b"version-one")
+        commands = []
+
+        class Context:
+            def update(self, *args):
+                pass
+            def command(self, argv, cwd=None):
+                commands.append(argv)
+
+        def assemble(store, run_dir, request, plan, renders, run=None):
+            run(["ffmpeg"], run_dir)                  # the encode goes through the operation's cancellable runner
+            (run_dir / "music-video.mp4").write_bytes(b"version-two")
+            return run_dir / "music-video.mp4"
+        def flashes(*args, run=None):
+            raise Cancelled("Operation cancelled.")
+        captioned = []
+        with patch("mmv.final_assembly.assemble", assemble), patch("mmv.media.duration", lambda path: 4.0), \
+                patch("mmv.subliminal.apply_to_run", flashes), \
+                patch("mmv.captions.apply_to_run", lambda *a, run=None: captioned.append(1)):
+            with self.assertRaises(Cancelled):
+                takes.reassemble_final_video(self.fixture.store, "cancel_run", Context())
+        self.assertEqual(commands, [["ffmpeg"]])
+        self.assertEqual(captioned, [], "no further encode after a cancel")
+        record = json.loads((directory / "output.json").read_text())
+        self.assertNotIn("subliminal", record, "the clean version is not described as flashed")
+        self.assertIn("Cancelled", record["reassembly_warnings"][0])
+        self.assertEqual(record["final_takes"], ["music-video-v1.mp4", "music-video-v2.mp4"])
+
+    def test_interrupted_encode_folders_are_removed_and_the_message_fits_the_operation(self):
+        from mmv.final_assembly import remove_interrupted_encodes
+        from mmv.jobs import interrupted_message
+        run = self.home / "runs" / "leftovers"
+        for name in ("assembly-kiunfslh", "subliminal-a1b2c3d4", "assembly", "captions-short", "prompt_takes"):
+            (run / name).mkdir(parents=True)
+        (run / "assembly-kiunfslh" / "render.mp4").write_bytes(b"partial")
+        removed = sorted(path.name for path in remove_interrupted_encodes(self.home / "runs"))
+        self.assertEqual(removed, ["assembly-kiunfslh", "subliminal-a1b2c3d4"])
+        self.assertEqual(sorted(p.name for p in run.iterdir()), ["assembly", "captions-short", "prompt_takes"])
+        self.assertIn("Nothing finished was replaced", interrupted_message("reassemble"))
+        self.assertIn("remote request IDs", interrupted_message("video"))

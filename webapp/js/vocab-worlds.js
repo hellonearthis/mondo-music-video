@@ -509,6 +509,9 @@ export const formatPoolStatusText = (pool, borrowed = false) => {
   return `${currentPoolCount} in pool, ${need} needed${borrowedNote}`;
 };
 
+const CHIP_STATE_LABELS = ["Included (default)", "Pinned (forced into rotation)", "Excluded (blocked from rotation)"];
+const CHIP_TOOLTIP = "Click to cycle: Included → Pinned (must appear) → Excluded";
+
 export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
   return pools.map((p, poolIdx) => {
     const { isLow } = computePoolCounts(p, borrowed);
@@ -521,7 +524,7 @@ export const renderPoolsHtml = (pools, borrowed, catalog = null) => {
     const chips = p.terms.map((term, termIdx) => {
       const chipState = Number(p.chipStates?.[term] || 0);
       const stateClass = chipState === 1 ? " pin" : chipState === 2 ? " ex" : "";
-      return `<button type="button" class="worlds-term-chip${stateClass}" data-pool="${poolIdx}" data-term="${termIdx}" data-state="${chipState}">${escapeHtml(term)}</button>`;
+      return `<button type="button" class="worlds-term-chip${stateClass}" data-pool="${poolIdx}" data-term="${termIdx}" data-state="${chipState}" data-tooltip="${CHIP_TOOLTIP}" title="${CHIP_STATE_LABELS[chipState] || CHIP_STATE_LABELS[0]}">${escapeHtml(term)}</button>`;
     }).join("");
 
     const catKey = dimensionToCategoryKey(p.dimension);
@@ -646,6 +649,19 @@ export const addTermToPool = (pools, poolIdx, rawTerm) => {
   });
 };
 
+// The world list a draft was applied with: its saved list, or (drafts saved before 1.11.5) the defaults with the saved
+// active names switched on, plus any active world the defaults do not list.
+export const restoreWorlds = (saved, defaults = DEFAULT_WORLDS) => {
+  if (Array.isArray(saved?.worlds) && saved.worlds.length) return saved.worlds.map(w => ({ ...w }));
+  if (!Array.isArray(saved?.activeWorlds)) return defaults.map(w => ({ ...w }));
+  const active = new Set(saved.activeWorlds);
+  const known = new Set(defaults.map(w => w.name));
+  return [
+    ...defaults.map(w => ({ ...w, active: active.has(w.name) })),
+    ...saved.activeWorlds.filter(name => !known.has(name)).map(name => ({ name, score: 0.5, active: true, locked: false }))
+  ];
+};
+
 const clonePools = (pools) =>
   pools.map(pool => ({
     ...pool,
@@ -664,7 +680,7 @@ export function initVocabWorlds() {
     mode: appState.thematicWorlds?.mode || "guided",
     slider: typeof appState.thematicWorlds?.slider === "number" ? appState.thematicWorlds.slider : 50,
     borrowed: false,
-    worlds: DEFAULT_WORLDS.map(w => ({ ...w })),
+    worlds: restoreWorlds(appState.thematicWorlds),
     sections: DEFAULT_SECTIONS.map(s => ({ ...s })),
     pools: clonePools(
       Array.isArray(appState.thematicWorlds?.pools) ? appState.thematicWorlds.pools : DEFAULT_POOLS
@@ -812,6 +828,7 @@ export function initVocabWorlds() {
       termChip.dataset.state = String(nextState);
       termChip.classList.toggle("pin", nextState === 1);
       termChip.classList.toggle("ex", nextState === 2);
+      termChip.title = CHIP_STATE_LABELS[nextState];
       const poolIdx = Number(termChip.dataset.pool);
       const term = termChip.textContent.trim();
       const targetPool = state.pools[poolIdx];
@@ -821,8 +838,13 @@ export function initVocabWorlds() {
         const statusEl = container.querySelector(`[data-pool-status="${poolIdx}"]`);
         if (statusEl && updatedPool) {
           const { isLow } = computePoolCounts(updatedPool, state.borrowed);
-          statusEl.textContent = formatPoolStatusText(updatedPool, state.borrowed);
-          statusEl.classList.toggle("pool-low", isLow);
+          if (isLow !== statusEl.classList.contains("pool-low")) {
+            updateView();            // the Borrow button comes and goes with a shortage; chip states survive the redraw
+          } else {
+            statusEl.textContent = formatPoolStatusText(updatedPool, state.borrowed);
+          }
+        }
+      }
         }
       }
       return;
@@ -865,6 +887,7 @@ export function initVocabWorlds() {
         mode: state.mode,
         slider: state.slider,
         activeWorlds,
+        worlds: state.worlds,
         pools: state.pools
       };
 
