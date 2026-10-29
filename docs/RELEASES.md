@@ -1,5 +1,10 @@
 # Releases
 
+## 1.11.4 — Passage prompt rewrites roll fresh settings and motifs
+
+- **Fresh setting and motif on rewrite.** When you click **✍️ Write new prompt** for a passage, the worker now automatically rolls a fresh variation seed for that segment's vocabulary slots (`thematic_anchor`, `footage_anchor`, `practical_effects`, and per-shot setting, mechanism, lighting, tonal register and costume) while preserving musical timing and cuts. The new draw excludes the passage's current terms, guaranteeing a genuinely new setting and motif from the pool.
+- An optional `seed` parameter is supported on the rewrite API, CLI (`--seed`), and MCP tool (`rewrite_prompt`).
+
 ## 1.11.3 — The Edit view keeps itself up to date
 
 - Fixed: a take rendered (or a prompt written) while you had left and reopened the Edit view did not appear until a hard browser refresh. The reopened view had read the passages before the operation finished, and only the view that started it was updated. Now, whenever an operation finishes, an open Edit view reads its video's passages, takes, prompt versions and final versions again, keeping your place on the page.

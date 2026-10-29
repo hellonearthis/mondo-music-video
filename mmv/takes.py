@@ -83,6 +83,137 @@ def _next_prompt_id(entry: dict) -> tuple[str, int]:
     return f"prompt{number}", number
 
 
+def _used_segment_vocab(seg) -> dict[str, list[str]]:
+    """Vocabulary terms already present in this passage, so a rewrite draws fresh setting and motif terms."""
+    used: dict[str, list[str]] = {
+        "settings": [],
+        "subject_types": [],
+        "mechanisms": [],
+        "lighting": [],
+        "tonal_registers": [],
+        "costume": [],
+        "footage_anchors": [],
+        "practical_effects": [],
+    }
+
+    def add(table: str, value: str | None) -> None:
+        if isinstance(value, str) and value and value not in used[table]:
+            used[table].append(value)
+
+    add("mechanisms", getattr(seg, "thematic_anchor", None))
+    add("footage_anchors", getattr(seg, "footage_anchor", None))
+    add("practical_effects", getattr(seg, "practical_effects", None))
+    key_to_table = {
+        "setting": "settings",
+        "subject_type": "subject_types",
+        "mechanism": "mechanisms",
+        "lighting": "lighting",
+        "tonal_register": "tonal_registers",
+        "costume": "costume",
+    }
+    for sh in getattr(seg, "shots", None) or []:
+        vocab = getattr(sh, "vocab", None) or {}
+        for key, table in key_to_table.items():
+            val = vocab.get(key)
+            if isinstance(val, str) and val:
+                add(table, val)
+                for part in val.split(", "):
+                    add(table, part.strip())
+    return {k: v for k, v in used.items() if v}
+
+
+def replan_segment_vocabulary(store: Storage, request: dict, seg, seed: int | None = None) -> int:
+    """Roll a fresh variation seed for one passage's setting, motif and visual vocabulary while preserving its timing and cuts."""
+    from .engine.plan import CHAOTIC, FRAGMENTATION, STANDARD, THEMATIC, VocabSampler
+    from .pipeline import load_vocabulary
+
+    base_seed = int(request.get("seed") or 0)
+    if seed is None:
+        variation_seed = random.SystemRandom().randint(1, 2147483647)
+        if variation_seed == base_seed:
+            variation_seed = (variation_seed % 2147483646) + 1
+    else:
+        variation_seed = int(seed)
+
+    used = _used_segment_vocab(seg)
+    vocab = load_vocabulary(
+        request.get("vocabulary_profile", "full"),
+        store=store,
+        custom=request.get("custom_vocabulary"),
+    )
+    if request.get("vocab_selection") == "contextual":
+        from .vocab_select import contextual_vocabulary
+        vocab = contextual_vocabulary(
+            vocab,
+            variation_seed,
+            (
+                request.get("direction", ""),
+                request.get("title", ""),
+                [t for spec in (request.get("custom_vocabulary") or {}).values() for t in spec.get("add", [])],
+            ),
+        )
+
+    sampler = VocabSampler(vocab, variation_seed, used)
+    montage_type = getattr(seg, "montage_type", STANDARD)
+    anchor = sampler.pick("mechanisms") if montage_type == THEMATIC else None
+    seg.thematic_anchor = anchor
+    seg.footage_anchor = sampler.pick("footage_anchors")
+    seg.practical_effects = sampler.pick("practical_effects")
+    seg.rigging = sampler.pick("rigging")
+    for sh in seg.shots:
+        if montage_type in (CHAOTIC, THEMATIC):
+            sh.vocab = {
+                "setting": sampler.pick("settings"),
+                "subject_type": sampler.pick("subject_types"),
+                "mechanism": anchor or sampler.pick("mechanisms"),
+                "lighting": sampler.pick("lighting"),
+                "tonal_register": sampler.pick("tonal_registers"),
+                "costume": sampler.pick("costume"),
+            }
+        else:
+            sh.vocab = {"lighting": sampler.pick("lighting")}
+    if montage_type in (STANDARD, FRAGMENTATION):
+        shared = {
+            "setting": sampler.pick("settings"),
+            "subject_type": sampler.pick("subject_types"),
+            "mechanism": sampler.pick("mechanisms"),
+            "tonal_register": sampler.pick("tonal_registers"),
+            "costume": sampler.pick("costume"),
+        }
+        for sh in seg.shots:
+            sh.vocab.update(shared)
+
+    if request.get("vocab_selection") == "contextual":
+        from .vocab_select import apply_energy_scaled_vocabulary, plan_gaussian_world_dissonance
+        fresh_vocab = {
+            k: ([t for t in v if t not in set(used.get(k, ()))] or list(v)) if isinstance(v, list) else v
+            for k, v in vocab.items()
+        }
+        for (_, sh_idx), vocab_after in apply_energy_scaled_vocabulary([seg], fresh_vocab, variation_seed).items():
+            seg.shots[sh_idx].vocab = vocab_after
+        worlds_ctx = request.get("thematic_worlds")
+        worlds_ctx = worlds_ctx if isinstance(worlds_ctx, dict) else {}
+        active = worlds_ctx.get("activeWorlds")
+        if worlds_ctx.get("mode") in ("guided", "strict") and isinstance(active, list) and active and isinstance(active[0], str):
+            try:
+                slider_pct = min(100.0, max(0.0, float(worlds_ctx.get("slider", 50))))
+            except (TypeError, ValueError):
+                slider_pct = 50.0
+            for (_, sh_idx), (_, vocab_after) in plan_gaussian_world_dissonance(
+                [seg], active[0], seed=variation_seed, slider_percent=slider_pct
+            ).items():
+                seg.shots[sh_idx].vocab = vocab_after
+
+    if request.get("world_departures"):
+        from .vocab_select import plan_world_departures
+        for (_, sh_idx), (_, vocab_after) in plan_world_departures(
+            [seg], request["world_departures"], variation_seed, request.get("world_contrast_strength", 50)
+        ).items():
+            seg.shots[sh_idx].vocab = vocab_after
+
+    return variation_seed
+
+
 def begin_prompt_rewrite(directory: Path, segment_id: str) -> str:
     """Save version 1 and move the passage's earlier writer/review files aside, so the new attempt never overwrites them.
     Returns the ID the new version will get."""

@@ -1,4 +1,9 @@
-# Verification — 1.11.3
+# Verification — 1.11.4
+
+## 1.11.4 — Passage prompt rewrite variation seed
+
+Full temporary-data/mock-service suite: verified passage prompt rewrite with new setting and motif draws (`shots[0]["vocabulary"]["setting"]` and `["mechanism"]` differ from original job), atomic rollback on rewrite failure, CLI `--seed` flag and MCP tool parity. The live app was restarted idle on port 8091 and reports 1.11.4 with `protected_scheme.check() == []`.
+
 
 ## 1.11.3 — Edit view refresh
 

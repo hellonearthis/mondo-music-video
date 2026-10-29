@@ -142,7 +142,7 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   useBtn.type = "button";
   const editBtn = text("button", "✏️ Edit prompt", "quiet", "Edit this prompt; it is used only if it passes the Mondo checks and Laya review");
   editBtn.type = "button";
-  const writeBtn = text("button", "✍️ Write new prompt", "quiet", "Have the writer write a new prompt for this passage, checked like every production prompt");
+  const writeBtn = text("button", "✍️ Write new prompt", "quiet", "Roll a fresh setting and motif for this passage and have the writer write a new checked prompt");
   writeBtn.type = "button";
   editBtn.hidden = writeBtn.hidden = Boolean(data.prompt_blocked);
   const chosen = () => versions.find(v => v.id === select.value);
@@ -171,7 +171,7 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   writeBtn.onclick = handle(async () => {
     const charge = data.writer_charge || {};
     const cost = charge.api_writer ? ` Your writer is an API service that may charge for this call (estimate about $${Number(charge.estimate_usd || 0).toFixed(2)}).` : "";
-    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? It goes through the writer, the Mondo checks and Laya, like every production prompt.${cost}`)) return;
+    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? This rolls a fresh setting and motif from the vocabulary pool and runs the writer, the Mondo checks and Laya.${cost}`)) return;
     await runPrompt("rewrite", { confirm: true, accept_writer_cost: Boolean(charge.api_writer) }, `Writing a new prompt for ${seg.segment_id}…`);
   });
   const editor = document.createElement("div");

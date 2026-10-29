@@ -410,6 +410,9 @@ def run(home, directory, *, resume=False, rewrite=None):
                 if singing:
                     from . import lipsync
                     cast_entries = lipsync.with_singer_lines(cast_entries, sing['actor_id'], sing['lines'])
+                if rewrite and candidate is None:
+                    from . import takes
+                    takes.replan_segment_vocabulary(store, request, seg, seed=rewrite.get('seed'))
                 job = build_writer_request(plan, seg, tags, cast_entries, silent_mouths=seg_silent)
                 if singing:
                     job['singing'] = {'actor_id': sing['actor_id'], 'picture_tag': sing['picture_tag'], 'lines': sing['lines'],
@@ -603,6 +606,10 @@ def run(home, directory, *, resume=False, rewrite=None):
     if not resume:
         passage_plans.bind_prompts(directory, prepared, prompts)
     if rewrite:
+        if candidate is None:
+            plan.to_json(plan_path)
+            prepared['plan'] = read_json(plan_path)
+            write_json(directory / 'prepared.json', prepared)
         progress(f"Prompt for {rewrite['segment']} validated", 100)
         return prompts[rewrite['segment']]
     progress('All prompts validated; opening renderer', 32)
@@ -955,8 +962,9 @@ def main():
     elif sys.argv[1] == 'rewrite_prompt':
         # One passage of a finished production through the normal prompt stage; an optional file holds a hand-edited candidate.
         home, directory, segment_id = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
-        candidate = Path(sys.argv[5]).read_text(encoding='utf-8') if len(sys.argv) > 5 else None
-        _guarded(home, lambda: run(home, directory, rewrite={'segment': segment_id, 'candidate': candidate}))
+        candidate = Path(sys.argv[5]).read_text(encoding='utf-8') if len(sys.argv) > 5 and sys.argv[5] else None
+        seed = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else None
+        _guarded(home, lambda: run(home, directory, rewrite={'segment': segment_id, 'candidate': candidate, 'seed': seed}))
     else: raise SystemExit('Unknown worker phase')
 
 if __name__=='__main__':main()

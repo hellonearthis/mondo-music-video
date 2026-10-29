@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.11.3")
+        self.assertEqual(api_version()["version"], "1.11.4")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.11.3", (root / "README.md").read_text())
+        self.assertIn("1.11.4", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -836,6 +836,7 @@ class PublicAppTests(unittest.TestCase):
         run_id = started.json()["id"]
         run = self.home / "runs" / run_id
         original = read_json(run / "prompts.json")["seg000"]
+        original_job = read_json(run / "writer_jobs" / "seg000.json")
         writer_files = sorted(p.name for p in run.glob("seg000.*.json"))
         base = f"/api/outputs/{run_id}/prompts/seg000"
 
@@ -846,9 +847,12 @@ class PublicAppTests(unittest.TestCase):
         self.assertIn("Confirm", self.client.post(f"{base}/rewrite", json={}).text)
         self.assertIn("Confirm", self.client.post(f"{base}/edit", json={"prompt": original}).text)
 
-        # A rewrite runs the worker's own writer, checks and Laya for this passage only, keeping the earlier files aside.
+        # A rewrite rolls a fresh setting and motif for this passage and runs the worker's own writer, checks and Laya.
         self.client.post(f"{base}/rewrite", json={"confirm": True}).raise_for_status()
         self.assertEqual(self.wait()["state"], "complete")
+        rewritten_job = read_json(run / "writer_jobs" / "seg000.json")
+        self.assertNotEqual(rewritten_job["shots"][0]["vocabulary"]["setting"], original_job["shots"][0]["vocabulary"]["setting"])
+        self.assertNotEqual(rewritten_job["shots"][0]["vocabulary"]["mechanism"], original_job["shots"][0]["vocabulary"]["mechanism"])
         versions = read_json(run / "prompt_takes.json")["segments"]["seg000"]
         self.assertEqual([v["id"] for v in versions["takes"]], ["prompt1", "prompt2"])
         self.assertEqual((versions["active_take"], versions["takes"][1]["validated"]), ("prompt2", True))
