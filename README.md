@@ -2,6 +2,11 @@
 
 **Version 1.11.5** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
+Turn a song into a music video. Beat-aware shot planning, LLM-written prompts, local or
+hosted rendering, actors that dance, lip-sync and play instruments, Worlds, storyboards,
+and frame-exact assembly with your original audio. Agent-installable, with MCP tools and
+Open Actor/Prop Protocols.
+
 ## Easy install — let your AI agent do it
 
 Give a coding agent with terminal access this one instruction:
@@ -55,7 +60,7 @@ passage to its planned frames, joins the picture, and restores your original son
 - Optional group dancing or independent dancing with per-actor beat/drums/bass/vocals assignments.
 - Opt-in [instrument-playing actors](docs/INSTRUMENTS.md) with drums/bass/guitar/keyboards assignments and per-passage references; guitar/keyboard sheets included, drums/bass sheets pending.
 - Output folders named for the uploaded song plus date and time; existing runs retain their IDs.
-- Consistent reference-image actors with Open Actor Protocol built in.
+- Consistent reference-image actors and props with Open Actor Protocol and Open Prop Protocol built in.
 - Your own visual styles, including styles harvested from reference images, plus
   six optional [style presets](examples/style-presets/README.md).
 - Animated production idents and opening or closing credits.
