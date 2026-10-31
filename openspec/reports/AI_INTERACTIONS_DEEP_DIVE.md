@@ -1,5 +1,5 @@
 # Behavior Report: Mondo Music Video AI Engine & Complex Interactive Flow
-**Scope:** `mmv/worker.py`, `mmv/engine/writer.py`, `mmv/engine/style.py`, `mmv/engine/schema.py`, `mmv/engine/validators/laya_semantic.py`, `mmv/quality.py`, `mmv/vision_check.py`, `mmv/vision_stage.py`, `mmv/lyrics.py`, `mmv/stems.py`, `mmv/voice.py`, `mmv/vocab_select.py`, `mmv/world_vectors.py`, `mmv/storyboard.py`, `mmv/takes.py`  
+**Scope:** `mmv/worker.py`, `mmv/engine/writer.py`, `mmv/engine/style.py`, `mmv/engine/schema.py`, `mmv/engine/validators/laya_semantic.py`, `mmv/quality.py`, `mmv/vision_check.py`, `mmv/vision_stage.py`, `mmv/lyrics.py`, `mmv/stems.py`, `mmv/voice.py`, `mmv/vocab_select.py`, `mmv/world_vectors.py`, `mmv/storyboard.py`, `mmv/takes.py`, `mmv/production_queue.py`  
 **Summary:** The Mondo Music Video engine orchestrates a multi-model generative media pipeline combining Vision-Language Models, local large language model prompt writers, a reinforcement-learned decision validator (Laya), audio stem/speech AI (Demucs/Whisper), and diffusion-based video generation (ComfyUI). It enforces deterministic motion and edge-to-edge framing quality gates, multi-tier corrective retry loops, and sealed-lips facial babbling suppressions across modular musical segments. Visual vocabulary selection is dynamically bound via percentile-calibrated Gaussian dissonance, while isolated passage rewrites and rerolls preserve non-destructive take versioning with atomic rollback.
 
 ---
@@ -24,6 +24,11 @@
 - `passage_rewrite`: Isolated re-synthesis of a single passage prompt that rolls a fresh variation seed and vocabulary rotation while holding shot cuts and song timing constant.
 - `atomic_rollback`: A state safety mechanism that backs up plan, prepared, and prompt files and restores them if a rewrite or edit fails validation or encounters an execution crash.
 - `storyboard_alignment`: The proportional assignment of narrative and visual storyboard panels across planned shots based on duration and cut timestamps.
+- `queue_ticket`: An atomic JSON file stored under `queue/` representing an individual music video or ident production in pending, running, complete, failed, cancelled, interrupted, or held state.
+- `approved_fingerprint`: A SHA-256 fingerprint of production inputs, settings, and quoted estimate recorded upon explicit operator consent; if any parameter changes, the ticket is held.
+- `held_ticket`: A queue ticket blocked from executing by cost-invariants, including missing approvals, changed inputs, or prior paid failure stops.
+- `resume_blocker`: Pre-resume validation verifying input fingerprint consistency, completed prompt files, and valid Comfy job receipts before continuing an interrupted local production.
+- `single_operation_guard`: An exclusive thread lock ensuring that only one GPU render, LLM writer synthesis, or video assembly pipeline runs across the studio at any time.
 
 ---
 
@@ -34,6 +39,7 @@ sequenceDiagram
     autonumber
     participant Op as User / Agent
     participant Web as Web Server (mondo_web.py)
+    participant Queue as Queue Dispatcher (production_queue.py)
     participant Pipe as Pipeline & Planner
     participant VisionAI as Vision AI (Style / Storyboard)
     participant AudioAI as Audio AI (Whisper / Demucs)
@@ -43,21 +49,33 @@ sequenceDiagram
     participant Comfy as ComfyUI Video Renderer
     participant PostVision as Post-Render Pixel Gate
 
-    Note over Op,Web: 1. Style & Storyboard Ingestion
-    Op->>Web: POST /api/quote (references, song, direction)
-    Web->>VisionAI: Style Harvest (11 Axes & Subtraction Test)
-    VisionAI-->>Web: Style Card & Aesthetic Directives JSON
+    Note over Op,Queue: 1. Queue Ingestion & Cost-Hold Evaluation
+    Op->>Web: POST /api/queue (quote_id, consent)
+    Web->>Queue: new_ticket(request, estimate, fingerprint)
+    Queue->>Queue: hold_reason(ticket, prior_paid_failures, fingerprint)
+    alt Cost Unapproved or Plan Changed
+        Queue-->>Web: Hold Ticket in queue/ (State: held)
+    else Free or Approved Paid Ticket
+        Queue-->>Web: Accept Ticket in queue/ (State: pending)
+    end
+    Op->>Web: POST /api/queue/start
+    Web->>Queue: start_dispatch() acquires jobs.lock
+    Queue->>Pipe: Launch Production under Single-Operation Guard
 
-    Note over Web,AudioAI: 2. Audio & Lyrics Intelligence
-    Web->>AudioAI: Demucs Stem Extraction & Whisper Transcription
+    Note over Pipe,VisionAI: 2. Style & Storyboard Ingestion
+    Pipe->>VisionAI: Style Harvest (11 Axes & Subtraction Test)
+    VisionAI-->>Pipe: Style Card & Aesthetic Directives JSON
+
+    Note over Pipe,AudioAI: 3. Audio & Lyrics Intelligence
+    Pipe->>AudioAI: Demucs Stem Extraction & Whisper Transcription
     AudioAI-->>Pipe: 6 Audio Stems & Timed Lyric Word Cues
 
-    Note over Pipe,Writer: 3. Semantic Montage Planning
+    Note over Pipe,Writer: 4. Semantic Montage Planning
     Pipe->>Pipe: Calibrate Gaussian World Dissonance (Kappa)
     Pipe->>Pipe: Build Segment Plan & Inject Sealed-Lips Rigging
     Pipe->>Writer: Dispatch Segment Writer Job (build_writer_request)
 
-    Note over Writer,Laya: 4. Multi-Tier Prompt Validation Loop
+    Note over Writer,Laya: 5. Multi-Tier Prompt Validation Loop
     loop Up to 3-4 Attempts
         Writer-->>MondoQ: Emit Structured 8-Field WriterResponse JSON
         MondoQ->>MondoQ: Validate Monotonic Timing & Rigging Tail
@@ -75,12 +93,12 @@ sequenceDiagram
         end
     end
 
-    Note over Pipe,Comfy: 5. Generative Video Synthesis
+    Note over Pipe,Comfy: 6. Generative Video Synthesis
     Pipe->>Writer: Unload Writer & Flush VRAM
     Pipe->>Comfy: Dispatch Assembled Graph (Actor Latents + Audio + Seed)
     Comfy-->>PostVision: Rendered Passage MP4 Clip
 
-    Note over PostVision,Op: 6. Post-Render Verification & Output
+    Note over PostVision,Op: 7. Post-Render Verification & Output
     PostVision->>PostVision: Luminance Delta (FROZEN_MOTION >= 0.35)
     PostVision->>PostVision: Border StdDev Inspection (Letterbox Detection)
     PostVision->>VisionAI: mmv-vision Quality Probe (port 8083)
@@ -89,6 +107,8 @@ sequenceDiagram
     else Clip Verified
         PostVision-->>Web: Save Take to takes.json & Render Record
     end
+    Queue->>Queue: settle_operation(state: complete)
+    Queue->>Queue: Dispatch next pending ticket in queue
     Web->>Op: Present Final Takes, Edit View & Playback URL
 ```
 
@@ -375,6 +395,48 @@ sequenceDiagram
 - **THEN** the passage's vocabulary pools are overridden by the requested Thematic World or studio World canon
 - **AND** the passage-specific direction note steers both contextual vocabulary ranking and the writer job's `conceptual_theme`
 
+### REPORT-40 Free vs. Paid Ticket Admission and Fingerprint Validation
+*Evidence:* `mmv/production_queue.py:53-59`, `mmv/production_queue.py:76-87` | *Confidence:* observed
+- **GIVEN** a production request previewed via `/api/quote`
+- **WHEN** `new_ticket` creates an atomic JSON file under `store.home / "queue"`
+- **THEN** free work (`estimate_usd <= 0`) records `approved_fingerprint: null` and is never held by cost invariants
+- **AND** paid work (`estimate_usd > 0`) records the cryptographic SHA-256 `approved_fingerprint` and is held if inputs, settings, or rate cards change before dispatch
+
+### REPORT-41 Single-Operation Guard and Sequential Ticket Dispatching
+*Evidence:* `mmv/production_queue.py:177-186`, `mmv/production_queue.py:266-285` | *Confidence:* observed
+- **GIVEN** a populated queue containing multiple pending tickets and a running pipeline
+- **WHEN** `_claim_next` attempts to dispatch under `jobs.lock`
+- **THEN** dispatching yields while `jobs.active is not None`, preventing overlapping GPU rendering or paid API execution
+- **AND** the next pending ticket is claimed and launched only after the active operation concludes and settles
+
+### REPORT-42 Unbroken Paid History Gate (Cascade Hold on Prior Paid Failure)
+*Evidence:* `mmv/production_queue.py:69-74`, `mmv/production_queue.py:85-87` | *Confidence:* observed
+- **GIVEN** a prior paid production ticket that terminated in `failed` or `interrupted` state at timestamp `T1`
+- **WHEN** a subsequent paid ticket approved before `T1` is evaluated for execution
+- **THEN** `hold_reason` detects the unverified failure and marks the subsequent ticket `held`
+- **AND** no money or remote render credits are spent until the operator explicitly reviews the failure and queues again
+
+### REPORT-43 Waiting Ticket Position Swapping and Running Ticket Protection
+*Evidence:* `mmv/production_queue.py:47-51`, `mmv/production_queue.py:90-101` | *Confidence:* observed
+- **GIVEN** a queue with waiting `pending` tickets and an active `running` ticket
+- **WHEN** `moved` is called with a delta on a waiting ticket
+- **THEN** position integers between adjacent waiting tickets are swapped cleanly
+- **AND** any attempt to move or delete the currently running ticket raises an explicit `ValueError`
+
+### REPORT-44 Atomic Crash Recovery to Interrupted State
+*Evidence:* `mmv/production_queue.py:151-157`, `mmv/production_queue.py:167-170` | *Confidence:* observed
+- **GIVEN** an application process crash or sudden server termination while a ticket is `running`
+- **WHEN** the server restarts and executes `recover_tickets`
+- **THEN** any ticket still marked `running` transitions to `interrupted` with a sanitized failure message
+- **AND** the in-memory queue control flag `running` remains `false`, requiring human or agent operator confirmation before restarting
+
+### REPORT-45 Resuming Local Runs from Saved Work Without Writer Recharge
+*Evidence:* `mmv/production_queue.py:103-106`, `mmv/production_queue.py:133-144`, `mmv/production_queue.py:241-246` | *Confidence:* observed
+- **GIVEN** an interrupted local production with saved prompts in `prompts.json` and valid ComfyUI receipts
+- **WHEN** the queue starts with `resume_interrupted` or the operator triggers `resume_ticket`
+- **THEN** `resume_blocker` validates that original inputs and settings are intact
+- **AND** execution continues in the existing run directory from saved clips without regenerating prompts or recharging API writers
+
 ---
 
 ## Coverage Gaps
@@ -409,6 +471,15 @@ sequenceDiagram
 | Passage Rewrite | User requests new passage prompt | REPORT-33 | Handled (Fresh seed & vocab) |
 | Passage Rewrite | Failure during writer/validation | REPORT-34 | Handled (Atomic rollback) |
 | Storyboard Ingestion | Uploaded panel drawings | REPORT-35 | Handled (Proportional align) |
+| Queue Admission | Free production ticket | REPORT-40 | Handled (auto-dispatches) |
+| Queue Admission | Paid ticket without cost approval | REPORT-40 | Handled (held) |
+| Queue Dispatch | Single operation active | REPORT-41 | Handled (waits for idle) |
+| Queue Dispatch | Unbroken paid stop detected | REPORT-42 | Handled (held) |
+| Queue Reorder | Move waiting ticket | REPORT-43 | Handled (swaps positions) |
+| Queue Reorder | Delete or move active running ticket | REPORT-43 | Handled (ValueError) |
+| Queue Crash Recovery | Server process restarts | REPORT-44 | Handled (interrupted) |
+| Queue Local Resume | Interrupted run with saved prompts | REPORT-45 | Handled (continues run) |
+| Queue Cancellation | Cancel active operation | — | Handled (pauses queue) |
 | External API Outage | Remote writer connection refused | — | Handled (Unreachable error) |
 | GPU Out of Memory | ComfyUI allocation failure | — | Handled (Error report & cancel) |
 

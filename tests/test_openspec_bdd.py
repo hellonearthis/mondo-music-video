@@ -24,7 +24,7 @@ import types
 import unittest
 from pathlib import Path
 
-from mmv import quality, storyboard, takes, vision_check, vocab_select, world_vectors, writer_json
+from mmv import production_queue, quality, storyboard, takes, vision_check, vocab_select, world_vectors, writer_json
 from mmv.engine.backends import get_backend
 from mmv.engine.plan import Shot, Segment, STANDARD, THEMATIC
 from mmv.engine.schema import RIGGING_TAIL, ValidationError, WriterResponse, assemble_prompt, validate_prompt
@@ -103,9 +103,9 @@ class OpenSpecStructureAndGlossaryTests(unittest.TestCase):
                 target = ROOT / quoted
                 self.assertTrue(target.is_file(), f"Glossary source file missing: {quoted}")
 
-    def test_all_nine_feature_files_parse_with_rules_tags_and_steps(self):
+    def test_all_ten_feature_files_parse_with_rules_tags_and_steps(self):
         feature_files = sorted(FEATURES_DIR.glob("*.feature"))
-        self.assertEqual(len(feature_files), 9)
+        self.assertEqual(len(feature_files), 10)
         total_scenarios = 0
         for path in feature_files:
             parsed = parse_gherkin_feature(path)
@@ -123,15 +123,15 @@ class OpenSpecStructureAndGlossaryTests(unittest.TestCase):
                 self.assertIn("Given", keywords, f"Scenario '{sc['title']}' missing Given")
                 self.assertIn("When", keywords, f"Scenario '{sc['title']}' missing When")
                 self.assertIn("Then", keywords, f"Scenario '{sc['title']}' missing Then")
-        self.assertGreaterEqual(total_scenarios, 45)
+        self.assertGreaterEqual(total_scenarios, 52)
 
     def test_behavior_report_contains_all_scenarios_diagram_and_tables(self):
         self.assertTrue(REPORT_PATH.is_file(), "AI_INTERACTIONS_DEEP_DIVE.md must exist")
         content = REPORT_PATH.read_text(encoding="utf-8")
         report_ids = re.findall(r"### (REPORT-\d{2})\b", content)
-        self.assertEqual(len(report_ids), 39)
+        self.assertEqual(len(report_ids), 45)
         self.assertEqual(report_ids[0], "REPORT-01")
-        self.assertEqual(report_ids[-1], "REPORT-39")
+        self.assertEqual(report_ids[-1], "REPORT-45")
         self.assertIn("```mermaid\nsequenceDiagram", content)
         self.assertIn("## Coverage Gaps", content)
         self.assertIn("## Unknowns", content)
@@ -419,6 +419,70 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
         self.assertIn("salt pier", ctx["shots"][0]["direction"])
         self.assertIn("rusted capstan", ctx["shots"][1]["direction"])
         self.assertEqual([s.start_frame for s in seg.shots], [0, 48])
+
+    def test_queue_01_and_02_free_vs_paid_fingerprint_hold_invariants(self):
+        """@QUEUE-01, @QUEUE-02 & REPORT-40: Free tickets never held; paid tickets require approved fingerprint."""
+        free = production_queue.new_ticket({"kind": "video", "backend": "local_h3"}, "Free Ticket", 1, estimate=0)
+        self.assertIsNone(production_queue.hold_reason(free, [free], 0, "any-hash"))
+
+        paid = production_queue.new_ticket({"kind": "video", "backend": "wavespeed"}, "Paid Ticket", 2, estimate=4.50, fingerprint="sha-abc")
+        self.assertEqual(paid["approved_fingerprint"], "sha-abc")
+        # Same fingerprint -> runnable
+        self.assertIsNone(production_queue.hold_reason(paid, [paid], 4.50, "sha-abc"))
+        # Changed fingerprint -> held
+        self.assertIn("inputs, settings or price changed", production_queue.hold_reason(paid, [paid], 4.50, "sha-diff"))
+        # Unapproved paid ticket -> held
+        unapproved = {**paid, "approved_fingerprint": None}
+        self.assertIn("never approved", production_queue.hold_reason(unapproved, [unapproved], 4.50, "sha-abc"))
+
+    def test_queue_03_prior_paid_failure_cascades_hold_onto_subsequent_tickets(self):
+        """@QUEUE-03 & REPORT-42: Prior paid failure holds subsequent paid tickets approved before failure time."""
+        now = 1000.0
+        approved = production_queue.new_ticket({"kind": "video"}, "Next Paid", 2, estimate=5.0, fingerprint="fp", now=now)
+        prior_failed = production_queue.new_ticket({"kind": "video"}, "Old Paid", 1, estimate=5.0, fingerprint="fp", now=now - 50)
+        prior_failed["state"] = "failed"
+        prior_failed["finished"] = now + 10.0  # stopped after approved ticket was created
+        reason = production_queue.hold_reason(approved, [prior_failed, approved], 5.0, "fp")
+        self.assertIn("earlier paid ticket did not finish", reason)
+
+    def test_queue_04_waiting_ticket_swapping_and_running_protection(self):
+        """@QUEUE-04 & REPORT-43: Waiting tickets swap positions; running tickets reject movement."""
+        t1 = production_queue.new_ticket({"kind": "video"}, "Ticket 1", 1)
+        t2 = production_queue.new_ticket({"kind": "video"}, "Ticket 2", 2)
+        swapped = production_queue.moved([t1, t2], t1["id"], 1)
+        self.assertEqual({t["id"]: t["position"] for t in swapped}, {t1["id"]: 2, t2["id"]: 1})
+
+        running = {**t1, "state": "running"}
+        with self.assertRaises(ValueError):
+            production_queue.moved([running, t2], running["id"], 1)
+
+    def test_queue_05_and_06_crash_recovery_and_resumable_contract(self):
+        """@QUEUE-05, @QUEUE-06 & REPORT-44, REPORT-45: Running tickets recover to interrupted; local runs with folders resume."""
+        ticket = {**production_queue.new_ticket({"kind": "video", "backend": "local_h3"}, "Crash Test", 1), "state": "running", "run_id": "run-xyz"}
+        with tempfile.TemporaryDirectory() as td:
+            store = Storage(Path(td))
+            production_queue.save_ticket(store, ticket)
+            production_queue.recover_tickets(store, lambda kind: "Died with server crash")
+            recovered = production_queue.get_ticket(store, ticket["id"])
+            self.assertEqual(recovered["state"], "interrupted")
+            self.assertTrue(production_queue.resumable(recovered))
+            resumed = production_queue.resume_ticket(store, recovered)
+            self.assertEqual(resumed["state"], "pending")
+            self.assertEqual(resumed["resume_run"], "run-xyz")
+
+    def test_queue_07_cancellation_pauses_queue_execution(self):
+        """@QUEUE-07: Cancelling an active operation sets running=False and marks the ticket cancelled."""
+        with tempfile.TemporaryDirectory() as td:
+            store = Storage(Path(td))
+            t = {**production_queue.new_ticket({"kind": "video"}, "Cancel Test", 1), "state": "running", "run_id": "run-abc"}
+            production_queue.save_ticket(store, t)
+            control = {"running": True, "dispatching": False, "prepare_lock": None}
+            from mmv.jobs import Jobs
+            jobs = Jobs(store)
+            production_queue.settle_operation(store, jobs, control, {"id": "run-abc", "state": "cancelled", "message": "Cancelled by operator"})
+            updated = production_queue.get_ticket(store, t["id"])
+            self.assertEqual(updated["state"], "cancelled")
+            self.assertFalse(control["running"], "Queue must pause upon operation cancellation")
 
 
 if __name__ == "__main__":

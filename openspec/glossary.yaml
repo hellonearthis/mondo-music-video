@@ -58,4 +58,19 @@ terms:
   storyboard_alignment:
     definition: "The proportional assignment of narrative and visual storyboard panels across planned shots based on duration and cut timestamps."
     sources: ["mmv/storyboard.py"]
+  queue_ticket:
+    definition: "An atomic JSON file stored under queue/ representing an individual music video or ident production in pending, running, complete, failed, cancelled, interrupted, or held state."
+    sources: ["mmv/production_queue.py"]
+  approved_fingerprint:
+    definition: "A SHA-256 fingerprint of production inputs, settings, and quoted estimate recorded upon explicit operator consent; if any parameter changes, the ticket is held."
+    sources: ["mmv/production_queue.py", "mmv/production.py"]
+  held_ticket:
+    definition: "A queue ticket blocked from executing by cost-invariants, including missing approvals, changed inputs, or prior paid failure stops."
+    sources: ["mmv/production_queue.py"]
+  resume_blocker:
+    definition: "Pre-resume validation verifying input fingerprint consistency, completed prompt files, and valid Comfy job receipts before continuing an interrupted local production."
+    sources: ["mmv/production_queue.py"]
+  single_operation_guard:
+    definition: "An exclusive thread lock ensuring that only one GPU render, LLM writer synthesis, or video assembly pipeline runs across the studio at any time."
+    sources: ["mmv/jobs.py", "mmv/production_queue.py"]
 
