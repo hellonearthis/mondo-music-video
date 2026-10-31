@@ -127,7 +127,8 @@ export async function json(path, body, method = "POST") {
 
 export function handle(fn) {
   return async event => {
-    event?.preventDefault();
+    // A fold inside a list with a delegated handler must still open.
+    if (!event?.target?.closest?.("summary")) event?.preventDefault();
     try {
       notice("");
       await fn(event);

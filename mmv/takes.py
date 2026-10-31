@@ -118,49 +118,39 @@ def _used_segment_vocab(seg) -> dict[str, list[str]]:
     return used
 
 
-def _world_custom_vocabulary(store: Storage, world_id: str | None) -> dict[str, dict]:
-    """Resolve a built-in Thematic World name or saved studio World ID into custom_vocabulary overrides."""
+def world_custom_vocabulary(store: Storage, world_id: str | None) -> dict[str, dict]:
+    """A built-in Thematic World name or saved World ID as custom_vocabulary overrides. An unknown one means the default vocabulary."""
     if not isinstance(world_id, str) or not world_id.strip():
         return {}
     clean = world_id.strip()
     from .world_vectors import BUILTIN_THEMATIC_WORLDS
-    if clean in BUILTIN_THEMATIC_WORLDS:
-        pools = BUILTIN_THEMATIC_WORLDS[clean]
-        return {
-            table: {"mode": "replace", "add": list(terms), "exclude": []}
-            for table, terms in pools.items()
-            if isinstance(terms, (list, tuple)) and terms
-        }
-    for name, pools in BUILTIN_THEMATIC_WORLDS.items():
-        if name.casefold() == clean.casefold():
-            return {
-                table: {"mode": "replace", "add": list(terms), "exclude": []}
-                for table, terms in pools.items()
-                if isinstance(terms, (list, tuple)) and terms
-            }
+    builtin = next((pools for name, pools in BUILTIN_THEMATIC_WORLDS.items() if name.casefold() == clean.casefold()), None)
+    if builtin:
+        return {table: {"mode": "replace", "add": list(terms), "exclude": []}
+                for table, terms in builtin.items() if isinstance(terms, (list, tuple)) and terms}
+    from . import worlds
     try:
-        from . import worlds
-        ledger = worlds.load(store, clean)
-        return worlds.custom_vocabulary(ledger, mode="replace")
+        return worlds.custom_vocabulary(worlds.load(store, clean), mode="replace")
     except Exception:
         return {}
+
+
+_world_custom_vocabulary = world_custom_vocabulary
 
 
 def replan_segment_vocabulary(
     store: Storage,
     request: dict,
     segments: list | object,
-    index_or_seed: int | None = None,
+    index_or_seed: int | None = 0,
     seed: int | None = None,
     world_id: str | None = None,
     direction_note: str | None = None,
 ) -> int:
-    """Draw new vocabulary for segments[index] (or seg) from the production's pool, with optional world and creative steering.
+    """Draw new vocabulary for segments[index] (or seg) from the production's pool, with optional World and note steering.
 
-    Timing, cuts, cast and rigging are kept. Supports both:
-    - (store, request, segments, index, seed, world_id=None, direction_note=None)
-    - (store, request, seg, seed=None, world_id=None, direction_note=None)
-    """
+    Timing, cuts, cast and rigging are kept. Other passages are read, never changed. A pool with no other term, or a
+    world's own terms, can bring a term back: new terms are likely, not guaranteed. Returns the seed used."""
     from .engine.plan import CHAOTIC, FRAGMENTATION, STANDARD, THEMATIC, VocabSampler
     from .pipeline import load_vocabulary
     from .vocab_select import (
@@ -186,7 +176,7 @@ def replan_segment_vocabulary(
 
     used = _used_segment_vocab(seg)
     custom = dict(request.get("custom_vocabulary") or {})
-    world_custom = _world_custom_vocabulary(store, world_id)
+    world_custom = world_custom_vocabulary(store, world_id)
     if world_custom:
         custom = {**custom, **world_custom}
 

@@ -12,7 +12,7 @@ MAX_FREE_RETRIES = 2
 
 LAYA_STYLE_DIVERGENCE_THRESHOLD = 0.65
 LAYA_STYLE_RETRY_NOTE = (
-    'Semantic Validator rejected: Style adherence was judged divergent from the style card. '
+    'Semantic Validator rejected: Style adherence was judged to contradict the style card. '
     'Re-anchor lighting, surface texture, and edge behaviour to the aesthetic directives.'
 )
 
@@ -47,7 +47,8 @@ def extract_json_object(raw: str) -> str:
         elif ch == '}':
             depth -= 1
             if depth == 0:
-                return text[start:idx + 1]
+                # Another object after this one means this may be an example, not the answer: let it fail as broken JSON.
+                return text if '{' in text[idx + 1:] else text[start:idx + 1]
     return text[start:]
 
 
@@ -64,7 +65,7 @@ def is_broken_json(problems):
 def laya_style_feedback(response: dict | None, strict: bool = False) -> tuple[list[str], list[str]]:
     """Inspect Laya's style_adherence judgment without altering the protected validator.
 
-    Returns (advice_notes, retry_problems). High-confidence style divergence (>= 0.65) is always recorded
+    Returns (advice_notes, retry_problems). A high-confidence contradicts_style answer (>= 0.65) is always recorded
     in advice_notes for operator visibility, and escalated to retry_problems when strict_prompt_checks is active.
     """
     if not isinstance(response, dict):
@@ -80,10 +81,11 @@ def laya_style_feedback(response: dict | None, strict: bool = False) -> tuple[li
         confidence = float(adherence.get('confidence') or 0.0)
     except (TypeError, ValueError):
         confidence = 0.0
-    if selected != 'divergent' or confidence < LAYA_STYLE_DIVERGENCE_THRESHOLD:
+    if selected not in ('contradicts_style', 'divergent') or confidence < LAYA_STYLE_DIVERGENCE_THRESHOLD:
         return [], []
+    reason_label = "judged to contradict the style card" if selected == "contradicts_style" else "judged divergent"
     advisory = (
-        f"Laya style adherence note: judged divergent (confidence {confidence:.2f}); "
+        f"Laya style adherence note: {reason_label} (confidence {confidence:.2f}); "
         "check lighting, surface texture, and edge behaviour against the style card."
     )
     return [advisory], ([LAYA_STYLE_RETRY_NOTE] if strict else [])

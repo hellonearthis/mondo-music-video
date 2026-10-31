@@ -198,13 +198,15 @@ def passage_breakdown(store, run_id):
                 _recorded_clip(renders, sid, roots),
                 active_take=active_take, takes=seg_takes, prompt_data=prompt_data
             ))
+    from . import worlds as worlds_mod
     from .world_vectors import BUILTIN_THEMATIC_WORLDS
     return {"run_id": run_id, "source_run_id": origin, "title": output.get("title", "Finished production"),
             "kind": output.get("kind", "video"), "segments": passages, "final_takes": final_takes.get("takes", []),
             "reroll_blocked": takes_mod.reroll_block(request),
             "prompt_blocked": takes_mod.prompt_block(request, prepared), "writer_charge": takes_mod.writer_charge(prepared),
             "prompt_limit": _prompt_limit(request),
-            "thematic_worlds": list(BUILTIN_THEMATIC_WORLDS.keys())}
+            "thematic_worlds": list(BUILTIN_THEMATIC_WORLDS.keys()),
+            "saved_worlds": [{"id": item["id"], "name": item.get("name") or item["id"]} for item in worlds_mod.listing(store)]}
 
 
 def passage_clip(store, run_id, segment_id, take_id=None):

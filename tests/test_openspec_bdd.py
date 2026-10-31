@@ -181,18 +181,18 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
         divergent_response = {
             "answers": {
                 "visual_density": {"expected": 4.2, "confidence": 0.85},
-                "style_adherence": {"selected": "divergent", "confidence": 0.80},
+                "style_adherence": {"selected": "contradicts_style", "confidence": 0.80},
             }
         }
         advice_default, problems_default = writer_json.laya_style_feedback(divergent_response, strict=False)
         self.assertEqual(len(advice_default), 1)
-        self.assertIn("judged divergent (confidence 0.80)", advice_default[0])
+        self.assertIn("contradict the style card (confidence 0.80)", advice_default[0])
         self.assertEqual(problems_default, [])
 
         advice_strict, problems_strict = writer_json.laya_style_feedback(divergent_response, strict=True)
         self.assertEqual(len(advice_strict), 1)
         self.assertEqual(len(problems_strict), 1)
-        self.assertIn("Style adherence was judged divergent", problems_strict[0])
+        self.assertIn("judged to contradict the style card", problems_strict[0])
 
         aligned_response = {
             "answers": {
@@ -305,7 +305,8 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
             steered_seed = takes.replan_segment_vocabulary(
                 store,
                 request,
-                seg,
+                [seg],
+                0,
                 seed=777,
                 world_id="Cyberpunk / High-Tech",
                 direction_note="saturated neon rain and optic cabling",
@@ -317,6 +318,19 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
                 self.assertIn(sh.vocab["lighting"], cyber_pools["lighting"])
                 self.assertIn(sh.vocab["costume"], cyber_pools["costume"])
 
+    def test_a_valid_example_before_the_answer_is_not_taken_as_the_answer(self):
+        example_then_truncated = 'For example {"shots": []} and my answer: {"shots": ["unfinished'
+        self.assertEqual(writer_json.extract_json_object(example_then_truncated), example_then_truncated)
+        self.assertEqual(writer_json.extract_json_object('<think>{x}</think> Here: {"a": 1} done.'), '{"a": 1}')
+
+    def test_laya_never_answers_the_old_divergent_label(self):
+        from mmv.engine.validators import laya_semantic
+        source = Path(laya_semantic.__file__).read_text(encoding="utf-8")
+        self.assertIn('"contradicts_style"', source)
+
+    def test_unknown_steering_world_falls_back_to_default_vocabulary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self.assertEqual(takes.world_custom_vocabulary(Storage(temp), "no_such_world"), {})
     def test_validate_02_03_mondo_quality_and_sealed_lips_validation(self):
         """@VALIDATE-02, @VALIDATE-03 & REPORT-19..21: Sealed-lips rigging validation and Mondo motion/framing regex gates."""
         seg = Segment(
@@ -483,7 +497,6 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
             updated = production_queue.get_ticket(store, t["id"])
             self.assertEqual(updated["state"], "cancelled")
             self.assertFalse(control["running"], "Queue must pause upon operation cancellation")
-
 
 if __name__ == "__main__":
     unittest.main()

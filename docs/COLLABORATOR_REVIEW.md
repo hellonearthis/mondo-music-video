@@ -1,5 +1,9 @@
 # Collaborator review record
 
+## Fork `aa1e06b` reviewed (release 1.12.1, 2026-11-01)
+
+Commit `4d4fb16`; merge `aa1e06b` of our 1.12.0 was not adopted as history. Adopted: rewrite steering, `<think>`/fence extraction, Laya style advice, pre-compiled World matrix, OpenSpec documents and test. Adapted after a read-only Codex review: dropped a `vocab-worlds.js` hunk that failed to parse; `laya_style_feedback` looked for `divergent` while the validator answers `contradicts_style`; extraction now refuses a reply with a further object after the first; steering hidden for idents, where it has no effect (owner decision: an unknown World falls back to default vocabulary without a message); saved Worlds listed in the GUI; `replan_segment_vocabulary` keeps one explicit signature. Omitted: `Jobs.reset`, which nothing called. Open: the BDD test checks document structure and some functions, not the feature steps.
+
 ## Fork `ffb3c50` reviewed (release 1.11.6, 2026-10-31)
 
 The task-start check found exact head `ffb3c50c`, one authored commit after last reviewed `7681740` (`ae61fb5`) plus merge `ffb3c50` of our 1.11.4 and 1.11.5. Claude Code (Opus 5.5) coordinated and integrated; Codex reviewed read-only through the plugin (model not reported by the CLI). The owner was told plainly that this changes prompting behaviour and chose it as the only behaviour of Write new prompt, without an extra option.

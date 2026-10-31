@@ -13,7 +13,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
@@ -143,11 +145,26 @@ def pick_device():
     return 'cuda' if _gpu()['free'] >= MIN_FREE_VRAM_BYTES else 'cpu'
 
 
+_gate = threading.local()
+
+
+@contextmanager
+def gpu_gate(wait):
+    """Within this block on this thread, `wait` runs before any stem separation actually has to use the GPU."""
+    _gate.wait = wait
+    try:
+        yield
+    finally:
+        _gate.wait = None
+
+
 def separate(store, song, digest, model):
     """Stems for this song and model, cached; returns the directory holding one wav per stem."""
     cache = _root(store) / f'{digest}-{model}'
     if all((cache / f'{stem}.wav').is_file() for stem in MODELS[model]):
         return cache
+    if getattr(_gate, 'wait', None):
+        _gate.wait()
     cache.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=cache.parent) as temp:
         result = subprocess.run([sys.executable, '-m', 'demucs.separate', '-n', model, '-d', pick_device(),

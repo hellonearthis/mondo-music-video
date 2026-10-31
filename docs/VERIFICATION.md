@@ -1,12 +1,16 @@
-# Verification — 1.12.1
+# Verification — 1.12.2
 
-## 1.12.1 — Production queue integration with creative steering & OpenSpec suite
+## 1.12.2 — Production queue OpenSpec audit & upstream 1.12.1 integration
 
-Integration merge of upstream v1.12.0 production queue with v1.11.7 OpenSpec BDD suite, `<think>`-resilient parsing, pre-compiled World matrices, Laya style feedback, and creative rewrite steering. Verified with mock-service test suite, `tests/test_openspec_bdd.py`, `tests/test_public_app.py`, `tests/test_rewrite_vocabulary.py`, syntax validation of all JavaScript files (`node --check webapp/js/*.js`), and `protected_scheme.check() == []`.
+Full mock-service suite: verified upstream 1.12.1 changes (11-axis preset cards, fold click handlers, stem work waiting for free GPU, saved Worlds steering) and 10 OpenSpec feature files (52 tagged BDD scenarios), `REPORT-01` through `REPORT-45`, and executable BDD test assertions across `tests/test_openspec_bdd.py`, `tests/test_public_app.py`, and `tests/test_rewrite_vocabulary.py`. `protected_scheme.check()` is `[]`.
+
+## 1.12.1 — Collaborator fork `aa1e06b`
+
+Mock services only: reply extraction including an example before a truncated answer, the real `contradicts_style` label, World steering and the default-vocabulary fallback for an unknown World, existing rewrite and queue tests. Also: stem work waiting for a free GPU, the Styles page card and full-text fold, and the eleven-axis checks on the presets. The owner checked the Styles page changes in Firefox. No real before/after renders of steered prompts, strict style retries or the fuller preset cards.
 
 ## 1.12.0 — The production queue
 
-Automated, mock services only: ordering, reordering, free tickets without consent, a full mocked video through the queue, the paid gate (consent needed, approved plan runs, changed plan and free-turned-paid held, earlier paid stop holds older approvals, rounded tiny cost still paid), failure moves on, cancel pauses, restart recovery without auto-start, shutdown starting nothing, filling the queue during an operation, stem-preview refusal, Queue again, and resume (same run, no second submission, start over before prompts finished, paid renderers refused, writer recharge held). The browser test ran in Chromium only.
+Automated, mock services only: ordering, reordering, free tickets without consent, a full mocked video through the queue, the paid gate (consent needed, approved plan runs, changed plan and free-turned-paid held, earlier paid stop holds older approvals, rounded tiny cost still paid), failure moves on, cancel pauses, restart recovery without auto-start, shutdown starting nothing, filling the queue during an operation, stem work waiting for a free GPU, Queue again, and resume (same run, no second submission, start over before prompts finished, paid renderers refused, writer recharge held). The browser test ran in Chromium only.
 
 Not verified: a real GPU queue run or resume, a real paid queue run, and Firefox.
 

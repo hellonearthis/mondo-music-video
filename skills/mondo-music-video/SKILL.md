@@ -290,7 +290,7 @@ upscaling is the explicit user-requested exception and still uses the selected f
 ## Production queue
 
 `queue_production(quote_id)` adds a reviewed music video or ident preview; previews and song/reference
-uploads work during an operation, except stem-driven previews. Free local tickets need no consent. A priced
+uploads work during an operation. A preview needing new stems waits for the GPU; if your call times out, the work carries on, so preview again later. Free local tickets need no consent. A priced
 preview needs `consent=true` with user authorization of its estimate. `start_queue` runs tickets one at a time;
 only start it when asked, since it uses the GPU. `pause_queue` stops after the current ticket and
 `cancel_production` stops the current one and pauses. `read_queue` shows each ticket's state and message.

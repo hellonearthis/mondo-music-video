@@ -28,20 +28,25 @@ export function shortDid(did) {
 
 // --- Pure HTML String Template Generators ---
 
+// The GUI already names the style, so its card's own title line is not shown. The saved card keeps it.
+export const styleCardDisplay = card => String(card || "").replace(/^\s*STYLE CARD:[^\n]*\n?/i, "");
+
 const styleCardHtml = (style) => {
   const escId = escapeHtml(style.id);
   const escName = escapeHtml(style.name);
-  const styleCardFold = style.style_card ? `
+  const shownCard = styleCardDisplay(style.style_card);
+  const styleCard = shownCard ? `<pre class="style-card-pre style-card-shown">${escapeHtml(shownCard)}</pre>` : "";
+  const fullText = `
     <details class="style-card-fold">
-      <summary class="style-card-fold-toggle" data-tooltip="Expand to view the 11-axis visual craft, grammar, and forensic breakdown for this style">View 11-Axis Forensic Card</summary>
-      <pre class="style-card-pre">${escapeHtml(style.style_card)}</pre>
+      <summary class="style-card-fold-toggle" data-tooltip="Show or hide the full style text">Full style text</summary>
+      <p class="style-full-text">${escapeHtml(style.direction)}</p>
     </details>
-  ` : "";
+  `;
   return `
     <article class="card" data-id="${escId}" data-name="${escName}">
       <h2>${escName}</h2>
-      <p>${escapeHtml(style.direction)}</p>
-      ${styleCardFold}
+      ${styleCard}
+      ${fullText}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button type="button" class="secondary" data-action="export-style" title="Download ${escName} style JSON">Download JSON</button>
         <button type="button" class="secondary" data-action="duplicate-style" title="Duplicate ${escName} style">Duplicate</button>

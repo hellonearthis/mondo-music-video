@@ -40,7 +40,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.12.1"
+MGL_APP_VERSION = "1.12.2"
 WEB = Path(__file__).parent
 
 
@@ -759,7 +759,7 @@ def create_app(home=None, *, test_hosts=False):
     @asynccontextmanager
     async def lifespan(app):
         yield
-        queue_control["running"] = False   # closing the app must not launch the next ticket
+        queue_control.update(running=False, closing=True)   # closing the app must not launch the next ticket
         await asyncio.to_thread(jobs.shutdown)
 
     app = FastAPI(title="Mondo Music Video", version=MGL_APP_VERSION, lifespan=lifespan)
@@ -1560,9 +1560,8 @@ def create_app(home=None, *, test_hosts=False):
         kind = request.get("kind", "video")
         log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
         try:
-            with queue_control["prepare_lock"]:   # one at a time: previews of a new song share its analysis file
-                if jobs.active is not None and (request.get("analysis_driver") or "mix") != "mix":
-                    raise BusyError("A stem-driven preview may need the GPU for stem separation. Preview it when the current operation ends.")
+            with queue_control["prepare_lock"], production_queue.preview_gpu_gate(store, jobs, queue_control):
+                # One at a time: previews of a new song share its analysis file. Stem work waits for a free GPU.
                 prepared = (production.prepare_resume(store, request, resume_directory) if resume_directory is not None
                             else production.prepare(store, request))
         except Exception as exc:

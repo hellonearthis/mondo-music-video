@@ -158,7 +158,8 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   const worldNames = Array.isArray(data.thematic_worlds) ? data.thematic_worlds : [];
   worldSelect.replaceChildren(
     option("", "Production default vocabulary"),
-    ...worldNames.map(w => option(w, `World: ${w}`))
+    ...worldNames.map(w => option(w, `World: ${w}`)),
+    ...(data.saved_worlds || []).map(w => option(w.id, `Your World: ${w.name}`))
   );
   const steerInput = document.createElement("input");
   steerInput.type = "text";
@@ -170,6 +171,7 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   steerRow.append(worldSelect, steerInput);
   steerDetails.append(steerSummary, steerRow);
   editBtn.hidden = writeBtn.hidden = steerDetails.hidden = Boolean(data.prompt_blocked);
+  steerDetails.hidden = steerDetails.hidden || data.kind === "ident";
   const chosen = () => versions.find(v => v.id === select.value);
   const sync = () => {
     const version = chosen();
