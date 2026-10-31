@@ -1,5 +1,21 @@
 # Collaborator review record
 
+## Fork `ffb3c50` reviewed (release 1.11.6, 2026-10-31)
+
+The task-start check found exact head `ffb3c50c`, one authored commit after last reviewed `7681740` (`ae61fb5`) plus merge `ffb3c50` of our 1.11.4 and 1.11.5. Claude Code (Opus 5.5) coordinated and integrated; Codex reviewed read-only through the plugin (model not reported by the CLI). The owner was told plainly that this changes prompting behaviour and chose it as the only behaviour of Write new prompt, without an extra option.
+
+| Contribution | Decision and evidence |
+| --- | --- |
+| Rewrite re-rolls passage vocabulary (`replan_segment_vocabulary`) | Adopted as the behaviour of Write new prompt, adapted. The energy, Thematic Worlds and departure passes hash each passage's list position, and the fork passed them a one-item list, so every passage behaved as the first; they now receive the whole list and only the chosen passage is kept. The excluded terms are now the passage's own, not also the terms just drawn. |
+| Rigging re-pick | Not adopted. The contribution describes setting and motif; rigging belongs to the sealed-lips scheme and nothing asked for it to change. |
+| Saving the changed plan | Adapted. The fork updated `plan` in `prepared.json` but not its `segments`, and saved a plan for idents too, which never replan. All saved copies now change together, for video passages only. A failed rewrite also restores the plan copies and the passage's writer job. |
+| Older prompt versions | Added. In the fork, going back to an older prompt kept the newer vocabulary and lost the original pairing and the variation seed. Each version now stores `vocabulary` and `variation_seed`, and `select_prompt_take` restores them. |
+| Ident rewrites and "guaranteed" wording | Corrected. The fork's documents said idents re-roll and that a new term is guaranteed; idents have no planned vocabulary, and `VocabSampler.pick` repeats a term when the pool has no other. The GUI text now differs for idents. |
+| Optional `seed` (API, CLI, MCP), tooltip and confirmation text, test idea | Adopted. |
+| Merge `ffb3c50` | Not adopted, with reasons: two stray braces make `webapp/js/vocab-worlds.js` fail to parse (`node --check`), `docs/RELEASES.md` holds a conflict marker, the older README and package descriptions would replace current ones, and `Jobs.reset` still has no caller. Remaining for the fork: fix that JavaScript. |
+
+Kept from the fork, for the owner to reconsider if wanted: a thematic passage draws its own new anchor, while the planner shares one anchor across a section, so a rewritten passage can differ from its neighbours. Remaining: no real before/after renders; a new scene can sit awkwardly with a passage's storyboard panel or dance/instrument references, and only a render would show it. `writer_jobs/` records the latest writer call and is not switched by selecting an older version. Codex's second pass also found, and we left as is: a retry after a failed rewrite can overwrite that version's archived earlier writer files (`begin_prompt_rewrite`, older than this release), and a request with no `kind` passes `prompt_block` then fails in the worker (the app always saves `kind`).
+
 ## Fork `7681740` reviewed (release 1.11.5, 2026-10-28)
 
 The task-start check found head `7681740`, two authored commits after last reviewed `c36c89f` (`60bc3fc`, `7681740`), plus merges of our 1.11.2 and 1.11.3. The patch from our 1.11.3 touched only `webapp/index.html` and four modules in `webapp/js/`, plus the long-standing `Jobs.reset` difference in `mmv/jobs.py`, again not adopted (it has no caller). Claude Code (Opus 5.5) coordinated and integrated; Codex (GPT-6) reviewed read-only.
@@ -211,7 +227,7 @@ Guitar and keyboard public sheets supplied by the owner are bundled; drums/bass 
 
 ## October 20, 2026 — fork integration, head 59f820d (release 1.8.11)
 
-Reviewed an isolated clone at exact revision `59f820d`, following last reviewed head `73cbd4b` (1.8.9). New commits: `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d`. Codex (low effort, read-only) acted as adversarial reviewer; its findings were checked against source. The owner reports EGG's changes fix a problem that appears on lower-memory machines and was invisible on the owner's larger-memory one.
+Reviewed an isolated clone at exact revision `59f820d`, following last reviewed head `73cbd4b` (1.8.9). New commits: `5a14e85`, `98a1cc0`, `4c6d79b`, `a7cb9df`, `59f820d`. Codex (low effort, read-only) acted as adversarial reviewer; its findings were checked against source. The owner reports hellonearthis's changes fix a problem that appears on lower-memory machines and was invisible on the owner's larger-memory one.
 
 | Contribution | Decision and evidence |
 | --- | --- |

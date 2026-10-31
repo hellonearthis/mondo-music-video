@@ -1,6 +1,11 @@
 # Mondo Music Video
 
-**Version 1.11.7** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.12.1** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+
+Turn a song into a music video. Beat-aware shot planning, LLM-written prompts, local or
+hosted rendering, actors that dance, lip-sync and play instruments, Worlds, storyboards,
+and frame-exact assembly with your original audio. Agent-installable, with MCP tools and
+Open Actor/Prop Protocols.
 
 ## Easy install — let your AI agent do it
 
@@ -55,7 +60,7 @@ passage to its planned frames, joins the picture, and restores your original son
 - Optional group dancing or independent dancing with per-actor beat/drums/bass/vocals assignments.
 - Opt-in [instrument-playing actors](docs/INSTRUMENTS.md) with drums/bass/guitar/keyboards assignments and per-passage references; guitar/keyboard sheets included, drums/bass sheets pending.
 - Output folders named for the uploaded song plus date and time; existing runs retain their IDs.
-- Consistent reference-image actors with Open Actor Protocol built in.
+- Consistent reference-image actors and props with Open Actor Protocol and Open Prop Protocol built in.
 - Your own visual styles, including styles harvested from reference images, plus
   six optional [style presets](examples/style-presets/README.md).
 - Animated production idents and opening or closing credits.
@@ -285,9 +290,17 @@ offline, local actors can be exported as audition packages that leave out
 cast-only assets, and role agreements record a casting between this studio
 (Director) and an actor's Agent, each signing with their own key.
 
+## Queue several productions
+
+Preview a music video or ident and choose **Add to queue** instead of starting it, even while something is
+rendering, then press **Start queue** on the Queue tab. Productions run one at a time. Free local work needs no
+acceptance. A priced production runs only on the plan and price you approved, and is otherwise held without spending
+anything. After a crash or restart the queue waits for you; **Start queue** then continues interrupted local tickets
+from their saved prompts and clips.
+
 ## Agent operation
 
-The v1.11.7 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
+The v1.12.1 MCP server has 74 tools, including a production queue (`queue_production`, `start_queue`, `read_queue`), OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets,
 world editing, passage prompts and versions (`rewrite_prompt`, `edit_prompt`, `select_prompt_take`), clip takes with seeds

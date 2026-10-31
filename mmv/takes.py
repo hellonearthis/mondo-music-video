@@ -63,8 +63,9 @@ def _prompt_takes_view(directory: Path, plan: dict, prompts: dict) -> tuple[dict
                 "created_at": _mtime(directory / "prompts.json")}]}
             changed = True
             continue
+        active = next((t for t in entry["takes"] if t.get("id") == entry.get("active_take")), None)
         matching = next((t["id"] for t in entry["takes"] if t.get("prompt") == text and t.get("validated", True)), None)
-        if matching and entry.get("active_take") != matching:
+        if matching and not (active and active.get("prompt") == text and active.get("validated", True)):
             entry["active_take"] = matching
             changed = True
     return {"segments": segments}, changed
@@ -83,27 +84,16 @@ def _next_prompt_id(entry: dict) -> tuple[str, int]:
     return f"prompt{number}", number
 
 
+def new_variation_seed(request: dict) -> int:
+    """A random variation seed for one passage's new vocabulary, different from the production's own."""
+    base = int(request.get("seed") or 0)
+    seed = random.SystemRandom().randint(1, 2147483647)
+    return seed if seed != base else (seed % 2147483646) + 1
+
+
 def _used_segment_vocab(seg) -> dict[str, list[str]]:
-    """Vocabulary terms already present in this passage, so a rewrite draws fresh setting and motif terms."""
-    used: dict[str, list[str]] = {
-        "settings": [],
-        "subject_types": [],
-        "mechanisms": [],
-        "lighting": [],
-        "tonal_registers": [],
-        "costume": [],
-        "footage_anchors": [],
-        "practical_effects": [],
-    }
-
-    def add(table: str, value: str | None) -> None:
-        if isinstance(value, str) and value and value not in used[table]:
-            used[table].append(value)
-
-    add("mechanisms", getattr(seg, "thematic_anchor", None))
-    add("footage_anchors", getattr(seg, "footage_anchor", None))
-    add("practical_effects", getattr(seg, "practical_effects", None))
-    key_to_table = {
+    """Vocabulary terms this passage already has, by table, so a rewrite draws different ones. Stacked terms count singly."""
+    shot_tables = {
         "setting": "settings",
         "subject_type": "subject_types",
         "mechanism": "mechanisms",
@@ -111,15 +101,21 @@ def _used_segment_vocab(seg) -> dict[str, list[str]]:
         "tonal_register": "tonal_registers",
         "costume": "costume",
     }
-    for sh in getattr(seg, "shots", None) or []:
-        vocab = getattr(sh, "vocab", None) or {}
-        for key, table in key_to_table.items():
-            val = vocab.get(key)
-            if isinstance(val, str) and val:
-                add(table, val)
-                for part in val.split(", "):
-                    add(table, part.strip())
-    return {k: v for k, v in used.items() if v}
+    pairs = [
+        ("mechanisms", getattr(seg, "thematic_anchor", None)),
+        ("footage_anchors", getattr(seg, "footage_anchor", None)),
+        ("practical_effects", getattr(seg, "practical_effects", None)),
+    ]
+    for shot in getattr(seg, "shots", None) or []:
+        for key, table in shot_tables.items():
+            value = (getattr(shot, "vocab", None) or {}).get(key)
+            if isinstance(value, str):
+                pairs += [(table, value), *((table, part.strip()) for part in value.split(", "))]
+    used: dict[str, list[str]] = {}
+    for table, value in pairs:
+        if value and value not in used.setdefault(table, []):
+            used[table].append(value)
+    return used
 
 
 def _world_custom_vocabulary(store: Storage, world_id: str | None) -> dict[str, dict]:
@@ -153,38 +149,57 @@ def _world_custom_vocabulary(store: Storage, world_id: str | None) -> dict[str, 
 def replan_segment_vocabulary(
     store: Storage,
     request: dict,
-    seg,
+    segments: list | object,
+    index_or_seed: int | None = None,
     seed: int | None = None,
     world_id: str | None = None,
     direction_note: str | None = None,
 ) -> int:
-    """Roll a fresh variation seed for one passage's setting, motif and visual vocabulary while preserving its timing and cuts."""
+    """Draw new vocabulary for segments[index] (or seg) from the production's pool, with optional world and creative steering.
+
+    Timing, cuts, cast and rigging are kept. Supports both:
+    - (store, request, segments, index, seed, world_id=None, direction_note=None)
+    - (store, request, seg, seed=None, world_id=None, direction_note=None)
+    """
     from .engine.plan import CHAOTIC, FRAGMENTATION, STANDARD, THEMATIC, VocabSampler
     from .pipeline import load_vocabulary
+    from .vocab_select import (
+        apply_energy_scaled_vocabulary,
+        contextual_vocabulary,
+        plan_gaussian_world_dissonance,
+        plan_world_departures,
+    )
 
-    base_seed = int(request.get("seed") or 0)
-    if seed is None:
-        variation_seed = random.SystemRandom().randint(1, 2147483647)
-        if variation_seed == base_seed:
-            variation_seed = (variation_seed % 2147483646) + 1
+    if isinstance(segments, list):
+        index = int(index_or_seed if index_or_seed is not None else 0)
+        seg = segments[index]
+        actual_seed = seed if seed is not None else (index_or_seed if seed is None and isinstance(index_or_seed, int) and index_or_seed > len(segments) else new_variation_seed(request))
+        if seed is not None:
+            actual_seed = seed
+        elif isinstance(index_or_seed, int) and index_or_seed > 2000:
+            actual_seed = index_or_seed
     else:
-        variation_seed = int(seed)
+        seg = segments
+        segments = [seg]
+        index = 0
+        actual_seed = seed if seed is not None else (index_or_seed if isinstance(index_or_seed, int) else new_variation_seed(request))
 
     used = _used_segment_vocab(seg)
     custom = dict(request.get("custom_vocabulary") or {})
     world_custom = _world_custom_vocabulary(store, world_id)
     if world_custom:
         custom = {**custom, **world_custom}
+
     vocab = load_vocabulary(
         request.get("vocabulary_profile", "full"),
         store=store,
         custom=custom or None,
     )
-    if request.get("vocab_selection") == "contextual" or direction_note:
-        from .vocab_select import contextual_vocabulary
+    contextual = request.get("vocab_selection") == "contextual" or bool(direction_note)
+    if contextual:
         vocab = contextual_vocabulary(
             vocab,
-            variation_seed,
+            actual_seed,
             (
                 request.get("direction", ""),
                 str(direction_note or ""),
@@ -193,65 +208,106 @@ def replan_segment_vocabulary(
             ),
         )
 
-    sampler = VocabSampler(vocab, variation_seed, used)
-    montage_type = getattr(seg, "montage_type", STANDARD)
-    anchor = sampler.pick("mechanisms") if montage_type == THEMATIC else None
+    sampler = VocabSampler(vocab, actual_seed, {table: list(terms) for table, terms in used.items()})
+    pick = sampler.pick
+    anchor = pick("mechanisms") if getattr(seg, "montage_type", STANDARD) == THEMATIC else None
     seg.thematic_anchor = anchor
-    seg.footage_anchor = sampler.pick("footage_anchors")
-    seg.practical_effects = sampler.pick("practical_effects")
-    seg.rigging = sampler.pick("rigging")
-    for sh in seg.shots:
-        if montage_type in (CHAOTIC, THEMATIC):
-            sh.vocab = {
-                "setting": sampler.pick("settings"),
-                "subject_type": sampler.pick("subject_types"),
-                "mechanism": anchor or sampler.pick("mechanisms"),
-                "lighting": sampler.pick("lighting"),
-                "tonal_register": sampler.pick("tonal_registers"),
-                "costume": sampler.pick("costume"),
+    seg.footage_anchor = pick("footage_anchors")
+    seg.practical_effects = pick("practical_effects")
+    for shot in getattr(seg, "shots", None) or []:
+        shot.vocab = (
+            {
+                "setting": pick("settings"),
+                "subject_type": pick("subject_types"),
+                "mechanism": anchor or pick("mechanisms"),
+                "lighting": pick("lighting"),
+                "tonal_register": pick("tonal_registers"),
+                "costume": pick("costume"),
             }
-        else:
-            sh.vocab = {"lighting": sampler.pick("lighting")}
-    if montage_type in (STANDARD, FRAGMENTATION):
+            if getattr(seg, "montage_type", STANDARD) in (CHAOTIC, THEMATIC)
+            else {"lighting": pick("lighting")}
+        )
+    if getattr(seg, "montage_type", STANDARD) in (STANDARD, FRAGMENTATION):
         shared = {
-            "setting": sampler.pick("settings"),
-            "subject_type": sampler.pick("subject_types"),
-            "mechanism": sampler.pick("mechanisms"),
-            "tonal_register": sampler.pick("tonal_registers"),
-            "costume": sampler.pick("costume"),
+            "setting": pick("settings"),
+            "subject_type": pick("subject_types"),
+            "mechanism": pick("mechanisms"),
+            "tonal_register": pick("tonal_registers"),
+            "costume": pick("costume"),
         }
-        for sh in seg.shots:
-            sh.vocab.update(shared)
+        for shot in getattr(seg, "shots", None) or []:
+            shot.vocab.update(shared)
 
-    if request.get("vocab_selection") == "contextual":
-        from .vocab_select import apply_energy_scaled_vocabulary, plan_gaussian_world_dissonance
-        fresh_vocab = {
+    def keep(changes):
+        for (s_idx, sh_idx), change in changes.items():
+            if s_idx == index:
+                seg.shots[sh_idx].vocab = change[1] if isinstance(change, tuple) else change
+
+    if contextual:
+        fresh = {
             k: ([t for t in v if t not in set(used.get(k, ()))] or list(v)) if isinstance(v, list) else v
             for k, v in vocab.items()
         }
-        for (_, sh_idx), vocab_after in apply_energy_scaled_vocabulary([seg], fresh_vocab, variation_seed).items():
-            seg.shots[sh_idx].vocab = vocab_after
-        worlds_ctx = request.get("thematic_worlds")
-        worlds_ctx = worlds_ctx if isinstance(worlds_ctx, dict) else {}
-        active = worlds_ctx.get("activeWorlds")
-        if worlds_ctx.get("mode") in ("guided", "strict") and isinstance(active, list) and active and isinstance(active[0], str):
-            try:
-                slider_pct = min(100.0, max(0.0, float(worlds_ctx.get("slider", 50))))
-            except (TypeError, ValueError):
-                slider_pct = 50.0
-            for (_, sh_idx), (_, vocab_after) in plan_gaussian_world_dissonance(
-                [seg], active[0], seed=variation_seed, slider_percent=slider_pct
-            ).items():
-                seg.shots[sh_idx].vocab = vocab_after
-
+        keep(apply_energy_scaled_vocabulary(segments, fresh, actual_seed))
+        worlds = request.get("thematic_worlds") if isinstance(request.get("thematic_worlds"), dict) else {}
+        active = worlds.get("activeWorlds")
+        if worlds.get("mode") in ("guided", "strict") and isinstance(active, list) and active and isinstance(active[0], str):
+            keep(
+                plan_gaussian_world_dissonance(
+                    segments,
+                    active[0],
+                    seed=actual_seed,
+                    slider_percent=min(100.0, max(0.0, float(worlds.get("slider", 50)))),
+                )
+            )
     if request.get("world_departures"):
-        from .vocab_select import plan_world_departures
-        for (_, sh_idx), (_, vocab_after) in plan_world_departures(
-            [seg], request["world_departures"], variation_seed, request.get("world_contrast_strength", 50)
-        ).items():
-            seg.shots[sh_idx].vocab = vocab_after
+        keep(
+            plan_world_departures(
+                segments,
+                request["world_departures"],
+                actual_seed,
+                request.get("world_contrast_strength", 50),
+            )
+        )
 
-    return variation_seed
+    return actual_seed
+
+
+def passage_vocabulary(segment: dict) -> dict:
+    """The vocabulary a prompt version was written from. Pure."""
+    return {
+        "thematic_anchor": segment.get("thematic_anchor"),
+        "footage_anchor": segment.get("footage_anchor"),
+        "practical_effects": segment.get("practical_effects"),
+        "shots": [shot.get("vocab") for shot in segment.get("shots") or []],
+    }
+
+
+def _with_passage_vocabulary(segments: list, segment_id: str, vocabulary: dict) -> list:
+    """The plan's segments with one passage's vocabulary replaced. Pure."""
+    def updated(segment):
+        fields = {key: vocabulary[key] for key in ("thematic_anchor", "footage_anchor", "practical_effects")}
+        shots = [{**shot, "vocab": vocab} for shot, vocab in zip(segment["shots"], vocabulary["shots"])]
+        return {**segment, **fields, "shots": shots}
+    return [updated(s) if f"seg{s['index']:03d}" == segment_id else s for s in segments]
+
+
+def save_passage_vocabulary(directory: Path, segment_id: str, vocabulary: dict) -> None:
+    """Write one passage's vocabulary to every saved copy of the plan: plan.json, and the plan and segments in prepared.json."""
+    prepared = read_json(directory / "prepared.json", {})
+    plan = read_json(directory / "plan.json", {}) or prepared.get("plan") or {}
+    write_json(directory / "plan.json", {**plan, "segments": _with_passage_vocabulary(plan.get("segments") or [], segment_id, vocabulary)})
+    if prepared:
+        saved_plan = prepared.get("plan") or {}
+        write_json(directory / "prepared.json", {
+            **prepared, "segments": _with_passage_vocabulary(prepared.get("segments") or [], segment_id, vocabulary),
+            "plan": {**saved_plan, "segments": _with_passage_vocabulary(saved_plan.get("segments") or [], segment_id, vocabulary)}})
+
+
+def _current_vocabulary(directory: Path, segment_id: str) -> dict | None:
+    plan = read_json(directory / "plan.json", {}) or read_json(directory / "prepared.json", {}).get("plan") or {}
+    segments = plan.get("segments") or []
+    return next((passage_vocabulary(s) for s in segments if f"seg{s['index']:03d}" == segment_id), None)
 
 
 def begin_prompt_rewrite(directory: Path, segment_id: str) -> str:
@@ -260,6 +316,10 @@ def begin_prompt_rewrite(directory: Path, segment_id: str) -> str:
     segment_id = validate_segment_id(segment_id)
     plan, prompts = read_json(directory / "plan.json", {}), read_json(directory / "prompts.json", {})
     data, _ = _prompt_takes_view(directory, plan, prompts)
+    # Versions from before vocabulary was saved with them were all written from the plan as it still stands.
+    vocabulary = _current_vocabulary(directory, segment_id)
+    for take in (data["segments"].get(segment_id) or {}).get("takes") or []:
+        take.setdefault("vocabulary", vocabulary)
     write_json(directory / PROMPT_TAKES_FILE, data)
     take_id, _ = _next_prompt_id(data["segments"].get(segment_id) or {})
     archive = directory / "prompt_takes" / segment_id / f"before-{take_id}"
@@ -270,14 +330,16 @@ def begin_prompt_rewrite(directory: Path, segment_id: str) -> str:
     return take_id
 
 
-def record_prompt_take(directory: Path, segment_id: str, prompt: str, how: str, *, problems=None) -> dict:
+def record_prompt_take(directory: Path, segment_id: str, prompt: str, how: str, *, problems=None, variation_seed=None) -> dict:
     """Add a prompt version. A validated one becomes active (prompts.json already holds it); a hand edit that failed the
     checks is kept for further editing but never becomes the passage's prompt."""
     data = read_json(directory / PROMPT_TAKES_FILE, {"segments": {}})
     entry = data["segments"].setdefault(segment_id, {"active_take": "", "takes": []})
     take_id, number = _next_prompt_id(entry)
     take = {"id": take_id, "label": f"Prompt {number} ({how}{'' if problems is None else ', not passed'})", "prompt": prompt,
-            "validated": problems is None, "created_at": time.time(), **({"problems": problems} if problems is not None else {})}
+            "validated": problems is None, "created_at": time.time(), "vocabulary": _current_vocabulary(directory, segment_id),
+            **({"variation_seed": variation_seed} if variation_seed is not None else {}),
+            **({"problems": problems} if problems is not None else {})}
     entry["takes"].append(take)
     if problems is None:
         entry["active_take"] = take_id
@@ -305,6 +367,8 @@ def select_prompt_take(store: Storage, run_id: str, segment_id: str, prompt_take
     prepared = read_json(directory / "prepared.json", {})
     if prepared:                # binding first: if it fails, the prompt in use is unchanged
         passage_plans.bind_prompts(directory, prepared, prompts)
+    if chosen.get("vocabulary"):    # the version and the vocabulary it was written from stay a pair
+        save_passage_vocabulary(directory, segment_id, chosen["vocabulary"])
     write_json(directory / "prompts.json", prompts)
     write_json(directory / PROMPT_TAKES_FILE, data)
     return {"run_id": origin, "segment_id": segment_id, "active_prompt_take": prompt_take_id, "prompt_take": chosen}

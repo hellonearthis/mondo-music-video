@@ -1,5 +1,23 @@
 # Releases
 
+## 1.12.1 — Production queue integration with creative steering & OpenSpec suite
+
+- **Integrated upstream v1.12.0 production queue** with full agent CLI, MCP (74 tools total), and web UI support.
+- **Combined with v1.11.7 enhancements**: `<think>` reasoning block stripping, pre-compiled World centroid matrices, Laya style feedback advisory notes, creative passage rewrite steering (`--world` and `--direction`), and the OpenSpec Cucumber BDD specification suite.
+- Updated version assertions across package metadata, tests, and documentation.
+
+## 1.12.0 — The production queue
+
+- **New Queue tab (08).** Preview a music video or ident, choose **Add to queue**, and line up as many as you like, even while something is rendering. **Start queue** runs them one at a time, as whole productions. Reorder, remove, pause after the current one, or clear finished. Finished Videos is now tab 09 and Settings tab 10.
+- **Local work just runs.** A free ticket needs no acceptance tick and uses your settings of the moment.
+- **Paid work keeps its safeguards.** A priced ticket needs acceptance of its estimate and runs only on that exact plan. If the plan changes, a free ticket becomes priced, or an earlier paid ticket stops after this one was approved, it is held and spends nothing. Paid work never retries itself; **Queue again** shows the full plan for a fresh decision.
+- **Stopped work resumes.** After a crash or restart the queue waits to be started, then **Start queue** continues interrupted local tickets in their own production folders, keeping their prompts and finished clips. Failed, cancelled or held local tickets have a **Resume** button. A ticket that stopped before its prompts were finished starts over with written prompts from cache, and is held instead if that could charge a paid writer again. Changed inputs or settings hold a resume until they are restored.
+- **Failures and Cancel.** A failed ticket is reported and the queue moves on. Cancel stops the current ticket and pauses the queue.
+- Previews and song/reference uploads now work during an operation, except stem-driven previews, which may need the GPU for stem separation.
+- Agent parity: 9 new MCP tools (`read_queue`, `queue_production`, `start_queue`, `pause_queue`, `move_queue_ticket`, `preview_queue_ticket`, `resume_queue_ticket`, `remove_queue_ticket`, `clear_finished_queue_tickets`) and matching CLI commands.
+
+Tested on mock services and in Chromium only: no real GPU or paid queue run yet, and Firefox has not been checked. On `local_h3`, a resume can re-render a clip whose automatic quality retry had already finished; the same applies to the existing Resume. No protected prompts or private assets changed.
+
 ## 1.11.7 — OpenSpec BDD suite, `<think>`-resilient writer parsing, Laya style adherence feedback, pre-compiled World matrices, and creative rewrite steering
 
 - **Resilient JSON extraction and `<think>` stripping.** `escape_control_characters` (`mmv/writer_json.py`) now strips `<think>...</think>` reasoning blocks, markdown code fences, and conversational wrappers to isolate the outermost balanced `{...}` JSON payload before `WriterResponse.parse`, preventing reasoning-enabled models from wasting retry budgets while keeping `is_broken_json` free-retry detection intact for genuinely truncated replies.
@@ -10,10 +28,15 @@
 
 No protected prompts, private assets, paid operations or automatic retries changed.
 
-## 1.11.6 — Passage prompt rewrites roll fresh settings and motifs
+## 1.11.6 — Write new prompt rolls a fresh setting and motif
 
-- **Fresh setting and motif on rewrite.** When you click **✍️ Write new prompt** for a passage, the worker now automatically rolls a fresh variation seed for that segment's vocabulary slots (`thematic_anchor`, `footage_anchor`, `practical_effects`, and per-shot setting, mechanism, lighting, tonal register and costume) while preserving musical timing and cuts. The new draw excludes the passage's current terms, guaranteeing a genuinely new setting and motif from the pool.
-- An optional `seed` parameter is supported on the rewrite API, CLI (`--seed`), and MCP tool (`rewrite_prompt`).
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commit `ae61fb5`, reviewed at exact head `ffb3c50`.
+
+- **A new prompt can now be a new scene.** In a finished video's Edit view, **Write new prompt** draws a fresh setting and motif for that passage from the production's vocabulary pool, then runs the writer, Mondo checks and Laya as before. Musical timing, cuts, cast and rigging stay. A very small pool or a world's own terms can repeat a term.
+- **Prompt versions keep their vocabulary.** Each version stores the vocabulary it was written from, and a written one its variation seed; choosing an older version brings its vocabulary back with it.
+- Optional `seed` on the rewrite API, CLI (`--seed`) and MCP `rewrite_prompt`. Idents have no planned vocabulary, so their rewrite still changes only the text.
+
+The owner chose this as the behaviour of Write new prompt after the prompting-scheme warning. No pinned prompt or planning file changed. It has been tested on mock services only: no real before/after renders were compared. No private assets, paid operations or automatic retries changed.
 
 ## 1.11.5 — Thematic Worlds keeps your choices; panels stay open when you open them
 
@@ -147,7 +170,7 @@ Fixed: growing a world could report "No changes to the world" although new lore 
 
 Validation: full temporary-data/mock-service suite, 772 passed + 141 subtests; the owner then grew their Fehenviz world from five new backstories and a finished video and confirmed that it added entries. No protected prompts, private assets, paid operations or automatic retries changed.
 
-## 1.10.21 — EGG's actor and prop UI, with music-video panel progress
+## 1.10.21 — hellonearthis's actor and prop UI, with music-video panel progress
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` (one commit after reviewed `db7bec7`). The actor cards have a wider responsive grid and an inline description editor for locally created actors; the OPP library has a readable in-app guide, and dark-theme text selection has better contrast. The fork's malformed actor textarea was repaired. Imported signed OAP actors are deliberately read-only in this editor, because their original package is preserved on export. Agents can edit local descriptions through API, CLI and MCP; OPP guide text is available by inspection.
 

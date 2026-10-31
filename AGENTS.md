@@ -63,8 +63,12 @@ verify the assets appear in the app. Never import other local/private assets.
   another final render. Attached productions and later caption jobs must recover
   their original sources or fail clearly. Keep originals and assembly-source.json
   for recovery. Operator-requested Topaz upscaling is the explicit exception.
-- Keep one active operation, no production queue, explicit paid consent and
-  upstream OAP verification. Do not retry paid submissions automatically.
+- Keep one active operation, explicit paid consent and upstream OAP verification.
+  Do not retry paid submissions automatically. The production queue runs whole
+  productions through that one operation: free local tickets need no consent, a
+  priced ticket runs only on its approved plan and is otherwise held, and the queue
+  never starts by itself after a restart; once started it continues interrupted
+  local tickets from their saved work.
 - Use temporary data and mock services for automated tests. Real paid/GPU/Topaz
   work requires deliberate operator verification, not an automated test run.
 - Automatic application updates are opt-in and off by default. With installation
@@ -207,7 +211,7 @@ beside the original. `reassemble_output` rebuilds the final video from original 
 inside that graph, keeping earlier versions as numbered files. Productions on other renderers are refused because rerolling
 could submit paid work without a preview and consent. Passage prompt rewrites and hand edits run through the worker's own
 prompt stage (writer, Mondo checks, Laya) for that one passage; keep it that way rather than copying the loop, never let an
-edit skip the checks, and require writer-cost acceptance for API writers. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
+edit skip the checks, and require writer-cost acceptance for API writers. A written video-passage prompt draws fresh vocabulary for that passage (`takes.replan_segment_vocabulary`, owner-approved), kept paired with its prompt version. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
 [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md).
 
 ## Panel progress and actor editing

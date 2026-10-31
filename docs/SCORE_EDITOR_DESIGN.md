@@ -59,7 +59,7 @@ grid, bar-1 guess, sections and per-beat energy all come from the mixed signal.
 
 ## Constraints
 
-Default behaviour unchanged. One active operation, no queue. Temp data and mock
+Default behaviour unchanged. One active operation. Temp data and mock
 services in tests. Third-party notice and licence check before vendoring
 wavesurfer.js and before adding Demucs.
 

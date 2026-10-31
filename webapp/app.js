@@ -7,6 +7,7 @@ import { initFileDropTargets } from "./js/file_drop.js";
 import { initQuickStart } from "./js/quick_start.js";
 import { initStoryboards, restoreStoryboards, refreshStoryboards } from "./js/storyboard.js";
 import { initWorlds, loadWorlds } from "./js/worlds.js";
+import { initQueue, loadQueue } from "./js/queue.js";
 import { initInstrumentLibrary } from "./js/instruments.js";
 import { initLibraryForms, loadActors, loadAgreements, loadStyles } from "./js/library.js";
 import { initCaptionControls, initUpscaleForm, loadOutputs } from "./js/outputs.js";
@@ -86,7 +87,8 @@ async function initialize() {
     loadStyles(),
     loadOutputs(),
     loadAgreements(),
-    loadWorlds()
+    loadWorlds(),
+    loadQueue()
   ]);
 
   $$(".backend-select").forEach(select => {
@@ -107,6 +109,7 @@ async function initialize() {
   initFileDropTargets();
   initSettingsAndPicker();
   initUpscaleForm();
+  initQueue();
 
   // Custom presets must be in the profile select before a saved choice is restored.
   await loadVocabularyCatalog().catch(() => {});

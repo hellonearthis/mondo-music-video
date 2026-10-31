@@ -108,6 +108,34 @@ class AgentClient:
             raise ValueError("Review the preview and obtain user authorization before starting")
         return self._json("POST", "/api/start", {"quote_id": quote_id, "consent": True})
 
+    def queue(self):
+        return self._json("GET", "/api/queue")
+
+    def queue_add(self, quote_id, consent=False, replaces=None):
+        """Add a reviewed preview to the queue. Consent is needed only when the preview has a price."""
+        return self._json("POST", "/api/queue", {"quote_id": quote_id, "consent": consent is True, "replaces": replaces})
+
+    def queue_start(self):
+        return self._json("POST", "/api/queue/start")
+
+    def queue_pause(self):
+        return self._json("POST", "/api/queue/pause")
+
+    def queue_move(self, ticket_id, delta):
+        return self._json("POST", "/api/queue/" + urllib.parse.quote(ticket_id, safe="") + "/move", {"delta": delta})
+
+    def queue_preview(self, ticket_id):
+        return self._json("POST", "/api/queue/" + urllib.parse.quote(ticket_id, safe="") + "/preview")
+
+    def queue_resume(self, ticket_id):
+        return self._json("POST", "/api/queue/" + urllib.parse.quote(ticket_id, safe="") + "/resume")
+
+    def queue_remove(self, ticket_id):
+        return self._json("DELETE", "/api/queue/" + urllib.parse.quote(ticket_id, safe=""))
+
+    def queue_clear_finished(self):
+        return self._json("POST", "/api/queue/clear-finished")
+
     def preview_resume(self, run_id):
         return self._json("POST", "/api/resume/quote", {"run_id": run_id})
 
@@ -415,7 +443,7 @@ class AgentClient:
 
     def rewrite_prompt(self, output_file, segment_id, confirm=False, accept_writer_cost=False, seed=None,
                        world_id=None, direction=None):
-        """Roll a fresh setting and motif for one passage and write a new prompt through the normal writer, Mondo checks and Laya
+        """Write a new prompt for one passage (a video passage also rolls a fresh setting and motif) through the normal writer, Mondo checks and Laya
         review (confirm=True; an API writer also needs accept_writer_cost=True). Optional world_id steers the passage's vocabulary
         toward a Thematic World or saved World; optional direction adds a passage-specific creative note. The new version becomes
         the passage's prompt; reroll the clip to render it."""
@@ -492,6 +520,17 @@ def main(argv=None):
     start = sub.add_parser("start")
     start.add_argument("quote_id")
     start.add_argument("--consent", action="store_true")
+    for name in ("queue", "queue-start", "queue-pause", "queue-clear-finished"):
+        sub.add_parser(name)
+    queue_add = sub.add_parser("queue-add")
+    queue_add.add_argument("quote_id")
+    queue_add.add_argument("--consent", action="store_true")
+    queue_add.add_argument("--replaces")
+    queue_move = sub.add_parser("queue-move")
+    queue_move.add_argument("ticket_id")
+    queue_move.add_argument("delta", type=int, choices=(-1, 1))
+    for name in ("queue-preview", "queue-resume", "queue-remove"):
+        sub.add_parser(name).add_argument("ticket_id")
     log = sub.add_parser("log")
     log.add_argument("run_id")
     for name in ("delete-actor", "delete-style", "delete-vocabulary"):
@@ -609,6 +648,24 @@ def main(argv=None):
             result = client.preview_retry_prompts(args.run_id)
         elif args.command == "start":
             result = client.start(args.quote_id, args.consent)
+        elif args.command == "queue":
+            result = client.queue()
+        elif args.command == "queue-start":
+            result = client.queue_start()
+        elif args.command == "queue-pause":
+            result = client.queue_pause()
+        elif args.command == "queue-clear-finished":
+            result = client.queue_clear_finished()
+        elif args.command == "queue-add":
+            result = client.queue_add(args.quote_id, args.consent, args.replaces)
+        elif args.command == "queue-move":
+            result = client.queue_move(args.ticket_id, args.delta)
+        elif args.command == "queue-preview":
+            result = client.queue_preview(args.ticket_id)
+        elif args.command == "queue-resume":
+            result = client.queue_resume(args.ticket_id)
+        elif args.command == "queue-remove":
+            result = client.queue_remove(args.ticket_id)
         elif args.command == "log":
             result = client.log(args.run_id)
         elif args.command == "download":

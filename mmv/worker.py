@@ -174,7 +174,7 @@ def harvest_text(value):
 
 
 def run(home, directory, *, resume=False, rewrite=None):
-    """Produce a video or ident. rewrite={'segment': id, 'candidate': text or None} instead prepares one passage of a finished
+    """Produce a video or ident. rewrite={'segment': id, 'candidate': text or None, 'seed': variation seed or None} instead prepares one passage of a finished
     production through this same prompt stage (a fresh writer prompt, or a hand-edited candidate given only the checks) and stops
     before rendering; other passages keep their saved prompts and the prompt cache is neither read nor written."""
     os.environ['MMV_HOME'] = str(home)
@@ -412,11 +412,13 @@ def run(home, directory, *, resume=False, rewrite=None):
                     cast_entries = lipsync.with_singer_lines(cast_entries, sing['actor_id'], sing['lines'])
                 if rewrite and candidate is None:
                     from . import takes
+                    seed_val = rewrite.get('seed')
                     takes.replan_segment_vocabulary(
                         store,
                         request,
-                        seg,
-                        seed=rewrite.get('seed'),
+                        plan.segments,
+                        index,
+                        seed=seed_val,
                         world_id=rewrite.get('world_id'),
                         direction_note=rewrite.get('direction'),
                     )
@@ -621,10 +623,11 @@ def run(home, directory, *, resume=False, rewrite=None):
     if not resume:
         passage_plans.bind_prompts(directory, prepared, prompts)
     if rewrite:
-        if candidate is None:
-            plan.to_json(plan_path)
-            prepared['plan'] = read_json(plan_path)
-            write_json(directory / 'prepared.json', prepared)
+        if candidate is None and request.get('kind', 'video') != 'ident':
+            from dataclasses import asdict
+            from . import takes
+            segment = next(s for s in plan.segments if s.segment_id == rewrite['segment'])
+            takes.save_passage_vocabulary(directory, rewrite['segment'], takes.passage_vocabulary(asdict(segment)))
         progress(f"Prompt for {rewrite['segment']} validated", 100)
         return prompts[rewrite['segment']]
     progress('All prompts validated; opening renderer', 32)

@@ -1,13 +1,22 @@
-# Verification — 1.11.7
+# Verification — 1.12.1
+
+## 1.12.1 — Production queue integration with creative steering & OpenSpec suite
+
+Integration merge of upstream v1.12.0 production queue with v1.11.7 OpenSpec BDD suite, `<think>`-resilient parsing, pre-compiled World matrices, Laya style feedback, and creative rewrite steering. Verified with mock-service test suite, `tests/test_openspec_bdd.py`, `tests/test_public_app.py`, `tests/test_rewrite_vocabulary.py`, syntax validation of all JavaScript files (`node --check webapp/js/*.js`), and `protected_scheme.check() == []`.
+
+## 1.12.0 — The production queue
+
+Automated, mock services only: ordering, reordering, free tickets without consent, a full mocked video through the queue, the paid gate (consent needed, approved plan runs, changed plan and free-turned-paid held, earlier paid stop holds older approvals, rounded tiny cost still paid), failure moves on, cancel pauses, restart recovery without auto-start, shutdown starting nothing, filling the queue during an operation, stem-preview refusal, Queue again, and resume (same run, no second submission, start over before prompts finished, paid renderers refused, writer recharge held). The browser test ran in Chromium only.
+
+Not verified: a real GPU queue run or resume, a real paid queue run, and Firefox.
 
 ## 1.11.7 — OpenSpec BDD suite, `<think>`-resilient writer parsing, Laya style adherence feedback, pre-compiled World matrices, and creative rewrite steering
 
 Verified with `tests/test_openspec_bdd.py` (11 passed: glossary & file bindings, all 9 Gherkin `.feature` files with 45 tagged scenarios, `AI_INTERACTIONS_DEEP_DIVE.md` report with 39 `REPORT-xx` scenarios, `<think>`/fence JSON extraction, Laya `style_adherence` advisory & strict retry feedback, pre-compiled Thematic World centroids & calibrated distance matrix, passage vocabulary re-sampling with `world_id` & `direction` steering, Mondo quality gates, safe interior frame sampling, and storyboard alignment), plus `tests/test_public_app.py`, `tests/test_score_view.py`, and `tests/test_quality.py`. `node --check webapp/js/outputs.js` passed, `git diff --check` is clean, and `protected_scheme.check()` returned `[]`.
 
-## 1.11.6 — Passage prompt rewrite variation seed
+## 1.11.6 — Collaborator fork `ffb3c50` (rewrite rolls fresh vocabulary)
 
-Full temporary-data/mock-service suite: verified passage prompt rewrite with new setting and motif draws (`shots[0]["vocabulary"]["setting"]` and `["mechanism"]` differ from original job), atomic rollback on rewrite failure, CLI `--seed` flag and MCP tool parity. The live app was restarted idle on port 8091 and reports 1.11.6 with `protected_scheme.check() == []`.
-
+Focused tests cover new vocabulary on rewrite, kept timing, cuts and rigging, all saved plan copies, the variation seed, vocabulary returning with an older prompt version, and the whole-list passes. Full temporary-data/mock-service suite: **809 passed + 141 subtests**; `protected_scheme.check()` is `[]`. Real same-song, same-seed renders comparing rewritten passages were not made, by the owner's decision. Firefox was not tested here.
 
 ## 1.11.5 — Collaborator fork `7681740` (Thematic Worlds, panel auto-collapse)
 

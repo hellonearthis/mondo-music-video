@@ -142,7 +142,7 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   useBtn.type = "button";
   const editBtn = text("button", "✏️ Edit prompt", "quiet", "Edit this prompt; it is used only if it passes the Mondo checks and Laya review");
   editBtn.type = "button";
-  const writeBtn = text("button", "✍️ Write new prompt", "quiet", "Roll a fresh setting and motif for this passage and have the writer write a new checked prompt");
+  const writeBtn = text("button", "✍️ Write new prompt", "quiet", data.kind === "ident" ? "Have the writer write a new prompt, checked like every production prompt" : "Roll a fresh setting and motif for this passage and have the writer write a new checked prompt");
   writeBtn.type = "button";
   const steerDetails = document.createElement("details");
   steerDetails.className = "prompt-rewrite-steer";
@@ -201,7 +201,10 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
     const steerNote = chosenWorld || chosenDirection
       ? ` Steering: ${[chosenWorld ? `world "${chosenWorld}"` : "", chosenDirection ? `note "${chosenDirection}"` : ""].filter(Boolean).join(", ")}.`
       : "";
-    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? This rolls a fresh setting and motif from the vocabulary pool and runs the writer, the Mondo checks and Laya.${steerNote}${cost}`)) return;
+    const intro = data.kind === "ident"
+      ? "It goes through the writer, the Mondo checks and Laya."
+      : "This rolls a fresh setting and motif from the vocabulary pool, and it goes through the writer, the Mondo checks and Laya.";
+    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? ${intro}${steerNote}${cost}`)) return;
     const payload = {
       confirm: true,
       accept_writer_cost: Boolean(charge.api_writer),

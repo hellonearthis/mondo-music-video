@@ -30,7 +30,7 @@ Generation, harvesting, idents, and upscale exports share a single-operation
 guard. Within one music-video production, a passage that fails the automatic
 motion/framing check may be re-rendered once with a new seed, only on free local
 renderers; paid renderers are never resubmitted automatically. This is a quality
-gate inside the operation, not a manual clip redo control. If busy, the application asks the user to wait; it does not enqueue work.
+gate inside the operation, not a manual clip redo control. If busy, a direct start asks the user to wait; whole music videos and idents can be added to the production queue, which runs them one at a time through the same guard.
 An optional `vision_quality_check` (off by default) judges sampled single frames
 in a batch with a local vision model. It adds model loading/judging time and
 mostly reports warnings; repeated unrequested framing devices can use the same

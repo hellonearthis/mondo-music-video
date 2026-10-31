@@ -72,7 +72,7 @@ and renderer configuration before starting; model failures stop production.
    authorize the free local operation; do not ask again solely because it is a
    tool call. Set `consent=true` only after the relevant user authorization exists.
 3. Start that quote once. Poll status at sensible intervals, such as every five
-   seconds. An active operation rejects additional work; never simulate a queue.
+   seconds. An active operation rejects a direct start. To line up more work, use `queue_production` with a reviewed video or ident preview and `start_queue` when the user asks (see Production queue below).
 4. On completion, inspect outputs and provide the playback URL or save the
    requested file. To explain the result, `read_music_score` returns the beats,
    energy, grammars and planned cuts; describe internal cuts as planned.
@@ -83,8 +83,8 @@ and renderer configuration before starting; model failures stop production.
    new take; compare takes in `read_output_prompts`, choose with
    `select_segment_take`, then `reassemble_output` re-encodes the final video once
    from original clips (earlier versions stay as `-vN.mp4`; report its `warnings`).
-   When the user wants a different prompt for a passage, `rewrite_prompt` (rolls a
-   fresh setting and motif for that passage and runs the writer,
+   When the user wants a different prompt for a passage, `rewrite_prompt` (in a video, rolls a
+   fresh setting and motif for that passage; runs the writer,
    checks and Laya; `confirm=true`, optional `seed`, `world_id` and `direction` steering, plus `accept_writer_cost` for an API writer after
    telling them the estimate) or `edit_prompt` (their text, same checks) creates a
    prompt version; only passed versions are used, and `select_prompt_take` returns to
@@ -286,3 +286,15 @@ calls. Inspect job status and `output.json` for warnings and download names; pro
 preview/start/resume and consent remain unchanged. Keep `assembly-source.json`,
 `assembly-assets/`, original clips and the song for later reconstruction. Topaz
 upscaling is the explicit user-requested exception and still uses the selected final.
+
+## Production queue
+
+`queue_production(quote_id)` adds a reviewed music video or ident preview; previews and song/reference
+uploads work during an operation, except stem-driven previews. Free local tickets need no consent. A priced
+preview needs `consent=true` with user authorization of its estimate. `start_queue` runs tickets one at a time;
+only start it when asked, since it uses the GPU. `pause_queue` stops after the current ticket and
+`cancel_production` stops the current one and pauses. `read_queue` shows each ticket's state and message.
+A paid ticket whose plan changed, or that follows a paid ticket that did not finish, becomes `held` and spends
+nothing. `start_queue` continues interrupted local tickets from their saved prompts and clips; `resume_queue_ticket` does the same for a failed, cancelled or held local ticket. To start a ticket afresh: `preview_queue_ticket`, then `queue_production(..., replaces=ticket_id)`. Paid work never retries itself.
+The CLI equivalents are `queue`, `queue-add`, `queue-start`, `queue-pause`, `queue-move`, `queue-preview`,
+`queue-remove` and `queue-clear-finished`. The queue is always paused after an application restart.
