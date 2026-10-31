@@ -122,7 +122,42 @@ def _used_segment_vocab(seg) -> dict[str, list[str]]:
     return {k: v for k, v in used.items() if v}
 
 
-def replan_segment_vocabulary(store: Storage, request: dict, seg, seed: int | None = None) -> int:
+def _world_custom_vocabulary(store: Storage, world_id: str | None) -> dict[str, dict]:
+    """Resolve a built-in Thematic World name or saved studio World ID into custom_vocabulary overrides."""
+    if not isinstance(world_id, str) or not world_id.strip():
+        return {}
+    clean = world_id.strip()
+    from .world_vectors import BUILTIN_THEMATIC_WORLDS
+    if clean in BUILTIN_THEMATIC_WORLDS:
+        pools = BUILTIN_THEMATIC_WORLDS[clean]
+        return {
+            table: {"mode": "replace", "add": list(terms), "exclude": []}
+            for table, terms in pools.items()
+            if isinstance(terms, (list, tuple)) and terms
+        }
+    for name, pools in BUILTIN_THEMATIC_WORLDS.items():
+        if name.casefold() == clean.casefold():
+            return {
+                table: {"mode": "replace", "add": list(terms), "exclude": []}
+                for table, terms in pools.items()
+                if isinstance(terms, (list, tuple)) and terms
+            }
+    try:
+        from . import worlds
+        ledger = worlds.load(store, clean)
+        return worlds.custom_vocabulary(ledger, mode="replace")
+    except Exception:
+        return {}
+
+
+def replan_segment_vocabulary(
+    store: Storage,
+    request: dict,
+    seg,
+    seed: int | None = None,
+    world_id: str | None = None,
+    direction_note: str | None = None,
+) -> int:
     """Roll a fresh variation seed for one passage's setting, motif and visual vocabulary while preserving its timing and cuts."""
     from .engine.plan import CHAOTIC, FRAGMENTATION, STANDARD, THEMATIC, VocabSampler
     from .pipeline import load_vocabulary
@@ -136,20 +171,25 @@ def replan_segment_vocabulary(store: Storage, request: dict, seg, seed: int | No
         variation_seed = int(seed)
 
     used = _used_segment_vocab(seg)
+    custom = dict(request.get("custom_vocabulary") or {})
+    world_custom = _world_custom_vocabulary(store, world_id)
+    if world_custom:
+        custom = {**custom, **world_custom}
     vocab = load_vocabulary(
         request.get("vocabulary_profile", "full"),
         store=store,
-        custom=request.get("custom_vocabulary"),
+        custom=custom or None,
     )
-    if request.get("vocab_selection") == "contextual":
+    if request.get("vocab_selection") == "contextual" or direction_note:
         from .vocab_select import contextual_vocabulary
         vocab = contextual_vocabulary(
             vocab,
             variation_seed,
             (
                 request.get("direction", ""),
+                str(direction_note or ""),
                 request.get("title", ""),
-                [t for spec in (request.get("custom_vocabulary") or {}).values() for t in spec.get("add", [])],
+                [t for spec in custom.values() for t in spec.get("add", [])],
             ),
         )
 

@@ -401,13 +401,14 @@ def create_server(base_url=None):
 
     @server.tool()
     def rewrite_prompt(output_file: str, segment_id: str, confirm: bool, accept_writer_cost: bool = False,
-                       seed: int | None = None) -> dict[str, Any]:
+                       seed: int | None = None, world_id: str | None = None, direction: str | None = None) -> dict[str, Any]:
         """Roll a fresh setting and motif for one passage of a finished video or ident and write a new prompt through Mondo's
         normal writer, prompt checks and Laya review (no copy of them, no cache). Set confirm=true only when the user asks.
-        If read_output_prompts shows writer_charge.api_writer, tell the user the estimate and set accept_writer_cost=true only
-        with their approval. Never retried automatically. Starts the single operation; on success the new version is the
-        passage's prompt, and reroll_segment renders it. Earlier versions are kept."""
-        return invoke(client.rewrite_prompt, output_file, segment_id, confirm, accept_writer_cost, seed)
+        Optional world_id steers the passage's vocabulary toward a Thematic World or saved World; optional direction adds a
+        passage-specific creative note. If read_output_prompts shows writer_charge.api_writer, tell the user the estimate and
+        set accept_writer_cost=true only with their approval. Never retried automatically. Starts the single operation; on
+        success the new version is the passage's prompt, and reroll_segment renders it. Earlier versions are kept."""
+        return invoke(client.rewrite_prompt, output_file, segment_id, confirm, accept_writer_cost, seed, world_id, direction)
 
     @server.tool()
     def edit_prompt(output_file: str, segment_id: str, prompt: str, confirm: bool) -> dict[str, Any]:

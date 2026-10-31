@@ -85,7 +85,7 @@ and renderer configuration before starting; model failures stop production.
    from original clips (earlier versions stay as `-vN.mp4`; report its `warnings`).
    When the user wants a different prompt for a passage, `rewrite_prompt` (rolls a
    fresh setting and motif for that passage and runs the writer,
-   checks and Laya; `confirm=true`, optional `seed`, plus `accept_writer_cost` for an API writer after
+   checks and Laya; `confirm=true`, optional `seed`, `world_id` and `direction` steering, plus `accept_writer_cost` for an API writer after
    telling them the estimate) or `edit_prompt` (their text, same checks) creates a
    prompt version; only passed versions are used, and `select_prompt_take` returns to
    an earlier one. Then reroll the clip. If an

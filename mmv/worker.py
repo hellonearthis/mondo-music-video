@@ -21,7 +21,7 @@ def blocking_for(request, blocking):
 
 
 from .workflow_presets import map_steps
-from .writer_json import MAX_FREE_RETRIES, draft_feedback, escape_control_characters, is_broken_json
+from .writer_json import MAX_FREE_RETRIES, draft_feedback, escape_control_characters, is_broken_json, laya_style_feedback
 from .storage import Storage, inside, read_json, write_json
 
 
@@ -412,7 +412,14 @@ def run(home, directory, *, resume=False, rewrite=None):
                     cast_entries = lipsync.with_singer_lines(cast_entries, sing['actor_id'], sing['lines'])
                 if rewrite and candidate is None:
                     from . import takes
-                    takes.replan_segment_vocabulary(store, request, seg, seed=rewrite.get('seed'))
+                    takes.replan_segment_vocabulary(
+                        store,
+                        request,
+                        seg,
+                        seed=rewrite.get('seed'),
+                        world_id=rewrite.get('world_id'),
+                        direction_note=rewrite.get('direction'),
+                    )
                 job = build_writer_request(plan, seg, tags, cast_entries, silent_mouths=seg_silent)
                 if singing:
                     job['singing'] = {'actor_id': sing['actor_id'], 'picture_tag': sing['picture_tag'], 'lines': sing['lines'],
@@ -424,6 +431,11 @@ def run(home, directory, *, resume=False, rewrite=None):
                 if prepared.get('storyboard'):
                     job['storyboard'] = storyboard.writer_context(prepared['storyboard'], seg.segment_id)
                 if request['conceptual_theme']: job['conceptual_theme'] = request['conceptual_theme']
+                if rewrite and candidate is None and rewrite.get('direction'):
+                    steer = str(rewrite['direction']).strip()
+                    if steer:
+                        base_theme = str(job.get('conceptual_theme') or '').strip()
+                        job['conceptual_theme'] = f"{base_theme} | Passage creative direction: {steer}" if base_theme else f"Passage creative direction: {steer}"
                 write_json(jobs_dir / (seg.segment_id+'.json'), job)
 
                 dance_blocks, instrument_blocks = blocking_for(request, dance_blocking), blocking_for(request, instrument_blocking)
@@ -553,6 +565,9 @@ def run(home, directory, *, resume=False, rewrite=None):
                                  'lyrics_flavor':(' / '.join(item['text'] for item in sing['lines']) if singing else request['lyrics']), 'director_direction':request['direction'],
                                  'style_digest':prepared['style'].get('style_card',prepared['style']['direction']), 'cast_digest':seg_cast_block}
                         response, problems = validator.run_clipboard(prompt,seg,tags,silent_mouths=seg_silent,state=state)
+                        style_advice, style_problems = laya_style_feedback(response, strict=bool(request.get('strict_prompt_checks')))
+                        advice = advice + style_advice
+                        problems = list(problems) + style_problems
                         clip = validator.last_clipboard_request if hasattr(validator, 'last_clipboard_request') else validator.build_clipboard_request(prompt,seg,tags,silent_mouths=seg_silent,state=state)
                         write_json(directory / f'{seg.segment_id}.laya-request-{call+1}.json', clip)
                         write_json(directory / f'{seg.segment_id}.laya-response-{call+1}.json', response)
@@ -964,7 +979,15 @@ def main():
         home, directory, segment_id = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
         candidate = Path(sys.argv[5]).read_text(encoding='utf-8') if len(sys.argv) > 5 and sys.argv[5] else None
         seed = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else None
-        _guarded(home, lambda: run(home, directory, rewrite={'segment': segment_id, 'candidate': candidate, 'seed': seed}))
+        world_id = sys.argv[7] if len(sys.argv) > 7 and sys.argv[7] else None
+        direction = sys.argv[8] if len(sys.argv) > 8 and sys.argv[8] else None
+        _guarded(home, lambda: run(home, directory, rewrite={
+            'segment': segment_id,
+            'candidate': candidate,
+            'seed': seed,
+            'world_id': world_id,
+            'direction': direction,
+        }))
     else: raise SystemExit('Unknown worker phase')
 
 if __name__=='__main__':main()

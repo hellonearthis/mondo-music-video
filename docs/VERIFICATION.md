@@ -1,4 +1,8 @@
-# Verification — 1.11.6
+# Verification — 1.11.7
+
+## 1.11.7 — OpenSpec BDD suite, `<think>`-resilient writer parsing, Laya style adherence feedback, pre-compiled World matrices, and creative rewrite steering
+
+Verified with `tests/test_openspec_bdd.py` (11 passed: glossary & file bindings, all 9 Gherkin `.feature` files with 45 tagged scenarios, `AI_INTERACTIONS_DEEP_DIVE.md` report with 39 `REPORT-xx` scenarios, `<think>`/fence JSON extraction, Laya `style_adherence` advisory & strict retry feedback, pre-compiled Thematic World centroids & calibrated distance matrix, passage vocabulary re-sampling with `world_id` & `direction` steering, Mondo quality gates, safe interior frame sampling, and storyboard alignment), plus `tests/test_public_app.py`, `tests/test_score_view.py`, and `tests/test_quality.py`. `node --check webapp/js/outputs.js` passed, `git diff --check` is clean, and `protected_scheme.check()` returned `[]`.
 
 ## 1.11.6 — Passage prompt rewrite variation seed
 

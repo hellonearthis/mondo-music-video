@@ -1,5 +1,15 @@
 # Releases
 
+## 1.11.7 — OpenSpec BDD suite, `<think>`-resilient writer parsing, Laya style adherence feedback, pre-compiled World matrices, and creative rewrite steering
+
+- **Resilient JSON extraction and `<think>` stripping.** `escape_control_characters` (`mmv/writer_json.py`) now strips `<think>...</think>` reasoning blocks, markdown code fences, and conversational wrappers to isolate the outermost balanced `{...}` JSON payload before `WriterResponse.parse`, preventing reasoning-enabled models from wasting retry budgets while keeping `is_broken_json` free-retry detection intact for genuinely truncated replies.
+- **Pre-compiled Thematic World centroids and distance matrix.** `mmv/world_vectors.py` now pre-computes `BUILTIN_WORLD_CENTROIDS` and `BUILTIN_CALIBRATED_MATRIX` once at import, avoiding repeated lexical embedding and P15/P85 percentile calibration inside `plan_gaussian_world_dissonance` (`mmv/vocab_select.py`).
+- **Laya `style_adherence` feedback.** Without modifying the protected Laya validator, `mmv/worker.py` now inspects `style_adherence` via `laya_style_feedback`: high-confidence style divergence (`selected == "divergent"`, `confidence >= 0.65`) is recorded as an advisory note in `segNNN.advice.json` by default, and escalated to a corrective writer retry problem when `strict_prompt_checks` is enabled.
+- **Creative steering on passage prompt rewrite.** Passage prompt rewrites (`POST /api/outputs/{run_id}/prompts/{segment_id}/rewrite`, CLI `rewrite-prompt --world --direction`, MCP `rewrite_prompt`, and the Edit view's **🧭 Optional rewrite steering** controls) now accept optional `world_id` and `direction` steering to override that passage's vocabulary pools with a chosen Thematic World or studio World and inject a passage-specific creative note.
+- **OpenSpec & Cucumber BDD specification and test suite.** Added `openspec/glossary.yaml`, 9 Gherkin `.feature` specifications under `openspec/features/`, the `openspec/reports/AI_INTERACTIONS_DEEP_DIVE.md` behavioral report, and executable verification in `tests/test_openspec_bdd.py`.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
+
 ## 1.11.6 — Passage prompt rewrites roll fresh settings and motifs
 
 - **Fresh setting and motif on rewrite.** When you click **✍️ Write new prompt** for a passage, the worker now automatically rolls a fresh variation seed for that segment's vocabulary slots (`thematic_anchor`, `footage_anchor`, `practical_effects`, and per-shot setting, mechanism, lighting, tonal register and costume) while preserving musical timing and cuts. The new draw excludes the passage's current terms, guaranteeing a genuinely new setting and motif from the pool.
@@ -32,7 +42,6 @@ No protected prompts, private assets, paid operations or automatic retries chang
 Investigated, owner's report: a Windows crash (bugcheck 0x154, `UNEXPECTED_STORE_EXCEPTION`, in Windows' memory store) about a minute into a re-encode. The encode was the same FFmpeg graph that built earlier versions that day, with no frame-buffering filter; no application defect explaining a host crash was found (Codex reviewed read-only). Encoder threads stay uncapped by the owner's choice, so many-core CPUs keep their speed.
 
 No protected prompts, private assets, paid operations or automatic retries changed.
->>>>>>> upstream/main
 
 ## 1.11.3 — The Edit view keeps itself up to date
 

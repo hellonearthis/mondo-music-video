@@ -1,0 +1,61 @@
+version: "1.0.0"
+domain: "Mondo Music Video AI Engine"
+terms:
+  style_harvest:
+    definition: "Vision AI extraction process that inspects reference images across eleven physical manufacturing axes to output an aesthetic style card and prose directives without pastiche or content nouns."
+    sources: ["mmv/engine/style.py", "mmv/worker.py"]
+  subtraction_test:
+    definition: "Constraint filter ensuring stylistic descriptions omit depictive subject/content nouns and describe only manufacturing, lighting, texture, and edge logic."
+    sources: ["mmv/engine/style.py"]
+  eleven_axes:
+    definition: "The 11 manufacturing dimensions: Ink Economy, Tonal Structure, Surface, Edge Behaviour, Light Logic, Depth Strategy, Composition Grammar, Scale Relationship, Provenance Markers, Typography, and Motion Implication."
+    sources: ["mmv/engine/style.py"]
+  thematic_world:
+    definition: "A high-dimensional semantic cluster and vocabulary canon (locations, practices, objects, factions, laws) represented as centroid vectors in latent space."
+    sources: ["mmv/worlds.py", "mmv/world_vectors.py"]
+  gaussian_dissonance:
+    definition: "Mathematical tension parameter (kappa) calibrated against audio section energy and user slider to inject contrast vocabulary from adjacent or opposite semantic clusters."
+    sources: ["mmv/vocab_select.py", "mmv/world_vectors.py"]
+  world_departure:
+    definition: "A transient shot-level vocabulary divergence borrowing terms from a contrast world (mirror, opposite, or tangent) during high-energy musical peaks."
+    sources: ["mmv/vocab_select.py"]
+  sealed_lips:
+    definition: "A prompt engineering constraint appending an explicit negative rigging rule and closing sentence to prevent generative video models from hallucinating mouth babbling under music."
+    sources: ["mmv/engine/style.py", "mmv/engine/schema.py"]
+  rigging_tail:
+    definition: "The exact mandatory closing phrase required at the end of every silent passage prompt: 'Subject Rigging: lips firmly sealed shut, jaw completely relaxed, to prevent any facial babbling or lip-sync hallucinations.'"
+    sources: ["mmv/engine/schema.py", "mmv/protected_scheme.py"]
+  writer_response:
+    definition: "A strict 8-field JSON payload emitted by the prompt writer containing segment metadata, style opening, retention analysis, shot bodies, soundscape, and music references."
+    sources: ["mmv/engine/schema.py"]
+  mondo_quality_gate:
+    definition: "Deterministic pre-generation and post-render validation enforcing visible motion, non-static camera/subject relationships, edge-to-edge framing, and absence of framing devices."
+    sources: ["mmv/quality.py"]
+  laya_decision_model:
+    definition: "A local reinforcement-learned evaluation agent executing Jev-style clipboard queries to assess prompt visual density, structural completeness, style adherence, and content safety."
+    sources: ["mmv/engine/validators/laya_semantic.py"]
+  clipboard_query:
+    definition: "A structured evaluation request submitted to Laya consisting of the uncompressed prompt, state digest, and specific scoring or classification questions."
+    sources: ["mmv/engine/validators/laya_semantic.py"]
+  corrective_retry_loop:
+    definition: "An automated iterative feedback cycle that transmits specific Mondo validation failures and Laya failure-mode notes back to the LLM writer for prompt correction (up to 3 or 4 attempts)."
+    sources: ["mmv/worker.py"]
+  comfy_latent_conditioning:
+    definition: "The injection of actor reference image latents, downbeat audio conditioning tags, and render seeds into an automated ComfyUI workflow graph."
+    sources: ["mmv/engine/comfy.py", "mmv/comfy_sdk.py"]
+  frozen_motion_gate:
+    definition: "Post-render luminance delta threshold (FROZEN_MOTION = 0.35) measuring frame-to-frame pixel change across safe shot interiors to detect still-image render failures."
+    sources: ["mmv/quality.py", "mmv/vision_check.py"]
+  passage_reroll:
+    definition: "Isolated re-rendering of a single musical passage clip using a new renderer seed while preserving musical alignment, prompt, and actor references."
+    sources: ["mmv/takes.py"]
+  passage_rewrite:
+    definition: "Isolated re-synthesis of a single passage prompt that rolls a fresh variation seed and vocabulary rotation while holding shot cuts and song timing constant."
+    sources: ["mmv/takes.py", "mmv/worker.py"]
+  atomic_rollback:
+    definition: "A state safety mechanism that backs up plan, prepared, and prompt files and restores them if a rewrite or edit fails validation or encounters an execution crash."
+    sources: ["webapp/mondo_web.py"]
+  storyboard_alignment:
+    definition: "The proportional assignment of narrative and visual storyboard panels across planned shots based on duration and cut timestamps."
+    sources: ["mmv/storyboard.py"]
+

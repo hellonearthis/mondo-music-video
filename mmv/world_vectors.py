@@ -256,6 +256,14 @@ def calibrate_distance_matrix(
     }
 
 
+# Pre-compiled immutable centroids and calibrated distance matrix for the built-in 10 Thematic Worlds.
+BUILTIN_WORLD_CENTROIDS: Mapping[str, np.ndarray] = {
+    name: compute_cluster_centroid(pools)
+    for name, pools in BUILTIN_THEMATIC_WORLDS.items()
+}
+BUILTIN_CALIBRATED_MATRIX: Mapping[str, object] = calibrate_distance_matrix(BUILTIN_WORLD_CENTROIDS)
+
+
 def compute_effective_kappa(base_kappa: float, slider_percent: float = 50.0) -> float:
     """Compute effective section dissonance kappa_eff bounded in [0.0, 1.0].
 

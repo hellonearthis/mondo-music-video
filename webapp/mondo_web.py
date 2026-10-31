@@ -39,7 +39,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.11.6"
+MGL_APP_VERSION = "1.11.7"
 WEB = Path(__file__).parent
 
 
@@ -698,6 +698,8 @@ class PromptRewriteRequest(StrictModel):
     confirm: bool = False
     accept_writer_cost: bool = False
     seed: int | None = Field(default=None, ge=0, le=2147483647)
+    world_id: str | None = Field(default=None, max_length=120)
+    direction: str | None = Field(default=None, max_length=600)
 
 
 class PromptEditRequest(StrictModel):
@@ -1903,7 +1905,7 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             return takes.select_segment_take(store, run_id, segment_id, value.take_id)
 
-    def prompt_job(run_id, segment_id, kind, how, candidate=None, seed=None):
+    def prompt_job(run_id, segment_id, kind, how, candidate=None, seed=None, world_id=None, direction=None):
         """Rewrite or check one passage prompt of a finished production through the worker's own prompt stage."""
         from mmv import takes
         origin = score_view._origin_run(store, run_id)
@@ -1922,8 +1924,13 @@ def create_app(home=None, *, test_hosts=False):
                 draft.parent.mkdir(parents=True, exist_ok=True)
                 draft.write_text(candidate, encoding="utf-8")
                 argv.append(str(draft))
-            elif seed is not None:
-                argv.extend(["", str(seed)])
+            elif seed is not None or world_id or direction:
+                argv.extend([
+                    "",
+                    str(seed) if seed is not None else "",
+                    str(world_id).strip() if world_id else "",
+                    str(direction).strip() if direction else "",
+                ])
             context.update(f"{'Checking the edited' if candidate is not None else 'Writing a new'} prompt for {segment_id}", 5)
             # The worker saves the prompt before its last checks finish; a failure anywhere restores the prompt and its binding.
             kept = {name: (directory / name).read_bytes()
@@ -1955,7 +1962,15 @@ def create_app(home=None, *, test_hosts=False):
             if charge["api_writer"] and value.accept_writer_cost is not True:
                 raise ValueError(f"This production's writer is an API service that may charge for the call "
                                  f"(estimate about ${charge['estimate_usd']:.2f}); accept the writer cost to continue")
-            return prompt_job(run_id, segment_id, "prompt_rewrite", "rewritten", seed=value.seed)
+            return prompt_job(
+                run_id,
+                segment_id,
+                "prompt_rewrite",
+                "rewritten",
+                seed=value.seed,
+                world_id=value.world_id,
+                direction=value.direction,
+            )
 
     @app.post("/api/outputs/{run_id}/prompts/{segment_id}/edit")
     def edit_output_prompt(run_id: str, segment_id: str, value: PromptEditRequest):

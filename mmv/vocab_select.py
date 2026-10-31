@@ -186,6 +186,7 @@ def plan_gaussian_world_dissonance(
     Thematic preserves thematic_anchor mechanism).
     """
     from .world_vectors import (
+        BUILTIN_CALIBRATED_MATRIX,
         BUILTIN_THEMATIC_WORLDS,
         calibrate_distance_matrix,
         compute_cluster_centroid,
@@ -198,9 +199,12 @@ def plan_gaussian_world_dissonance(
     if base_world not in catalog or len(catalog) < 2:
         return {}
 
-    centroids = {name: compute_cluster_centroid(pools) for name, pools in catalog.items()}
-    cal = calibrate_distance_matrix(centroids)
-    calibrated_dists = cal["calibrated"]
+    if not world_pools:
+        calibrated_dists = BUILTIN_CALIBRATED_MATRIX["calibrated"]
+    else:
+        centroids = {name: compute_cluster_centroid(pools) for name, pools in catalog.items()}
+        cal = calibrate_distance_matrix(centroids)
+        calibrated_dists = cal["calibrated"]
 
     def pick_cluster_for_tier(tier: str, kappa_eff: float, s_idx: int, pos: int, key: str) -> str:
         if tier == "base":
