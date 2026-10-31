@@ -1,5 +1,17 @@
 # Releases
 
+## 1.12.0 — The production queue
+
+- **New Queue tab (08).** Preview a music video or ident, choose **Add to queue**, and line up as many as you like, even while something is rendering. **Start queue** runs them one at a time, as whole productions. Reorder, remove, pause after the current one, or clear finished. Finished Videos is now tab 09 and Settings tab 10.
+- **Local work just runs.** A free ticket needs no acceptance tick and uses your settings of the moment.
+- **Paid work keeps its safeguards.** A priced ticket needs acceptance of its estimate and runs only on that exact plan. If the plan changes, a free ticket becomes priced, or an earlier paid ticket stops after this one was approved, it is held and spends nothing. Paid work never retries itself; **Queue again** shows the full plan for a fresh decision.
+- **Stopped work resumes.** After a crash or restart the queue waits to be started, then **Start queue** continues interrupted local tickets in their own production folders, keeping their prompts and finished clips. Failed, cancelled or held local tickets have a **Resume** button. A ticket that stopped before its prompts were finished starts over with written prompts from cache, and is held instead if that could charge a paid writer again. Changed inputs or settings hold a resume until they are restored.
+- **Failures and Cancel.** A failed ticket is reported and the queue moves on. Cancel stops the current ticket and pauses the queue.
+- Previews and song/reference uploads now work during an operation, except stem-driven previews, which may need the GPU for stem separation.
+- Agent parity: 9 new MCP tools (`read_queue`, `queue_production`, `start_queue`, `pause_queue`, `move_queue_ticket`, `preview_queue_ticket`, `resume_queue_ticket`, `remove_queue_ticket`, `clear_finished_queue_tickets`) and matching CLI commands.
+
+Tested on mock services and in Chromium only: no real GPU or paid queue run yet, and Firefox has not been checked. On `local_h3`, a resume can re-render a clip whose automatic quality retry had already finished; the same applies to the existing Resume. No protected prompts or private assets changed.
+
 ## 1.11.6 — Write new prompt rolls a fresh setting and motif
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork commit `ae61fb5`, reviewed at exact head `ffb3c50`.

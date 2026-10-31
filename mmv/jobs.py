@@ -1,6 +1,7 @@
 """One active operation, cancellable child processes, and durable status."""
 from __future__ import annotations
 
+import logging
 import os
 import re
 import unicodedata
@@ -146,6 +147,7 @@ class Jobs:
         self.active = None
         self.worker = None
         self.subscribers = []
+        self.on_settled = self.on_idle = lambda record: None   # the queue records its ticket, then starts the next
         self.status_path = store.home / "operation.json"
         self.last = read_json(self.status_path, {"state": "idle"})
         if self.last.get("state") in ("running", "cancelling", "interrupted"):   # interrupted: re-word records saved earlier
@@ -170,9 +172,15 @@ class Jobs:
             except Exception:
                 pass
 
+    def _hook(self, hook, record):
+        try:
+            hook(dict(record))
+        except Exception as error:
+            logging.getLogger("uvicorn.error").warning("Operation hook failed: %s", type(error).__name__)
+
     def require_idle(self):
         if self.active is not None:
-            raise BusyError("An operation is active. Wait or cancel it; work is never queued.")
+            raise BusyError("An operation is active. Wait, cancel it, or add this production to the queue.")
 
     def status(self):
         with self.lock:
@@ -207,7 +215,9 @@ class Jobs:
                         write_json(self.store.home / "runs" / record["id"] / "operation.json", record)
                         write_json(self.status_path, record)
                         self.active = None
-                    self.notify(record)
+                        self._hook(self.on_settled, record)
+                    self.notify(record)   # everyone hears this operation ended before another can begin
+                    self._hook(self.on_idle, record)
 
             self.worker = threading.Thread(target=worker, daemon=True)
             self.worker.start()

@@ -1,3 +1,4 @@
+import { loadQueue } from "./queue.js";
 import { openWorldsPanel } from "./worlds.js";
 import { $, $$, api, json, notice, option, state, updateLogDisplay } from "./core.js";
 import { openVocabularyPanel, updateVocabCustomBadge } from "./vocabulary.js";
@@ -18,6 +19,9 @@ export function panel(name) {
   });
   if (name === "vocab") {
     openVocabularyPanel().catch(error => notice(error.message));
+  }
+  if (name === "queue") {
+    loadQueue().catch(error => notice(error.message));
   }
   if (name === "worlds") {
     openWorldsPanel().catch(error => notice(error.message));

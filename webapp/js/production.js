@@ -1,3 +1,4 @@
+import { renderQueue, syncQueueButton } from "./queue.js";
 // Production quote/preview, operation controls, live AI service dock, SSE stream, and update status.
 
 import { $, $$, api, copyToClipboard, handle, json, logSession, notice, state, text, updateLogDisplay, upload } from "./core.js";
@@ -339,6 +340,7 @@ export function showQuote(request, quote) {
     }
   }
   $("#consent").checked = false;
+  syncQueueButton(request, quote);
   const dialog = $("#preview-dialog");
   if (!dialog.dataset.scoreEditorBound) {
     dialog.dataset.scoreEditorBound = "1";
@@ -455,6 +457,7 @@ export async function applyStatus(status) {
   $("#retry-prompts").hidden = !status.can_retry_prompts;
   $("#show-log").hidden = false;
   $$(".operation-action").forEach(button => button.disabled = busy);
+  if (status.queue) renderQueue(status.queue);
   if (status.services) {
     renderServices(status.services);
   }

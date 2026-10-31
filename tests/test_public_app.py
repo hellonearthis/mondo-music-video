@@ -20,6 +20,7 @@ import oap
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from mmv import production, production_queue
 from mmv import actors, media, render
 from mmv.api_profiles import save_settings
 from mmv.jobs import Jobs, BusyError
@@ -428,7 +429,7 @@ class PublicAppTests(unittest.TestCase):
         import re
         html = (Path(__file__).resolve().parents[1] / "webapp" / "index.html").read_text()
         tabs = re.findall(r'<button class="nav[^"]*" data-panel="(\w+)".*?<span>(\d\d)</span>', html)
-        self.assertEqual([k for k, _ in tabs], ["video", "idents", "actors", "styles", "harvest", "vocab", "worlds", "outputs", "settings"])
+        self.assertEqual([k for k, _ in tabs], ["video", "idents", "actors", "styles", "harvest", "vocab", "worlds", "queue", "outputs", "settings"])
         self.assertEqual([n for _, n in tabs], ["%02d" % i for i in range(1, len(tabs) + 1)])
         eyebrows = dict(re.findall(r'<section id="panel-(\w+)"[^>]*><div[^>]*class="eyebrow"[^>]*>(\d\d) /', html))
         self.assertEqual(eyebrows, dict(tabs))
@@ -437,9 +438,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.11.6")
+        self.assertEqual(api_version()["version"], "1.12.0")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.11.6", (root / "README.md").read_text())
+        self.assertIn("1.12.0", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -459,7 +460,7 @@ class PublicAppTests(unittest.TestCase):
         app_res = self.client.get("/app.js")
         self.assertEqual(app_res.status_code, 200)
         self.assertIn("text/javascript", app_res.headers["content-type"])
-        for mod in ("core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocab-model.js", "vocabulary.js", "component_labeling.js", "markdown.js"):
+        for mod in ("queue.js", "core.js", "tooltips.js", "project.js", "library.js", "outputs.js", "settings.js", "production.js", "guides.js", "vocab-model.js", "vocabulary.js", "component_labeling.js", "markdown.js"):
             res = self.client.get(f"/js/{mod}")
             self.assertEqual(res.status_code, 200, mod)
             self.assertIn("text/javascript", res.headers["content-type"])
@@ -1009,6 +1010,225 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(response.status_code,400)
         self.assertEqual(MockService.requests,[])
 
+    def queue_quote(self, **changes):
+        image = self.client.post("/api/upload/reference", files={"file": ("ref.png", picture())}).json()["file"]
+        quote = self.client.post("/api/quote", json={"song": self.song_upload(), "backend": "local_h3", "references": [image], **changes})
+        quote.raise_for_status()
+        return quote.json()
+
+    def paid_quote(self):
+        self.store.save_key("WAVESPEED_API_KEY", "mock-only-key")
+        return self.queue_quote(backend="wavespeed", resolution="768p")
+
+    def wait_queue(self, timeout=30):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            queue = self.client.get("/api/queue").json()
+            if not queue["running"] and self.app.state.jobs.active is None:
+                return queue
+            time.sleep(.02)
+        self.fail("Queue did not finish")
+
+    def test_queue_runs_free_tickets_in_order_without_consent(self):
+        ran = []
+        first = self.client.post("/api/queue", json={"quote_id": self.queue_quote(title="one")["id"]})
+        second = self.client.post("/api/queue", json={"quote_id": self.queue_quote(title="two")["id"]})
+        self.assertEqual((first.status_code, second.status_code), (200, 200), first.text)
+        self.assertEqual(self.client.post(f"/api/queue/{second.json()['id']}/move", json={"delta": -1}).status_code, 200)
+        self.assertEqual(self.client.get("/api/status").json()["queue"]["waiting"], 2)
+        time.sleep(.1)
+        self.assertEqual(self.app.state.jobs.active, None, "adding must not start anything")
+        with patch("mmv.production.produce", side_effect=lambda store, request, prepared, context, resume=False: ran.append((request["title"], prepared["consent"]["accepted"])) or {}):
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        self.assertEqual(ran, [("two", True), ("one", True)])
+        self.assertEqual([t["state"] for t in queue["tickets"]], ["complete", "complete"])
+        self.assertNotIn("request", queue["tickets"][0])
+        self.assertEqual(self.client.post("/api/queue/clear-finished").json()["tickets"], [])
+
+    def test_queue_paid_ticket_needs_consent_and_is_held_when_its_plan_changes(self):
+        quote = self.paid_quote()
+        self.assertGreater(quote["estimate_usd"], 0)
+        refused = self.client.post("/api/queue", json={"quote_id": quote["id"]})
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("estimated charges", refused.json()["detail"])
+        self.client.post("/api/queue", json={"quote_id": quote["id"], "consent": True}).raise_for_status()
+        with patch("mmv.production.produce") as produce, patch("mmv.production.fingerprint", return_value="changed"):
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        produce.assert_not_called()
+        self.assertEqual(queue["tickets"][0]["state"], "held")
+        self.assertIn("nothing was spent", queue["tickets"][0]["message"])
+
+    def test_queue_paid_ticket_runs_on_its_approved_plan(self):
+        quote = self.paid_quote()
+        self.client.post("/api/queue", json={"quote_id": quote["id"], "consent": True}).raise_for_status()
+        with patch("mmv.production.produce", return_value={}) as produce:
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        self.assertEqual(queue["tickets"][0]["state"], "complete", queue["tickets"][0]["message"])
+        self.assertEqual(produce.call_args.args[2]["consent"]["estimate_usd"], quote["estimate_usd"])
+
+    def test_queue_free_ticket_that_became_paid_is_held(self):
+        self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).raise_for_status()
+        real = production.prepare
+        with patch("mmv.production.prepare", side_effect=lambda store, request: {**real(store, request), "estimate": 3.5}), \
+                patch("mmv.production.produce") as produce:
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        produce.assert_not_called()
+        self.assertEqual(queue["tickets"][0]["state"], "held")
+
+    def test_queue_failure_moves_on_and_cancel_pauses(self):
+        for title in ("bad", "cancel me", "after"):
+            self.client.post("/api/queue", json={"quote_id": self.queue_quote(title=title)["id"]}).raise_for_status()
+        def produce(store, request, prepared, context, resume=False):
+            if request["title"] == "bad":
+                raise ValueError("mock failure")
+            while True:
+                context.wait(.02)
+        with patch("mmv.production.produce", side_effect=produce):
+            self.client.post("/api/queue/start").raise_for_status()
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                tickets = self.client.get("/api/queue").json()["tickets"]
+                if tickets[1]["state"] == "running":
+                    break
+                time.sleep(.02)
+            self.client.post("/api/cancel").raise_for_status()
+            queue = self.wait_queue()
+        self.assertEqual([t["state"] for t in queue["tickets"]], ["failed", "cancelled", "pending"])
+        self.assertIn("mock failure", queue["tickets"][0]["message"])
+
+    def test_queue_restart_interrupts_and_never_starts_by_itself(self):
+        self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).raise_for_status()
+        running = self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).json()["id"]
+        path = self.home / "queue" / f"{running}.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), "state": "running"}))
+        reopened = TestClient(create_app(self.home, test_hosts=True))
+        queue = reopened.get("/api/queue").json()
+        self.assertFalse(queue["running"])
+        self.assertEqual(sorted(t["state"] for t in queue["tickets"]), ["interrupted", "pending"])
+        reopened.close()
+
+    def test_queue_can_be_filled_during_an_operation_but_start_cannot_overlap(self):
+        release = threading.Event()
+        self.app.state.jobs.start("export", lambda context: release.wait(30))
+        try:
+            quote = self.queue_quote()
+            self.assertEqual(self.client.post("/api/start", json={"quote_id": quote["id"], "consent": True}).status_code, 409)
+            self.client.post("/api/queue", json={"quote_id": quote["id"]}).raise_for_status()
+        finally:
+            release.set()
+        self.wait()
+        self.assertEqual(self.client.get("/api/queue").json()["tickets"][0]["state"], "pending")
+
+    def test_queue_again_replaces_a_stopped_ticket_at_its_place(self):
+        first = self.client.post("/api/queue", json={"quote_id": self.queue_quote(title="one")["id"]}).json()
+        second = self.client.post("/api/queue", json={"quote_id": self.queue_quote(title="two")["id"]}).json()["id"]
+        self.assertEqual(self.client.post(f"/api/queue/{first['id']}/preview", json={}).status_code, 400)
+        path = self.home / "queue" / f"{first['id']}.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), "state": "failed"}))
+        quote = self.client.post(f"/api/queue/{first['id']}/preview", json={})
+        quote.raise_for_status()
+        self.client.post("/api/queue", json={"quote_id": quote.json()["id"], "replaces": first["id"]}).raise_for_status()
+        tickets = self.client.get("/api/queue").json()["tickets"]
+        self.assertEqual([t["state"] for t in tickets], ["pending", "pending"])
+        self.assertEqual(tickets[1]["id"], second)
+        self.assertNotEqual(tickets[0]["id"], first["id"])
+
+    def test_queue_treats_a_tiny_writer_cost_as_paid_and_shutdown_starts_nothing(self):
+        self.assertGreater(production_queue.cost({"estimate": 0.0, "writer_estimate": 0.00001}), 0)
+        self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).raise_for_status()
+        release = threading.Event()
+        jobs = self.app.state.jobs
+        jobs.start("export", lambda context: release.wait(30))
+        self.client.post("/api/queue/start").raise_for_status()
+        with TestClient(self.app):
+            pass   # lifespan close: the same path the application takes when it stops
+        release.set()
+        self.wait()
+        time.sleep(.2)
+        self.assertEqual(self.client.get("/api/queue").json()["tickets"][0]["state"], "pending")
+
+    def test_queue_makes_a_real_mocked_video_from_start_to_finish(self):
+        self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).raise_for_status()
+        self.client.post("/api/queue/start").raise_for_status()
+        queue = self.wait_queue(120)
+        ticket = queue["tickets"][0]
+        self.assertEqual(ticket["state"], "complete", ticket["message"])
+        self.assertTrue((self.home / "runs" / ticket["run_id"] / "output.json").is_file())
+        self.assertTrue(read_json(self.home / "runs" / ticket["run_id"] / "consent.json")["accepted"])
+        self.assertEqual(self.client.get("/api/status").json()["state"], "complete")
+
+    def mark_ticket(self, ticket_id, **fields):
+        path = self.home / "queue" / f"{ticket_id}.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), **fields}))
+
+    def test_queue_resume_keeps_finished_work_and_starting_the_queue_resumes_interrupted(self):
+        self.configure_sdk()
+        self.server.v2_download_fail = True
+        quote = self.queue_quote(backend="comfy_sdk_h3")
+        ticket = self.client.post("/api/queue", json={"quote_id": quote["id"]}).json()
+        self.client.post("/api/queue/start").raise_for_status()
+        stopped = self.wait_queue(120)["tickets"][0]
+        self.assertEqual(stopped["state"], "failed", stopped["message"])
+        self.assertTrue(stopped["resumable"])
+        self.server.v2_download_fail = False
+        self.mark_ticket(ticket["id"], state="interrupted")   # as a restart would leave it
+        self.assertEqual(self.client.get("/api/queue").json()["waiting"], 1)
+        self.client.post("/api/queue/start").raise_for_status()
+        finished = self.wait_queue(120)["tickets"][0]
+        self.assertEqual(finished["state"], "complete", finished["message"])
+        self.assertEqual(finished["run_id"], stopped["run_id"], "must continue in the same run")
+        self.assertEqual(len(self.server.v2_submits), 1, "nothing is rendered twice")
+
+    def test_queue_resume_before_prompts_finished_starts_over_and_paid_is_never_resumed(self):
+        free = self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).json()
+        self.mark_ticket(free["id"], state="interrupted", run_id="never_got_far")
+        with patch("mmv.production.produce", return_value={}) as produce:
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        self.assertEqual(queue["tickets"][0]["state"], "complete", queue["tickets"][0]["message"])
+        self.assertFalse(produce.call_args.kwargs["resume"])
+        self.assertNotEqual(queue["tickets"][0]["run_id"], "never_got_far")
+        paid = self.client.post("/api/queue", json={"quote_id": self.paid_quote()["id"], "consent": True}).json()
+        self.mark_ticket(paid["id"], state="interrupted", run_id="paid_run")
+        self.assertEqual(self.client.post(f"/api/queue/{paid['id']}/resume").status_code, 400)
+        with patch("mmv.production.produce") as produce:
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        produce.assert_not_called()
+        self.assertEqual(queue["tickets"][-1]["state"], "interrupted")
+
+    def test_queue_resume_that_would_recharge_a_writer_is_held(self):
+        ticket = self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).json()
+        self.mark_ticket(ticket["id"], state="interrupted", run_id="writer_stopped")
+        real = production.prepare
+        with patch("mmv.production.prepare", side_effect=lambda store, request: {**real(store, request), "estimate": 1.0}), \
+                patch("mmv.production.produce") as produce:
+            self.client.post("/api/queue/start").raise_for_status()
+            queue = self.wait_queue()
+        produce.assert_not_called()
+        self.assertEqual(queue["tickets"][0]["state"], "held")
+
+    def test_queue_stem_preview_waits_for_the_gpu(self):
+        release = threading.Event()
+        self.app.state.jobs.start("export", lambda context: release.wait(30))
+        try:
+            response = self.client.post("/api/quote", json={"song": "anything", "analysis_driver": "drums"})
+            self.assertIn(response.status_code, (409, 422), response.text)
+        finally:
+            release.set()
+        self.wait()
+
+    def test_queue_refuses_non_productions_and_running_removal(self):
+        self.assertEqual(self.client.post("/api/queue", json={"quote_id": "fabricated"}).status_code, 400)
+        first = self.client.post("/api/queue", json={"quote_id": self.queue_quote()["id"]}).json()
+        path = self.home / "queue" / f"{first['id']}.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), "state": "running"}))
+        self.assertEqual(self.client.delete(f"/api/queue/{first['id']}").status_code, 400)
+
     def test_preview_returns_editable_score_and_edits_change_the_plan(self):
         self.store.save_key("WAVESPEED_API_KEY","mock-only-key")
         image=self.client.post("/api/upload/reference",files={"file":("ref.png",picture())}).json()["file"]
@@ -1536,13 +1756,13 @@ class PublicAppTests(unittest.TestCase):
         self.assertFalse(self.client.get('/api/status').json()['can_retry_prompts'])
         self.assertEqual(self.client.post('/api/retry-prompts/quote', json={'run_id': status['id']}).status_code, 400)
 
-    def test_cancel_own_render_and_no_queue(self):
+    def test_cancel_own_render_and_no_overlapping_start(self):
         MockService.hold=True
         _,started=self.start({"song":self.song_upload()});started.raise_for_status()
         deadline=time.monotonic()+15
         while time.monotonic()<deadline and not any(path=="/prompt" for path,body in MockService.requests): time.sleep(.05)
         self.assertTrue(any(path=="/prompt" for path,body in MockService.requests))
-        self.assertEqual(self.client.post("/api/quote",json={"song":"anything"}).status_code,409)
+        self.assertEqual(self.client.post("/api/start",json={"quote_id":"anything","consent":True}).status_code,409)
         self.client.post("/api/cancel").raise_for_status()
         self.assertEqual(self.wait()["state"],"cancelled")
         self.assertTrue(any(path=="/queue" and body=={"delete":["local-test"]} for path,body in MockService.requests))
@@ -1713,7 +1933,7 @@ class PublicAppTests(unittest.TestCase):
 
     def test_security_and_private_features_absent(self):
         self.assertEqual(self.client.post("/api/cancel", headers={"Origin": "https://other.invalid"}).status_code, 403)
-        for endpoint in ("/api/queue", "/api/vault/status", "/api/film", "/api/micro-drama/new", "/mondo_web.py"):
+        for endpoint in ("/api/vault/status", "/api/film", "/api/micro-drama/new", "/mondo_web.py"):
             self.assertEqual(self.client.get(endpoint).status_code, 404)
         response = self.client.get("/")
         self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
@@ -1889,6 +2109,38 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(res_file.status_code, 200)
         file_names = [f["name"] for f in res_file.json()["files"]]
         self.assertIn("test.json", file_names)
+
+
+class QueueRuleTests(unittest.TestCase):
+    def ticket(self, estimate=0, fingerprint="f", **fields):
+        return {**production_queue.new_ticket({"kind": "video"}, "x", 1, estimate=estimate, fingerprint=fingerprint), **fields}
+
+    def test_free_work_is_never_held(self):
+        self.assertIsNone(production_queue.hold_reason(self.ticket(), [self.ticket(5, state="failed")], 0, "other"))
+
+    def test_paid_work_needs_the_approved_plan_and_a_clean_paid_record(self):
+        approved = self.ticket(5)
+        self.assertIsNone(production_queue.hold_reason(approved, [approved], 5, "f"))
+        self.assertIn("changed", production_queue.hold_reason(approved, [approved], 5, "g"))
+        self.assertIn("never approved", production_queue.hold_reason(self.ticket(), [], 5, "f"))
+        self.assertIn("earlier paid", production_queue.hold_reason(approved, [self.ticket(5, state="failed", finished=approved["created"] + 1)], 5, "f"))
+        self.assertIsNone(production_queue.hold_reason(approved, [self.ticket(5, state="failed", finished=approved["created"] - 1)], 5, "f"))
+        self.assertIsNone(production_queue.hold_reason(approved, [self.ticket(0, state="failed")], 5, "f"))
+
+    def test_a_paid_failure_put_back_in_line_still_holds_older_approvals(self):
+        approved = self.ticket(5)
+        failed = self.ticket(5, state="failed", finished=approved["created"] + 1)
+        requeued = {**failed, "state": "held", "finished": approved["created"] + 2, "stopped_at": failed["finished"]}
+        self.assertIn("earlier paid", production_queue.hold_reason(approved, [requeued], 5, "f"))
+        self.assertIsNone(production_queue.hold_reason(approved, [{**requeued, "state": "complete"}], 5, "f"))
+
+    def test_moved_swaps_waiting_neighbours_only(self):
+        first, second = self.ticket(position=1), self.ticket(position=2)
+        swapped = production_queue.moved([first, second], first["id"], 1)
+        self.assertEqual({t["id"]: t["position"] for t in swapped}, {first["id"]: 2, second["id"]: 1})
+        self.assertEqual(production_queue.moved([first, second], first["id"], -1), [])
+        with self.assertRaises(ValueError):
+            production_queue.moved([self.ticket(state="running", id="r")], "r", 1)
 
 
 class UtilityTests(unittest.TestCase):

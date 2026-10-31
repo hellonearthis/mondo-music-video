@@ -63,8 +63,12 @@ verify the assets appear in the app. Never import other local/private assets.
   another final render. Attached productions and later caption jobs must recover
   their original sources or fail clearly. Keep originals and assembly-source.json
   for recovery. Operator-requested Topaz upscaling is the explicit exception.
-- Keep one active operation, no production queue, explicit paid consent and
-  upstream OAP verification. Do not retry paid submissions automatically.
+- Keep one active operation, explicit paid consent and upstream OAP verification.
+  Do not retry paid submissions automatically. The production queue runs whole
+  productions through that one operation: free local tickets need no consent, a
+  priced ticket runs only on its approved plan and is otherwise held, and the queue
+  never starts by itself after a restart; once started it continues interrupted
+  local tickets from their saved work.
 - Use temporary data and mock services for automated tests. Real paid/GPU/Topaz
   work requires deliberate operator verification, not an automated test run.
 - Automatic application updates are opt-in and off by default. With installation

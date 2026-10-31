@@ -195,6 +195,34 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 browser.close()
 
 
+    def test_preview_adds_a_free_production_to_the_queue_tab(self):
+        from playwright.sync_api import sync_playwright, expect
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, executable_path=str(_cached_chromium()[-1]))
+            page = browser.new_page()
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            try:
+                page.goto(self.url)
+                page.wait_for_function('() => document.querySelectorAll(".file-drop-target").length === 16')
+                page.locator('#quick-start').click()
+                page.locator('#quick-start-song').set_input_files({'name': 'queued song.wav', 'mimeType': 'audio/wav', 'buffer': self.song.read_bytes()})
+                expect(page.locator('#preview-dialog')).to_be_visible(timeout=60000)
+                expect(page.locator('#add-to-queue')).to_be_visible()
+                expect(page.locator('#consent')).not_to_be_checked()
+                page.locator('#add-to-queue').click()
+                expect(page.locator('#preview-dialog')).to_be_hidden()
+                page.locator('.nav[data-panel=queue]').click()
+                expect(page.locator('#queue-list .queue-ticket')).to_contain_text('queued song.wav')
+                expect(page.locator('#queue-list .queue-ticket')).to_contain_text('local, free')
+                expect(page.locator('#queue-state')).to_have_text('Paused · 1 waiting')
+                expect(page.locator('#queue-start')).to_be_enabled()
+                page.locator('#queue-list .queue-ticket button', has_text='Remove').click()
+                expect(page.locator('#queue-state')).to_have_text('Nothing waiting')
+                self.assertFalse(errors, errors)
+            finally:
+                browser.close()
+
     def test_quick_start_asks_for_a_song_then_opens_the_preview_without_instruments(self):
         from playwright.sync_api import sync_playwright, expect
         with sync_playwright() as p:
@@ -759,7 +787,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.11.6')
+                expect(page.locator('#version')).to_have_text('1.12.0')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1661,7 +1689,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.11.6')
+                expect(page.locator('#version')).to_have_text('1.12.0')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -30,7 +30,8 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from mmv import actors, agreements, instrument_assets, oap_collection, production, props, score_view, worlds
-from mmv.jobs import BusyError, Jobs, job_run_id, upload_name
+from mmv.jobs import BusyError, Jobs, interrupted_message, job_run_id, upload_name
+from mmv import production_queue
 from mmv.pipeline import VOCAB_TABLES, apply_vocabulary_overrides, load_vocabulary, render_seed
 from mmv.render import CATALOG
 from mmv.services import check_services
@@ -39,7 +40,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.11.6"
+MGL_APP_VERSION = "1.12.0"
 WEB = Path(__file__).parent
 
 
@@ -490,6 +491,16 @@ class StartRequest(StrictModel):
     consent: bool = False
 
 
+class QueueAddRequest(StrictModel):
+    quote_id: str
+    consent: bool = False
+    replaces: str | None = None
+
+
+class QueueMoveRequest(StrictModel):
+    delta: Literal[-1, 1]
+
+
 class ResumeRequest(StrictModel):
     run_id: str
 
@@ -715,7 +726,7 @@ class ReassembleRequest(StrictModel):
 
 
 class ProjectState(StrictModel):
-    panel: Literal["video", "vocab", "worlds", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
+    panel: Literal["video", "vocab", "worlds", "queue", "actors", "styles", "harvest", "idents", "outputs", "settings"] = "video"
     forms: dict[str, dict[str, str | bool | float | int | list[str]]] = Field(default_factory=dict)
     files: dict[str, dict[str, str | list[str]]] = Field(default_factory=dict)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
@@ -732,6 +743,10 @@ def create_app(home=None, *, test_hosts=False):
     store = Storage(home)
     jobs = Jobs(store)
     quotes = {}
+    queue_control = production_queue.new_control()
+    production_queue.recover_tickets(store, interrupted_message)
+    jobs.on_settled = lambda record: production_queue.settle_operation(store, jobs, queue_control, record)
+    jobs.on_idle = lambda record: production_queue.start_dispatch(store, jobs, queue_control)
     from mmv.final_assembly import remove_interrupted_encodes
     for leftover in remove_interrupted_encodes(store.home / "runs"):   # no operation runs yet
         log_studio(store, f"Removed an interrupted encode's work folder: {leftover.parent.name}/{leftover.name}")
@@ -742,6 +757,7 @@ def create_app(home=None, *, test_hosts=False):
     @asynccontextmanager
     async def lifespan(app):
         yield
+        queue_control["running"] = False   # closing the app must not launch the next ticket
         await asyncio.to_thread(jobs.shutdown)
 
     app = FastAPI(title="Mondo Music Video", version=MGL_APP_VERSION, lifespan=lifespan)
@@ -825,7 +841,13 @@ def create_app(home=None, *, test_hosts=False):
                                 and previous.get('backend') == 'comfy_sdk_h3'
                                 and not result['can_retry_prompts'])
         result['services'] = check_services(store, result)
+        result['queue'] = queue_view()
         return result
+
+    def queue_view():
+        tickets = production_queue.read_tickets(store)
+        return {"running": queue_control["running"], "waiting": production_queue.waiting_count(tickets),
+                "tickets": [production_queue.public_ticket(t) for t in tickets]}
 
     def retryable_prompt_run(snapshot, previous):
         """Only an unrendered, failed prompt attempt may offer a fresh quote."""
@@ -1099,7 +1121,8 @@ def create_app(home=None, *, test_hosts=False):
         target = store.home / "uploads" / name
         # Serialize mutations with operation startup so quoted inputs remain stable.
         with jobs.lock:
-            jobs.require_idle()
+            if kind not in ("song", "reference"):   # these get new names, so they cannot disturb a running production
+                jobs.require_idle()
             if kind == "reference":
                 data = file.file.read(limit + 1)
                 actors.clean_image(data, target)
@@ -1531,36 +1554,41 @@ def create_app(home=None, *, test_hosts=False):
         return {"deleted": vocab_id}
 
     def build_quote(value: ProductionRequest, *, resume_directory=None):
-        with jobs.lock:
-            jobs.require_idle()
-            request = with_world(store, request_dict(value))   # pipeline.prepare picks a random render seed if none was chosen
-            kind = request.get("kind", "video")
-            log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
-            try:
+        request = with_world(store, request_dict(value))   # pipeline.prepare picks a random render seed if none was chosen
+        kind = request.get("kind", "video")
+        log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
+        try:
+            with queue_control["prepare_lock"]:   # one at a time: previews of a new song share its analysis file
+                if jobs.active is not None and (request.get("analysis_driver") or "mix") != "mix":
+                    raise BusyError("A stem-driven preview may need the GPU for stem separation. Preview it when the current operation ends.")
                 prepared = (production.prepare_resume(store, request, resume_directory) if resume_directory is not None
                             else production.prepare(store, request))
-            except Exception as exc:
-                log_studio(store, f"Preview failed ({kind}): {exc}", level="ERROR")
-                raise
+        except Exception as exc:
+            log_studio(store, f"Preview failed ({kind}): {exc}", level="ERROR")
+            raise
+        quote_fingerprint = production.fingerprint(store, request, prepared)
+        quote_id = secrets.token_urlsafe(24)
+        with jobs.lock:   # the plan itself is worked out unlocked: a running production keeps reporting meanwhile
+            busy = jobs.active is not None
             for expired in [key for key, item in quotes.items() if item["expires"] < time.time()]:
                 quotes.pop(expired)
             if len(quotes) > 100:
                 quotes.clear()
-            quote_id = secrets.token_urlsafe(24)
-            quotes[quote_id] = {"request": request, "fingerprint": production.fingerprint(store, request, prepared),
+            quotes[quote_id] = {"request": request, "fingerprint": quote_fingerprint, "estimate": production_queue.cost(prepared),
                                 "expires": time.time() + 600}
-            from mmv.services import check_required_services
-            offline_engines = check_required_services(store, request, resume=bool(resume_directory))
-            return {"id": quote_id, "seed": request["seed"], "render_seed": render_seed(request), "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
-                    "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
-                    "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
-                    "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
-                    "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"), "world_contrast": prepared.get("world_contrast"), "storyboard": prepared.get("storyboard"),
-                    "offline_engines": offline_engines,
-                    "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
-                    else prepared["estimate"] > 0,
-                    "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
-                    "Cancellation cannot undo charges for submitted work."}
+        from mmv.services import check_required_services
+        # Engines swap in and out during an operation, so "offline" only means something when idle; the ticket checks again.
+        offline_engines = [] if busy else check_required_services(store, request, resume=bool(resume_directory))
+        return {"id": quote_id, "seed": request["seed"], "render_seed": render_seed(request), "estimate_usd": prepared["estimate"], "clips": len(prepared["segments"]),
+                "seconds": prepared["seconds"], "analysis": prepared.get("analysis"),
+                "segments": prepared["segments"], "writer_estimate_usd": prepared.get("writer_estimate", 0),
+                "score": score_view.build_score(prepared["score"], prepared["plan"]) if kind == "video" else None,
+                "detected": prepared.get("detected"), "lipsync": prepared.get("lipsync"), "subliminal": prepared.get("subliminal"), "captions": prepared.get("captions"), "dance": prepared.get("dance"), "instruments": instrument_preview(prepared.get("instruments")), "voice": prepared.get("voice"), "world_contrast": prepared.get("world_contrast"), "storyboard": prepared.get("storyboard"),
+                "offline_engines": offline_engines,
+                "paid": prepared["estimate"] > 0 if request["kind"] != "harvest"
+                else prepared["estimate"] > 0,
+                "note": "Estimate only. Check provider pricing. Uploaded references/audio are sent to your chosen provider. "
+                "Cancellation cannot undo charges for submitted work."}
 
     @app.get("/api/quick-start")
     def quick_start_plan():
@@ -1678,17 +1706,15 @@ def create_app(home=None, *, test_hosts=False):
                 raise ValueError('This production is already complete')
             # Recheck OAP, files, workflow and settings before offering recovery.
             prepared = production.prepare_resume(store, request, directory)
-            if production.fingerprint(store, request, prepared) != consent.get('fingerprint'):
+            fingerprint_now = production.fingerprint(store, request, prepared)
+            if fingerprint_now != consent.get('fingerprint'):
                 raise ValueError('Original inputs or settings changed; restore them before resuming')
             prompts = read_json(directory / 'prompts.json', {})
             if any(not prompts.get(f"seg{seg['index']:03d}") for seg in prepared['segments']):
                 raise ValueError('Only productions with every prompt validated can resume')
-            for path in (directory / 'renders').glob('*/comfy-request.json'):
-                receipt = read_json(path, {})
-                if not receipt.get('job_id'):
-                    raise ValueError('Submission outcome unknown. Reconcile the saved receipt with the proxy before resuming')
-                if receipt.get('state') in ('failed', 'canceled', 'expired'):
-                    raise ValueError('A Comfy job ended without a usable result; resume will not regenerate it')
+            blocker = production_queue.resume_blocker(directory, fingerprint_now, consent)
+            if blocker:
+                raise ValueError(blocker)
             result = build_quote(ProductionRequest(**request), resume_directory=directory)
             quotes[result['id']]['resume_run'] = run_id
             result.update(kind=request['kind'], estimate_usd=0, writer_estimate_usd=0, paid=False,
@@ -1743,6 +1769,86 @@ def create_app(home=None, *, test_hosts=False):
             return jobs.start(request["kind"], lambda context: production.produce(
                 store, request, prepared, context, resume=bool(quoted.get("resume_run"))),
                 run_id=quoted.get("resume_run") or output_run_id(store, request))
+
+    @app.get("/api/queue")
+    def queue_list():
+        return queue_view()
+
+    @app.post("/api/queue")
+    def queue_add(value: QueueAddRequest):
+        with jobs.lock:
+            quoted = quotes.get(value.quote_id)
+            if not quoted or quoted["expires"] < time.time():
+                raise ValueError("Preview expired. Request a new preview")
+            request = quoted["request"]
+            if quoted.get("resume_run") or request["kind"] not in production_queue.QUEUEABLE_KINDS:
+                raise ValueError("Only a new music video or ident can be queued")
+            if quoted["estimate"] > 0 and value.consent is not True:
+                raise ValueError("Accept the estimated charges before queueing this paid production")
+            tickets = production_queue.read_tickets(store)
+            replaced = production_queue.get_ticket(store, value.replaces) if value.replaces else None
+            if replaced and replaced["state"] not in production_queue.TERMINAL_STATES:
+                raise ValueError("Only a stopped ticket can be replaced")
+            label = upload_name(store, request.get("song")) or request.get("title") or request["kind"]
+            ticket = production_queue.new_ticket(
+                request, label, replaced["position"] if replaced else production_queue.next_position(tickets),
+                estimate=quoted["estimate"], fingerprint=quoted["fingerprint"])
+            quotes.pop(value.quote_id)
+            production_queue.save_ticket(store, ticket)
+            if replaced:
+                production_queue.remove_ticket(store, replaced["id"])
+            return production_queue.public_ticket(ticket)
+
+    @app.post("/api/queue/start")
+    def queue_start():
+        with jobs.lock:
+            production_queue.resume_interrupted(store)
+            queue_control["running"] = True
+        production_queue.start_dispatch(store, jobs, queue_control)
+        return queue_view()
+
+    @app.post("/api/queue/pause")
+    def queue_pause():
+        with jobs.lock:
+            queue_control["running"] = False
+            return queue_view()
+
+    @app.post("/api/queue/clear-finished")
+    def queue_clear_finished():
+        with jobs.lock:
+            for ticket in production_queue.read_tickets(store):
+                if ticket["state"] in production_queue.TERMINAL_STATES:
+                    production_queue.remove_ticket(store, ticket["id"])
+            return queue_view()
+
+    @app.post("/api/queue/{ticket_id}/move")
+    def queue_move(ticket_id: str, value: QueueMoveRequest):
+        with jobs.lock:
+            for ticket in production_queue.moved(production_queue.read_tickets(store), ticket_id, value.delta):
+                production_queue.save_ticket(store, ticket)
+            return queue_view()
+
+    @app.post("/api/queue/{ticket_id}/preview")
+    def queue_preview(ticket_id: str):
+        """A fresh quote for a stopped ticket. Add it with `replaces` to put the ticket back in line."""
+        ticket = production_queue.get_ticket(store, ticket_id)
+        if ticket["state"] not in production_queue.TERMINAL_STATES:
+            raise ValueError("Only a stopped ticket can be previewed again")
+        return {**build_quote(ProductionRequest(**ticket["request"])), "replaces": ticket["id"],
+                "request": {key: value for key, value in ticket["request"].items() if key != "world_departures"}}
+
+    @app.post("/api/queue/{ticket_id}/resume")
+    def queue_resume(ticket_id: str):
+        """Put a stopped local ticket back in line to continue from its saved work."""
+        with jobs.lock:
+            production_queue.resume_ticket(store, production_queue.get_ticket(store, ticket_id))
+            return queue_view()
+
+    @app.delete("/api/queue/{ticket_id}")
+    def queue_remove(ticket_id: str):
+        with jobs.lock:
+            production_queue.remove_ticket(store, ticket_id)
+            return queue_view()
 
     @app.get("/api/outputs")
     def outputs():

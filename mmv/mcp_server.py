@@ -159,6 +159,51 @@ def create_server(base_url=None):
         """Start a reviewed preview. Set consent only with user authorization, including any paid charges."""
         return invoke(client.start, quote_id, consent)
 
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True))
+    def read_queue() -> dict[str, Any]:
+        """List queued productions in running order, whether the queue is on, and why any ticket stopped or is held."""
+        return invoke(client.queue)
+
+    @server.tool()
+    def queue_production(quote_id: str, consent: bool = False, replaces: str | None = None) -> dict[str, Any]:
+        """Add a reviewed video or ident preview to the queue. A priced preview needs consent with user authorization of its estimate; free local work needs none."""
+        return invoke(client.queue_add, quote_id, consent, replaces)
+
+    @server.tool()
+    def start_queue() -> dict[str, Any]:
+        """Run queued productions one at a time, first continuing any interrupted local ticket from its saved work. Start it only when the user asks: it uses the GPU and any approved paid tickets."""
+        return invoke(client.queue_start)
+
+    @server.tool()
+    def pause_queue() -> dict[str, Any]:
+        """Stop after the current production. Use cancel_production to stop that production too."""
+        return invoke(client.queue_pause)
+
+    @server.tool()
+    def move_queue_ticket(ticket_id: str, delta: Literal[-1, 1]) -> dict[str, Any]:
+        """Move a waiting ticket one place earlier (-1) or later (1)."""
+        return invoke(client.queue_move, ticket_id, delta)
+
+    @server.tool()
+    def preview_queue_ticket(ticket_id: str) -> dict[str, Any]:
+        """Get a fresh preview for a stopped or held ticket; queue_production with `replaces` puts it back in line. Nothing retries by itself."""
+        return invoke(client.queue_preview, ticket_id)
+
+    @server.tool()
+    def resume_queue_ticket(ticket_id: str) -> dict[str, Any]:
+        """Put a stopped local ticket back in line to continue from its saved prompts and clips. start_queue also resumes interrupted local tickets by itself."""
+        return invoke(client.queue_resume, ticket_id)
+
+    @server.tool()
+    def remove_queue_ticket(ticket_id: str) -> dict[str, Any]:
+        """Remove a ticket that is not running. Its finished video and files stay."""
+        return invoke(client.queue_remove, ticket_id)
+
+    @server.tool()
+    def clear_finished_queue_tickets() -> dict[str, Any]:
+        """Remove every ticket that has stopped. Finished videos and files stay."""
+        return invoke(client.queue_clear_finished)
+
     @server.tool()
     def cancel_production() -> dict[str, Any]:
         """Cancel the active operation when requested; already submitted remote work may still be billed."""

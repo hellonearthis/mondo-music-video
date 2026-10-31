@@ -6,6 +6,7 @@ export const $$ = selector => [...document.querySelectorAll(selector)];
 export const state = {
   catalog: null,
   currentQuote: null,
+  queueReplaces: null,
   currentOap: null,
   lastState: null,
   currentRun: null,

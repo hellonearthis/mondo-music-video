@@ -1,4 +1,10 @@
-# Verification — 1.11.6
+# Verification — 1.12.0
+
+## 1.12.0 — The production queue
+
+Automated, mock services only: ordering, reordering, free tickets without consent, a full mocked video through the queue, the paid gate (consent needed, approved plan runs, changed plan and free-turned-paid held, earlier paid stop holds older approvals, rounded tiny cost still paid), failure moves on, cancel pauses, restart recovery without auto-start, shutdown starting nothing, filling the queue during an operation, stem-preview refusal, Queue again, and resume (same run, no second submission, start over before prompts finished, paid renderers refused, writer recharge held). The browser test ran in Chromium only.
+
+Not verified: a real GPU queue run or resume, a real paid queue run, and Firefox.
 
 ## 1.11.6 — Collaborator fork `ffb3c50` (rewrite rolls fresh vocabulary)
 
