@@ -140,7 +140,7 @@ def _passage_takes(origin, segment_id, takes_data, roots):
 
 def _passage_prompts(segment_id, prompt_data):
     entry = (prompt_data.get("segments") or {}).get(segment_id) or {}
-    versions = [{key: t.get(key) for key in ("id", "label", "prompt", "validated", "problems", "created_at")}
+    versions = [{key: t.get(key) for key in ("id", "label", "prompt", "validated", "problems", "created_at", "vocabulary", "variation_seed")}
                 for t in entry.get("takes") or [] if isinstance(t, dict) and isinstance(t.get("prompt"), str)]
     return entry.get("active_take"), versions
 

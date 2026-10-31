@@ -174,7 +174,7 @@ def harvest_text(value):
 
 
 def run(home, directory, *, resume=False, rewrite=None):
-    """Produce a video or ident. rewrite={'segment': id, 'candidate': text or None} instead prepares one passage of a finished
+    """Produce a video or ident. rewrite={'segment': id, 'candidate': text or None, 'seed': variation seed or None} instead prepares one passage of a finished
     production through this same prompt stage (a fresh writer prompt, or a hand-edited candidate given only the checks) and stops
     before rendering; other passages keep their saved prompts and the prompt cache is neither read nor written."""
     os.environ['MMV_HOME'] = str(home)
@@ -410,6 +410,9 @@ def run(home, directory, *, resume=False, rewrite=None):
                 if singing:
                     from . import lipsync
                     cast_entries = lipsync.with_singer_lines(cast_entries, sing['actor_id'], sing['lines'])
+                if rewrite and rewrite.get('seed') is not None:
+                    from . import takes
+                    takes.replan_segment_vocabulary(store, request, plan.segments, index, rewrite['seed'])
                 job = build_writer_request(plan, seg, tags, cast_entries, silent_mouths=seg_silent)
                 if singing:
                     job['singing'] = {'actor_id': sing['actor_id'], 'picture_tag': sing['picture_tag'], 'lines': sing['lines'],
@@ -603,6 +606,11 @@ def run(home, directory, *, resume=False, rewrite=None):
     if not resume:
         passage_plans.bind_prompts(directory, prepared, prompts)
     if rewrite:
+        if rewrite.get('seed') is not None and request.get('kind', 'video') != 'ident':
+            from dataclasses import asdict
+            from . import takes
+            segment = next(s for s in plan.segments if s.segment_id == rewrite['segment'])
+            takes.save_passage_vocabulary(directory, rewrite['segment'], takes.passage_vocabulary(asdict(segment)))
         progress(f"Prompt for {rewrite['segment']} validated", 100)
         return prompts[rewrite['segment']]
     progress('All prompts validated; opening renderer', 32)
@@ -955,8 +963,9 @@ def main():
     elif sys.argv[1] == 'rewrite_prompt':
         # One passage of a finished production through the normal prompt stage; an optional file holds a hand-edited candidate.
         home, directory, segment_id = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
-        candidate = Path(sys.argv[5]).read_text(encoding='utf-8') if len(sys.argv) > 5 else None
-        _guarded(home, lambda: run(home, directory, rewrite={'segment': segment_id, 'candidate': candidate}))
+        candidate = Path(sys.argv[5]).read_text(encoding='utf-8') if len(sys.argv) > 5 and sys.argv[5] else None
+        seed = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else None
+        _guarded(home, lambda: run(home, directory, rewrite={'segment': segment_id, 'candidate': candidate, 'seed': seed}))
     else: raise SystemExit('Unknown worker phase')
 
 if __name__=='__main__':main()

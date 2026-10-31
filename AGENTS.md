@@ -207,7 +207,7 @@ beside the original. `reassemble_output` rebuilds the final video from original 
 inside that graph, keeping earlier versions as numbered files. Productions on other renderers are refused because rerolling
 could submit paid work without a preview and consent. Passage prompt rewrites and hand edits run through the worker's own
 prompt stage (writer, Mondo checks, Laya) for that one passage; keep it that way rather than copying the loop, never let an
-edit skip the checks, and require writer-cost acceptance for API writers. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
+edit skip the checks, and require writer-cost acceptance for API writers. A written video-passage prompt draws fresh vocabulary for that passage (`takes.replan_segment_vocabulary`, owner-approved), kept paired with its prompt version. Reading prompts and takes writes nothing. GUI, CLI and MCP are in
 [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md).
 
 ## Panel progress and actor editing

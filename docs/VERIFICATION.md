@@ -1,4 +1,8 @@
-# Verification — 1.11.5
+# Verification — 1.11.6
+
+## 1.11.6 — Collaborator fork `ffb3c50` (rewrite rolls fresh vocabulary)
+
+Focused tests cover new vocabulary on rewrite, kept timing, cuts and rigging, all saved plan copies, the variation seed, vocabulary returning with an older prompt version, and the whole-list passes. Full temporary-data/mock-service suite: **809 passed + 141 subtests**; `protected_scheme.check()` is `[]`. Real same-song, same-seed renders comparing rewritten passages were not made, by the owner's decision. Firefox was not tested here.
 
 ## 1.11.5 — Collaborator fork `7681740` (Thematic Worlds, panel auto-collapse)
 

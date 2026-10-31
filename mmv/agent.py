@@ -413,11 +413,13 @@ class AgentClient:
         run_id = str(output_file).split("/")[0]
         return f"/api/outputs/{urllib.parse.quote(run_id, safe='')}/prompts/{urllib.parse.quote(segment_id, safe='')}/{action}"
 
-    def rewrite_prompt(self, output_file, segment_id, confirm=False, accept_writer_cost=False):
-        """Write a new prompt for one passage through the normal writer, Mondo checks and Laya review (confirm=True; an API
-        writer also needs accept_writer_cost=True). The new version becomes the passage's prompt; reroll the clip to render it."""
-        return self._json("POST", self._prompt_url(output_file, segment_id, "rewrite"),
-                          {"confirm": bool(confirm), "accept_writer_cost": bool(accept_writer_cost)})
+    def rewrite_prompt(self, output_file, segment_id, confirm=False, accept_writer_cost=False, seed=None):
+        """Write a new prompt for one passage (a video passage also rolls a fresh setting and motif) through the normal writer, Mondo checks and Laya
+        review (confirm=True; an API writer also needs accept_writer_cost=True). The new version becomes the passage's prompt;
+        reroll the clip to render it."""
+        payload = {"confirm": bool(confirm), "accept_writer_cost": bool(accept_writer_cost),
+                   **({"seed": int(seed)} if seed is not None else {})}
+        return self._json("POST", self._prompt_url(output_file, segment_id, "rewrite"), payload)
 
     def edit_prompt(self, output_file, segment_id, prompt, confirm=False):
         """Check a hand-edited prompt with the Mondo checks and Laya review (confirm=True). It becomes the passage's prompt
@@ -568,6 +570,7 @@ def main(argv=None):
     rewrite_cmd = sub.add_parser("rewrite-prompt", help="Write a new checked prompt for one passage")
     rewrite_cmd.add_argument("output_file")
     rewrite_cmd.add_argument("segment_id")
+    rewrite_cmd.add_argument("--seed", type=int, default=None, help="Optional variation seed for the passage's new setting and motif")
     rewrite_cmd.add_argument("--confirm", action="store_true")
     rewrite_cmd.add_argument("--accept-writer-cost", action="store_true", help="Accept an API writer's charge for this call")
     edit_cmd = sub.add_parser("edit-prompt", help="Check a hand-edited prompt (read from a file) for one passage")
@@ -673,7 +676,7 @@ def main(argv=None):
         elif args.command == "select-segment-take":
             result = client.select_segment_take(args.output_file, args.segment_id, args.take_id)
         elif args.command == "rewrite-prompt":
-            result = client.rewrite_prompt(args.output_file, args.segment_id, args.confirm, args.accept_writer_cost)
+            result = client.rewrite_prompt(args.output_file, args.segment_id, args.confirm, args.accept_writer_cost, seed=args.seed)
         elif args.command == "edit-prompt":
             result = client.edit_prompt(args.output_file, args.segment_id, Path(args.prompt_file).read_text(encoding="utf-8"), args.confirm)
         elif args.command == "select-prompt-take":

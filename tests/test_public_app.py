@@ -437,9 +437,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.11.5")
+        self.assertEqual(api_version()["version"], "1.11.6")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.11.5", (root / "README.md").read_text())
+        self.assertIn("1.11.6", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -836,6 +836,8 @@ class PublicAppTests(unittest.TestCase):
         run_id = started.json()["id"]
         run = self.home / "runs" / run_id
         original = read_json(run / "prompts.json")["seg000"]
+        original_job = read_json(run / "writer_jobs" / "seg000.json")
+        original_prepared = read_json(run / "prepared.json")
         writer_files = sorted(p.name for p in run.glob("seg000.*.json"))
         base = f"/api/outputs/{run_id}/prompts/seg000"
 
@@ -846,12 +848,26 @@ class PublicAppTests(unittest.TestCase):
         self.assertIn("Confirm", self.client.post(f"{base}/rewrite", json={}).text)
         self.assertIn("Confirm", self.client.post(f"{base}/edit", json={"prompt": original}).text)
 
-        # A rewrite runs the worker's own writer, checks and Laya for this passage only, keeping the earlier files aside.
-        self.client.post(f"{base}/rewrite", json={"confirm": True}).raise_for_status()
+        # A rewrite rolls fresh vocabulary and runs the worker's own writer, checks and Laya for this passage, keeping the earlier files aside.
+        self.client.post(f"{base}/rewrite", json={"confirm": True, "seed": 4242}).raise_for_status()
         self.assertEqual(self.wait()["state"], "complete")
+        rewritten_job = read_json(run / "writer_jobs" / "seg000.json")
+        self.assertNotEqual(rewritten_job["shots"][0]["vocabulary"]["setting"], original_job["shots"][0]["vocabulary"]["setting"])
+        rewritten_prepared = read_json(run / "prepared.json")
+        new_seg, old_seg = rewritten_prepared["plan"]["segments"][0], original_prepared["plan"]["segments"][0]
+        self.assertEqual(rewritten_prepared["segments"][0], new_seg)
+        self.assertEqual(read_json(run / "plan.json")["segments"][0], new_seg)
+        self.assertEqual(rewritten_prepared["plan"]["slug"], original_prepared["plan"]["slug"])
+        self.assertEqual(new_seg["rigging"], old_seg["rigging"])
+        strip = lambda seg: {**seg, "thematic_anchor": 0, "footage_anchor": 0, "practical_effects": 0,
+                             "shots": [{**shot, "vocab": 0} for shot in seg["shots"]]}
+        self.assertEqual(strip(new_seg), strip(old_seg), "timing and cuts stay")
         versions = read_json(run / "prompt_takes.json")["segments"]["seg000"]
         self.assertEqual([v["id"] for v in versions["takes"]], ["prompt1", "prompt2"])
         self.assertEqual((versions["active_take"], versions["takes"][1]["validated"]), ("prompt2", True))
+        self.assertEqual(versions["takes"][1]["variation_seed"], 4242)
+        listed = self.client.get(f"/api/outputs/{run_id}/prompts").json()["segments"][0]["prompt_takes"]
+        self.assertEqual((listed[1]["variation_seed"], listed[0]["vocabulary"]["shots"][0]), (4242, old_seg["shots"][0]["vocab"]))
         self.assertEqual(sorted(p.name for p in (run / "prompt_takes" / "seg000" / "before-prompt2").glob("*.json")), writer_files)
         self.assertIn("Writing musical passage 1 of 1", (run / "operation.log").read_text(encoding="utf-8"))
 
@@ -871,6 +887,10 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(read_json(run / "prompt_takes.json")["segments"]["seg000"]["active_take"], "prompt4")
         self.client.post(f"{base}/select", json={"prompt_take_id": "prompt1"}).raise_for_status()
         self.assertEqual(read_json(run / "prompts.json")["seg000"], original)
+        # The original prompt comes back with the vocabulary it was written from, in every saved plan.
+        self.assertEqual(read_json(run / "prepared.json")["plan"]["segments"][0], old_seg)
+        self.assertEqual(read_json(run / "prepared.json")["segments"][0], old_seg)
+        self.assertEqual(read_json(run / "plan.json")["segments"][0], old_seg)
 
         # An API writer needs the user's acceptance of the writer cost.
         prepared = read_json(run / "prepared.json")

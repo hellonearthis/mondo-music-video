@@ -1,5 +1,15 @@
 # Releases
 
+## 1.11.6 — Write new prompt rolls a fresh setting and motif
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commit `ae61fb5`, reviewed at exact head `ffb3c50`.
+
+- **A new prompt can now be a new scene.** In a finished video's Edit view, **Write new prompt** draws a fresh setting and motif for that passage from the production's vocabulary pool, then runs the writer, Mondo checks and Laya as before. Musical timing, cuts, cast and rigging stay. A very small pool or a world's own terms can repeat a term.
+- **Prompt versions keep their vocabulary.** Each version stores the vocabulary it was written from, and a written one its variation seed; choosing an older version brings its vocabulary back with it.
+- Optional `seed` on the rewrite API, CLI (`--seed`) and MCP `rewrite_prompt`. Idents have no planned vocabulary, so their rewrite still changes only the text.
+
+The owner chose this as the behaviour of Write new prompt after the prompting-scheme warning. No pinned prompt or planning file changed. It has been tested on mock services only: no real before/after renders were compared. No private assets, paid operations or automatic retries changed.
+
 ## 1.11.5 — Thematic Worlds keeps your choices; panels stay open when you open them
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork commits `60bc3fc` and `7681740`, reviewed at exact head `7681740`.
@@ -132,7 +142,7 @@ Fixed: growing a world could report "No changes to the world" although new lore 
 
 Validation: full temporary-data/mock-service suite, 772 passed + 141 subtests; the owner then grew their Fehenviz world from five new backstories and a finished video and confirmed that it added entries. No protected prompts, private assets, paid operations or automatic retries changed.
 
-## 1.10.21 — EGG's actor and prop UI, with music-video panel progress
+## 1.10.21 — hellonearthis's actor and prop UI, with music-video panel progress
 
 Credit: [hellonearthis](https://github.com/hellonearthis) for fork revision `1e0978748cbb3f9f23575a1e7c49bba19dd4708b` (one commit after reviewed `db7bec7`). The actor cards have a wider responsive grid and an inline description editor for locally created actors; the OPP library has a readable in-app guide, and dark-theme text selection has better contrast. The fork's malformed actor textarea was repaired. Imported signed OAP actors are deliberately read-only in this editor, because their original package is preserved on export. Agents can edit local descriptions through API, CLI and MCP; OPP guide text is available by inspection.
 

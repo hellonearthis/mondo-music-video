@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.11.5** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.11.6** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 Turn a song into a music video. Beat-aware shot planning, LLM-written prompts, local or
 hosted rendering, actors that dance, lip-sync and play instruments, Worlds, storyboards,
@@ -292,7 +292,7 @@ cast-only assets, and role agreements record a casting between this studio
 
 ## Agent operation
 
-The v1.11.5 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
+The v1.11.6 MCP server has 65 tools, including OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets,
 world editing, passage prompts and versions (`rewrite_prompt`, `edit_prompt`, `select_prompt_take`), clip takes with seeds
