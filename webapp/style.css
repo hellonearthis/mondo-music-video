@@ -90,6 +90,8 @@
   font-size: 12px;
   line-height: 1.55;
 }
+.style-card-shown { max-height: none; overflow: visible; }
+.style-full-text { white-space: pre-wrap; font-size: 14px; line-height: 1.6; margin: 6px 0 10px; }
 [data-theme=dark] .style-card-pre {
   background: #141b1f;
   border-color: var(--line);

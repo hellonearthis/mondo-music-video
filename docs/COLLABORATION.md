@@ -22,6 +22,12 @@
 
 AGENTS.md is authoritative; its release rules bind helpers too. In particular:
 
+- HIGH PRIORITY: the goal is a program that works. Do not craft a refusal machine.
+  When something cannot happen right now, make it happen: wait for the resource,
+  queue the work, fall back to a sensible default, or carry on and finish. Do not
+  add refusals, error messages or warnings as the easy answer, and do not bother the
+  user with them. Keep a stop only where the owner has asked for one, such as paid
+  consent, and raise any other proposed stop with the owner before building it.
 - Only the four authorized starter actors and six style presets may be published;
   never stage, package or copy other local actors, styles, `data/` or
   `api-profiles.json`.

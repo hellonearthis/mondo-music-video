@@ -8,6 +8,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 
 from .storage import identifier, read_json, write_json
 
@@ -15,6 +16,7 @@ QUEUEABLE_KINDS = ("video", "ident")
 TERMINAL_STATES = ("complete", "failed", "cancelled", "interrupted", "held")
 STOPPED_PAID_STATES = ("failed", "interrupted")
 LOCAL_BACKENDS = ("local_h3", "comfy_sdk_h3")
+GPU_POLL_SECONDS = 1
 RESUMABLE_STATES = ("failed", "cancelled", "interrupted", "held")
 
 
@@ -156,6 +158,36 @@ def recover_tickets(store, message_for):
                                 "finished": time.time()})
 
 
+@contextmanager
+def preview_gpu_gate(store, jobs, control):
+    """For a preview holding prepare_lock: GPU work waits for the current operation to end, then goes before the next ticket."""
+    from .stems import gpu_gate
+    waiting = []
+
+    def wait():
+        if not waiting:
+            with jobs.lock:
+                control["gpu_waiters"] += 1
+            waiting.append(True)
+        while jobs.active is not None:
+            if control["closing"]:
+                raise ValueError("The application is closing")
+            control["prepare_lock"].release()   # other previews need no GPU and carry on meanwhile
+            try:
+                time.sleep(GPU_POLL_SECONDS)
+            finally:
+                control["prepare_lock"].acquire()
+
+    try:
+        with gpu_gate(wait):
+            yield
+    finally:
+        if waiting:
+            with jobs.lock:
+                control["gpu_waiters"] -= 1
+            start_dispatch(store, jobs, control)
+
+
 def _reason(store, error):
     """Same care as an operation failure: no response bodies or credentials reach the ticket."""
     message = str(error) if isinstance(error, ValueError) else type(error).__name__
@@ -166,7 +198,7 @@ def _reason(store, error):
 
 def new_control():
     """The queue's in-memory state. Never saved: after a restart the queue waits to be started."""
-    return {"running": False, "dispatching": False, "prepare_lock": threading.Lock()}
+    return {"running": False, "dispatching": False, "closing": False, "gpu_waiters": 0, "prepare_lock": threading.Lock()}
 
 
 def cost(prepared):
@@ -177,6 +209,9 @@ def cost(prepared):
 def _claim_next(store, jobs, control):
     """The next ticket to prepare, or None after releasing the dispatcher when there is nothing to do now."""
     with jobs.lock:
+        if control["gpu_waiters"]:   # a preview is next on the GPU; its gate restarts the queue when it finishes
+            control["dispatching"] = False
+            return None
         ticket = next_pending(read_tickets(store)) if control["running"] and jobs.active is None else None
         if ticket is None:
             if control["running"] and jobs.active is None:

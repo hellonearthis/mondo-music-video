@@ -40,7 +40,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.12.0"
+MGL_APP_VERSION = "1.12.1"
 WEB = Path(__file__).parent
 
 
@@ -709,6 +709,8 @@ class PromptRewriteRequest(StrictModel):
     confirm: bool = False
     accept_writer_cost: bool = False
     seed: int | None = Field(default=None, ge=0, le=2147483647)
+    world_id: str | None = Field(default=None, max_length=120)
+    direction: str | None = Field(default=None, max_length=600)
 
 
 class PromptEditRequest(StrictModel):
@@ -757,7 +759,7 @@ def create_app(home=None, *, test_hosts=False):
     @asynccontextmanager
     async def lifespan(app):
         yield
-        queue_control["running"] = False   # closing the app must not launch the next ticket
+        queue_control.update(running=False, closing=True)   # closing the app must not launch the next ticket
         await asyncio.to_thread(jobs.shutdown)
 
     app = FastAPI(title="Mondo Music Video", version=MGL_APP_VERSION, lifespan=lifespan)
@@ -1558,9 +1560,8 @@ def create_app(home=None, *, test_hosts=False):
         kind = request.get("kind", "video")
         log_studio(store, f"Preview requested: kind='{kind}' backend='{request.get('backend')}' title='{request.get('title', '')}'")
         try:
-            with queue_control["prepare_lock"]:   # one at a time: previews of a new song share its analysis file
-                if jobs.active is not None and (request.get("analysis_driver") or "mix") != "mix":
-                    raise BusyError("A stem-driven preview may need the GPU for stem separation. Preview it when the current operation ends.")
+            with queue_control["prepare_lock"], production_queue.preview_gpu_gate(store, jobs, queue_control):
+                # One at a time: previews of a new song share its analysis file. Stem work waits for a free GPU.
                 prepared = (production.prepare_resume(store, request, resume_directory) if resume_directory is not None
                             else production.prepare(store, request))
         except Exception as exc:
@@ -2009,7 +2010,7 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             return takes.select_segment_take(store, run_id, segment_id, value.take_id)
 
-    def prompt_job(run_id, segment_id, kind, how, candidate=None, seed=None):
+    def prompt_job(run_id, segment_id, kind, how, candidate=None, seed=None, world_id=None, direction=None):
         """Rewrite or check one passage prompt of a finished production through the worker's own prompt stage."""
         from mmv import takes
         origin = score_view._origin_run(store, run_id)
@@ -2031,8 +2032,13 @@ def create_app(home=None, *, test_hosts=False):
                 draft.parent.mkdir(parents=True, exist_ok=True)
                 draft.write_text(candidate, encoding="utf-8")
                 argv.append(str(draft))
-            elif variation is not None:
-                argv.extend(["", str(variation)])
+            elif variation is not None or world_id or direction:
+                argv.extend([
+                    "",
+                    str(variation) if variation is not None else "",
+                    str(world_id).strip() if world_id else "",
+                    str(direction).strip() if direction else "",
+                ])
             context.update(f"{'Checking the edited' if candidate is not None else 'Writing a new'} prompt for {segment_id}", 5)
             # The worker saves the prompt before its last checks finish; a failure anywhere restores the prompt, its binding and plan.
             kept = {name: (directory / name).read_bytes()
@@ -2064,7 +2070,15 @@ def create_app(home=None, *, test_hosts=False):
             if charge["api_writer"] and value.accept_writer_cost is not True:
                 raise ValueError(f"This production's writer is an API service that may charge for the call "
                                  f"(estimate about ${charge['estimate_usd']:.2f}); accept the writer cost to continue")
-            return prompt_job(run_id, segment_id, "prompt_rewrite", "rewritten", seed=value.seed)
+            return prompt_job(
+                run_id,
+                segment_id,
+                "prompt_rewrite",
+                "rewritten",
+                seed=value.seed,
+                world_id=value.world_id,
+                direction=value.direction,
+            )
 
     @app.post("/api/outputs/{run_id}/prompts/{segment_id}/edit")
     def edit_output_prompt(run_id: str, segment_id: str, value: PromptEditRequest):

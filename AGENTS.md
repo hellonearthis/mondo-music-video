@@ -28,6 +28,12 @@ verify the assets appear in the app. Never import other local/private assets.
 
 ## Development and release
 
+- HIGH PRIORITY: the goal is a program that works. Do not craft a refusal machine.
+  When something cannot happen right now, make it happen: wait for the resource,
+  queue the work, fall back to a sensible default, or carry on and finish. Do not
+  add refusals, error messages or warnings as the easy answer, and do not bother the
+  user with them. Keep a stop only where the owner has asked for one, such as paid
+  consent, and raise any other proposed stop with the owner before building it.
 - Release only the authorized music-video engine sources and prompts recorded
   in docs/SOURCE_EXTRACTION.json. Keep unrelated private studio code, credentials,
   actors, models and production artifacts out of this repository.

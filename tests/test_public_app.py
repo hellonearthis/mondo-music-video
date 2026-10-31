@@ -438,9 +438,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.12.0")
+        self.assertEqual(api_version()["version"], "1.12.1")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.12.0", (root / "README.md").read_text())
+        self.assertIn("1.12.1", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -854,6 +854,7 @@ class PublicAppTests(unittest.TestCase):
         self.assertEqual(self.wait()["state"], "complete")
         rewritten_job = read_json(run / "writer_jobs" / "seg000.json")
         self.assertNotEqual(rewritten_job["shots"][0]["vocabulary"]["setting"], original_job["shots"][0]["vocabulary"]["setting"])
+        self.assertNotEqual(rewritten_job["shots"][0]["vocabulary"]["mechanism"], original_job["shots"][0]["vocabulary"]["mechanism"])
         rewritten_prepared = read_json(run / "prepared.json")
         new_seg, old_seg = rewritten_prepared["plan"]["segments"][0], original_prepared["plan"]["segments"][0]
         self.assertEqual(rewritten_prepared["segments"][0], new_seg)
@@ -1165,6 +1166,7 @@ class PublicAppTests(unittest.TestCase):
         path = self.home / "queue" / f"{ticket_id}.json"
         path.write_text(json.dumps({**json.loads(path.read_text()), **fields}))
 
+    @unittest.skipUnless(importlib.util.find_spec('comfy_sdk'), 'optional official SDK not installed')
     def test_queue_resume_keeps_finished_work_and_starting_the_queue_resumes_interrupted(self):
         self.configure_sdk()
         self.server.v2_download_fail = True
@@ -1212,15 +1214,36 @@ class PublicAppTests(unittest.TestCase):
         produce.assert_not_called()
         self.assertEqual(queue["tickets"][0]["state"], "held")
 
-    def test_queue_stem_preview_waits_for_the_gpu(self):
-        release = threading.Event()
-        self.app.state.jobs.start("export", lambda context: release.wait(30))
-        try:
-            response = self.client.post("/api/quote", json={"song": "anything", "analysis_driver": "drums"})
-            self.assertIn(response.status_code, (409, 422), response.text)
-        finally:
+    def test_stem_work_waits_for_a_free_gpu_then_goes_before_the_next_ticket(self):
+        from mmv import stems
+        control, jobs = production_queue.new_control(), self.app.state.jobs
+        release, ran, active_at_run = threading.Event(), [], []
+        def record(*args, **kwargs):
+            active_at_run.append(jobs.active is not None)
+            ran.append(True)
+            raise ValueError("mock separation stops here")
+        def preview():
+            with control["prepare_lock"], production_queue.preview_gpu_gate(self.store, jobs, control):
+                stems.separate(self.store, self.home / "song.wav", "digest", "htdemucs")
+        jobs.start("export", lambda context: release.wait(30))
+        with patch("mmv.stems.subprocess.run", side_effect=record), patch.object(production_queue, "GPU_POLL_SECONDS", .02), \
+                patch("mmv.stems.pick_device", return_value="cpu"):
+            worker = threading.Thread(target=lambda: self.assertRaises(ValueError, preview))
+            worker.start()
+            deadline = time.monotonic() + 5
+            while not control["gpu_waiters"] and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertEqual(control["gpu_waiters"], 1)
+            control["running"] = True
+            self.assertIsNone(production_queue._claim_next(self.store, jobs, control), "the next ticket lets the preview go first")
+            self.assertTrue(control["running"])
+            self.assertEqual(ran, [], "nothing touches the GPU during the operation")
+            with control["prepare_lock"]:
+                pass   # other previews are not held up while it waits
             release.set()
-        self.wait()
+            worker.join(10)
+        self.assertEqual(active_at_run, [False])
+        self.assertEqual(control["gpu_waiters"], 0)
 
     def test_queue_refuses_non_productions_and_running_removal(self):
         self.assertEqual(self.client.post("/api/queue", json={"quote_id": "fabricated"}).status_code, 400)

@@ -442,14 +442,19 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
                 expect(preview).to_be_hidden()
                 page.route('**/api/styles', lambda route: route.fulfill(json=[{
                     'id': 'forensic_test', 'name': 'Forensic Test', 'direction': 'Muted light',
-                    'style_card': 'Axis 1: muted light'
+                    'style_card': 'STYLE CARD: Forensic Test\nAxis 1: muted light'
                 }]))
                 page.evaluate('async () => (await import("/js/library.js")).loadStyles()')
                 page.locator('.nav[data-panel=styles]').click()
+                expect(page.locator('#style-list .style-card-shown')).to_be_visible()
+                expect(page.locator('#style-list .style-card-shown')).to_have_text('Axis 1: muted light')
                 fold = page.locator('#style-list .style-card-fold')
-                expect(fold.locator('.style-card-pre')).to_be_hidden()
+                expect(fold.locator('.style-full-text')).to_be_hidden()
                 fold.locator('summary').click()
-                expect(fold.locator('.style-card-pre')).to_have_text('Axis 1: muted light')
+                expect(fold.locator('.style-full-text')).to_be_visible()
+                expect(fold.locator('.style-full-text')).to_have_text('Muted light')
+                fold.locator('summary').click()
+                expect(fold.locator('.style-full-text')).to_be_hidden()
             finally:
                 browser.close()
 
@@ -787,7 +792,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             done = threading.Event()
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.12.0')
+                expect(page.locator('#version')).to_have_text('1.12.1')
                 page.evaluate("""async () => {
                   const m = await import('/js/production.js');
                   m.renderServices({vision_quality: {activity: 'offline', available: false, has_launch: true,
@@ -1689,7 +1694,7 @@ class BrowserTests(LiveAppFixture, unittest.TestCase):
             page.on('pageerror', lambda err: errors.append(str(err)))
             try:
                 page.goto(self.url)
-                expect(page.locator('#version')).to_have_text('1.12.0')
+                expect(page.locator('#version')).to_have_text('1.12.1')
                 page.wait_for_function('() => document.querySelector("#video-form .song-input").onchange !== null')
                 page.locator('#video-form select[name=backend]').select_option('comfy_sdk_h3')
                 page.locator('#video-form .song-input').set_input_files(str(self.song))

@@ -3,7 +3,7 @@ import { renderQueue, syncQueueButton } from "./queue.js";
 
 import { $, $$, api, copyToClipboard, handle, json, logSession, notice, state, text, updateLogDisplay, upload } from "./core.js";
 import { disposeScoreEditor, mountScoreEditor } from "./score_editor.js";
-import { loadActors, loadStyles } from "./library.js";
+import { loadActors, loadStyles, styleCardDisplay } from "./library.js";
 import { loadOutputs, refreshProductionBreakdown } from "./outputs.js";
 import { scheduleSave, updateSongPreview } from "./project.js";
 import { storyboardFromForm, refreshStoryboards } from "./storyboard.js";
@@ -210,7 +210,9 @@ export async function preview(form) {
     submitBtn.innerHTML = `${busyText} <span class="spinner" aria-hidden="true"></span>`;
   }
   document.body.style.cursor = "wait";
-  notice(noticeMsg);
+  notice(["running", "cancelling"].includes(state.lastState) && (request.analysis_driver || "mix") !== "mix"
+    ? "Preparing the preview. If its stems need the GPU, they run as soon as the current production finishes."
+    : noticeMsg);
 
   try {
     logSession(`Preview requested for kind='${request.kind}' backend='${request.backend}'`);
@@ -840,8 +842,8 @@ export async function displayHarvestResult(styleId) {
     const pre = $("#harvest-result-card-pre");
     if (title) title.textContent = `${style.name || style.id} (${style.id})`;
     if (dir) dir.textContent = style.direction || "";
-    if (pre) pre.textContent = style.style_card || "No 11-axis forensic breakdown recorded.";
-    if (fold) fold.open = true;
+    if (pre) pre.textContent = styleCardDisplay(style.style_card) || "No style card recorded.";
+    if (fold) fold.open = false;
     card.hidden = false;
     card.scrollIntoView({ behavior: "smooth" });
 

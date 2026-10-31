@@ -1,5 +1,20 @@
 # Releases
 
+## 1.12.1 — Steer a new prompt; clearer Styles; stems wait for the GPU
+
+Credit: [hellonearthis](https://github.com/hellonearthis) for fork commit `4d4fb16`, reviewed at exact head `aa1e06b`.
+
+- **Steer Write new prompt.** A music video passage's **Write new prompt** can now take a Thematic World or your own saved World, and a creative note for that passage (GUI, CLI `--world` and `--direction`, MCP `rewrite_prompt`). Leaving them empty changes nothing. An unknown World simply uses the default vocabulary.
+- **Reasoning models parse better.** Writer replies wrapped in `<think>` blocks, code fences or commentary now yield their JSON. A reply with more than one object still counts as broken, so an example can never pass as the answer.
+- **Laya's style verdict is visible.** A high-confidence "contradicts style" answer is recorded as advice on the passage. With `strict_prompt_checks` on, it sends the prompt back for a rewrite. The default run still accepts the prompt.
+- **Faster World contrast.** Built-in Thematic World distances are worked out once at startup.
+- **OpenSpec documentation.** `openspec/` adds a glossary, nine Gherkin feature specifications and a behaviour report. `tests/test_openspec_bdd.py` checks their structure and a few real functions; it does not execute the feature steps or the GUI workflows.
+- **Stem work waits its turn.** A preview needing new stem separation during a render now waits for the free GPU, then runs ahead of the next queued ticket. An unknown steering World uses the default vocabulary.
+- **Styles are easy to scroll.** Each Styles card now shows its style card without its redundant title line, with the full style text behind a **Full style text** fold that opens and closes. The harvest result panel matches. The fold did nothing when clicked before; that is fixed.
+- **Fuller preset cards.** The six public presets now have complete eleven-axis style cards, like Daylight Cinema. Laya and the ident writer read these cards, so results with these presets may differ. An existing installation keeps its current copies. An interrupted production using one of these presets resumes only with its original card in place.
+
+Integration fixes: a syntax error in `vocab-worlds.js` that stopped the page loading was dropped; the style check looked for an answer Laya never gives; a first balanced object could replace a truncated real answer; steering appeared on idents, which cannot use it; the GUI listed only built-in Worlds; unused `Jobs.reset` was omitted. Tested on mock services only, with no real before/after renders. No pinned prompt or validator file changed; the steered note and the strict-mode style retry do change writer input or prompt acceptance when used.
+
 ## 1.12.0 — The production queue
 
 - **New Queue tab (08).** Preview a music video or ident, choose **Add to queue**, and line up as many as you like, even while something is rendering. **Start queue** runs them one at a time, as whole productions. Reorder, remove, pause after the current one, or clear finished. Finished Videos is now tab 09 and Settings tab 10.
@@ -7,10 +22,20 @@
 - **Paid work keeps its safeguards.** A priced ticket needs acceptance of its estimate and runs only on that exact plan. If the plan changes, a free ticket becomes priced, or an earlier paid ticket stops after this one was approved, it is held and spends nothing. Paid work never retries itself; **Queue again** shows the full plan for a fresh decision.
 - **Stopped work resumes.** After a crash or restart the queue waits to be started, then **Start queue** continues interrupted local tickets in their own production folders, keeping their prompts and finished clips. Failed, cancelled or held local tickets have a **Resume** button. A ticket that stopped before its prompts were finished starts over with written prompts from cache, and is held instead if that could charge a paid writer again. Changed inputs or settings hold a resume until they are restored.
 - **Failures and Cancel.** A failed ticket is reported and the queue moves on. Cancel stops the current ticket and pauses the queue.
-- Previews and song/reference uploads now work during an operation, except stem-driven previews, which may need the GPU for stem separation.
+- Previews and song/reference uploads now work during an operation. If a preview needs new stem separation, that work waits until the GPU is free, then runs ahead of the next queued ticket.
 - Agent parity: 9 new MCP tools (`read_queue`, `queue_production`, `start_queue`, `pause_queue`, `move_queue_ticket`, `preview_queue_ticket`, `resume_queue_ticket`, `remove_queue_ticket`, `clear_finished_queue_tickets`) and matching CLI commands.
 
 Tested on mock services and in Chromium only: no real GPU or paid queue run yet, and Firefox has not been checked. On `local_h3`, a resume can re-render a clip whose automatic quality retry had already finished; the same applies to the existing Resume. No protected prompts or private assets changed.
+
+## 1.11.7 — OpenSpec BDD suite, `<think>`-resilient writer parsing, Laya style adherence feedback, pre-compiled World matrices, and creative rewrite steering
+
+- **Resilient JSON extraction and `<think>` stripping.** `escape_control_characters` (`mmv/writer_json.py`) now strips `<think>...</think>` reasoning blocks, markdown code fences, and conversational wrappers to isolate the outermost balanced `{...}` JSON payload before `WriterResponse.parse`, preventing reasoning-enabled models from wasting retry budgets while keeping `is_broken_json` free-retry detection intact for genuinely truncated replies.
+- **Pre-compiled Thematic World centroids and distance matrix.** `mmv/world_vectors.py` now pre-computes `BUILTIN_WORLD_CENTROIDS` and `BUILTIN_CALIBRATED_MATRIX` once at import, avoiding repeated lexical embedding and P15/P85 percentile calibration inside `plan_gaussian_world_dissonance` (`mmv/vocab_select.py`).
+- **Laya `style_adherence` feedback.** Without modifying the protected Laya validator, `mmv/worker.py` now inspects `style_adherence` via `laya_style_feedback`: high-confidence style divergence (`selected == "divergent"`, `confidence >= 0.65`) is recorded as an advisory note in `segNNN.advice.json` by default, and escalated to a corrective writer retry problem when `strict_prompt_checks` is enabled.
+- **Creative steering on passage prompt rewrite.** Passage prompt rewrites (`POST /api/outputs/{run_id}/prompts/{segment_id}/rewrite`, CLI `rewrite-prompt --world --direction`, MCP `rewrite_prompt`, and the Edit view's **🧭 Optional rewrite steering** controls) now accept optional `world_id` and `direction` steering to override that passage's vocabulary pools with a chosen Thematic World or studio World and inject a passage-specific creative note.
+- **OpenSpec & Cucumber BDD specification and test suite.** Added `openspec/glossary.yaml`, 9 Gherkin `.feature` specifications under `openspec/features/`, the `openspec/reports/AI_INTERACTIONS_DEEP_DIVE.md` behavioral report, and executable verification in `tests/test_openspec_bdd.py`.
+
+No protected prompts, private assets, paid operations or automatic retries changed.
 
 ## 1.11.6 — Write new prompt rolls a fresh setting and motif
 

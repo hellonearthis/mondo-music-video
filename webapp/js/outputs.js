@@ -144,7 +144,34 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   editBtn.type = "button";
   const writeBtn = text("button", "✍️ Write new prompt", "quiet", data.kind === "ident" ? "Have the writer write a new prompt, checked like every production prompt" : "Roll a fresh setting and motif for this passage and have the writer write a new checked prompt");
   writeBtn.type = "button";
-  editBtn.hidden = writeBtn.hidden = Boolean(data.prompt_blocked);
+  const steerDetails = document.createElement("details");
+  steerDetails.className = "prompt-rewrite-steer";
+  steerDetails.style.cssText = "font-size:12px;margin-top:2px;";
+  const steerSummary = text("summary", "🧭 Optional rewrite steering (world & note)", "muted");
+  steerSummary.style.cursor = "pointer";
+  const steerRow = document.createElement("div");
+  steerRow.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;";
+  const worldSelect = document.createElement("select");
+  worldSelect.className = "prompt-rewrite-world";
+  worldSelect.style.cssText = "font-size:12px;padding:4px 8px;min-width:170px;";
+  worldSelect.setAttribute("aria-label", `Optional Thematic World for rewriting ${seg.segment_id}`);
+  const worldNames = Array.isArray(data.thematic_worlds) ? data.thematic_worlds : [];
+  worldSelect.replaceChildren(
+    option("", "Production default vocabulary"),
+    ...worldNames.map(w => option(w, `World: ${w}`)),
+    ...(data.saved_worlds || []).map(w => option(w.id, `Your World: ${w.name}`))
+  );
+  const steerInput = document.createElement("input");
+  steerInput.type = "text";
+  steerInput.maxLength = 600;
+  steerInput.placeholder = "Optional creative note for this passage…";
+  steerInput.className = "prompt-rewrite-direction";
+  steerInput.style.cssText = "font-size:12px;padding:4px 8px;flex:1 1 220px;";
+  steerInput.setAttribute("aria-label", `Optional creative direction note for rewriting ${seg.segment_id}`);
+  steerRow.append(worldSelect, steerInput);
+  steerDetails.append(steerSummary, steerRow);
+  editBtn.hidden = writeBtn.hidden = steerDetails.hidden = Boolean(data.prompt_blocked);
+  steerDetails.hidden = steerDetails.hidden || data.kind === "ident";
   const chosen = () => versions.find(v => v.id === select.value);
   const sync = () => {
     const version = chosen();
@@ -171,8 +198,22 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
   writeBtn.onclick = handle(async () => {
     const charge = data.writer_charge || {};
     const cost = charge.api_writer ? ` Your writer is an API service that may charge for this call (estimate about $${Number(charge.estimate_usd || 0).toFixed(2)}).` : "";
-    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? ${data.kind === "ident" ? "It goes" : "This rolls a fresh setting and motif from the vocabulary pool, and it goes"} through the writer, the Mondo checks and Laya.${cost}`)) return;
-    await runPrompt("rewrite", { confirm: true, accept_writer_cost: Boolean(charge.api_writer) }, `Writing a new prompt for ${seg.segment_id}…`);
+    const chosenWorld = worldSelect.value.trim();
+    const chosenDirection = steerInput.value.trim();
+    const steerNote = chosenWorld || chosenDirection
+      ? ` Steering: ${[chosenWorld ? `world "${chosenWorld}"` : "", chosenDirection ? `note "${chosenDirection}"` : ""].filter(Boolean).join(", ")}.`
+      : "";
+    const intro = data.kind === "ident"
+      ? "It goes through the writer, the Mondo checks and Laya."
+      : "This rolls a fresh setting and motif from the vocabulary pool, and it goes through the writer, the Mondo checks and Laya.";
+    if (!window.confirm(`Write a new prompt for ${seg.segment_id}? ${intro}${steerNote}${cost}`)) return;
+    const payload = {
+      confirm: true,
+      accept_writer_cost: Boolean(charge.api_writer),
+      ...(chosenWorld ? { world_id: chosenWorld } : {}),
+      ...(chosenDirection ? { direction: chosenDirection } : {}),
+    };
+    await runPrompt("rewrite", payload, `Writing a new prompt for ${seg.segment_id}…`);
   });
   const editor = document.createElement("div");
   editor.hidden = true;
@@ -206,7 +247,7 @@ function promptVersionControls(seg, data, sourceRunId, showText, reload) {
     await runPrompt("edit", { prompt: area.value, confirm: true }, `Checking the edited prompt for ${seg.segment_id}…`);
   });
   bar.append(select, useBtn, editBtn, writeBtn);
-  wrap.append(bar, problems, editor);
+  wrap.append(bar, steerDetails, problems, editor);
   sync();
   return wrap;
 }
