@@ -298,6 +298,15 @@ When casting characters from your character sheets or reference images, you can 
 - **Cast assignment:** Choose **Hold through musical section** (`section`) to keep character continuity through an entire verse or chorus before switching to the next actor. Use **Rotate** (`rotate`) for strict round-robin alternation, or **Seeded random** (`random`) for variety.
 - **Ensemble mode & Actors on screen:** By default (`One actor at a time`), passages feature solo characters. To have your characters appear together in the same frames, set **Ensemble** to **Always** (or **Mixed** during energetic passages) and increase **Actors on screen** to 2 or more.
 
+### Studio direction & power-user tips
+
+For fine-grained creative control over video generation and post-production, see [Studio Direction & Prompting](docs/STUDIO_DIRECTION_PROMPTING.md#6-power-user-production-tips--studio-best-practices):
+- **Passage takes & single-clip rerolls:** Reroll, rewrite, or hand-edit single passage clips on finished local productions and re-encode the final video losslessly from chosen takes without re-rendering the whole song.
+- **The Two Seeds:** Master the difference between the **Variation Seed** (narrative blueprint, scene cuts, and vocabulary draws) and the **Render Seed** (diffusion noise, facial micro-expressions, and lighting physics).
+- **Lip-sync & approved singing:** How lyrics and singer assignments lift the default sealed-lips constraint during performance passages while preventing mouth spasms in instrumentals.
+- **Reference image composition:** Best practices for neutral backgrounds, clean three-quarter framing, and automatic `<Subject N>` tag normalization for MiniMax H3.
+- **Aspect ratios & resolution scaling:** Configure 9:16 vertical video for mobile social reels or 2.39:1 anamorphic cinemascope for cinema releases.
+
 ## Queue several productions
 
 Preview a music video or ident and choose **Add to queue** instead of starting it, even while something is
