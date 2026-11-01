@@ -85,7 +85,7 @@ To toggle Component Labeling Mode in the web interface:
 - **ID**: `director-fold-camera`
 - **Used in**: Inside `director-control-room`
 - **Code**: `webapp/index.html`
-- **Design rules**: Configures reference policy (all shots, single-subject, fragmentation), casting rotation policy, ensemble mode, and maximum simultaneous actors on screen.
+- **Design rules**: Configures reference policy (`all` to eliminate random strangers across all montage types, `single_subject`, or `fragmentation`), casting policy (`section` to hold character focus through a musical section, `rotate`, or `random`), ensemble mode (`off`, `mixed`, `always`), and maximum simultaneous actors on screen.
 
 #### Video Format & Render Engine Fold
 - **ID**: `director-fold-format`

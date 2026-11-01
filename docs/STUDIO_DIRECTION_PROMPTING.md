@@ -24,10 +24,28 @@ For example:
 - **Cast** supplies recurring identities, reference slots and content riders.
   Loose reference images also occupy reference slots in this engine; do not
   assume they are guaranteed to be used only for mood or lighting.
-- **Casting policy**, **Ensemble mode** and **On-screen count** govern assignment
-  and shared shots. Selecting several actors alone does not require shared shots.
+- **Reference policy**, **Casting policy**, **Ensemble mode** and **On-screen count**
+  govern assignment, reference image binding, and shared shots. Selecting several
+  actors alone does not require shared shots or eliminate uncast background figures.
 - **Visual vocabulary** keeps the full current pool or selects the optional
   reduced flash/strobe cues. Neither choice certifies the generated output.
+
+## Character consistency and eliminating random subjects
+
+When using character sheets or additional reference images, you can eliminate unwanted one-off strangers and enforce strict cast continuity across the production:
+
+- **Reference policy (`ref_policy`)**:
+  - `fragmentation`: Wires reference sheets only to peak-energy passages. Lower-energy, multi-scene, or intro passages carry zero reference slots, prompting the AI writer to generate uncast, anonymous figures (e.g. "a farrier in an evidence locker").
+  - `single_subject`: Wires reference sheets to both fragmentation and standard single-subject passages.
+  - `all`: **Wired across every passage in the entire video.** The writer contract strictly mandates that the assigned cast member overrides generic subject rules and appears in every shot of that passage. Use this to completely eliminate uncast strangers.
+- **Cast assignment (`casting_policy`)**:
+  - `section`: Holds the same character through an entire musical section (verse or chorus) before switching, providing coherent narrative progression.
+  - `rotate`: Strict sequential round-robin alternation between characters passage-by-passage.
+  - `random`: Seeded fair random selection across passages.
+- **Ensemble mode & Actors on screen (`ensemble_mode`, `on_screen`)**:
+  - `off`: Exactly one character at a time per passage.
+  - `always`: Guarantees that the requested on-screen count (e.g. 2) share every eligible frame.
+  - `mixed`: Solos during quiet sections, ensemble during peaks.
 
 ## What stays under planner control
 

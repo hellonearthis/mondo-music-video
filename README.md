@@ -290,6 +290,14 @@ offline, local actors can be exported as audition packages that leave out
 cast-only assets, and role agreements record a casting between this studio
 (Director) and an actor's Agent, each signing with their own key.
 
+### Character consistency and eliminating random subjects
+
+When casting characters from your character sheets or reference images, you can eliminate random uncast strangers and control how your characters appear throughout the video inside the **Camera & Montage Policies** fold on the Music Video panel:
+
+- **Reference policy:** Set to **All montage types** (`all`) to eliminate random strangers completely. The default (`fragmentation`) only binds reference sheets to peak-energy passages, causing intro, verse, or multi-scene passages to invent anonymous, one-off figures. Setting this to **All montage types** forces every single passage across the entire song to use your cast members and reference images.
+- **Cast assignment:** Choose **Hold through musical section** (`section`) to keep character continuity through an entire verse or chorus before switching to the next actor. Use **Rotate** (`rotate`) for strict round-robin alternation, or **Seeded random** (`random`) for variety.
+- **Ensemble mode & Actors on screen:** By default (`One actor at a time`), passages feature solo characters. To have your characters appear together in the same frames, set **Ensemble** to **Always** (or **Mixed** during energetic passages) and increase **Actors on screen** to 2 or more.
+
 ## Queue several productions
 
 Preview a music video or ident and choose **Add to queue** instead of starting it, even while something is
