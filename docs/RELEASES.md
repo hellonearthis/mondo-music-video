@@ -1,5 +1,11 @@
 # Releases
 
+## 1.12.4 — Operation recovery: Dismiss, Purge & Start Fresh, and clear-log support
+
+- **Operation Dismiss & Purge Buttons**: When an active operation stops with `interrupted`, `failed`, or `cancelled`, the operation control bar now directly surfaces **Dismiss** (resets banner to ready without touching files) and **Purge & Start Fresh** (removes the incomplete run directory, resets status, and offers a clear log option).
+- **Clear Diagnostic Log Option**: The Purge & Start Fresh dialog includes a one-click checkbox (`Also clear the diagnostic operation log`) to reset session and server logs alongside the draft directory.
+- **Agent CLI and MCP Parity**: Added `reset_operation` (CLI `mondo-music-video-agent reset-operation [--purge-run] [--clear-log]`, MCP `reset_operation`), expanding the MCP server surface to 75 tools.
+
 ## 1.12.3 — Preset-driven Narrative Palettes & vocab-worlds syntax fix
 
 - **Preset-driven Narrative Palettes**: Organize visual vocabulary into chronologically ordered acts (e.g. Act I, Act II, Act III) with customizable time spans or automatic equal partitions. Passages dynamically draw from their active act's sub-tables (`settings`, `lighting`, `mechanisms`, `costumes`, `tonal_registers`, `subject_types`) while preserving held settings in Standard / Type 1 passages and thematic anchors in Type 3 passages.

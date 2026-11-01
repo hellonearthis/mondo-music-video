@@ -40,7 +40,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.12.3"
+MGL_APP_VERSION = "1.12.4"
 WEB = Path(__file__).parent
 
 
@@ -523,6 +523,11 @@ class ResumeRequest(StrictModel):
     run_id: str
 
 
+class ResetOperationRequest(StrictModel):
+    purge_run: bool = False
+    clear_log: bool = False
+
+
 class Settings(StrictModel):
     writer_api_profile: str = ""
     vision_api_profile: str = ""
@@ -950,6 +955,31 @@ def create_app(home=None, *, test_hosts=False):
     @app.post("/api/cancel")
     def cancel():
         return jobs.cancel()
+
+    @app.post("/api/operation/reset")
+    def reset_operation(value: ResetOperationRequest = ResetOperationRequest()):
+        with jobs.lock:
+            status = jobs.status()
+            if status.get("state") in ("running", "cancelling"):
+                raise ValueError("Cannot reset an active operation; cancel it first")
+            run_id = status.get("id")
+            if value.purge_run and run_id:
+                try:
+                    target = inside(store.home / "runs", identifier(run_id))
+                    if target.is_dir() and not (target / "output.json").is_file():
+                        shutil.rmtree(target, ignore_errors=True)
+                except Exception:
+                    pass
+            if value.clear_log:
+                write_json(store.home / "log_cleared.json", {"cleared_at": time.time(), "offsets": {}})
+                studio_log = store.home / "studio.log"
+                if studio_log.exists():
+                    try:
+                        studio_log.write_text("", encoding="utf-8")
+                    except Exception:
+                        pass
+            jobs.reset()
+            return get_full_status()
 
     @app.get("/api/catalog")
     def catalog():

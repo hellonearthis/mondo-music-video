@@ -319,7 +319,8 @@ class MCPTests(LiveAppFixture, unittest.TestCase):
             async with Client(stdio_client(transport)) as client:
                 tools = await client.list_tools()
                 names = {tool.name for tool in tools.tools}
-                self.assertEqual(len(names), 74)
+                self.assertEqual(len(names), 75)
+                self.assertIn("reset_operation", names)
                 self.assertTrue({'check_oap_collection', 'stage_oap_collection'} <= names)
                 self.assertTrue({'create_role_agreement', 'sign_role_agreement', 'verify_role_agreement',
                     'export_role_agreement', 'import_role_agreement', 'read_music_score', 'read_output_prompts'} <= names)

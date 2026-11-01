@@ -1,4 +1,8 @@
-# Verification — 1.12.3
+# Verification — 1.12.4
+
+## 1.12.4 — Operation recovery: Dismiss, Purge & Start Fresh, and clear-log support
+
+Verified automated test suite: `tests/test_public_app.py` (`test_reset_operation_dismiss_and_purge` and `test_version_matches_package_and_readme`), `tests/test_agent.py` (75 MCP tools, `reset_operation` tool assertion), `tests/test_vision_stage.py` (75 MCP tools), `tests/test_protected_scheme.py` (all 7 passed, `protected_scheme.check() == []`). Verified JavaScript syntax clean with `node --check` across `webapp/js/production.js`.
 
 ## 1.12.3 — Preset-driven Narrative Palettes & vocab-worlds syntax fix
 

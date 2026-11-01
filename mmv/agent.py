@@ -146,6 +146,9 @@ class AgentClient:
     def cancel(self):
         return self._json("POST", "/api/cancel")
 
+    def reset_operation(self, purge_run=False, clear_log=False):
+        return self._json("POST", "/api/operation/reset", {"purge_run": purge_run, "clear_log": clear_log})
+
     def log(self, run_id):
         return self._json("GET", "/api/log/" + urllib.parse.quote(run_id, safe=""))
 
@@ -508,6 +511,9 @@ def main(argv=None):
     storyboard_parser.add_argument("--raw-response", action="store_true")
     for name in ("worlds", "status", "version", "catalog", "actors", "instruments", "props", "opp-guide", "vision-guide", "oap-collection", "styles", "vocabularies", "vocabulary", "stems", "lyrics", "outputs", "settings", "update", "agreements", "storyboards", "quick-start", "cancel"):
         sub.add_parser(name)
+    reset_op = sub.add_parser("reset-operation")
+    reset_op.add_argument("--purge-run", action="store_true", help="Delete the incomplete run folder")
+    reset_op.add_argument("--clear-log", action="store_true", help="Clear the operation and studio logs")
     upload = sub.add_parser("upload")
     upload.add_argument("kind", choices=("song", "reference", "oap", "opp", "agreement", "video", "lore"))
     upload.add_argument("path")
@@ -678,6 +684,8 @@ def main(argv=None):
             result = client.upscale_models()
         elif args.command == "cancel":
             result = client.cancel()
+        elif args.command == "reset-operation":
+            result = client.reset_operation(purge_run=args.purge_run, clear_log=args.clear_log)
         elif args.command == "delete-actor":
             result = client.delete_actor(args.id, args.confirm)
         elif args.command == "update-actor":
