@@ -1,4 +1,8 @@
-# Verification — 1.12.2
+# Verification — 1.12.3
+
+## 1.12.3 — Preset-driven Narrative Palettes & vocab-worlds syntax fix
+
+Verified with automated test suite: `tests/test_vocab_select.py` (12 passed: act span resolution, midpoint timeline progress mapping, 3-act chronological vocabulary progression, held setting preservation in Standard / Type 1 passages, thematic anchor preservation in Type 3 passages, and pipeline prepare integration), `tests/test_public_app.py` (`test_narrative_acts_preset_persistence_and_api` covering `POST /api/vocabularies` with acts and `GET /api/vocabularies`), and `tests/test_openspec_bdd.py` (19 passed). Fixed brace syntax error in `webapp/js/vocab-worlds.js` (`node --check` clean). `protected_scheme.check()` returned `[]`.
 
 ## 1.12.2 — Production queue OpenSpec audit & upstream 1.12.1 integration
 

@@ -40,7 +40,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.12.2"
+MGL_APP_VERSION = "1.12.3"
 WEB = Path(__file__).parent
 
 
@@ -187,6 +187,20 @@ class VocabularyTableOverride(StrictModel):
     exclude: list[str] = Field(default_factory=list, max_length=500)
 
 
+class NarrativeAct(StrictModel):
+    act: int = Field(ge=1, le=20)
+    title: str = Field(default="", max_length=120)
+    span: list[float] | None = None
+    tables: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+
+    @field_validator("tables")
+    @classmethod
+    def valid_act_tables(cls, value):
+        if any(k not in VOCAB_TABLES for k in value):
+            raise ValueError("Unknown vocabulary category in narrative act")
+        return value
+
+
 class WorldRequest(StrictModel):
     id: str = Field(max_length=64)
     name: str = Field(min_length=1, max_length=160)
@@ -219,6 +233,7 @@ class VocabularyRequest(StrictModel):
     description: str = Field(default="", max_length=1000)
     base_profile: Literal["full", "reduced_flashing"] = "full"
     tables: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+    acts: list[NarrativeAct] = Field(default_factory=list, max_length=10)
 
     @field_validator("id")
     @classmethod
@@ -354,6 +369,7 @@ class ProductionRequest(StrictModel):
     stem_quality: Literal["standard", "high"] = "standard"
     vocabulary_profile: str = Field(default="full", max_length=64)
     custom_vocabulary: dict[str, VocabularyTableOverride] = Field(default_factory=dict)
+    narrative_acts: list[NarrativeAct] = Field(default_factory=list, max_length=10)
     thematic_worlds: dict[str, Any] | None = None
     vocab_selection: Literal["legacy", "contextual"] = "legacy"
     world_id: str = Field(default="", max_length=64)
@@ -461,6 +477,8 @@ def request_dict(value):
         request.pop("vocab_selection", None)
     if not request.get("thematic_worlds") or request.get("thematic_worlds", {}).get("mode", "off") == "off":
         request.pop("thematic_worlds", None)
+    if not request.get("narrative_acts"):
+        request.pop("narrative_acts", None)
     return request
 
 

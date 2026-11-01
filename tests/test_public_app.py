@@ -438,9 +438,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.12.2")
+        self.assertEqual(api_version()["version"], "1.12.3")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.12.2", (root / "README.md").read_text())
+        self.assertIn("1.12.3", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -2395,6 +2395,61 @@ class UtilityTests(unittest.TestCase):
             self.assertIn("markdown", guide_data)
             self.assertIn("Visual Vocabulary", guide_data["markdown"])
             self.assertIn("title", guide_data)
+
+    def test_narrative_acts_preset_persistence_and_api(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Storage(temp)
+            client = TestClient(create_app(store.home, test_hosts=True))
+            preset_payload = {
+                "id": "escape_arc",
+                "name": "The Great Escape",
+                "description": "3-act narrative palette",
+                "base_profile": "full",
+                "tables": {},
+                "acts": [
+                    {
+                        "act": 1,
+                        "title": "Confinement",
+                        "span": [0.0, 0.35],
+                        "tables": {
+                            "settings": {"mode": "replace", "add": ["cell", "archive"], "exclude": []}
+                        }
+                    },
+                    {
+                        "act": 2,
+                        "title": "Transit",
+                        "span": [0.35, 0.70],
+                        "tables": {
+                            "settings": {"mode": "replace", "add": ["tunnel", "platform"], "exclude": []}
+                        }
+                    },
+                    {
+                        "act": 3,
+                        "title": "Horizon",
+                        "span": [0.70, 1.0],
+                        "tables": {
+                            "settings": {"mode": "replace", "add": ["salt flat", "open sea"], "exclude": []}
+                        }
+                    }
+                ]
+            }
+            res = client.post("/api/vocabularies", json=preset_payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(len(data.get("acts", [])), 3)
+            self.assertEqual(data["acts"][0]["title"], "Confinement")
+
+            # Check GET /api/vocabularies returns the acts
+            res = client.get("/api/vocabularies")
+            self.assertEqual(res.status_code, 200)
+            vocabs = res.json()
+            self.assertEqual(len(vocabs), 1)
+            self.assertEqual(len(vocabs[0].get("acts", [])), 3)
+
+            # Check store.vocabulary returns acts
+            saved = store.vocabulary("escape_arc")
+            self.assertEqual(len(saved.get("acts", [])), 3)
+            self.assertEqual(saved["acts"][2]["title"], "Horizon")
 
     def test_project_vocab_random_key_persistence(self):
         with tempfile.TemporaryDirectory() as temp:

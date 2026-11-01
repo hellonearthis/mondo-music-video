@@ -845,8 +845,6 @@ export function initVocabWorlds() {
           }
         }
       }
-        }
-      }
       return;
     }
 

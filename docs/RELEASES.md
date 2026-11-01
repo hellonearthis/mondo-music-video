@@ -1,5 +1,11 @@
 # Releases
 
+## 1.12.3 — Preset-driven Narrative Palettes & vocab-worlds syntax fix
+
+- **Preset-driven Narrative Palettes**: Organize visual vocabulary into chronologically ordered acts (e.g. Act I, Act II, Act III) with customizable time spans or automatic equal partitions. Passages dynamically draw from their active act's sub-tables (`settings`, `lighting`, `mechanisms`, `costumes`, `tonal_registers`, `subject_types`) while preserving held settings in Standard / Type 1 passages and thematic anchors in Type 3 passages.
+- **Act Badges & Example Preset**: Visual vocabulary selector now badges presets with act counts (`[3 Acts]`). Included `examples/vocabulary-presets/the_great_escape.json` showcasing a 3-act narrative progression from Confinement through Transit to Horizon.
+- **Vocab Worlds syntax fix**: Resolved stray closing braces in `webapp/js/vocab-worlds.js` (`Uncaught SyntaxError: missing ) after argument list`).
+
 ## 1.12.2 — Production queue OpenSpec audit & upstream 1.12.1 integration
 
 - **Integrated upstream v1.12.1**: Clearer Styles with 11-axis preset cards, fold click fixes, stem preview queue waiting for free GPU, saved Worlds steering, and single-answer JSON parsing.
