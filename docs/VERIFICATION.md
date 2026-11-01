@@ -1,4 +1,8 @@
-# Verification — 1.12.4
+# Verification — 1.12.5
+
+## 1.12.5 — Automatic H3 reference & subject tag normalizer
+
+Verified with automated test suite: `tests/test_original_engine.py` (`test_normalize_h3_prompt` covering `<Picture N>` binding in `subject_definitions`, shot-level character name replacement with `<Subject N>`, apostrophe handling, no-op idempotency, and empty cast handling), `tests/test_public_app.py` (version assertions and public endpoints), and `tests/test_protected_scheme.py` (all 7 passed, `protected_scheme.check() == []`).
 
 ## 1.12.4 — Operation recovery: Dismiss, Purge & Start Fresh, and clear-log support
 

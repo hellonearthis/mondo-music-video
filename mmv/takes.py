@@ -665,7 +665,8 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
                 ["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", str(seg.gen_frames / 24), str(song)],
                 check=True,
             )
-        images = [(member["actor_id"], sheets[member["actor_id"]]) for member in casting.cast_for(prepared.get("casting"), seg.segment_id)]
+        cast_members = casting.cast_for(prepared.get("casting"), seg.segment_id)
+        images = [(member["actor_id"], sheets[member["actor_id"]]) for member in cast_members]
         if instrument_plan:
             images += instruments.images(instrument_passages[seg.segment_id], instrument_plan)
         if len(images) != seg.ref_image_slots:
@@ -683,6 +684,7 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
             height=plan.height,
             seed=seed,
             images=images,
+            cast=cast_members,
             song=str(song),
             audio_start_s=seg.audio_slice_start_s,
             audio_end_s=seg.audio_slice_end_s,

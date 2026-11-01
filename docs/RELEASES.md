@@ -1,5 +1,11 @@
 # Releases
 
+## 1.12.5 — Automatic H3 reference & subject tag normalizer
+
+- **Automatic Reference `<Picture N>` Binding**: In MiniMax H3 backends (`local_h3`, `comfy_sdk_h3`), `normalize_h3_prompt` automatically binds the wired `<Picture N>` tag to its assigned `<Subject N>` inside `subject_definitions:` if the LLM writer omitted the explicit tag.
+- **Shot-Level `<Subject N>` Tag Conditioning**: Replaces plain literal character and reference names in `detailed_description:` (the shot bodies) with `<Subject N>` so MiniMax H3's cross-attention layers properly condition video frames against loaded reference images.
+- **Passage & Take Execution Wiring**: Wired cast member metadata through `worker.py` and `takes.py` directly to `backend.render_segment` for seamless prompt normalization.
+
 ## 1.12.4 — Operation recovery: Dismiss, Purge & Start Fresh, and clear-log support
 
 - **Operation Dismiss & Purge Buttons**: When an active operation stops with `interrupted`, `failed`, or `cancelled`, the operation control bar now directly surfaces **Dismiss** (resets banner to ready without touching files) and **Purge & Start Fresh** (removes the incomplete run directory, resets status, and offers a clear log option).

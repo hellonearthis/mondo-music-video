@@ -22,6 +22,7 @@ the planner and the GUI can know the ceilings without opening the map.
 
 from __future__ import annotations
 
+import re
 import shutil
 import time
 from pathlib import Path
@@ -29,6 +30,58 @@ from pathlib import Path
 from .. import grid
 from ..comfy import ComfyClient, RefTags, WorkflowBuilder, slice_audio
 from .base import Backend, BackendError, TAG_SYNTAX_MINIMAX_H3
+
+COMMON_COLOR_STOPWORDS = frozenset({
+    "red", "blue", "green", "black", "white", "grey", "gray", "gold", "yellow", "brown", "dark", "light"
+})
+
+
+def normalize_h3_prompt(prompt: str, cast_members: list[dict] | None) -> str:
+    """Normalize a prompt for MiniMax H3 so reference images and subjects are properly bound.
+
+    1. Ensures each cast member's <Picture N> tag is tied to their <Subject N> in subject_definitions.
+    2. Replaces literal character names in detailed_description (the shot descriptions) with <Subject N>
+       so H3's text-image cross-attention conditioning is activated.
+    """
+    if not prompt or not cast_members:
+        return prompt
+    normalized = prompt
+    for i, member in enumerate(cast_members):
+        sub_tag = f"<Subject {i + 1}>"
+        pic_tag = member.get("picture_tag") or f"<Picture {i + 1}>"
+        raw_names = [member.get("display_name"), member.get("actor_id"), member.get("part")]
+        names = []
+        for n in raw_names:
+            if not n:
+                continue
+            cleaned = str(n).strip()
+            if len(cleaned) < 3 and cleaned.lower() in COMMON_COLOR_STOPWORDS:
+                continue
+            if cleaned not in names:
+                names.append(cleaned)
+
+        # 1. Ensure picture tag is bound to subject tag in subject_definitions if pic_tag missing
+        if pic_tag not in normalized:
+            pattern = re.compile(rf"({re.escape(sub_tag)}\s+is\s+)", re.IGNORECASE)
+            if pattern.search(normalized):
+                normalized = pattern.sub(rf"\1{pic_tag}, ", normalized, count=1)
+            else:
+                sd_pos = normalized.find("subject_definitions:\n")
+                if sd_pos != -1:
+                    insert_pos = sd_pos + len("subject_definitions:\n")
+                    desc = member.get("display_name") or member.get("actor_id") or "character"
+                    normalized = normalized[:insert_pos] + f"{sub_tag} is {pic_tag} ({desc}).\n" + normalized[insert_pos:]
+
+        # 2. In detailed_description (the shots), replace literal character name with <Subject N>
+        desc_pos = normalized.find("detailed_description:")
+        if desc_pos != -1:
+            head = normalized[:desc_pos]
+            shots = normalized[desc_pos:]
+            for name in sorted(names, key=len, reverse=True):
+                pattern = re.compile(r"(?<![<A-Za-z0-9_])" + re.escape(name) + r"(?![>A-Za-z0-9_])", re.IGNORECASE)
+                shots = pattern.sub(sub_tag, shots)
+            normalized = head + shots
+    return normalized
 
 
 class LocalH3Backend(Backend):
@@ -172,8 +225,12 @@ class LocalH3Backend(Backend):
             if name:
                 images.append(name)
 
+        prompt = job["prompt"]
+        if job.get("cast"):
+            prompt = normalize_h3_prompt(prompt, job["cast"])
+
         build_kwargs = dict(
-            prompt=job["prompt"],
+            prompt=prompt,
             duration_input=job["duration_input"],
             seed=job["seed"],
             width=job["width"], height=job["height"],
