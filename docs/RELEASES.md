@@ -1,5 +1,14 @@
 # Releases
 
+# Releases
+
+## 1.12.7 — Merge upstream 1.12.3: OAP 0.5 actors, recipient key, opt-in H3 tag normalizer & safer draft purge
+
+- **OAP 0.5 Actors & Recipient Key (upstream 1.12.2)**: Public actor collections built on OAP 0.5.0 import seamlessly with backward compatibility for OAP 0.2/0.3. Added studio recipient X25519 key discovery (CLI `oap-recipient-key`, MCP `oap_recipient_key`) for sealed cast packages; full exports now generate OAP 0.5 portfolio packages.
+- **Opt-in H3 Tag Normalizer (upstream 1.12.3)**: Adapted H3 picture/subject tag conditioning as an explicit opt-in switch in Settings (`h3_tag_normalizer`, off by default). Includes unified single-pass name regex substitution, longest name precedence, and color stopword filtering.
+- **Safer Draft Purge (`purgeable_run`)**: Purging incomplete operations removes only discardable draft directories containing no finished output, assembly source, or renderer artifacts.
+- **Agent Surface Expansion**: MCP server now provides **76 tools** with full CLI, client, and test parity across all platforms.
+
 ## 1.12.6 — Storyboard Prose Humanizer & Vision De-Slop Engine
 
 - **Opt-in Storyboard Prose Humanizer**: Added `humanize: bool = False` to the Storyboard schema and pipeline interpreter (`mmv/storyboard.py`), with unit test coverage in `tests/test_prose_humanizer.py` and `tests/test_storyboard.py`.

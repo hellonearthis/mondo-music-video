@@ -59,18 +59,18 @@ terms:
     definition: "The proportional assignment of narrative and visual storyboard panels across planned shots based on duration and cut timestamps."
     sources: ["mmv/storyboard.py"]
   queue_ticket:
-    definition: "An atomic JSON file stored under queue/ representing an individual music video or ident production in pending, running, complete, failed, cancelled, interrupted, or held state."
+    definition: "One music video or ident production represented by an atomic JSON file under queue/; it can be pending, running, complete, failed, cancelled, interrupted, or held."
     sources: ["mmv/production_queue.py"]
   approved_fingerprint:
-    definition: "A SHA-256 fingerprint of production inputs, settings, and quoted estimate recorded upon explicit operator consent; if any parameter changes, the ticket is held."
+    definition: "The production plan's SHA-256 fingerprint, stored on a paid ticket after explicit quote consent and checked again before dispatch."
     sources: ["mmv/production_queue.py", "mmv/production.py"]
   held_ticket:
     definition: "A queue ticket blocked from executing by cost-invariants, including missing approvals, changed inputs, or prior paid failure stops."
     sources: ["mmv/production_queue.py"]
   resume_blocker:
-    definition: "Pre-resume validation verifying input fingerprint consistency, completed prompt files, and valid Comfy job receipts before continuing an interrupted local production."
+    definition: "A pre-resume check of the saved consent fingerprint and Comfy job receipts; separate planning checks decide whether saved prompts are complete."
     sources: ["mmv/production_queue.py"]
   single_operation_guard:
-    definition: "An exclusive thread lock ensuring that only one GPU render, LLM writer synthesis, or video assembly pipeline runs across the studio at any time."
+    definition: "The Jobs active-operation check under its thread lock, which allows one production operation at a time."
     sources: ["mmv/jobs.py", "mmv/production_queue.py"]
 

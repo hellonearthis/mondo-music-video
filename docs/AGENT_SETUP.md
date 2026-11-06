@@ -42,8 +42,9 @@ inspect the studio, upload selected media, preview/start/cancel productions,
 read logs, create/delete actors/styles, inspect/import/export OAP, draft/sign/verify
 OAP role agreements, download outputs, price (`estimate_upscale`) and start a requested Topaz export
 (installed or cloud; cloud needs `max_credits` from the user's approved estimate).
-v1.12.6 exposes **75 tools** and advertises the
+v1.12.7 exposes **76 tools** and advertises the
 application version in MCP initialization. It has no shell or private-studio tools.
+`reset_operation` (CLI `reset-operation [--purge-run] [--clear-log]`) returns a stopped, failed or cancelled operation to ready; a purge removes only a draft run with no finished output, assembly source or renderer work, and an active operation is never reset. The `h3_tag_normalizer` setting (off by default; `update_studio_settings`) binds each cast member's Picture tag to its Subject at local H3 render time.
 Queue tools (`read_queue`, `queue_production`, `start_queue`, `pause_queue`, `move_queue_ticket`, `preview_queue_ticket`, `resume_queue_ticket`, `remove_queue_ticket`, `clear_finished_queue_tickets`) run whole productions one at a time; only priced tickets need consent, and those are held if their approved plan changes.
 App calls permit only a localhost URL and bypass proxy environment variables.
 The separate API discovery tool makes a bounded GET to a provider's `/models`
@@ -64,8 +65,10 @@ actor, call `stage_oap_collection(actor_id, index_sha256)` (CLI
 `oap-collection-stage ID INDEX_SHA256`). Staging downloads and verifies one
 signed package without importing it. Review the returned manifest, signer,
 license and rider, then use the existing `import_oap` action only after the
-operator explicitly accepts that signer. The original four packages are OAP
-v0.2; newer collection packages can be v0.3. This flow does not change the
+operator explicitly accepts that signer. The public collection is OAP
+v0.5 and uses plain reference sheets; the four bundled starter packages stay OAP
+v0.2. A package sealed to this studio imports too: give its Agent the key from
+`oap_recipient_key` (CLI `oap-recipient-key`) first. This flow does not change the
 built-in starter roster or overwrite an installed actor.
 
 Worlds: use `preview_production` with `kind: "world_harvest"` (upload images as `reference`, clips as `video`, text as `lore`), review the proposal with `inspect_world_proposal`, and accept it only after the user has seen its changes. To change a world by hand, read it with `get_world`, edit the ledger, show the user `preview_world_edit(world_id, world)` (or CLI `world-edit-preview ID FILE`), then call `edit_world(world_id, world, confirm=true)` (CLI `edit-world ID FILE --confirm`) only after they have reviewed the changes; it saves a new version and fails if the world changed since it was read. See [Worlds](WORLDS.md).
@@ -248,11 +251,11 @@ service note; `quality.json` holds per-attempt judgments.
 | `select_prompt_take` | Makes a passed prompt version (`prompt1` is the production's original) the passage's prompt and rebinds the saved passage-plan digest. Versions marked not passed are refused. Clips are unchanged until `reroll_segment`. CLI: `select-prompt-take OUTPUT_FILE SEGMENT_ID PROMPT_TAKE_ID`. |
 | `reassemble_output` | Re-encodes the final video once from the original passage clips with the active takes, or with `selected_takes` (`{"seg001": "take2"}`; unknown passages or takes are refused before anything changes). Subliminal flashes and burned captions are reapplied from the production's original plan inside that one encode. The first re-encode keeps the original as `music-video-v1.mp4`; each new version is also saved as `-vN.mp4` and downloadable. The result's `warnings` (also `reassembly_warnings` on the output) say when an effect could not be applied. `cancel_production` stops a running re-encode; the finished video changes only after a complete encode. No renderer or paid call. CLI: `reassemble-output OUTPUT_FILE [--takes JSON]`. |
 
-## v1.3.0 OAP 0.3 tools
+## OAP 0.5 tools
 
 | Tool | Purpose and boundary |
 | --- | --- |
-| `export_oap` | `tier="audition"` writes a signed audition package that lists cast-only assets by hash without including them. Set `reference_clearance="audition"` only when the user confirms the reference is a cleaned or watermarked take. Imported actors export only their original package. |
+| `export_oap` | `tier="audition"` writes a signed audition package that leaves out cast-only assets. Set `reference_clearance="audition"` only when the user confirms the reference is a cleaned or watermarked take. Imported actors export only their original package. |
 | `create_role_agreement` | Draft an unsigned agreement casting an actor; this studio is the Director. It binds the actor's exact signed manifest and a generated casting call. Rider conflicts are refused, never approved. Terms cannot change after drafting. |
 | `sign_role_agreement` | Sign as `director`, or as `agent` only for actors this studio exported. Requires the user's explicit authorization for that agreement and role, then `confirm=true`. |
 | `verify_role_agreement` | Read-only check of both signatures and source bindings. Valid signatures do not prove who holds the keys. |

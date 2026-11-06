@@ -1,4 +1,8 @@
-# Verification — 1.12.6
+# Verification — 1.12.7
+
+## 1.12.7 — Merge upstream 1.12.3: OAP 0.5 actors, recipient key, opt-in H3 tag normalizer & safer draft purge
+
+Verified with full automated test suite: `tests/test_oap_v05.py` (OAP 0.5 package verification, sealed package recipient identity decryption, portfolio tier export), `tests/test_original_engine.py` (`test_normalize_h3_prompt_keeps_scene_colours_and_longest_names`), `tests/test_public_app.py` (`test_reset_operation_purge_keeps_runs_with_renders`, `test_saving_a_preset_without_acts_keeps_its_acts`), `tests/test_agent.py` & `tests/test_vision_stage.py` (76 MCP tools verified including `oap_recipient_key` and `reset_operation`), `tests/test_openspec_bdd.py` (queue hold & resume assertions), `tests/test_prose_humanizer.py` (Marker T1/T3 de-slop transformations), and `tests/test_protected_scheme.py` (all 7 passed, `protected_scheme.check() == []`).
 
 ## 1.12.6 — Storyboard Prose Humanizer & Vision De-Slop Engine
 

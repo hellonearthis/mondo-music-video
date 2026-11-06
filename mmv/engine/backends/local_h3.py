@@ -34,6 +34,30 @@ from .base import Backend, BackendError, TAG_SYNTAX_MINIMAX_H3
 COMMON_COLOR_STOPWORDS = frozenset({
     "red", "blue", "green", "black", "white", "grey", "gray", "gold", "yellow", "brown", "dark", "light"
 })
+H3_BACKENDS = frozenset({"local_h3", "comfy_sdk_h3"})
+
+
+def h3_cast_kwargs(settings: dict, backend_name: str, cast_members: list[dict]) -> dict:
+    """The opt-in `h3_tag_normalizer` setting hands the cast to an H3 renderer; otherwise the job is exactly as before."""
+    on = settings.get("h3_tag_normalizer") and backend_name in H3_BACKENDS and cast_members
+    return {"cast": cast_members} if on else {}
+
+
+def _cast_names(member: dict) -> list[str]:
+    names = (str(n).strip() for n in (member.get("display_name"), member.get("actor_id"), member.get("part")) if n)
+    return list(dict.fromkeys(n for n in names if n and n.lower() not in COMMON_COLOR_STOPWORDS))
+
+
+def _bind_picture(text: str, sub_tag: str, pic_tag: str, label: str) -> str:
+    """Tie `<Picture N>` to its `<Subject N>` definition; a definition that already names a picture is left alone."""
+    definition = re.search(rf"{re.escape(sub_tag)}[ \t]+is[ \t]+([^\n]*)", text, re.IGNORECASE)
+    if definition:
+        if re.search(r"<Picture\s*\d+>", definition.group(1)):
+            return text
+        return text[:definition.start(1)] + f"{pic_tag}, " + text[definition.start(1):]
+    head = "subject_definitions:\n"
+    at = text.find(head)
+    return text if at == -1 else text[:at + len(head)] + f"{sub_tag} is {pic_tag} ({label}).\n" + text[at + len(head):]
 
 
 def normalize_h3_prompt(prompt: str, cast_members: list[dict] | None) -> str:
@@ -41,46 +65,23 @@ def normalize_h3_prompt(prompt: str, cast_members: list[dict] | None) -> str:
 
     1. Ensures each cast member's <Picture N> tag is tied to their <Subject N> in subject_definitions.
     2. Replaces literal character names in detailed_description (the shot descriptions) with <Subject N>
-       so H3's text-image cross-attention conditioning is activated.
+       so H3's text-image cross-attention conditioning is activated. Longer names win across all actors,
+       and plain colour words are never treated as names.
     """
     if not prompt or not cast_members:
         return prompt
     normalized = prompt
+    names = {}
     for i, member in enumerate(cast_members):
         sub_tag = f"<Subject {i + 1}>"
         pic_tag = member.get("picture_tag") or f"<Picture {i + 1}>"
-        raw_names = [member.get("display_name"), member.get("actor_id"), member.get("part")]
-        names = []
-        for n in raw_names:
-            if not n:
-                continue
-            cleaned = str(n).strip()
-            if len(cleaned) < 3 and cleaned.lower() in COMMON_COLOR_STOPWORDS:
-                continue
-            if cleaned not in names:
-                names.append(cleaned)
-
-        # 1. Ensure picture tag is bound to subject tag in subject_definitions if pic_tag missing
-        if pic_tag not in normalized:
-            pattern = re.compile(rf"({re.escape(sub_tag)}\s+is\s+)", re.IGNORECASE)
-            if pattern.search(normalized):
-                normalized = pattern.sub(rf"\1{pic_tag}, ", normalized, count=1)
-            else:
-                sd_pos = normalized.find("subject_definitions:\n")
-                if sd_pos != -1:
-                    insert_pos = sd_pos + len("subject_definitions:\n")
-                    desc = member.get("display_name") or member.get("actor_id") or "character"
-                    normalized = normalized[:insert_pos] + f"{sub_tag} is {pic_tag} ({desc}).\n" + normalized[insert_pos:]
-
-        # 2. In detailed_description (the shots), replace literal character name with <Subject N>
-        desc_pos = normalized.find("detailed_description:")
-        if desc_pos != -1:
-            head = normalized[:desc_pos]
-            shots = normalized[desc_pos:]
-            for name in sorted(names, key=len, reverse=True):
-                pattern = re.compile(r"(?<![<A-Za-z0-9_])" + re.escape(name) + r"(?![>A-Za-z0-9_])", re.IGNORECASE)
-                shots = pattern.sub(sub_tag, shots)
-            normalized = head + shots
+        label = member.get("display_name") or member.get("actor_id") or "character"
+        normalized = _bind_picture(normalized, sub_tag, pic_tag, label)
+        names.update({n.lower(): sub_tag for n in _cast_names(member) if n.lower() not in names})
+    desc_pos = normalized.find("detailed_description:")
+    if desc_pos != -1 and names:
+        pattern = re.compile(r"(?<![<A-Za-z0-9_])(" + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True)) + r")(?![>A-Za-z0-9_])", re.IGNORECASE)
+        normalized = normalized[:desc_pos] + pattern.sub(lambda m: names[m.group(1).lower()], normalized[desc_pos:])
     return normalized
 
 

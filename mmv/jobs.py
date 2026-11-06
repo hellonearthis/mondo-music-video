@@ -183,6 +183,7 @@ class Jobs:
             raise BusyError("An operation is active. Wait, cancel it, or add this production to the queue.")
 
     def reset(self):
+        """Return a stopped operation's banner to ready; an active operation is left alone."""
         with self.lock:
             if self.active is not None:
                 return dict(self.last)

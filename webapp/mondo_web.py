@@ -40,7 +40,7 @@ from mmv.workflow_presets import map_steps, preset_for_model, preset_path, workf
 from mmv.storage import DEFAULTS, Storage, identifier, inside, read_json, write_json
 
 LOG_FILES = ("operation.log", "writer-service.log", "comfy-service.log")
-MGL_APP_VERSION = "1.12.6"
+MGL_APP_VERSION = "1.12.7"
 WEB = Path(__file__).parent
 
 
@@ -523,6 +523,14 @@ class ResumeRequest(StrictModel):
     run_id: str
 
 
+def purgeable_run(directory):
+    """A run is only a discardable draft while it holds no finished output, assembly source, or renderer work."""
+    renders = directory / "renders"
+    kept = (directory / "output.json").is_file() or (directory / "assembly-source.json").is_file() \
+        or (renders.is_dir() and any(renders.rglob("*")))
+    return not kept
+
+
 class ResetOperationRequest(StrictModel):
     purge_run: bool = False
     clear_log: bool = False
@@ -534,6 +542,7 @@ class Settings(StrictModel):
     video_api_profile: str = ""
     auto_updates: bool = False
     auto_collapse_panels: bool = True
+    h3_tag_normalizer: bool = False
     render_timeout_minutes: int = Field(default=120, ge=0, le=1440)
     backend: Literal["local_h3", "comfy_sdk_h3", "wavespeed", "seedance_2", "seedance_2_5"] = "local_h3"
     comfy_url: str = "http://127.0.0.1:8188"
@@ -966,7 +975,7 @@ def create_app(home=None, *, test_hosts=False):
             if value.purge_run and run_id:
                 try:
                     target = inside(store.home / "runs", identifier(run_id))
-                    if target.is_dir() and not (target / "output.json").is_file():
+                    if target.is_dir() and purgeable_run(target):
                         shutil.rmtree(target, ignore_errors=True)
                 except Exception:
                     pass
@@ -1325,6 +1334,10 @@ def create_app(home=None, *, test_hosts=False):
         manifest, verification = actors.package_info(path, allow_unsigned=allow_unsigned)
         return {"manifest": manifest, "verification": verification}
 
+    @app.get("/api/oap/recipient-key")
+    def oap_recipient_key():
+        return {"public_key": actors.recipient_identity(store)["public_key"]}
+
     @app.post("/api/oap/import")
     def import_package(filename: str = Form(...), actor_id: str = Form(""),
                        allow_unsigned: bool = Form(False), accept_unknown: bool = Form(False)):
@@ -1582,6 +1595,8 @@ def create_app(home=None, *, test_hosts=False):
             jobs.require_idle()
             if path.is_symlink():
                 raise ValueError("Cannot overwrite a linked vocabulary file")
+            if "acts" not in value.model_fields_set and path.is_file():   # a save that does not mention acts keeps them
+                payload["acts"] = read_json(path, {}).get("acts", [])
             load_vocabulary(value.base_profile, store=store, custom=payload["tables"])
             write_json(path, payload)
             quotes.clear()

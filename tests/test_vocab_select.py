@@ -342,5 +342,3 @@ def test_pipeline_prepare_video_with_narrative_acts(tmp_path):
         for shot in seg["shots"]:
             assert shot["vocab"].get("setting") in ("analog print shop", "digital neon display")
 
-
-

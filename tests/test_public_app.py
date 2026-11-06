@@ -438,9 +438,9 @@ class PublicAppTests(unittest.TestCase):
         import tomllib
         root = Path(__file__).resolve().parents[1]
         project = tomllib.loads((root / "pyproject.toml").read_text())
-        self.assertEqual(api_version()["version"], "1.12.6")
+        self.assertEqual(api_version()["version"], "1.12.7")
         self.assertEqual(project["project"]["version"], MGL_APP_VERSION)
-        self.assertIn("1.12.6", (root / "README.md").read_text())
+        self.assertIn("1.12.7", (root / "README.md").read_text())
         self.assertEqual(self.client.get("/api/version").json(), api_version())
 
     def test_quick_start_button_dialog_and_endpoint(self):
@@ -1814,6 +1814,25 @@ class PublicAppTests(unittest.TestCase):
         self.assertFalse(run_dir.exists())
         self.assertEqual((self.home / "studio.log").read_text("utf-8"), "")
 
+    def test_reset_operation_purge_keeps_runs_with_renders(self):
+        from mmv.storage import write_json
+        run_dir = self.home / "runs" / "paid-run"
+        (run_dir / "renders" / "s1").mkdir(parents=True)
+        write_json(run_dir / "renders" / "s1" / "comfy-request.json", {"prompt_id": "abc"})
+        self.app.state.jobs.last.update(id="paid-run", state="failed")
+        res = self.client.post("/api/operation/reset", json={"purge_run": True})
+        self.assertEqual(res.json()["state"], "idle")
+        self.assertTrue((run_dir / "renders" / "s1" / "comfy-request.json").is_file())
+
+    def test_saving_a_preset_without_acts_keeps_its_acts(self):
+        from mmv.storage import write_json
+        path = self.home / "vocabularies" / "acts_demo.json"
+        path.parent.mkdir(exist_ok=True)
+        acts = [{"act": 1, "title": "Dawn", "span": None, "tables": {}}]
+        write_json(path, {"id": "acts_demo", "name": "Acts", "acts": acts})
+        self.client.post("/api/vocabularies", json={"id": "acts_demo", "name": "Acts renamed"}).raise_for_status()
+        saved = self.client.get("/api/vocabularies").json()
+        self.assertEqual([v["acts"] for v in saved if v["id"] == "acts_demo"], [acts])
     def test_stale_preview_rejected(self):
         quote = self.client.post("/api/quote", json={"song": self.song_upload()}).json()
         settings = self.store.settings()

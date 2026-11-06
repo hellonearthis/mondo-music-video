@@ -536,3 +536,4 @@ When writing **Visual Direction** or editing passage prompts in the **Passage Ta
 * **The Path:** Details, props, obstacles, and lighting cues that characters can **touch, trip over, fight against, or navigate through**. These give the latent cross-attention layers firm geometric anchors.
 * **The Picnic:** Decorative purple prose, abstract thematic trivia, and poetic filler (*"a testament to suffering"*, *"a rich tapestry of sorrow"*) that clutter the prompt ceiling and induce model hallucinations.
 * **Director's Rule:** If a prompt element does not alter the camera's spatial trajectory, create physical friction, or reveal character agency, **prune it**. Keep the description grounded in tactile materials, camera elevation, and direct lighting physics.
+

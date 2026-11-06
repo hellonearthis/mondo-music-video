@@ -169,6 +169,21 @@ class OriginalEngineTests(unittest.TestCase):
         self.assertEqual(normalize_h3_prompt(normalized, cast), normalized)
         self.assertEqual(normalize_h3_prompt(prompt, []), prompt)
 
+    def test_normalize_h3_prompt_keeps_scene_colours_and_longest_names(self):
+        from mmv.engine.backends.local_h3 import h3_cast_kwargs, normalize_h3_prompt
+        prompt = ("subject_definitions:\n<Subject 1> is Red.\n<Subject 2> is <Picture 1>, wrong.\n\n"
+                  "detailed_description:\n[Shot 1] Red lighting hits Ann Marie beside Ann.\n")
+        cast = [{"actor_id": "ann", "display_name": "Ann"}, {"actor_id": "ann_marie", "display_name": "Ann Marie"},
+                {"actor_id": "red", "display_name": "Red"}]
+        out = normalize_h3_prompt(prompt, cast)
+        self.assertIn("Red lighting hits", out)
+        self.assertIn("hits <Subject 2> beside <Subject 1>.", out)
+        self.assertIn("<Subject 1> is <Picture 1>, Red.", out)
+        self.assertIn("<Subject 2> is <Picture 1>, wrong.", out)
+        self.assertEqual(h3_cast_kwargs({}, "local_h3", cast), {})
+        self.assertEqual(h3_cast_kwargs({"h3_tag_normalizer": True}, "wavespeed", cast), {})
+        self.assertEqual(h3_cast_kwargs({"h3_tag_normalizer": True}, "local_h3", cast), {"cast": cast})
+
     def test_python_311_syntax(self):
         for directory in ('mmv','webapp'):
             for path in (ROOT/directory).rglob('*.py'):

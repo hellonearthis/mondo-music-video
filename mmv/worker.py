@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+from .engine.backends.local_h3 import h3_cast_kwargs
 from . import writer_usage, storyboard
 from .dance import is_blocking as dance_blocking
 from .instruments import is_blocking as instrument_blocking
@@ -681,7 +682,7 @@ def run(home, directory, *, resume=False, rewrite=None):
                     prompt=prompts[seg.segment_id],duration_input=seg.duration_input,gen_frames=seg.gen_frames,
                     width=plan.width,height=plan.height,seed=seed,images=images,song=str(song),
                     audio_start_s=seg.audio_slice_start_s,audio_end_s=seg.audio_slice_end_s,
-                    cast=cast_members)
+                    **h3_cast_kwargs(settings, request['backend'], cast_members))
             except Exception as exc:
                 err_str = str(exc).lower()
                 if any(term in err_str for term in ("connection refused", "winerror 10061", "offline", "unreachable", "failed to establish", "target machine actively refused")):

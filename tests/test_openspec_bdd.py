@@ -2,9 +2,9 @@
 
 Validates:
 1. Domain Glossary (`openspec/glossary.yaml`) completeness and source file bindings.
-2. All 9 Gherkin `.feature` specifications (`openspec/features/*.feature`) for valid syntax,
+2. All 10 Gherkin `.feature` specifications (`openspec/features/*.feature`) for valid syntax,
    `Feature:`, `Rule:`, `@TAG-NN` Scenario IDs, and `Given` / `When` / `Then` steps.
-3. Behavior Report (`openspec/reports/AI_INTERACTIONS_DEEP_DIVE.md`) scenarios (`REPORT-01` .. `REPORT-39`),
+3. Behavior Report (`openspec/reports/AI_INTERACTIONS_DEEP_DIVE.md`) scenarios (`REPORT-01` .. `REPORT-45`),
    evidence file/line references, Mermaid sequence diagram, Coverage Gaps table, and Unknowns.
 4. Direct behavioral execution of the core AI Engine contracts across:
    - Resilient JSON extraction & `<think>` stripping (`mmv/writer_json.py`, `mmv/engine/schema.py`)
@@ -14,6 +14,7 @@ Validates:
    - Deterministic Mondo motion & framing gates (`mmv/quality.py`)
    - Safe shot interior frame sampling (`mmv/vision_check.py`)
    - Storyboard proportional timeline alignment (`mmv/storyboard.py`)
+   - Queue cost holds, crash recovery, ticket movement, resume bookkeeping and cancellation (`mmv/production_queue.py`)
 """
 from __future__ import annotations
 
@@ -331,6 +332,7 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
     def test_unknown_steering_world_falls_back_to_default_vocabulary(self):
         with tempfile.TemporaryDirectory() as temp:
             self.assertEqual(takes.world_custom_vocabulary(Storage(temp), "no_such_world"), {})
+
     def test_validate_02_03_mondo_quality_and_sealed_lips_validation(self):
         """@VALIDATE-02, @VALIDATE-03 & REPORT-19..21: Sealed-lips rigging validation and Mondo motion/framing regex gates."""
         seg = Segment(
@@ -435,9 +437,10 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
         self.assertEqual([s.start_frame for s in seg.shots], [0, 48])
 
     def test_queue_01_and_02_free_vs_paid_fingerprint_hold_invariants(self):
-        """@QUEUE-01, @QUEUE-02 & REPORT-40: Free tickets never held; paid tickets require approved fingerprint."""
+        """@QUEUE-01, @QUEUE-02 & REPORT-40: A free plan needs no approval; a newly paid plan is held."""
         free = production_queue.new_ticket({"kind": "video", "backend": "local_h3"}, "Free Ticket", 1, estimate=0)
         self.assertIsNone(production_queue.hold_reason(free, [free], 0, "any-hash"))
+        self.assertIn("never approved", production_queue.hold_reason(free, [free], 4.50, "new-plan"))
 
         paid = production_queue.new_ticket({"kind": "video", "backend": "wavespeed"}, "Paid Ticket", 2, estimate=4.50, fingerprint="sha-abc")
         self.assertEqual(paid["approved_fingerprint"], "sha-abc")
@@ -450,17 +453,17 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
         self.assertIn("never approved", production_queue.hold_reason(unapproved, [unapproved], 4.50, "sha-abc"))
 
     def test_queue_03_prior_paid_failure_cascades_hold_onto_subsequent_tickets(self):
-        """@QUEUE-03 & REPORT-42: Prior paid failure holds subsequent paid tickets approved before failure time."""
+        """@QUEUE-03 & REPORT-42: A paid failure or interruption holds tickets created before the stop."""
         now = 1000.0
         approved = production_queue.new_ticket({"kind": "video"}, "Next Paid", 2, estimate=5.0, fingerprint="fp", now=now)
         prior_failed = production_queue.new_ticket({"kind": "video"}, "Old Paid", 1, estimate=5.0, fingerprint="fp", now=now - 50)
-        prior_failed["state"] = "failed"
-        prior_failed["finished"] = now + 10.0  # stopped after approved ticket was created
-        reason = production_queue.hold_reason(approved, [prior_failed, approved], 5.0, "fp")
-        self.assertIn("earlier paid ticket did not finish", reason)
+        for state in ("failed", "interrupted"):
+            stopped = {**prior_failed, "state": state, "finished": now + 10.0}
+            reason = production_queue.hold_reason(approved, [stopped, approved], 5.0, "fp")
+            self.assertIn("earlier paid ticket did not finish", reason)
 
     def test_queue_04_waiting_ticket_swapping_and_running_protection(self):
-        """@QUEUE-04 & REPORT-43: Waiting tickets swap positions; running tickets reject movement."""
+        """@QUEUE-04 & REPORT-43: Waiting tickets swap; a running ticket cannot move or be removed."""
         t1 = production_queue.new_ticket({"kind": "video"}, "Ticket 1", 1)
         t2 = production_queue.new_ticket({"kind": "video"}, "Ticket 2", 2)
         swapped = production_queue.moved([t1, t2], t1["id"], 1)
@@ -469,9 +472,14 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
         running = {**t1, "state": "running"}
         with self.assertRaises(ValueError):
             production_queue.moved([running, t2], running["id"], 1)
+        with tempfile.TemporaryDirectory() as td:
+            store = Storage(Path(td))
+            production_queue.save_ticket(store, running)
+            with self.assertRaises(ValueError):
+                production_queue.remove_ticket(store, running["id"])
 
     def test_queue_05_and_06_crash_recovery_and_resumable_contract(self):
-        """@QUEUE-05, @QUEUE-06 & REPORT-44, REPORT-45: Running tickets recover to interrupted; local runs with folders resume."""
+        """@QUEUE-05, @QUEUE-06 & REPORT-44, REPORT-45: Startup interrupts running tickets; a saved run ID can be requeued."""
         ticket = {**production_queue.new_ticket({"kind": "video", "backend": "local_h3"}, "Crash Test", 1), "state": "running", "run_id": "run-xyz"}
         with tempfile.TemporaryDirectory() as td:
             store = Storage(Path(td))
@@ -483,13 +491,18 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
             resumed = production_queue.resume_ticket(store, recovered)
             self.assertEqual(resumed["state"], "pending")
             self.assertEqual(resumed["resume_run"], "run-xyz")
+            production_queue.save_ticket(store, {**recovered, "state": "interrupted"})
+            production_queue.resume_interrupted(store)
+            self.assertEqual(production_queue.get_ticket(store, ticket["id"])["resume_run"], "run-xyz")
 
     def test_queue_07_cancellation_pauses_queue_execution(self):
-        """@QUEUE-07: Cancelling an active operation sets running=False and marks the ticket cancelled."""
+        """@QUEUE-07: Settling a cancelled operation pauses dispatch and leaves waiting tickets alone."""
         with tempfile.TemporaryDirectory() as td:
             store = Storage(Path(td))
             t = {**production_queue.new_ticket({"kind": "video"}, "Cancel Test", 1), "state": "running", "run_id": "run-abc"}
+            waiting = production_queue.new_ticket({"kind": "video"}, "Next Test", 2)
             production_queue.save_ticket(store, t)
+            production_queue.save_ticket(store, waiting)
             control = {"running": True, "dispatching": False, "prepare_lock": None}
             from mmv.jobs import Jobs
             jobs = Jobs(store)
@@ -497,6 +510,8 @@ class OpenSpecExecutableBehaviorTests(unittest.TestCase):
             updated = production_queue.get_ticket(store, t["id"])
             self.assertEqual(updated["state"], "cancelled")
             self.assertFalse(control["running"], "Queue must pause upon operation cancellation")
+            self.assertEqual(production_queue.get_ticket(store, waiting["id"]), waiting)
+
 
 if __name__ == "__main__":
     unittest.main()

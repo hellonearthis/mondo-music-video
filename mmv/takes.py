@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .engine.backends.local_h3 import h3_cast_kwargs
 from .storage import Storage, identifier, inside, read_json, write_json
 
 TAKES_FILE = "takes.json"
@@ -684,7 +685,7 @@ def reroll_segment_worker(home: Path, directory: Path, segment_id: str, seed: in
             height=plan.height,
             seed=seed,
             images=images,
-            cast=cast_members,
+            **h3_cast_kwargs(settings, backend_name, cast_members),
             song=str(song),
             audio_start_s=seg.audio_slice_start_s,
             audio_end_s=seg.audio_slice_end_s,
