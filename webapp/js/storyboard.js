@@ -28,6 +28,30 @@ export function storyboardFromForm(form, request) {
   if (request.kind === 'ident') request.ident_all_references = form.elements.ident_all_references.checked;
 }
 
+// WHAT: Pre-compiled immutable RegExp patterns for Prose Humanizer de-slopping.
+// WHY: Hoisting regex instances to module level prevents re-compiling 16 RegExp objects on every function call.
+const STORYBOARD_CLICHE_REPLACEMENTS = Object.freeze([
+  [/\b(?:stands?\s+as\s+|serves?\s+as\s+|is\s+)?(?:a\s+)?testament\s+to\b/gi, 'evidence of'],
+  [/\bdelv(?:ing|es|ed|e)\s+into\b/gi, 'entering'],
+  [/\b(?:a\s+)?(?:rich\s+|vibrant\s+|complex\s+)?tapestry\s+of\b/gi, 'a mixture of'],
+  [/\b(?:a\s+)?(?:delicate\s+|intricate\s+|subtle\s+)?dance\s+of\s+(?:light\s+and\s+shadow|shadow\s+and\s+light|shadows?)\b/gi, 'stark light and deep shadows'],
+  [/\bpalpable\s+tension\b/gi, 'heavy stillness'],
+  [/\bshivers?\s+down\s+(?:the|their|his|her|its)\s+spine\b/gi, 'sudden hesitation'],
+  [/\b(?:an?\s+)?unspoken\s+understanding\b/gi, 'a shared glance'],
+  [/\b(?:a\s+)?beacon\s+of\s+hope\b/gi, 'a single light'],
+  [/\bechoes?\s+of\s+(?:the\s+)?past\b/gi, 'remnants'],
+  [/^(?:in\s+this\s+(?:shot|panel|image|frame)|this\s+(?:shot|panel|image|frame)\s+(?:shows|depicts|features|captures)|we\s+(?:can\s+)?(?:see|observe|witness)|in\s+a\s+world\s+where)\s*,?\s*/gi, ''],
+  [/\bwe\s+(?:can\s+)?see\s+/gi, ''],
+  [/,?\s*(?:creating|evoking|adding\s+to|giving)\s+(?:a\s+sense\s+of|an\s+atmosphere\s+of|a\s+feeling\s+of)\s+[^.;]+([.;]|$)/gi, '$1']
+]);
+
+const STORYBOARD_PUNCTUATION_CLEANUP = Object.freeze([
+  [/\s+([,.;])/g, '$1'],
+  [/,\s*,/g, ','],
+  [/,\s*\./g, '.'],
+  [/\s{2,}/g, ' ']
+]);
+
 // WHAT: Pure function that strips synthetic AI clichés, conversational throat-clearing, and purple abstractions from prompt text.
 // WHY: Implements the Prose Humanizer rules in the browser: replaces abstract fluff with grounded sensory nouns,
 // strips frame-level narrator artifacts ("we see"), and prunes trailing atmosphere tags before diffusion rendering.
@@ -35,31 +59,15 @@ export const humanizeDirectionText = (text = '') => {
   if (!text || typeof text !== 'string') return '';
   let cleaned = text.trim();
 
-  const replacements = [
-    [/\b(?:stands?\s+as\s+|serves?\s+as\s+|is\s+)?(?:a\s+)?testament\s+to\b/gi, 'evidence of'],
-    [/\bdelv(?:ing|es|ed|e)\s+into\b/gi, 'entering'],
-    [/\b(?:a\s+)?(?:rich\s+|vibrant\s+|complex\s+)?tapestry\s+of\b/gi, 'a mixture of'],
-    [/\b(?:a\s+)?(?:delicate\s+|intricate\s+|subtle\s+)?dance\s+of\s+(?:light\s+and\s+shadow|shadow\s+and\s+light|shadows?)\b/gi, 'stark light and deep shadows'],
-    [/\bpalpable\s+tension\b/gi, 'heavy stillness'],
-    [/\bshivers?\s+down\s+(?:the|their|his|her|its)\s+spine\b/gi, 'sudden hesitation'],
-    [/\b(?:an?\s+)?unspoken\s+understanding\b/gi, 'a shared glance'],
-    [/\b(?:a\s+)?beacon\s+of\s+hope\b/gi, 'a single light'],
-    [/\bechoes?\s+of\s+(?:the\s+)?past\b/gi, 'remnants'],
-    [/^(?:in\s+this\s+(?:shot|panel|image|frame)|this\s+(?:shot|panel|image|frame)\s+(?:shows|depicts|features|captures)|we\s+(?:can\s+)?(?:see|observe|witness)|in\s+a\s+world\s+where)\s*,?\s*/gi, ''],
-    [/\bwe\s+(?:can\s+)?see\s+/gi, ''],
-    [/,?\s*(?:creating|evoking|adding\s+to|giving)\s+(?:a\s+sense\s+of|an\s+atmosphere\s+of|a\s+feeling\s+of)\s+[^.;]+([.;]|$)/gi, '$1']
-  ];
-
-  for (const [pattern, replacement] of replacements) {
+  for (const [pattern, replacement] of STORYBOARD_CLICHE_REPLACEMENTS) {
     cleaned = cleaned.replace(pattern, replacement);
   }
 
-  cleaned = cleaned
-    .replace(/\s+([,.;])/g, '$1')
-    .replace(/,\s*,/g, ',')
-    .replace(/,\s*\./g, '.')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  for (const [pattern, replacement] of STORYBOARD_PUNCTUATION_CLEANUP) {
+    cleaned = cleaned.replace(pattern, replacement);
+  }
+
+  cleaned = cleaned.trim();
 
   if (cleaned.length > 0 && cleaned[0] === cleaned[0].toLowerCase()) {
     cleaned = cleaned[0].toUpperCase() + cleaned.slice(1);

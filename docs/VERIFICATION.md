@@ -1,4 +1,8 @@
-# Verification — 1.12.7
+# Verification — 1.12.8
+
+## 1.12.8 — Performance, allocation & algorithmic optimizations
+
+Verified with full automated test suite: `tests/test_world_vectors.py` (BLAS distance matrix calibration and centroid normalization), `tests/test_vocab_select.py` (Gaussian cluster weights memoization and progression), `tests/test_lipsync.py` (C-level `maketrans` masking, pre-compiled clause/sentence splitters, word tokenization), `tests/test_lyrics.py` (`str.endswith` boundary check, Suno bracket/section parsing), `tests/test_dance.py` & `tests/test_instruments.py` (pre-compiled performer name patterns and inline regex hoisting), `tests/test_vision_check.py` (fence stripping and GGUF model suffix resolution), `tests/test_package_export.py` (slug sanitization and timestamp matching), `tests/test_public_app.py` (version assertions and public endpoints), and `tests/test_protected_scheme.py` (all 7 passed, `protected_scheme.check() == []`). JavaScript syntax verified clean with `node --check webapp/app.js webapp/js/*.js`.
 
 ## 1.12.7 — Merge upstream 1.12.3: OAP 0.5 actors, recipient key, opt-in H3 tag normalizer & safer draft purge
 

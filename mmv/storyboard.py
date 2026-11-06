@@ -145,8 +145,8 @@ def interpret(home, directory):
                    + 'User direction: ' + request.get('direction', ''))
     content = [{'type': 'text', 'text': instruction}]
     for name, path in zip(board['images'], paths):
-        content += [{'type': 'text', 'text': 'Uploaded filename: ' + name},
-                    {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode()}}]
+        content.append({'type': 'text', 'text': 'Uploaded filename: ' + name})
+        content.append({'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode()}})
     write_json(directory / 'progress.json', {'message': 'Interpreting storyboard images', 'progress': 15})
     response = request_json(settings['vision_url'].rstrip('/') + '/chat/completions',
                             {'model': settings['vision_model'], 'temperature': .2, 'max_tokens': 8000,

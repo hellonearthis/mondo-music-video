@@ -233,18 +233,38 @@ const normalizeRawScore = (rawScore, maxRaw, idx) => {
   return Math.max(0.15, 0.28 - idx * 0.03);
 };
 
+// WHAT: Pre-computed lowercase keyword and signature pool term caches for high-frequency prompt scoring.
+// WHY: Avoids re-mapping arrays, re-lowercasing strings, and flattening pool arrays on every keystroke/scoring call.
+const worldScoreCache = new WeakMap();
+
+const getWorldIndex = (world) => {
+  let cached = worldScoreCache.get(world);
+  if (!cached) {
+    const keywords = (world.keywords || []).map(k => k.toLowerCase());
+    const keywordsSet = new Set(keywords);
+    const flattenedPools = Object.values(world.pools || {}).flat().map(t => t.toLowerCase());
+    cached = {
+      nameLower: world.name.toLowerCase(),
+      keywords,
+      keywordsSet,
+      flattenedPools
+    };
+    worldScoreCache.set(world, cached);
+  }
+  return cached;
+};
+
 // WHAT: Calculates the composite raw semantic affinity score of a world against a user prompt.
 // WHY: Combines three complementary retrieval signals:
 //   1. Full multi-word and hyphenated keyword phrase occurrences in the raw text (highest confidence).
 //   2. Individual token exact matches and prefix stems against world names and keywords.
 //   3. Exact matches against signature vocabulary pool terms across all five dimensions.
 const computeWorldRawScore = (world, rawText, meaningfulTokens) => {
-  const worldKeywords = (world.keywords || []).map(k => k.toLowerCase());
-  const worldNameLower = world.name.toLowerCase();
+  const { nameLower, keywords, keywordsSet, flattenedPools } = getWorldIndex(world);
 
   // WHAT: Score full multi-word or hyphenated keyword phrases found in the prompt string.
   // WHY: Multi-word phrases like "night-shift" or "evidence locker" carry stronger thematic specificity than single tokens.
-  const keywordMatchScore = worldKeywords.reduce(
+  const keywordMatchScore = keywords.reduce(
     (sum, kw) => sum + (rawText.includes(kw) ? ((kw.includes(" ") || kw.includes("-")) ? 4.5 : 3.0) : 0),
     0
   );
@@ -253,18 +273,19 @@ const computeWorldRawScore = (world, rawText, meaningfulTokens) => {
   // WHY: Rewards prompts containing exact tokens or shared root words (e.g., "brutal" matching "brutalist")
   // while weighting world title matches more heavily.
   const tokenMatchScore = meaningfulTokens.reduce((sum, tok) => {
-    const nameBonus = worldNameLower.includes(tok) ? 2.5 : 0;
-    const exactMatch = worldKeywords.some(kw => kw === tok);
-    const prefixMatch = !exactMatch && tok.length >= 4 && worldKeywords.some(kw => kw.startsWith(tok) || tok.startsWith(kw));
+    const nameBonus = nameLower.includes(tok) ? 2.5 : 0;
+    const exactMatch = keywordsSet.has(tok);
+    const prefixMatch = !exactMatch && tok.length >= 4 && keywords.some(kw => kw.startsWith(tok) || tok.startsWith(kw));
     const kwBonus = exactMatch ? 2.0 : prefixMatch ? 1.0 : 0;
     return sum + nameBonus + kwBonus;
   }, 0);
 
   // WHAT: Score exact matches against world signature pool items.
   // WHY: If a prompt mentions specific props or settings (e.g. "pneumatic tube"), that strongly anchors the world.
-  const poolMatchScore = Object.values(world.pools || {})
-    .flat()
-    .reduce((sum, term) => sum + (rawText.includes(term.toLowerCase()) ? 2.0 : 0), 0);
+  const poolMatchScore = flattenedPools.reduce(
+    (sum, termLower) => sum + (rawText.includes(termLower) ? 2.0 : 0),
+    0
+  );
 
   return keywordMatchScore + tokenMatchScore + poolMatchScore;
 };
@@ -320,11 +341,9 @@ export const scorePromptAgainstWorlds = (promptText, currentWorlds = [], library
 
   // WHAT: Select the top 4 ranked candidate worlds plus any user-locked worlds.
   // WHY: Guarantees a minimum cluster of 4 worlds for comparison while honoring user overrides.
-  const selectedFromRanked = ranked.reduce((acc, item) => (
-    acc.length < 4 || item.locked
-      ? [...acc, { name: item.name, score: item.score, active: item.active, locked: item.locked }]
-      : acc
-  ), []);
+  const selectedFromRanked = ranked
+    .filter((item, idx) => idx < 4 || item.locked)
+    .map(item => ({ name: item.name, score: item.score, active: item.active, locked: item.locked }));
 
   // WHAT: Ensure all locked worlds from the previous state are preserved even if ranked outside the top 4.
   // WHY: A locked world is an explicit director choice and must remain active in the workspace.
@@ -356,16 +375,16 @@ const POOL_DIMENSIONS = [
 ];
 
 // WHAT: Deduplicates an array of keyword strings case-insensitively, preserving original casing.
-// WHY: Prevents redundant UI chip badges and duplicate token sampling when combining world terms with custom terms.
-const uniqueCaseInsensitive = (terms) =>
-  terms.reduce(
-    (acc, term) => (
-      acc.some(existing => existing.toLowerCase() === term.toLowerCase())
-        ? acc
-        : [...acc, term]
-    ),
-    []
-  );
+// WHY: Uses an internal Set lookup to achieve linear O(N) deduplication without allocating O(N^2) intermediate arrays.
+const uniqueCaseInsensitive = (terms = []) => {
+  const seen = new Set();
+  return terms.filter(term => {
+    const lower = String(term || "").toLowerCase().trim();
+    if (!lower || seen.has(lower)) return false;
+    seen.add(lower);
+    return true;
+  });
+};
 
 // WHAT: Merges and compiles visual vocabulary pools from all currently activated thematic worlds.
 // WHY: When a director activates one or more worlds (e.g. "Brutalist Concrete" + "Bureaucratic"), their
@@ -389,9 +408,8 @@ export const compilePoolsFromActiveWorlds = (activeWorldNames = [], currentPools
     const existingChipStates = existingPool?.chipStates ? { ...existingPool.chipStates } : {};
     const need = existingPool ? existingPool.need : dim.defaultNeed;
 
-    const worldTerms = activeWorlds
-      .flatMap(world => world.pools?.[dim.name] || [])
-      .reduce((acc, term) => (acc.includes(term) ? acc : [...acc, term]), []);
+    const rawWorldTerms = activeWorlds.flatMap(world => world.pools?.[dim.name] || []);
+    const worldTerms = [...new Set(rawWorldTerms)];
 
     const mergedTerms = uniqueCaseInsensitive([...worldTerms, ...existingTerms]);
 
@@ -686,14 +704,15 @@ const partitionPoolTerms = (pool, poolIdx, domContainer) => {
         chipState: Number(pool.chipStates?.[term] || 0)
       }));
 
-  return entries.reduce(
-    (acc, { term, chipState }) => {
-      if (chipState === 2) return { ...acc, excluded: [...acc.excluded, term] };
-      if (chipState === 1) return { ...acc, pinned: [...acc.pinned, term] };
-      return { ...acc, included: [...acc.included, term] };
-    },
-    { pinned: [], excluded: [], included: [] }
-  );
+  const pinned = [];
+  const excluded = [];
+  const included = [];
+  for (const { term, chipState } of entries) {
+    if (chipState === 2) excluded.push(term);
+    else if (chipState === 1) pinned.push(term);
+    else included.push(term);
+  }
+  return { pinned, excluded, included };
 };
 
 // WHAT: Compiles active pools, sampling mode, and chip states into engine-compatible custom vocabulary schema rules.
@@ -703,26 +722,26 @@ const partitionPoolTerms = (pool, poolIdx, domContainer) => {
 export const compileWorldsToCustomVocab = (pools, mode, domContainer = null) => {
   if (mode === "off") return {};
 
-  return pools.reduce((draft, pool, poolIdx) => {
+  const result = {};
+  for (let poolIdx = 0; poolIdx < pools.length; poolIdx++) {
+    const pool = pools[poolIdx];
     const key = dimensionToCategoryKey(pool.dimension);
     const { pinned, excluded, included } = partitionPoolTerms(pool, poolIdx, domContainer);
 
     if (mode === "strict") {
       const activePool = [...pinned, ...included];
-      return activePool.length > 0
-        ? { ...draft, [key]: { mode: "replace", add: activePool, exclude: excluded } }
-        : draft;
-    }
-
-    if (mode === "guided") {
-      return {
-        ...draft,
-        [key]: { mode: "append", add: [...pinned], exclude: excluded }
+      if (activePool.length > 0) {
+        result[key] = { mode: "replace", add: activePool, exclude: excluded };
+      }
+    } else if (mode === "guided") {
+      result[key] = {
+        mode: "append",
+        add: [...pinned],
+        exclude: excluded
       };
     }
-
-    return draft;
-  }, {});
+  }
+  return result;
 };
 
 // WHAT: Pure state transition toggling the locked status of a world by index.

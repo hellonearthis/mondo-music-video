@@ -1,6 +1,21 @@
 # Releases
 
-# Releases
+## 1.12.8 — Performance, allocation & algorithmic optimizations
+
+- **Matrix Clustering & Vector Calibration**: Replaced $O(N^2)$ pairwise loops in `mmv/world_vectors.py` with BLAS matrix multiplication (`unit_matrix @ unit_matrix.T`) and vectorized row normalization, accelerating world clustering by orders of magnitude for large custom world catalogs.
+- **Frontend Array & DOM Optimizations**:
+  - Replaced $O(N^2)$ array shifting in `loadThumbnails` (`webapp/js/outputs.js`) with an atomic cursor index for asynchronous batch loading.
+  - Eliminated accumulator object/array spread allocations across `partitionPoolTerms`, `compileWorldsToCustomVocab`, and `selectedFromRanked` in `webapp/js/vocab-worlds.js`.
+  - Added memoization with `WeakMap` for lowercase keywords and flattened term sets in world scoring.
+  - Cached child control groups in `webapp/js/panel_progress.js` to avoid redundant DOM query sweeps across all cards and folds on every keystroke.
+  - Hoisted regular expressions in `webapp/js/storyboard.js` to module-level tables.
+- **Backend Regex & String Operations**:
+  - Replaced per-word regex searching with C-level `str.endswith` and pre-compiled module-level patterns in `mmv/lyrics.py`.
+  - Optimized clause masking in `mmv/lipsync.py` using C-level character translation tables (`str.maketrans`) and pre-compiled sentence/clause splitters.
+  - Pre-compiled dancer and performer name matchers before sentence loops in `mmv/dance.py` and `mmv/instruments.py`.
+  - Cached H3 subject definition regex compilation with `@functools.lru_cache` in `mmv/engine/backends/local_h3.py`.
+  - Pre-compiled slug and timestamp regexes in `mmv/package_export.py` and `mmv/vision_check.py`.
+- **Protected Scheme Invariant**: All 7 writer, ident, and singing prompt pins verified bit-for-bit identical (`protected_scheme.check() == []`).
 
 ## 1.12.7 — Merge upstream 1.12.3: OAP 0.5 actors, recipient key, opt-in H3 tag normalizer & safer draft purge
 
