@@ -1,4 +1,8 @@
-# Verification — 1.12.5
+# Verification — 1.12.6
+
+## 1.12.6 — Storyboard Prose Humanizer & Vision De-Slop Engine
+
+Verified with automated test suite: `tests/test_prose_humanizer.py` (5 passed: Marker T1 cliché purge, Marker T3 throat-clearing stripping, trailing atmosphere pruning, panel de-slopping, and clean input preservation), `tests/test_storyboard.py` (10 passed: opt-in `humanize=True` verification, untrusted interpretation bounding, shot alignment, and ident sub-second slicing), `tests/test_public_app.py` (version assertions and public endpoints), and `tests/test_protected_scheme.py` (all 7 passed, `protected_scheme.check() == []`). JavaScript syntax verified clean with `node --check` across `webapp/js/storyboard.js`, `webapp/js/vocab-worlds.js`, and `webapp/js/thematic-worlds-extended.js`.
 
 ## 1.12.5 — Automatic H3 reference & subject tag normalizer
 

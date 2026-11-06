@@ -474,3 +474,65 @@ The **Worlds** panel enables rich environmental design beyond single-genre stere
 * **World Presets & Guided Sliders**:
   - Use the World editor to define spatial consistency: interior vs. exterior transitions, material palettes (e.g. brushed titanium, wet asphalt, rusted corrugated iron), and dominant color temperatures.
   - The writer LLM weaves these environmental anchors into every passage prompt, while the vocabulary engine injects varied micro-mechanisms (steam vents, puddles, electrical arcs) to prevent visual repetition across takes.
+
+---
+
+## 7. Cognitive Pacing, Visual Subtext & Scene Value Shifts
+
+Because music videos lack spoken dialogue, emotional impact relies entirely on **visual cognitive pacing, expectation subversion, somatic physical action, and musical value shifts**. Applying psychological design principles prevents the common trap of "screensaver syndrome"—generating technically impressive but emotionally inert clips where every passage shares the same static energy.
+
+### 7.1 The Audience Prediction Machine
+
+Human cognition is an active prediction engine. In music video direction, you manipulate three core psychological variables across the timeline:
+
+1. **Expectation:** What the viewer’s mind predicts will happen next based on environmental cues and musical rhythm.
+2. **Attention:** What is explicitly highlighted by camera framing versus what is held in background tension or physical friction.
+3. **Identification:** How closely the viewer identifies with the character's somatic state (tight handheld intimacy, eye-level tracking) versus maintaining clinical, ironic distance (wide tableau, rigid symmetrical tripod).
+
+### 7.2 McKee Scene Value Shifts Across Passages
+
+Robert McKee’s foundational storytelling principle states that **every story beat must move a character’s condition between opposing emotional or physical poles**. If Verse 1, Verse 2, and the Chorus all depict a character looking moody in the rain, the video feels flat and redundant.
+
+Plan distinct value transitions across your song's passage grid:
+
+| Musical Section | Starting Condition | Ending Condition | Director's Visual Mechanism |
+| :--- | :--- | :--- | :--- |
+| **Intro / Verse 1** | *Stasis / Entrapment* | *Initial Friction* | Monolithic static framing, muted sodium lighting, tight claustrophobic corridors. |
+| **Pre-Chorus** | *Passive Observation* | *Active Momentum* | Lateral camera movement begins, character interacts with a physical prop or obstacle. |
+| **Chorus** | *Vulnerability / Chaos* | *Empowered Catharsis* | Dynamic lighting shift, wider focal length, environmental eruption (steam, rain, sparks). |
+| **Verse 2** | *False Security* | *Escalating Stakes* | Shifting camera angles, contrasting secondary actor introduced, pacing syncopation. |
+| **Bridge** | *Crisis / Disorientation* | *Breakthrough* | Maximum dissonance ($\kappa$), lens distortion, Dutch angles, rapid kinetic motion. |
+| **Final Chorus / Outro** | *Transformation* | *Irreversible New Normal* | Open horizon, altered wardrobe/posture, lingering unresolved somatic detail. |
+
+### 7.3 The Poetic Volta & The Juxtaposition Arc ($\kappa$)
+
+In classical poetry, the *volta* (turn) is the dramatic pivot where perspective, tone, or emotional meaning sharply shifts. In Mondo, this maps directly to the musical juxtaposition coefficient ($\kappa$):
+
+* **Schema Priming (Low $\kappa$, 0.05–0.20):**
+  - Used in **Verse 1 and Outros**.
+  - Establishes a predictable, coherent baseline. Characters adhere strictly to anchor world rules (e.g. Brutalist concrete textures, utilitarian attire, grey monochrome grade). The audience learns the physical physics of the scene.
+* **Volta Delay & Cognitive Release (High $\kappa$, 0.75–0.90):**
+  - Held back through the build and unleashed at the **Chorus or Bridge drop**.
+  - Suspends strict tier adjacency rules to inject contrasting visual vocabulary (e.g. brutalist concrete suddenly erupting with baroque gold leaf, or clinical white tile flooded with crimson emergency flare light).
+  - The sudden contrast satisfies the auditory release of the musical drop, producing a powerful emotional payoff.
+
+### 7.4 Visual Subtext & Object Displacement (The "Silent Mouths" Philosophy)
+
+Mondo enforces **Silent Mouths** (sealed lips) by default to prevent uncanny AI mouth morphing and phantom singing. In the absence of verbal dialogue, emotion must be communicated through **somatic grounding** and **object displacement**:
+
+* **The Anti-Therapy Principle:**
+  - Characters in high-stakes visual stories do not pose with generic emotional expressions (*"looking heartbroken"* or *"feeling panicked"*). Diffusion models cannot reliably render abstract emotional adjectives.
+  - Instead, translate emotion into **tactile physical struggle and object manipulation**:
+* **Examples (Abstract vs. Somatically Grounded):**
+  - ❌ *Abstract (Poor Diffusion Yield):* `"The detective feels a sense of deep despair and loneliness as the rain falls."`
+  - ✅ *Somatic (High Diffusion Yield):* `"Close-up on hands: White-knuckled fingers slip on the cold wet iron railing as rain runs into his collar. He does not wipe his eyes."`
+  - ❌ *Abstract:* `"The woman is terrified that she is being pursued by an unknown presence."`
+  - ✅ *Somatic:* `"Waist-up tracking: She fumbles a ring of brass keys against the deadbolt, dropping one into the mud, eyes fixed down the dark alleyway."`
+
+### 7.5 Philip Pullman's Path vs. Picnic Razor
+
+When writing **Visual Direction** or editing passage prompts in the **Passage Takes** view, distinguish narrative necessity from decorative prompt bloat:
+
+* **The Path:** Details, props, obstacles, and lighting cues that characters can **touch, trip over, fight against, or navigate through**. These give the latent cross-attention layers firm geometric anchors.
+* **The Picnic:** Decorative purple prose, abstract thematic trivia, and poetic filler (*"a testament to suffering"*, *"a rich tapestry of sorrow"*) that clutter the prompt ceiling and induce model hallucinations.
+* **Director's Rule:** If a prompt element does not alter the camera's spatial trajectory, create physical friction, or reveal character agency, **prune it**. Keep the description grounded in tactile materials, camera elevation, and direct lighting physics.

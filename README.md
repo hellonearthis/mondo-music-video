@@ -1,6 +1,6 @@
 # Mondo Music Video
 
-**Version 1.12.5** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
+**Version 1.12.6** · MAXIMUM GOOSE LABORATORY · Apache License 2.0
 
 Turn a song into a music video. Beat-aware shot planning, LLM-written prompts, local or
 hosted rendering, actors that dance, lip-sync and play instruments, Worlds, storyboards,
@@ -306,6 +306,7 @@ For fine-grained creative control over video generation and post-production, see
 - **Lip-sync & approved singing:** How lyrics and singer assignments lift the default sealed-lips constraint during performance passages while preventing mouth spasms in instrumentals.
 - **Reference image composition:** Best practices for neutral backgrounds, clean three-quarter framing, and automatic `<Subject N>` tag normalization for MiniMax H3.
 - **Aspect ratios & resolution scaling:** Configure 9:16 vertical video for mobile social reels or 2.39:1 anamorphic cinemascope for cinema releases.
+- **Cognitive pacing & scene value shifts:** Apply McKee value shifts across musical passages, map poetic voltas to musical drops via the juxtaposition arc ($\kappa$), and direct visual subtext through somatic action under the sealed-lips rule.
 
 ## Queue several productions
 
@@ -317,7 +318,7 @@ from their saved prompts and clips.
 
 ## Agent operation
 
-The v1.12.5 MCP server has 75 tools, including operation recovery and reset (`reset_operation`), a production queue (`queue_production`, `start_queue`, `read_queue`), OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
+The v1.12.6 MCP server has 75 tools, including operation recovery and reset (`reset_operation`), a production queue (`queue_production`, `start_queue`, `read_queue`), OPP package inspection/import/sheet selection, prompt-retry previews, API profile add/select/remove,
 model/service preferences, starter installation, confirmed actor/style
 deletion, audition exports, OAP role agreements, musical score reading, lyric captioning of finished videos, visual vocabulary presets,
 world editing, passage prompts and versions (`rewrite_prompt`, `edit_prompt`, `select_prompt_take`), clip takes with seeds

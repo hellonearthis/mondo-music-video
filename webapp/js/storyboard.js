@@ -18,10 +18,65 @@ export function storyboardFromForm(form, request) {
   const board = read(form);
   if (form.elements.storyboard_enabled.checked && (!board.panels.length || board.panels.some(p => !p.direction.trim())))
     throw new Error('Interpret the storyboard or write a direction for every panel before using it');
-  request.storyboard = form.elements.storyboard_enabled.checked ? {...board, enabled: true, mode: form.elements.storyboard_mode.value} : {};
+  request.storyboard = form.elements.storyboard_enabled.checked ? {
+    ...board,
+    enabled: true,
+    mode: form.elements.storyboard_mode.value,
+    humanize: Boolean(form.elements.storyboard_humanize?.checked)
+  } : {};
   for (const key of Object.keys(request)) if (key.startsWith('storyboard_')) delete request[key];
   if (request.kind === 'ident') request.ident_all_references = form.elements.ident_all_references.checked;
 }
+
+// WHAT: Pure function that strips synthetic AI clichés, conversational throat-clearing, and purple abstractions from prompt text.
+// WHY: Implements the Prose Humanizer rules in the browser: replaces abstract fluff with grounded sensory nouns,
+// strips frame-level narrator artifacts ("we see"), and prunes trailing atmosphere tags before diffusion rendering.
+export const humanizeDirectionText = (text = '') => {
+  if (!text || typeof text !== 'string') return '';
+  let cleaned = text.trim();
+
+  const replacements = [
+    [/\b(?:stands?\s+as\s+|serves?\s+as\s+|is\s+)?(?:a\s+)?testament\s+to\b/gi, 'evidence of'],
+    [/\bdelv(?:ing|es|ed|e)\s+into\b/gi, 'entering'],
+    [/\b(?:a\s+)?(?:rich\s+|vibrant\s+|complex\s+)?tapestry\s+of\b/gi, 'a mixture of'],
+    [/\b(?:a\s+)?(?:delicate\s+|intricate\s+|subtle\s+)?dance\s+of\s+(?:light\s+and\s+shadow|shadow\s+and\s+light|shadows?)\b/gi, 'stark light and deep shadows'],
+    [/\bpalpable\s+tension\b/gi, 'heavy stillness'],
+    [/\bshivers?\s+down\s+(?:the|their|his|her|its)\s+spine\b/gi, 'sudden hesitation'],
+    [/\b(?:an?\s+)?unspoken\s+understanding\b/gi, 'a shared glance'],
+    [/\b(?:a\s+)?beacon\s+of\s+hope\b/gi, 'a single light'],
+    [/\bechoes?\s+of\s+(?:the\s+)?past\b/gi, 'remnants'],
+    [/^(?:in\s+this\s+(?:shot|panel|image|frame)|this\s+(?:shot|panel|image|frame)\s+(?:shows|depicts|features|captures)|we\s+(?:can\s+)?(?:see|observe|witness)|in\s+a\s+world\s+where)\s*,?\s*/gi, ''],
+    [/\bwe\s+(?:can\s+)?see\s+/gi, ''],
+    [/,?\s*(?:creating|evoking|adding\s+to|giving)\s+(?:a\s+sense\s+of|an\s+atmosphere\s+of|a\s+feeling\s+of)\s+[^.;]+([.;]|$)/gi, '$1']
+  ];
+
+  for (const [pattern, replacement] of replacements) {
+    cleaned = cleaned.replace(pattern, replacement);
+  }
+
+  cleaned = cleaned
+    .replace(/\s+([,.;])/g, '$1')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*\./g, '.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (cleaned.length > 0 && cleaned[0] === cleaned[0].toLowerCase()) {
+    cleaned = cleaned[0].toUpperCase() + cleaned.slice(1);
+  }
+
+  return cleaned;
+};
+
+// WHAT: Pure state transformation returning a new storyboard with humanized panel directions.
+// WHY: Ensures zero in-place mutation of the existing draft structure while updating panel texts.
+export const humanizeStoryboardPanels = (board) => ({
+  ...board,
+  panels: (board.panels || []).map(panel => ({
+    ...panel,
+    direction: humanizeDirectionText(panel.direction)
+  }))
+});
 
 const updatePanelDirection = (board, index, direction) => ({
   ...board,
@@ -98,6 +153,7 @@ export function initStoryboards() {
       <p>Guide the sequence with ordered panels. Narrative follows action and mood; Visual follows composition and framing. Your cast keeps its identity.</p>
       <label class="check"><input type="checkbox" name="storyboard_enabled"> Use this storyboard</label>
       <label>Interpretation<select name="storyboard_mode"><option value="narrative">Narrative</option><option value="visual">Visual direction</option></select></label>
+      <label class="check"><input type="checkbox" name="storyboard_humanize"> Humanize directions (strip AI clichés)</label>
       <input type="hidden" name="storyboard_draft" value='{"images":[],"panels":[]}'>
       <label>Add storyboard images (up to 24)<input class="storyboard-files" type="file" accept="image/*" multiple data-max="24"><small class="file-drop-hint">Choose files or drop up to 24 files here</small><small class="file-drop-error" role="alert"></small></label>
       <p class="storyboard-images muted"></p><div class="storyboard-actions"></div>
@@ -121,11 +177,17 @@ export function initStoryboards() {
     actions.append(button('Add text panel', () => {
       const board = read(form); if (board.panels.length >= 24) throw new Error('Use at most 24 panels');
       save(form, appendTextPanel(board)); render(form);
+    }), button('Humanize directions', () => {
+      const current = read(form);
+      if (!current.panels.length) throw new Error('No panels to humanize');
+      save(form, humanizeStoryboardPanels(current));
+      render(form);
+      notice('Humanized panel directions: stripped synthetic clichés and throat-clearing.');
     }), button('Preview interpretation', async () => {
       if (form.dataset.storyboardPending) throw new Error('Wait for uploads to finish');
       const board = read(form);
       const request = {kind: 'storyboard', title: form.elements.title.value, direction: form.elements.direction.value,
-        storyboard: {mode: form.elements.storyboard_mode.value, images: board.images}};
+        storyboard: {mode: form.elements.storyboard_mode.value, humanize: Boolean(form.elements.storyboard_humanize?.checked), images: board.images}};
       showQuote(request, await json('/api/quote', request));
     }), button('Clear storyboard', () => clearStoryboard(form)));
     section.querySelector('.storyboard-result-actions').append(button('Refresh interpretations', refreshStoryboards), button('Load for review', async () => {

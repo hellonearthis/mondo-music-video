@@ -1,5 +1,12 @@
 # Releases
 
+## 1.12.6 — Storyboard Prose Humanizer & Vision De-Slop Engine
+
+- **Opt-in Storyboard Prose Humanizer**: Added `humanize: bool = False` to the Storyboard schema and pipeline interpreter (`mmv/storyboard.py`), with unit test coverage in `tests/test_prose_humanizer.py` and `tests/test_storyboard.py`.
+- **Vision De-Slop Filter (`mmv/prose_humanizer.py`)**: Automatically strips Marker T1 synthetic clichés (*"testament to"*, *"delve into"*, *"rich tapestry of"*, *"dance of light and shadow"*, *"palpable tension"*), Marker T3 frame-level throat-clearing (*"in this shot we see"*), and trailing purple atmosphere tags (*"creating a sense of..."*), converting vision output into grounded sensory nouns and active verbs.
+- **Web UI Controls**: Added **☑ Humanize directions (strip AI clichés)** checkbox to the Storyboard editor fold, along with a **Humanize directions** button to de-slop and clean loaded panels directly in the browser.
+- **External Thematic Worlds Library**: Integrated 8 additional aesthetic world definitions via external module `webapp/js/thematic-worlds-extended.js` and JSON catalog `webapp/thematic-worlds-extended.json`.
+
 ## 1.12.5 — Automatic H3 reference & subject tag normalizer
 
 - **Automatic Reference `<Picture N>` Binding**: In MiniMax H3 backends (`local_h3`, `comfy_sdk_h3`), `normalize_h3_prompt` automatically binds the wired `<Picture N>` tag to its assigned `<Subject N>` inside `subject_definitions:` if the LLM writer omitted the explicit tag.
